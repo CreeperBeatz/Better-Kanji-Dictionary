@@ -177,7 +177,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function get<T>(path: string, params?: [string, string][]): Promise<T> {
-  const url = new URL(BASE + path)
+  const url = new URL(BASE + path, window.location.origin)
   for (const [k, v] of params ?? []) url.searchParams.append(k, v)
   const res = await fetch(url, { headers: authHeaders() })
   if (!res.ok) {
