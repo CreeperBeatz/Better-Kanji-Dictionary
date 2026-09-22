@@ -26,8 +26,9 @@ Then open http://localhost:5173.
 On Windows set `PYTHONIOENCODING=utf-8` before any pipeline script, or the
 console encoder fails on the first kanji.
 
-The server binds `0.0.0.0` so a phone on the same network can reach it. There is
-no authentication and no offline mode — keep it off untrusted networks.
+The server binds `0.0.0.0` so a phone on the same network can reach it. Without
+`RESEND_API_KEY`, sign-in links are shown in the page rather than mailed, so
+anyone who can reach it can sign in as anyone — keep it off untrusted networks.
 
 ## Reading the graph
 
@@ -77,6 +78,34 @@ text every frame.
 | **Associations** | Text, pasted or dropped images, and in-app sketches, on both kanji and components. A character's panel pulls in your notes on each of its parts, so the mnemonic assembles itself. Autosaves to disk. |
 | **Stroke order** | A static diagram from KanjiVG: one small glyph per stroke, each adding the next, so the whole order reads at a glance. |
 | **Decomposition** | Fix a bad split from the graph and it redraws immediately. A review queue ranks what is worth fixing by how much a bad split actually costs. |
+| **Offline lookup** | Installed to a home screen or as a desktop app, it downloads the dictionary once (about 21 MB) and from then on search, drawing, radicals, levels and each character's details answer on the device, with or without a connection. See below. |
+
+## Offline
+
+The site is an installable app: a web manifest, and a service worker
+(`web/sw.template.js`, filled in at build by the plugin in `vite.config.ts`)
+that caches the app so it opens with no connection.
+
+The dictionary is a separate download, the *offline pack*, which
+`server/offline.py` builds from the database — by itself on startup whenever the
+database is newer than the last pack, or by hand with `python -m server.offline`.
+An installed app fetches it without being asked; in a browser tab it is offered
+in the account dialog. It lives in IndexedDB, and a Web Worker
+(`web/src/local/`) answers lookups from it. `api.ts` asks the device first and
+the server when the pack is not there. The graph, notes, comments and example
+sentences stay on the server.
+
+The device has to find what the server finds, so `web/src/local/` ports the
+server's search, deinflection and handwriting matcher line for line, and
+`tests/offline_parity.py` checks that they agree: a few thousand searches,
+drawings, radical picks and word lists, put to both.
+
+    python tests/offline_parity.py            # ~2 minutes
+    python tests/offline_parity.py --quick
+
+Change the search or the matcher on one side and the test fails until the other
+follows. Change what the pack contains and bump `FORMAT` in `server/offline.py`,
+or a deployed server keeps its old pack.
 
 ## Layout
 
@@ -89,9 +118,12 @@ text every frame.
     server/     FastAPI read-only API, plus the association store
       japanese.py       romaji and deinflection
       store.py          associations and decomposition overrides on disk
+      offline.py        builds the offline pack from the database
     web/        React + TypeScript client
       src/graph/layout.ts   the orbit-above / DAG-below geometry, and the peek
       src/map/              the map: canvas renderer, layout worker, sprite atlas
+      src/local/            offline lookup: the pack, its worker, and the ports
+    tests/      offline_parity.py -- the device and the server must agree
 
 `decomp.py` is the single source of truth for what "contains" means. It
 reproduces `build.py`'s 1,370-node closure and 391-component fan-out exactly.
@@ -134,7 +166,7 @@ closed, and any of them would end the option of open-sourcing this.
 
 Stroke-order *animation* (the static diagram is built), phonetic-series
 display, component role labels (semantic / phonetic / form), the BetterRTK study
-order as a browsable view, offline mode, and association discovery.
+order as a browsable view, the graph and map offline, and association discovery.
 
 KANJIDIC2 is downloaded but no build stage reads it yet: meanings come from
 `kanji.json`, which is already KANJIDIC-derived. KANJIDIC2 would add nanori,

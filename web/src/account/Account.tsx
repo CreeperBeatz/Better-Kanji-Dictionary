@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
 import { Credits } from '../About'
+import { OfflineSetting } from '../local/OfflineSetting'
 import { Avatar, squareAvatar } from './Avatar'
 import { GoogleButton } from './GoogleButton'
 
@@ -122,6 +123,7 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
             </p>
           </>
         )}
+        <OfflineSetting />
         <Credits />
       </div>
     </div>

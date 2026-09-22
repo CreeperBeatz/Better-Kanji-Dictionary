@@ -7,13 +7,17 @@ import { SearchOverlay } from './search/SearchOverlay'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
-import { DetailPanel } from './detail/DetailPanel'
+import { DetailPanel, type DetailData } from './detail/DetailPanel'
+import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
 import { RailResizer, useRailWidth } from './RailResizer'
 import { LevelFilter, RecentGrid, ViewSwitch, type StageView } from './StageControls'
 import { useRecent } from './recent'
 
 const START = '言'
+
+// What a failed graph fetch says when the network, not the server, is why.
+const OFFLINE = 'The graph needs a connection.'
 const VIEW_KEY = 'betterrtk:view'
 
 // Matches the narrow layout in theme.css.
@@ -86,6 +90,8 @@ export function App() {
   // or any pick brings a character back.
   const [selected, setSelected] = useState(linked !== null)
   const [data, setData] = useState<GraphResponse | null>(null)
+  // The character's own details from the offline pack, which arrive before the graph.
+  const [onDevice, setOnDevice] = useState<DetailData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -174,18 +180,28 @@ export function App() {
 
   useEffect(() => {
     let stale = false
+    local.kanji(focus)?.then(
+      (d) => !stale && setOnDevice(d),
+      () => {},
+    )
     api.kanji(focus).then(
       (d) => {
         if (stale) return
         setData(d)
         setError(null)
       },
-      (e) => !stale && setError(String(e.message ?? e)),
+      // fetch rejects with a TypeError only when the request never got an answer.
+      (e) => !stale && setError(e instanceof TypeError ? OFFLINE : String(e.message ?? e)),
     )
     return () => {
       stale = true
     }
   }, [focus])
+
+  // The rail shows the graph's data once it is for this character, and the
+  // device's until then -- or instead, when there is no connection.
+  const detail: DetailData | null =
+    data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : data
 
   // `via` is the container a peek skipped through (言 -> 語 -> X), which counts
   // as visited too.
@@ -294,14 +310,14 @@ export function App() {
               {mobile && <ProfileButton onOpen={() => setAccountOpen(true)} />}
             </div>
             <div className="rail-tabs" role="tablist" aria-label="Side panel">
-              {selected && data && (
+              {selected && detail && (
                 <>
                   <button
                     role="tab"
                     aria-selected={!onStage && railTab === 'kanji'}
                     onClick={() => chooseRailTab('kanji')}
                   >
-                    {data.focus.char} <span>kanji</span>
+                    {detail.focus.char} <span>kanji</span>
                   </button>
                   <button
                     role="tab"
@@ -339,10 +355,10 @@ export function App() {
             <>
               {/* Kept mounted while hidden, so an unsent association and the
                   count on its tab survive switching tabs. */}
-              {data && (
+              {detail && (
                 <div hidden={railTab !== 'associations'}>
                   <Associations
-                    char={data.focus.char}
+                    char={detail.focus.char}
                     onPick={drill}
                     onSignIn={() => setAccountOpen(true)}
                     onCount={setAssocCount}
@@ -358,7 +374,7 @@ export function App() {
                     onPick={(c) => (c === focus ? setWord(null) : drill(c))}
                   />
                 ) : (
-                  data && <DetailPanel data={data} hovered={hoveredNode} onWord={openWord} />
+                  detail && <DetailPanel data={detail} hovered={hoveredNode} onWord={openWord} />
                 ))}
             </>
           )}
@@ -374,10 +390,14 @@ export function App() {
               <p>
                 {error}
                 <br />
-                <span className="hint">
-                  Start the server with{' '}
-                  <code>.venv/Scripts/uvicorn server.app:app --port 8000</code>
-                </span>
+                {error === OFFLINE ? (
+                  <span className="hint">Search, drawing and each character's details work without one.</span>
+                ) : (
+                  <span className="hint">
+                    Start the server with{' '}
+                    <code>.venv/Scripts/uvicorn server.app:app --port 8000</code>
+                  </span>
+                )}
               </p>
             </div>
           )}
