@@ -12,11 +12,12 @@ const FILTERS: { value: ContainerFilter; label: string; focus: string; map: stri
     focus: 'only characters with a newspaper frequency rank',
     map: 'the 2,501 newspaper-ranked characters and their parts',
   },
-  { value: 5, label: 'N5', focus: 'N5', map: 'N5 and the parts it is built from' },
-  { value: 4, label: 'N4', focus: 'N5 and N4', map: 'N5 and N4, and their parts' },
-  { value: 3, label: 'N3', focus: 'N3 and easier', map: 'N3 and easier, and their parts' },
-  { value: 2, label: 'N2', focus: 'N2 and easier', map: 'N2 and easier, and their parts' },
+  // Widest first, like all and common before them.
   { value: 1, label: 'N1', focus: 'N1 and easier — the whole JLPT set', map: 'the whole JLPT set and its parts' },
+  { value: 2, label: 'N2', focus: 'N2 and easier', map: 'N2 and easier, and their parts' },
+  { value: 3, label: 'N3', focus: 'N3 and easier', map: 'N3 and easier, and their parts' },
+  { value: 4, label: 'N4', focus: 'N5 and N4', map: 'N5 and N4, and their parts' },
+  { value: 5, label: 'N5', focus: 'N5', map: 'N5 and the parts it is built from' },
 ]
 
 export function LevelFilter({

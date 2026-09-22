@@ -81,8 +81,14 @@ export function SearchOverlay({ open, onClose, onPick, onWord }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const seq = useRef(0)
 
+  // Opens on the draw pad; typing still switches to text search. A query left
+  // from last time keeps its results instead.
   useEffect(() => {
-    if (open) inputRef.current?.focus()
+    if (!open) return
+    setMode((m) => (q.trim() && m === 'search' ? m : 'draw'))
+    // On a touch screen, focusing the input would raise a keyboard over the pad.
+    if (!window.matchMedia('(pointer: coarse)').matches) inputRef.current?.focus()
+    // Only on opening: q changing while open is typing, not a reason to switch.
   }, [open])
 
   useEffect(() => {

@@ -1,12 +1,20 @@
-"""Sign-in by magic link, and the dependencies other routes use to know who is asking."""
+"""Sign-in by magic link, your profile, and the dependencies other routes use to know who is asking."""
 
 import os
+from pathlib import Path
 
-from fastapi import APIRouter, Body, Header, HTTPException, Request
+from fastapi import APIRouter, Body, File, Header, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 
 from .. import auth, mail, store
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# The browser crops and shrinks a picture to a small square before sending it,
+# so anything near this limit was not sent by the app.
+AVATAR_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+AVATAR_MAGIC = {".png": b"\x89PNG", ".jpg": b"\xff\xd8", ".jpeg": b"\xff\xd8", ".webp": b"RIFF"}
+MAX_AVATAR_BYTES = 1024 * 1024
 
 
 def _bearer(authorization: str | None) -> str | None:
@@ -27,7 +35,13 @@ def require_user(authorization: str | None = Header(None)) -> dict:
 
 
 def _public(user: dict) -> dict:
-    return {"id": user["id"], "email": user["email"], "name": user["name"]}
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "username": user.get("username"),
+        "avatar": user.get("avatar"),
+    }
 
 
 def _app_url(request: Request) -> str:
@@ -67,7 +81,7 @@ def verify(payload: dict = Body(...)) -> dict:
     if result is None:
         raise HTTPException(400, "this link has expired or was already used")
     session, user, _ = result
-    store.ensure_author(user["id"], user["name"])
+    store.ensure_author(user)
     store.claim_legacy(user["id"], user["email"])
     return {"session": session, "user": _public(user)}
 
@@ -81,12 +95,57 @@ def me(authorization: str | None = Header(None)) -> dict:
 @router.patch("/me")
 def update_me(payload: dict = Body(...), authorization: str | None = Header(None)) -> dict:
     user = require_user(authorization)
-    name = (payload.get("name") or "").strip()[:40]
-    if not name:
-        raise HTTPException(400, "a name cannot be empty")
-    user = auth.rename(user["id"], name)
-    store.ensure_author(user["id"], user["name"])
+    name = username = None
+    if "name" in payload:
+        name = (payload.get("name") or "").strip()[:40]
+        if not name:
+            raise HTTPException(400, "a name cannot be empty")
+    if "username" in payload:
+        username = auth.normalise_username(payload.get("username") or "")
+        if not username:
+            raise HTTPException(400, "a username is 3 to 24 of a-z, 0-9, _ and -")
+    try:
+        user = auth.update_profile(user["id"], name=name, username=username)
+    except auth.UsernameTaken:
+        raise HTTPException(409, "that username is taken")
+    store.ensure_author(user)
     return {"user": _public(user)}
+
+
+@router.post("/avatar")
+async def upload_avatar(file: UploadFile = File(...), authorization: str | None = Header(None)) -> dict:
+    user = require_user(authorization)
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in AVATAR_TYPES:
+        raise HTTPException(400, "a profile picture must be PNG, JPEG or WebP")
+    raw = await file.read()
+    if len(raw) > MAX_AVATAR_BYTES:
+        raise HTTPException(413, "profile picture larger than 1MB")
+    if not raw.startswith(AVATAR_MAGIC[suffix]):
+        raise HTTPException(400, "that file is not the image it says it is")
+    user = auth.set_avatar(user["id"], raw, suffix)
+    store.ensure_author(user)
+    return {"user": _public(user)}
+
+
+@router.delete("/avatar")
+def remove_avatar(authorization: str | None = Header(None)) -> dict:
+    user = auth.set_avatar(require_user(authorization)["id"], None)
+    store.ensure_author(user)
+    return {"user": _public(user)}
+
+
+@router.get("/avatar/{name}")
+def get_avatar(name: str):
+    path = auth.AVATARS / Path(name).name
+    if not path.is_file():
+        raise HTTPException(404, "no such picture")
+    # Every upload gets a new name, so a picture never changes under its name.
+    return FileResponse(
+        path,
+        media_type=AVATAR_TYPES.get(path.suffix.lower(), "application/octet-stream"),
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @router.post("/logout")

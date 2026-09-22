@@ -34,6 +34,8 @@ interface Props {
   onDeselect: () => void
   onOpen: (char: string) => void
   onScope: (f: ContainerFilter) => void
+  /** Show how to read the map, opened from the (i). */
+  legend: boolean
 }
 
 interface Camera {
@@ -408,7 +410,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   return s.anim !== null || atlas.pending > 0
 }
 
-export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope }: Props) {
+export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -879,15 +881,17 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
         </button>
       </div>
 
-      <p className="legend">
-        {counts && `${counts.nodes.toLocaleString()} characters, ${counts.edges.toLocaleString()} links`}
-        <br />
-        larger is more frequent, or a part more characters share
-        <br />
-        click to select and see its links, click again to open,
-        <br />
-        click empty space to deselect
-      </p>
+      {legend && (
+        <p className="legend" id="stage-legend">
+          {counts && `${counts.nodes.toLocaleString()} characters, ${counts.edges.toLocaleString()} links`}
+          <br />
+          larger is more frequent, or a part more characters share
+          <br />
+          click to select and see its links, click again to open,
+          <br />
+          click empty space to deselect
+        </p>
+      )}
     </div>
   )
 }

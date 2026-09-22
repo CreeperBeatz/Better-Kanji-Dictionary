@@ -10,6 +10,8 @@ interface Props {
   /** `via` is the container a peeked character was reached through. */
   onDrill: (char: string, via?: string) => void
   onHover: (char: string | null) => void
+  /** Show how to read the graph, opened from the (i). */
+  legend: boolean
 }
 
 /** What to call a character's level, including the things that have none. */
@@ -81,7 +83,7 @@ interface Peek {
   hidden: number
 }
 
-export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
+export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
   const shown = useMemo(() => data.containers.filter(keeps(filter)), [data.containers, filter])
@@ -114,6 +116,23 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
       scale,
     })
   }, [layout, data.focus.char, filter])
+
+  // Keep the graph where it was relative to the middle as the stage changes
+  // size -- dragging the rail wider or narrower, say.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    let last = svg.getBoundingClientRect()
+    const ro = new ResizeObserver(() => {
+      const now = svg.getBoundingClientRect()
+      const dx = (now.width - last.width) / 2
+      const dy = (now.height - last.height) / 2
+      last = now
+      if (dx || dy) setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+    })
+    ro.observe(svg)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     let stale = false
@@ -353,13 +372,15 @@ ${levelOf(n)}`}
         </g>
       </svg>
 
-      <p className="legend">
-        above, characters that contain it, nearest first by frequency
-        <br />
-        below, what it is made of, down to atoms
-        <br />
-        hover one above to see what contains it in turn
-      </p>
+      {legend && (
+        <p className="legend" id="stage-legend">
+          above, characters that contain it, nearest first by frequency
+          <br />
+          below, what it is made of, down to atoms
+          <br />
+          hover one above to see what contains it in turn
+        </p>
+      )}
     </>
   )
 }

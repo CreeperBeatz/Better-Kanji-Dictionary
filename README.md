@@ -104,6 +104,10 @@ record carries an author and provenance, and imports arrive as a separate
 attributed layer rather than overwriting yours, so browsing and adopting other
 people's associations later needs no migration.
 
+A public association is also a comment under its character: others can give it
+a thumbs up and reply to it. Likes and replies live in the same store file;
+accounts, their usernames and profile pictures live in `data/auth/`.
+
 Decomposition fixes are mirrored to `data/decomp_overrides.json`, which
 `pipeline/decomp.py` loads as its top layer — so a rebuild keeps them.
 

@@ -18,7 +18,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import DatabaseMissing
-from .routes import assoc, atlas, auth, decomp, graph, radicals, recognize, search
+from . import auth as accounts
+from . import store
+from .routes import assoc, atlas, auth, comments, decomp, graph, radicals, recognize, search
 
 app = FastAPI(
     title="BetterRTK Explorer",
@@ -51,8 +53,16 @@ app.include_router(atlas.router)
 app.include_router(search.router)
 app.include_router(auth.router)
 app.include_router(assoc.router)
+app.include_router(comments.router)
 app.include_router(decomp.router)
 app.include_router(recognize.router)
+
+
+@app.on_event("startup")
+def migrate_accounts() -> None:
+    # Accounts from before usernames get one, and every author's public card
+    # (name, username, picture) is brought in line with their account.
+    store.sync_authors(accounts.migrate())
 
 
 @app.get("/api/health")

@@ -76,6 +76,7 @@ body {
 }
 
 .shell-grid {
+  position: relative;
   display: grid;
   grid-template-columns: var(--rail) 1fr;
   height: 100%;
@@ -94,6 +95,50 @@ body {
   background: var(--sumi-sunk);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* A wide invisible grip over the rail's border; the border itself lights up. */
+.rail-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--rail) - 5px);
+  width: 9px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.rail-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+
+.rail-resizer:hover::after,
+.rail-resizer:focus-visible::after,
+.rail-resizer[data-dragging]::after {
+  background: var(--ai-deep);
+  box-shadow: 0 0 0 1px var(--ai-deep);
+}
+
+.rail-resizer:focus-visible {
+  outline: none;
+}
+
+/* While dragging, the pointer passes over the graph and text; neither should react. */
+body.rail-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.rail-resizing .shell-grid > :not(.rail-resizer) {
+  pointer-events: none;
 }
 
 .stage {
@@ -432,13 +477,28 @@ body {
 
 .legend {
   position: absolute;
-  right: 20px;
-  bottom: 16px;
-  text-align: right;
-  font-size: 11.5px;
-  color: var(--muted);
+  left: 20px;
+  bottom: 50px;
+  z-index: 4;
+  max-width: min(340px, calc(100% - 40px));
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  color: var(--paper-dim);
   line-height: 1.7;
   pointer-events: none;
+  animation: legend-in 140ms var(--ease);
+}
+
+@keyframes legend-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
 }
 
 .stage-empty {
@@ -463,9 +523,56 @@ body {
 
   .rail {
     border-right: 0;
-    border-bottom: 1px solid var(--rule);
-    max-height: 45vh;
+    min-height: 0;
   }
+
+  .rail-resizer {
+    display: none;
+  }
+
+  /* One pane fills the phone at a time; the rail's tabs switch between them.
+     Reading: the rail is the whole screen, and the stage is laid out behind it,
+     hidden but still full size, so the graph and map keep their framing. */
+  .shell-grid[data-pane='rail'] {
+    grid-template-rows: 1fr;
+  }
+
+  .shell-grid[data-pane='rail'] .stage {
+    position: absolute;
+    inset: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  /* Looking: only the rail's header stays, above the stage. */
+  .shell-grid[data-pane='stage'] .rail {
+    overflow: hidden;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .shell-grid[data-pane='stage'] .rail > :not(.rail-top) {
+    display: none;
+  }
+
+  .shell-grid[data-pane='stage'] .rail-top {
+    border-bottom: 0;
+  }
+
+  .rail-section.rail-top {
+    padding: 12px 16px 16px;
+  }
+}
+
+/* The search and, on a phone, your profile beside it. */
+.rail-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rail-search-row .search-trigger {
+  flex: 1;
+  min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1392,10 +1499,37 @@ body {
 
 /* ---------------------------------------------------------------- graph filter */
 
-.filter {
+/* The stage's width, not the window's, decides what fits along its top edge:
+   the rail can be dragged wide. */
+.stage {
+  container: stage / inline-size;
+}
+
+@container stage (max-width: 900px) {
+  .filter-count {
+    display: none;
+  }
+}
+
+/* Too narrow for the view switch to sit between the trail and the corner. */
+@container stage (max-width: 780px) {
+  .view-switch {
+    top: 50px;
+  }
+}
+
+/* Top right of the stage: the level filter, then who you are. */
+.stage-corner {
   position: absolute;
-  top: 14px;
-  right: 20px;
+  top: 10px;
+  right: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1449,17 +1583,36 @@ body {
   transition: color 120ms var(--ease), border-color 120ms var(--ease);
 }
 
-.info-button:hover {
+.info-button:hover,
+.info-button[aria-expanded='true'] {
   color: var(--paper);
   border-color: var(--paper-dim);
 }
 
-/* ---------------------------------------------------------------- credits dialog */
+.info-button[aria-expanded='true'] {
+  background: var(--sumi-lift);
+}
 
-.about-panel h2 {
-  margin: 0 0 12px;
-  font-size: 13px;
-  font-weight: 500;
+/* ---------------------------------------------------------------- credits, in the account dialog */
+
+.account-about {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.account-about summary {
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.account-about summary:hover {
+  color: var(--paper);
+}
+
+.account-about[open] summary {
+  margin-bottom: 10px;
   color: var(--paper-dim);
 }
 
@@ -1720,7 +1873,7 @@ body {
 .map-zoom {
   position: absolute;
   right: 20px;
-  bottom: 104px;
+  bottom: 16px;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--rule);
@@ -2095,16 +2248,11 @@ body {
 }
 
 /* Over a dense map the controls need ground of their own. */
-.map-host:not([hidden]) ~ .filter,
-.map .legend {
+.map-host:not([hidden]) ~ .stage-corner .filter {
   padding: 3px 6px;
   background: var(--sumi-sunk);
   border: 1px solid var(--rule);
   border-radius: 3px;
-}
-
-.map .legend {
-  padding: 6px 10px;
 }
 
 .map-host:not([hidden]) ~ .trail {
@@ -2115,20 +2263,6 @@ body {
 }
 
 /* ---------------------------------------------------------------- account */
-
-.account-line {
-  margin: 8px 0 0;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.account-who {
-  color: var(--paper-dim);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .account-panel {
   width: min(440px, 100%);
@@ -2246,4 +2380,758 @@ body {
   aspect-ratio: 1;
   border: 1px solid var(--rule);
   border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------- avatars and profile */
+
+.avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sumi-lift);
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-weight: 500;
+  line-height: 1;
+  object-fit: cover;
+  overflow: hidden;
+  user-select: none;
+}
+
+.avatar-none {
+  color: var(--muted);
+}
+
+.avatar-none svg {
+  margin-top: 18%;
+}
+
+.profile-button {
+  display: grid;
+  place-items: center;
+  padding: 1px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule-bright);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease);
+}
+
+.profile-button:hover {
+  border-color: var(--paper-dim);
+}
+
+.profile-button:hover .avatar-none {
+  color: var(--paper);
+}
+
+/* Checking a saved session, or moving this browser's notes into the account. */
+.profile-button[data-busy] {
+  animation: profile-busy 1.2s var(--ease) infinite alternate;
+}
+
+@keyframes profile-busy {
+  to {
+    border-color: var(--ai);
+  }
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-picture {
+  position: relative;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.profile-picture .avatar {
+  display: grid;
+}
+
+.profile-picture-edit {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 3px 0 7px;
+  background: rgba(12, 10, 9, 0.72);
+  color: var(--paper);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 120ms var(--ease);
+}
+
+.profile-picture:hover .profile-picture-edit,
+.profile-picture:focus-visible .profile-picture-edit {
+  opacity: 1;
+}
+
+.profile-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.profile-who strong {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+.profile-who span {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.profile-who .profile-email {
+  color: var(--faint);
+}
+
+.profile-picture-actions {
+  margin: 0;
+}
+
+.profile-form {
+  display: grid;
+  gap: 6px;
+}
+
+.profile-form label {
+  margin: 4px 0 0;
+}
+
+.profile-handle {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--sumi);
+}
+
+.profile-handle:focus-within {
+  border-color: var(--ai-deep);
+}
+
+.profile-handle span {
+  padding-left: 11px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.profile-handle .assoc-text {
+  border: 0;
+  padding-left: 2px;
+}
+
+.profile-rule {
+  margin: 0;
+  font-size: 12px;
+  color: var(--shu);
+}
+
+.profile-save {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.profile-save .account-submit {
+  padding: 5px 14px;
+}
+
+/* ---------------------------------------------------------------- comment section */
+
+.assoc-group {
+  margin-top: 22px;
+}
+
+.assoc-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.assoc-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.assoc-group-head h3 {
+  margin: 0;
+}
+
+.assoc-sort {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.assoc-sort button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 11.5px;
+  padding: 1px 7px;
+  cursor: pointer;
+}
+
+.assoc-sort button:hover {
+  color: var(--paper);
+}
+
+.assoc-sort button[data-on='true'] {
+  background: var(--sumi-lift);
+  border-color: var(--rule-bright);
+  color: var(--paper);
+}
+
+.discussion-count {
+  padding: 0 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.discussion-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Each interpretation is its own card; replies nest as quieter cards inside. */
+.comment {
+  padding: 11px 13px 10px;
+  margin-bottom: 8px;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.comment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
+.comment-name {
+  font-weight: 500;
+  color: var(--paper);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comment-handle {
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comment-you {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--ai-deep);
+  border-radius: 2px;
+  color: var(--ai);
+  font-size: 10.5px;
+}
+
+.comment-head time {
+  flex: none;
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.comment-body {
+  margin-top: 6px;
+  padding-left: 34px;
+}
+
+.comment-body .assoc-images {
+  margin-top: 8px;
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 9px;
+  padding-left: 34px;
+}
+
+.comment-like {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  background: none;
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.comment-like:hover:not(:disabled) {
+  color: var(--paper);
+  border-color: var(--paper-dim);
+}
+
+.comment-like[aria-pressed='true'] {
+  color: var(--paper);
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+}
+
+.comment-like[aria-pressed='true'] svg {
+  color: var(--ai);
+}
+
+.comment-like:disabled {
+  cursor: default;
+  border-color: var(--rule);
+}
+
+.comment-thread-toggle {
+  color: var(--paper-dim);
+}
+
+.replies {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0 34px;
+}
+
+.reply {
+  padding: 8px 10px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+.reply .comment-actions {
+  margin-top: 5px;
+}
+
+.reply .md {
+  font-size: 13px;
+}
+
+.discussion-more {
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  border: 1px dashed var(--rule-bright);
+  border-radius: 3px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.discussion-more:hover:not(:disabled) {
+  color: var(--paper);
+  border-color: var(--ai-deep);
+}
+
+.discussion-more:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.reply-form {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.reply-form .avatar {
+  margin-top: 6px;
+}
+
+.reply-form .assoc-text {
+  font-size: 13px;
+  resize: none;
+}
+
+.reply-form-actions {
+  grid-column: 2;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+}
+
+.reply-form-actions .account-submit {
+  padding: 4px 14px;
+}
+
+.reply-start {
+  justify-self: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .profile-button[data-busy] {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- rail tabs */
+
+.rail-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px -22px -20px;
+  padding: 0 22px;
+  border-top: 1px solid var(--rule);
+}
+
+.rail-tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 11px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 120ms var(--ease);
+}
+
+.rail-tabs button:first-child {
+  margin-left: -10px;
+  font-family: var(--mincho);
+  font-size: 15px;
+}
+
+.rail-tabs button:first-child span {
+  font-family: var(--gothic);
+  font-size: 13px;
+}
+
+.rail-tabs button:hover {
+  color: var(--paper);
+}
+
+.rail-tabs button[aria-selected='true'] {
+  color: var(--paper);
+}
+
+/* The same vermilion underline as the Focus / Map switch. */
+.rail-tabs button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--shu);
+}
+
+.rail-tab-count {
+  padding: 0 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  color: var(--paper-dim);
+  font-size: 11px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- composer */
+
+.composer {
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px 12px;
+  transition: border-color 120ms var(--ease);
+}
+
+.composer[data-open],
+.composer:focus-within {
+  border-color: var(--rule-bright);
+}
+
+.assoc-group .composer {
+  margin-bottom: 8px;
+}
+
+.composer-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.composer-text {
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 13.5px;
+  line-height: 1.55;
+  resize: none;
+}
+
+.composer-text:focus {
+  outline: none;
+}
+
+.composer-text::placeholder {
+  color: var(--muted);
+}
+
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0 38px;
+}
+
+.composer-attachments figure {
+  margin: 0;
+  width: 88px;
+}
+
+.composer-attachments img,
+.composer-attachments .assoc-image-pending {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--sumi-sunk);
+}
+
+.composer-attachments figcaption {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 10px 0 0 38px;
+  padding-top: 9px;
+  border-top: 1px solid var(--rule);
+}
+
+.composer-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  margin-left: -4px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.composer-tool:hover {
+  color: var(--paper);
+  background: var(--sumi-lift);
+}
+
+/* Who sees it, and sending it: kept together at the right, wrapping as one. */
+.composer-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.composer-local {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.composer-local .clear {
+  font-size: 11.5px;
+}
+
+.composer-post {
+  padding: 4px 16px;
+  background: var(--ai-deep);
+  border: 1px solid var(--ai);
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.composer-post:hover:not(:disabled) {
+  background: var(--ai);
+  color: var(--sumi);
+}
+
+.composer-post:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- your own cards */
+
+/* Private ones sit a step back from what is shared. */
+.comment[data-private] {
+  background: var(--sumi-sunk);
+  border-style: dashed;
+}
+
+.comment-own {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.comment-badge {
+  padding: 0 6px;
+  background: none;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+button.comment-badge {
+  cursor: pointer;
+}
+
+button.comment-badge:hover:not(:disabled) {
+  color: var(--paper);
+  border-color: var(--paper-dim);
+}
+
+.comment-badge[data-public] {
+  border-color: var(--ai-deep);
+  color: var(--ai);
+}
+
+.comment-danger {
+  color: var(--shu);
+}
+
+/* ---------------------------------------------------------------- scrollbars */
+
+/* Thin and dark, and in the rail only there while you are over it. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-bright) transparent;
+}
+
+.rail {
+  scrollbar-gutter: stable;
+  scrollbar-color: transparent transparent;
+}
+
+.rail:hover,
+.rail:focus-within {
+  scrollbar-color: var(--rule-bright) transparent;
+}
+
+/* Safari, which has no scrollbar-color. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rule-bright);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+
+/* After the tab styles above, so these win on a phone. */
+@media (max-width: 900px) {
+  /* Phone scrollbars float over the content; nothing to reserve room for. */
+  .rail {
+    scrollbar-gutter: auto;
+  }
+
+  .rail-tabs {
+    margin: 10px -16px -16px;
+    padding: 0 8px;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .rail-tabs button {
+    flex: none;
+    padding: 9px 8px 10px;
+    font-size: 12.5px;
+  }
+
+  .rail-tabs button:first-child {
+    margin-left: 0;
+  }
+
+  .rail-tabs button[aria-selected='true']::after {
+    left: 8px;
+    right: 8px;
+  }
 }

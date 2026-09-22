@@ -1,19 +1,44 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, keeps, type ContainerFilter } from './graph/KanjiGraph'
 import { KanjiMap } from './map/KanjiMap'
 import { scopeOf } from './map/mapData'
 import { SearchOverlay } from './search/SearchOverlay'
 import { Associations } from './detail/Associations'
-import { About } from './About'
-import { AccountDialog, AccountLine } from './account/Account'
+import { AccountDialog, ProfileButton } from './account/Account'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel } from './detail/DetailPanel'
 import { WordPanel } from './detail/WordPanel'
+import { RailResizer, useRailWidth } from './RailResizer'
 import { LevelFilter, Trail, ViewSwitch, type StageView } from './StageControls'
 
 const START = '言'
 const VIEW_KEY = 'betterrtk:view'
+
+// Matches the narrow layout in theme.css.
+const MOBILE = '(max-width: 900px)'
+
+function useMediaQuery(query: string): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const m = window.matchMedia(query)
+      m.addEventListener('change', onChange)
+      return () => m.removeEventListener('change', onChange)
+    },
+    () => window.matchMedia(query).matches,
+  )
+}
+
+const RAIL_TAB_KEY = 'betterrtk:railTab'
+type RailTab = 'kanji' | 'associations'
+
+function initialRailTab(): RailTab {
+  try {
+    return localStorage.getItem(RAIL_TAB_KEY) === 'associations' ? 'associations' : 'kanji'
+  } catch {
+    return 'kanji'
+  }
+}
 
 function initialView(): StageView {
   try {
@@ -33,7 +58,8 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [aboutOpen, setAboutOpen] = useState(false)
+  // How to read the graph or map, behind the (i) rather than always on screen.
+  const [legendOpen, setLegendOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const { error: authError } = useAuth()
   // A sign-in link that did not work says why, where you would try again.
@@ -45,9 +71,29 @@ export function App() {
   const [mapOpened, setMapOpened] = useState(view === 'map')
   // A word open in the rail, and the kanji it was opened from.
   const [word, setWord] = useState<{ word: Word; from: string } | null>(null)
+  const [railWidth, setRailWidth] = useRailWidth()
+  const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
+  const [assocCount, setAssocCount] = useState(0)
+
+  // On a phone the rail and the stage cannot both have room, so one fills the
+  // screen at a time and Focus and Map join the rail's tabs.
+  const mobile = useMediaQuery(MOBILE)
+  const [pane, setPane] = useState<'rail' | 'stage'>('rail')
+  const onStage = mobile && pane === 'stage'
+
+  const chooseRailTab = useCallback((t: RailTab) => {
+    setRailTab(t)
+    setPane('rail')
+    try {
+      localStorage.setItem(RAIL_TAB_KEY, t)
+    } catch {
+      // not remembered, which is fine
+    }
+  }, [])
 
   const setView = useCallback((v: StageView) => {
     setViewState(v)
+    setPane('stage')
     if (v === 'map') setMapOpened(true)
     try {
       localStorage.setItem(VIEW_KEY, v)
@@ -102,7 +148,15 @@ export function App() {
     setSelected(false)
   }, [])
 
-  const openWord = useCallback((w: Word) => setWord({ word: w, from: focus }), [focus])
+  // A word shows where the kanji's details do.
+  const openWord = useCallback(
+    (w: Word) => {
+      setWord({ word: w, from: focus })
+      setRailTab('kanji')
+      setPane('rail')
+    },
+    [focus],
+  )
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -117,6 +171,7 @@ export function App() {
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return
       if (document.querySelector('.overlay')) return
+      if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
       if (e.key === 'f' || e.key === 'F') setView('focus')
       // Backspace walks back out, matching the breadcrumb -- first out of an
@@ -151,43 +206,96 @@ export function App() {
     )
   }, [data, hovered])
 
-  const dimmed = searchOpen || aboutOpen || accountShown
+  const dimmed = searchOpen || accountShown
 
   return (
     <div className="shell">
-      <div className="shell-grid" data-dimmed={dimmed || undefined}>
+      <div
+        className="shell-grid"
+        data-dimmed={dimmed || undefined}
+        data-pane={mobile ? pane : undefined}
+        style={{ '--rail': `${railWidth}px` } as React.CSSProperties}
+      >
         <aside className="rail">
           <div className="rail-section rail-top">
-            <button className="search-trigger" onClick={() => setSearchOpen(true)}>
-              <span>Search, or browse a level</span>
-              <kbd>/</kbd>
-            </button>
-            <AccountLine onOpen={() => setAccountOpen(true)} />
+            <div className="rail-search-row">
+              <button className="search-trigger" onClick={() => setSearchOpen(true)}>
+                <span>Search, or browse a level</span>
+                <kbd>/</kbd>
+              </button>
+              {mobile && <ProfileButton onOpen={() => setAccountOpen(true)} />}
+            </div>
+            {((selected && data) || mobile) && (
+              <div className="rail-tabs" role="tablist" aria-label="Side panel">
+                {selected && data && (
+                  <>
+                    <button
+                      role="tab"
+                      aria-selected={!onStage && railTab === 'kanji'}
+                      onClick={() => chooseRailTab('kanji')}
+                    >
+                      {data.focus.char} <span>kanji</span>
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={!onStage && railTab === 'associations'}
+                      onClick={() => chooseRailTab('associations')}
+                    >
+                      Associations
+                      {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                    </button>
+                  </>
+                )}
+                {mobile && (
+                  <>
+                    <button role="tab" aria-selected={onStage && view === 'focus'} onClick={() => setView('focus')}>
+                      Focus
+                    </button>
+                    <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
+                      Map
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {!selected ? (
             <section className="rail-section">
               <p className="hint">Select a kanji</p>
             </section>
-          ) : word ? (
-            <WordPanel
-              word={word.word}
-              from={word.from}
-              onBack={() => setWord(null)}
-              onPick={(c) => (c === focus ? setWord(null) : drill(c))}
-            />
           ) : (
             <>
-              {data && <DetailPanel data={data} hovered={hoveredNode} onWord={openWord} />}
+              {/* Kept mounted while hidden, so an unsent association and the
+                  count on its tab survive switching tabs. */}
               {data && (
-                <Associations char={data.focus.char} onPick={drill} onSignIn={() => setAccountOpen(true)} />
+                <div hidden={railTab !== 'associations'}>
+                  <Associations
+                    char={data.focus.char}
+                    onPick={drill}
+                    onSignIn={() => setAccountOpen(true)}
+                    onCount={setAssocCount}
+                  />
+                </div>
               )}
+              {railTab === 'kanji' &&
+                (word ? (
+                  <WordPanel
+                    word={word.word}
+                    from={word.from}
+                    onBack={() => setWord(null)}
+                    onPick={(c) => (c === focus ? setWord(null) : drill(c))}
+                  />
+                ) : (
+                  data && <DetailPanel data={data} hovered={hoveredNode} onWord={openWord} />
+                ))}
             </>
           )}
           {/* "Its parts" -- the decomposition editor and review queue -- is
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
         </aside>
+        <RailResizer width={railWidth} onWidth={setRailWidth} />
 
         <main className="stage">
           {error && (
@@ -210,7 +318,7 @@ export function App() {
           )}
 
           {!error && data && selected && view === 'focus' && (
-            <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={setHovered} />
+            <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={setHovered} legend={legendOpen} />
           )}
 
           {!error && mapOpened && (
@@ -223,6 +331,7 @@ export function App() {
                 onDeselect={deselect}
                 onOpen={() => setView('focus')}
                 onScope={setFilter}
+                legend={legendOpen && view === 'map'}
               />
             </div>
           )}
@@ -230,21 +339,31 @@ export function App() {
           {!error && (
             <>
               <Trail trail={trail} selected={selected} onPop={pop} />
-              <ViewSwitch view={view} onView={setView} />
+              {/* On a phone the tabs above do this. */}
+              {!mobile && <ViewSwitch view={view} onView={setView} />}
+            </>
+          )}
+
+          <div className="stage-corner">
+            {!error && (
               <LevelFilter
                 filter={filter}
                 view={view}
                 onFilter={setFilter}
                 note={view === 'focus' && data && selected ? containerNote(data, filter) : undefined}
               />
-            </>
-          )}
+            )}
+            {/* On a phone it sits beside the search instead, where it is always on screen. */}
+            {!mobile && <ProfileButton onOpen={() => setAccountOpen(true)} />}
+          </div>
 
           <button
             className="info-button"
-            onClick={() => setAboutOpen(true)}
-            title="What this is built on"
-            aria-label="What this is built on"
+            onClick={() => setLegendOpen((o) => !o)}
+            aria-expanded={legendOpen}
+            aria-controls="stage-legend"
+            title={legendOpen ? 'Hide the legend' : `How to read the ${view === 'map' ? 'map' : 'graph'}`}
+            aria-label="Legend"
           >
             i
           </button>
@@ -257,7 +376,6 @@ export function App() {
         onPick={drill}
         onWord={openWord}
       />
-      <About open={aboutOpen} onClose={() => setAboutOpen(false)} />
       {accountShown && <AccountDialog onClose={closeAccount} />}
     </div>
   )

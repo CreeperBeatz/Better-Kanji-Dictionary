@@ -130,11 +130,60 @@ export interface Association {
 
 export type Visibility = 'private' | 'public'
 
-export interface User {
+/** What others see of an account: never its email. */
+export interface Author {
   id: string
-  email: string
-  /** Shown beside your public notes. */
+  /** Display name, free text. */
   name: string
+  /** Unique handle, shown as @username. */
+  username: string | null
+  /** File name of the profile picture, or null for the initial. */
+  avatar: string | null
+}
+
+export interface User extends Author {
+  email: string
+}
+
+/** A note as the associations tab shows it: yours, or someone's public one. */
+export interface PublicNote {
+  id: string
+  char: string
+  author: Author
+  text: string
+  images: string[]
+  /** The images that are drawings and have a scene to reopen. */
+  drawings: string[]
+  visibility: Visibility
+  created: string
+  updated: string
+  likes: number
+  liked: boolean
+  /** How many replies there are, not the replies themselves. */
+  replies: number
+  mine: boolean
+}
+
+export interface Reply {
+  id: string
+  assoc: string
+  author: Author
+  text: string
+  created: string
+  mine: boolean
+}
+
+export interface Page<T> {
+  total: number
+  offset: number
+  items: T[]
+}
+
+export type NoteSort = 'liked' | 'new'
+
+/** `mine` is every note of yours on the character; the page is everyone else's public ones. */
+export interface NotesPage extends Page<PublicNote> {
+  mine: PublicNote[]
 }
 
 export interface AssociationView {
@@ -177,7 +226,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function get<T>(path: string, params?: [string, string][]): Promise<T> {
-  const url = new URL(BASE + path)
+  const url = new URL(BASE + path, window.location.origin)
   for (const [k, v] of params ?? []) url.searchParams.append(k, v)
   const res = await fetch(url, { headers: authHeaders() })
   if (!res.ok) {
@@ -229,8 +278,14 @@ export const api = {
   associations: (char: string) =>
     get<AssociationView>(`/api/assoc/for/${encodeURIComponent(char)}`),
 
-  saveAssociation: (char: string, text: string, images: string[], visibility: Visibility) =>
-    send<Association>(`/api/assoc/for/${encodeURIComponent(char)}`, 'PUT', { text, images, visibility }),
+  postAssociation: (char: string, text: string, images: string[], visibility: Visibility) =>
+    send<Association>(`/api/assoc/for/${encodeURIComponent(char)}`, 'POST', { text, images, visibility }),
+
+  editAssociation: (id: string, patch: { text?: string; images?: string[]; visibility?: Visibility }) =>
+    send<Association>(`/api/assoc/${encodeURIComponent(id)}`, 'PATCH', patch),
+
+  deleteAssociation: (id: string) =>
+    send<{ id: string; deleted: boolean }>(`/api/assoc/${encodeURIComponent(id)}`, 'DELETE'),
 
   uploadImage: async (file: Blob, filename: string) => {
     const form = new FormData()
@@ -259,7 +314,49 @@ export const api = {
 
   me: () => get<{ user: User | null }>('/api/auth/me'),
 
-  rename: (name: string) => send<{ user: User }>('/api/auth/me', 'PATCH', { name }),
+  updateProfile: (patch: { name?: string; username?: string }) =>
+    send<{ user: User }>('/api/auth/me', 'PATCH', patch),
+
+  uploadAvatar: async (file: Blob, filename: string) => {
+    const form = new FormData()
+    form.append('file', file, filename)
+    const res = await fetch(BASE + '/api/auth/avatar', { method: 'POST', body: form, headers: authHeaders() })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new ApiError(res.status, body.detail ?? 'uploading the picture failed')
+    }
+    return (await res.json()) as { user: User }
+  },
+
+  removeAvatar: () => send<{ user: User }>('/api/auth/avatar', 'DELETE'),
+
+  avatarUrl: (name: string) => `${BASE}/api/auth/avatar/${encodeURIComponent(name)}`,
+
+  notesFor: (char: string, sort: NoteSort, offset = 0, limit = 10) =>
+    get<NotesPage>(`/api/comments/for/${encodeURIComponent(char)}`, [
+      ['offset', String(offset)],
+      ['limit', String(limit)],
+      ['sort', sort],
+    ]),
+
+  like: (assocId: string, liked: boolean) =>
+    send<{ id: string; likes: number; liked: boolean }>(
+      `/api/comments/like/${encodeURIComponent(assocId)}`,
+      'PUT',
+      { liked },
+    ),
+
+  replies: (assocId: string, offset = 0, limit = 5) =>
+    get<Page<Reply>>(`/api/comments/replies/${encodeURIComponent(assocId)}`, [
+      ['offset', String(offset)],
+      ['limit', String(limit)],
+    ]),
+
+  reply: (assocId: string, text: string) =>
+    send<Reply>(`/api/comments/replies/${encodeURIComponent(assocId)}`, 'POST', { text }),
+
+  deleteReply: (replyId: string) =>
+    send<{ id: string; deleted: boolean }>(`/api/comments/reply/${encodeURIComponent(replyId)}`, 'DELETE'),
 
   logout: () => send<{ ok: boolean }>('/api/auth/logout', 'POST'),
 
