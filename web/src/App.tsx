@@ -62,9 +62,10 @@ function urlFor(char: string | null): string {
   return char ? `/kanji/${encodeURIComponent(char)}` : '/'
 }
 
-// A desktop opens on the whole common map with nothing picked, to wander in;
-// a phone opens on the character and view it was left on. A link to a
-// character opens on that character either way, in the focus view.
+// The URL alone decides what is selected, so a refresh keeps what was on
+// screen: `/` opens with nothing picked, a link to a character opens on it in
+// the focus view. Otherwise a desktop opens on the whole common map, to wander
+// in, and a phone on the view it was left on.
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linked = kanjiInUrl()
 
@@ -83,7 +84,7 @@ export function App() {
   const { recent, focus, visit, back, clear: clearRecent } = useRecent(START, linked)
   // Clicking empty map clears the selection; the recent list is kept, so it
   // or any pick brings a character back.
-  const [selected, setSelected] = useState(openedOnPhone || linked !== null)
+  const [selected, setSelected] = useState(linked !== null)
   const [data, setData] = useState<GraphResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
