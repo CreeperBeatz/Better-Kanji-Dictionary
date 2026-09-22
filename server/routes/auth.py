@@ -1,4 +1,4 @@
-"""Sign-in by magic link, your profile, and the dependencies other routes use to know who is asking."""
+"""Sign-in by magic link or Google, your profile, and the dependencies other routes use to know who is asking."""
 
 import os
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from .. import auth, mail, store
+from .. import auth, google, mail, store
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -81,6 +81,32 @@ def verify(payload: dict = Body(...)) -> dict:
     if result is None:
         raise HTTPException(400, "this link has expired or was already used")
     session, user, _ = result
+    store.ensure_author(user)
+    store.claim_legacy(user["id"], user["email"])
+    return {"session": session, "user": _public(user)}
+
+
+@router.get("/config")
+def config() -> dict:
+    """Which sign-in methods this server offers; the Google client id is public by design."""
+    return {"googleClientId": google.client_id()}
+
+
+@router.post("/google")
+def google_sign_in(payload: dict = Body(...)) -> dict:
+    try:
+        claims = google.verify(payload.get("credential", ""))
+    except google.InvalidCredential as e:
+        raise HTTPException(400, str(e))
+    email = auth.normalise_email(claims["email"])
+    if not email:
+        raise HTTPException(400, "that Google account's address is not one we can use")
+    session, user, created = auth.sign_in_google(claims["sub"], email, claims.get("name"))
+    # A new account starts with its Google picture; an existing one keeps its own.
+    if created and not user.get("avatar"):
+        picture = google.fetch_picture(claims.get("picture"))
+        if picture:
+            user = auth.set_avatar(user["id"], *picture)
     store.ensure_author(user)
     store.claim_legacy(user["id"], user["email"])
     return {"session": session, "user": _public(user)}

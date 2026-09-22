@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
 import { Credits } from '../About'
 import { Avatar, squareAvatar } from './Avatar'
+import { GoogleButton } from './GoogleButton'
 
 /** Top-right of the stage: your picture, or a silhouette that opens sign-in. */
 export function ProfileButton({ onOpen }: { onOpen: () => void }) {
@@ -93,9 +94,10 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
           <>
             <h2>Log in</h2>
             <p className="hint">
-              We email you a link; there is no password. Notes you wrote in this browser move into
-              your account, as private notes.
+              Continue with Google, or we email you a link; there is no password. Notes you wrote in
+              this browser move into your account, as private notes.
             </p>
+            <GoogleButton onError={setProblem} />
             <form className="account-form" onSubmit={send}>
               <div className="account-row">
                 <input

@@ -1,8 +1,10 @@
-"""Accounts, by emailed magic link.
+"""Accounts, by emailed magic link or by Google.
 
 There are no passwords. Asking to sign in mints a one-time token that is
 emailed as a link; opening the link trades it for a session token the browser
-keeps and sends as `Authorization: Bearer ...`. A bearer header rather than a
+keeps and sends as `Authorization: Bearer ...`. Signing in with Google ends
+in the same session, and an address that already has an account signs into
+it rather than making a second one. A bearer header rather than a
 cookie because the dev frontend and this server sit on different origins.
 
 Only hashes of tokens are stored, so `data/auth/auth.json` leaking does not let
@@ -148,25 +150,56 @@ def redeem_link(token: str) -> tuple[str, dict, bool] | None:
         user = next((u for u in data["users"].values() if u["email"] == link["email"]), None)
         created = user is None
         if created:
-            user = {
-                "id": f"u-{uuid.uuid4().hex[:12]}",
-                "email": link["email"],
-                # What others see beside your public notes; never the whole address.
-                "name": link["email"].split("@")[0][:40],
-                "username": _free_username(data, link["email"].split("@")[0]),
-                "avatar": None,
-                "created": _now().isoformat(),
-            }
-            data["users"][user["id"]] = user
-
-        session = secrets.token_urlsafe(32)
-        data["sessions"][_hash(session)] = {
-            "user": user["id"],
-            "created": _now().isoformat(),
-            "expires": (_now() + SESSION_TTL).isoformat(),
-        }
+            user = _new_user(data, link["email"])
+        session = _new_session(data, user["id"])
         _save(data)
         return session, dict(user), created
+
+
+def sign_in_google(sub: str, email: str, name: str | None) -> tuple[str, dict, bool]:
+    """Sign in the Google account `sub`, whose verified address is `email`.
+
+    Returns (session token, user, is_new_user). The account is found by its
+    Google id first, so changing the address on the Google side keeps it; then
+    by address, which ties Google to an account first made by email link.
+    """
+    with _lock:
+        data = _load()
+        _prune(data)
+        user = next((u for u in data["users"].values() if u.get("google") == sub), None)
+        if user is None:
+            user = next((u for u in data["users"].values() if u["email"] == email), None)
+        created = user is None
+        if created:
+            user = _new_user(data, email, name)
+        user["google"] = sub
+        session = _new_session(data, user["id"])
+        _save(data)
+        return session, dict(user), created
+
+
+def _new_user(data: dict, email: str, name: str | None = None) -> dict:
+    user = {
+        "id": f"u-{uuid.uuid4().hex[:12]}",
+        "email": email,
+        # What others see beside your public notes; never the whole address.
+        "name": (name or "").strip()[:40] or email.split("@")[0][:40],
+        "username": _free_username(data, email.split("@")[0]),
+        "avatar": None,
+        "created": _now().isoformat(),
+    }
+    data["users"][user["id"]] = user
+    return user
+
+
+def _new_session(data: dict, user_id: str) -> str:
+    session = secrets.token_urlsafe(32)
+    data["sessions"][_hash(session)] = {
+        "user": user_id,
+        "created": _now().isoformat(),
+        "expires": (_now() + SESSION_TTL).isoformat(),
+    }
+    return session
 
 
 def user_for_session(session: str | None) -> dict | None:

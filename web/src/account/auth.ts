@@ -1,8 +1,9 @@
 /**
  * Who is signed in, shared across the app.
  *
- * Signing in is by emailed link: the link opens the app with `?login=<token>`,
- * which is traded for a session here. Straight after, every note written while
+ * Signing in is by emailed link -- the link opens the app with `?login=<token>`,
+ * which is traded for a session here -- or by Google's button, whose
+ * credential is traded the same way. Straight after, every note written while
  * signed out is moved from the browser into the account, before the app is
  * told who you are -- so the first thing it loads already includes them.
  */
@@ -48,11 +49,7 @@ export async function startAuth() {
     url.searchParams.delete('login')
     window.history.replaceState(null, '', url)
     try {
-      const { session, user } = await api.verifyLogin(token)
-      setSessionToken(session)
-      set({ syncing: true })
-      await moveLocalNotes()
-      set({ user, ready: true, syncing: false })
+      await finishSignIn(await api.verifyLogin(token))
       return
     } catch (e) {
       set({ error: e instanceof ApiError ? e.message : 'signing in failed', syncing: false })
@@ -76,6 +73,18 @@ export async function startAuth() {
 
 export async function requestLink(email: string) {
   return api.requestLogin(email)
+}
+
+/** Trade the credential from Google's button for a session. */
+export async function signInWithGoogle(credential: string) {
+  await finishSignIn(await api.googleLogin(credential))
+}
+
+async function finishSignIn({ session, user }: { session: string; user: User }) {
+  setSessionToken(session)
+  set({ syncing: true, error: null })
+  await moveLocalNotes()
+  set({ user, ready: true, syncing: false })
 }
 
 export async function logout() {

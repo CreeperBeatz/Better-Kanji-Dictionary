@@ -2320,6 +2320,22 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: default;
 }
 
+/* Google draws its own button in an iframe; this only gives it the row. */
+.google-slot {
+  min-height: 40px;
+}
+
+.google-slot[hidden] {
+  display: none;
+}
+
+.account-or {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
 .account-problem {
   margin: 0;
   font-size: 12.5px;

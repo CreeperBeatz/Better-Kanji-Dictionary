@@ -312,6 +312,11 @@ export const api = {
   verifyLogin: (token: string) =>
     send<{ session: string; user: User }>('/api/auth/verify', 'POST', { token }),
 
+  authConfig: () => get<{ googleClientId: string | null }>('/api/auth/config'),
+
+  googleLogin: (credential: string) =>
+    send<{ session: string; user: User }>('/api/auth/google', 'POST', { credential }),
+
   me: () => get<{ user: User | null }>('/api/auth/me'),
 
   updateProfile: (patch: { name?: string; username?: string }) =>
