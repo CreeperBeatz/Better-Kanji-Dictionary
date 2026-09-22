@@ -51,7 +51,15 @@ export function LevelFilter({
   )
 }
 
-export function Trail({ trail, onPop }: { trail: string[]; onPop: (index: number) => void }) {
+export function Trail({
+  trail,
+  selected,
+  onPop,
+}: {
+  trail: string[]
+  selected: boolean
+  onPop: (index: number) => void
+}) {
   if (trail.length < 2) return null
   return (
     <nav className="trail" aria-label="Where you came from">
@@ -59,8 +67,8 @@ export function Trail({ trail, onPop }: { trail: string[]; onPop: (index: number
         <button
           key={`${c}-${i}`}
           onClick={() => onPop(i)}
-          disabled={i === trail.length - 1}
-          aria-current={i === trail.length - 1 ? 'page' : undefined}
+          disabled={selected && i === trail.length - 1}
+          aria-current={selected && i === trail.length - 1 ? 'page' : undefined}
         >
           {c}
         </button>

@@ -24,6 +24,9 @@ function initialView(): StageView {
 export function App() {
   // The trail is the zoom-out path: drilling pushes, the breadcrumb pops.
   const [trail, setTrail] = useState<string[]>([START])
+  // Clicking empty map clears the selection; the trail is kept, so the
+  // breadcrumb or any pick brings a character back.
+  const [selected, setSelected] = useState(true)
   const [data, setData] = useState<GraphResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
@@ -68,6 +71,7 @@ export function App() {
   const drill = useCallback((char: string, via?: string) => {
     setHovered(null)
     setWord(null)
+    setSelected(true)
     setTrail((t) => {
       const next = via && t[t.length - 1] !== via && via !== char ? [...t, via] : t
       return next[next.length - 1] === char ? next : [...next, char]
@@ -77,7 +81,14 @@ export function App() {
   const pop = useCallback((index: number) => {
     setHovered(null)
     setWord(null)
+    setSelected(true)
     setTrail((t) => t.slice(0, index + 1))
+  }, [])
+
+  const deselect = useCallback(() => {
+    setHovered(null)
+    setWord(null)
+    setSelected(false)
   }, [])
 
   const openWord = useCallback((w: Word) => setWord({ word: w, from: focus }), [focus])
@@ -102,7 +113,10 @@ export function App() {
       if (e.key === 'Backspace') {
         e.preventDefault()
         setWord((w) => {
-          if (!w) setTrail((t) => (t.length > 1 ? t.slice(0, -1) : t))
+          if (!w) {
+            setSelected(true)
+            setTrail((t) => (t.length > 1 ? t.slice(0, -1) : t))
+          }
           return null
         })
       }
@@ -134,7 +148,11 @@ export function App() {
             </button>
           </div>
 
-          {word ? (
+          {!selected ? (
+            <section className="rail-section">
+              <p className="hint">Select a kanji</p>
+            </section>
+          ) : word ? (
             <WordPanel
               word={word.word}
               from={word.from}
@@ -166,7 +184,13 @@ export function App() {
             </div>
           )}
 
-          {!error && data && view === 'focus' && (
+          {!error && !selected && view === 'focus' && (
+            <div className="stage-empty">
+              <p className="hint">Select a kanji</p>
+            </div>
+          )}
+
+          {!error && data && selected && view === 'focus' && (
             <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={setHovered} />
           )}
 
@@ -174,9 +198,10 @@ export function App() {
             <div className="map-host" hidden={view !== 'map'}>
               <KanjiMap
                 scope={scopeOf(filter)}
-                focus={focus}
-                focusNode={data?.focus ?? null}
+                focus={selected ? focus : null}
+                focusNode={selected ? (data?.focus ?? null) : null}
                 onSelect={drill}
+                onDeselect={deselect}
                 onOpen={() => setView('focus')}
                 onScope={setFilter}
               />
@@ -185,13 +210,13 @@ export function App() {
 
           {!error && (
             <>
-              <Trail trail={trail} onPop={pop} />
+              <Trail trail={trail} selected={selected} onPop={pop} />
               <ViewSwitch view={view} onView={setView} />
               <LevelFilter
                 filter={filter}
                 view={view}
                 onFilter={setFilter}
-                note={view === 'focus' && data ? containerNote(data, filter) : undefined}
+                note={view === 'focus' && data && selected ? containerNote(data, filter) : undefined}
               />
             </>
           )}

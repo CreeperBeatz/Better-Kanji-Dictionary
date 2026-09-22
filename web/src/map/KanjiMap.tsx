@@ -13,7 +13,7 @@
  * little; as spokes from one character they say everything.
  *
  * Clicking a character flies to it and makes it the focus; clicking the focus
- * again opens it in the focus view.
+ * again opens it in the focus view. Clicking empty space clears the focus.
  */
 
 import { interpolateZoom } from 'd3-interpolate'
@@ -27,9 +27,11 @@ import { cachedLayout, loadMap, storeLayout, type MapData, type Scope } from './
 
 interface Props {
   scope: Scope
-  focus: string
+  /** null when nothing is selected */
+  focus: string | null
   focusNode: KanjiNode | null
   onSelect: (char: string) => void
+  onDeselect: () => void
   onOpen: (char: string) => void
   onScope: (f: ContainerFilter) => void
 }
@@ -406,7 +408,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   return s.anim !== null || atlas.pending > 0
 }
 
-export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }: Props) {
+export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -544,7 +546,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
       setPhase('ready')
       const i = d.index.get(s.focusChar) ?? -1
       s.focus = i
-      setPresent(i >= 0)
+      setPresent(i >= 0 || !s.focusChar)
       if (i >= 0) centreOn(i)
       else {
         const fit = fitCamera()
@@ -619,12 +621,12 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
 
   // The focus can change from anywhere -- search, breadcrumb, a word's kanji.
   useEffect(() => {
-    s.focusChar = focus
+    s.focusChar = focus ?? ''
     const d = s.data
     if (!d || !s.pos || phase !== 'ready') return
-    const i = d.index.get(focus) ?? -1
+    const i = focus ? (d.index.get(focus) ?? -1) : -1
     s.focus = i
-    setPresent(i >= 0)
+    setPresent(i >= 0 || !focus)
     if (i >= 0) centreOn(i)
     else request()
   }, [focus, phase, s, centreOn, request])
@@ -784,7 +786,11 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
     if (!g || g.moved > 4) return
     const i = pick(x, y)
     const d = s.data
-    if (i < 0 || !d) return
+    if (!d) return
+    if (i < 0) {
+      if (s.focus >= 0 || s.focusChar) onDeselect()
+      return
+    }
     if (i === s.focus) onOpen(d.chars[i])
     else onSelect(d.chars[i])
   }
@@ -849,9 +855,9 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
       <div className="map-zoom" role="group" aria-label="Zoom">
         <button
           onClick={() => s.focus >= 0 && centreOn(s.focus)}
-          disabled={!present || phase !== 'ready'}
-          aria-label={`Recentre on ${focus}`}
-          title={`Recentre on ${focus} (C)`}
+          disabled={!focus || !present || phase !== 'ready'}
+          aria-label={focus ? `Recentre on ${focus}` : 'Recentre'}
+          title={focus ? `Recentre on ${focus} (C)` : 'Nothing selected'}
         >
           ◎
         </button>
@@ -878,7 +884,9 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
         <br />
         larger is more frequent, or a part more characters share
         <br />
-        click to select and see its links, click again to open
+        click to select and see its links, click again to open,
+        <br />
+        click empty space to deselect
       </p>
     </div>
   )
