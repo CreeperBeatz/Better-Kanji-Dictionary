@@ -1400,6 +1400,20 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 0 6px;
 }
 
+/* On a phone the levels take a second row: the divider becomes the line break. */
+@media (max-width: 640px) {
+  .overlay-tabs {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .overlay-tab-rule {
+    flex-basis: 100%;
+    height: 0;
+    margin: 0;
+  }
+}
+
 .overlay-body {
   margin-top: 14px;
   overflow-y: auto;
