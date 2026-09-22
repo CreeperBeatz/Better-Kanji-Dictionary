@@ -9,10 +9,11 @@ so keep it off untrusted networks.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from .db import DatabaseMissing
-from .routes import assoc, decomp, graph, radicals, recognize, search
+from .routes import assoc, atlas, decomp, graph, radicals, recognize, search
 
 app = FastAPI(
     title="BetterRTK Explorer",
@@ -30,6 +31,10 @@ app.add_middleware(
 )
 
 
+# The map payload is a few hundred KB of repetitive JSON at the widest scope.
+app.add_middleware(GZipMiddleware, minimum_size=2048)
+
+
 @app.exception_handler(DatabaseMissing)
 async def db_missing_handler(request, exc: DatabaseMissing):
     return JSONResponse(status_code=503, content={"error": "database_missing", "detail": str(exc)})
@@ -37,6 +42,7 @@ async def db_missing_handler(request, exc: DatabaseMissing):
 
 app.include_router(radicals.router)
 app.include_router(graph.router)
+app.include_router(atlas.router)
 app.include_router(search.router)
 app.include_router(assoc.router)
 app.include_router(decomp.router)

@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, type GraphResponse, type KanjiNode } from './api'
-import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
+import { api, type GraphResponse, type KanjiNode, type Word } from './api'
+import { KanjiGraph, keeps, type ContainerFilter } from './graph/KanjiGraph'
+import { KanjiMap } from './map/KanjiMap'
+import { scopeOf } from './map/mapData'
 import { SearchOverlay } from './search/SearchOverlay'
 import { Associations } from './detail/Associations'
 import { About } from './About'
 import { DetailPanel } from './detail/DetailPanel'
+import { WordPanel } from './detail/WordPanel'
+import { LevelFilter, Trail, ViewSwitch, type StageView } from './StageControls'
 
 const START = '言'
+const VIEW_KEY = 'betterrtk:view'
+
+function initialView(): StageView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'map' ? 'map' : 'focus'
+  } catch {
+    return 'focus'
+  }
+}
 
 export function App() {
   // The trail is the zoom-out path: drilling pushes, the breadcrumb pops.
@@ -17,6 +30,22 @@ export function App() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [filter, setFilter] = useState<ContainerFilter>('all')
+  const [view, setViewState] = useState<StageView>(initialView)
+  // The map is expensive to lay out, so once opened it stays mounted and keeps
+  // its camera while the focus view is showing.
+  const [mapOpened, setMapOpened] = useState(view === 'map')
+  // A word open in the rail, and the kanji it was opened from.
+  const [word, setWord] = useState<{ word: Word; from: string } | null>(null)
+
+  const setView = useCallback((v: StageView) => {
+    setViewState(v)
+    if (v === 'map') setMapOpened(true)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // not remembered, which is fine
+    }
+  }, [])
 
   const focus = trail[trail.length - 1]
 
@@ -35,15 +64,23 @@ export function App() {
     }
   }, [focus])
 
-  const drill = useCallback((char: string) => {
+  // `via` keeps the breadcrumb honest when a peek skips a level: 言 -> 語 -> X.
+  const drill = useCallback((char: string, via?: string) => {
     setHovered(null)
-    setTrail((t) => (t[t.length - 1] === char ? t : [...t, char]))
+    setWord(null)
+    setTrail((t) => {
+      const next = via && t[t.length - 1] !== via && via !== char ? [...t, via] : t
+      return next[next.length - 1] === char ? next : [...next, char]
+    })
   }, [])
 
   const pop = useCallback((index: number) => {
     setHovered(null)
+    setWord(null)
     setTrail((t) => t.slice(0, index + 1))
   }, [])
+
+  const openWord = useCallback((w: Word) => setWord({ word: w, from: focus }), [focus])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -56,17 +93,23 @@ export function App() {
         setSearchOpen(true)
         return
       }
-      if (typing) return
-      // Backspace walks back out, matching the breadcrumb. Escape is left to
-      // whichever overlay is open.
+      if (typing || e.metaKey || e.ctrlKey || e.altKey) return
+      if (document.querySelector('.overlay')) return
+      if (e.key === 'm' || e.key === 'M') setView('map')
+      if (e.key === 'f' || e.key === 'F') setView('focus')
+      // Backspace walks back out, matching the breadcrumb -- first out of an
+      // open word, then up the trail. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
         e.preventDefault()
-        setTrail((t) => (t.length > 1 ? t.slice(0, -1) : t))
+        setWord((w) => {
+          if (!w) setTrail((t) => (t.length > 1 ? t.slice(0, -1) : t))
+          return null
+        })
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setView])
 
   const hoveredNode: KanjiNode | null = useMemo(() => {
     if (!data || !hovered) return null
@@ -91,8 +134,19 @@ export function App() {
             </button>
           </div>
 
-          {data && <DetailPanel data={data} hovered={hoveredNode} onPick={drill} />}
-          {data && <Associations char={data.focus.char} onPick={drill} />}
+          {word ? (
+            <WordPanel
+              word={word.word}
+              from={word.from}
+              onBack={() => setWord(null)}
+              onPick={(c) => (c === focus ? setWord(null) : drill(c))}
+            />
+          ) : (
+            <>
+              {data && <DetailPanel data={data} hovered={hoveredNode} onWord={openWord} />}
+              {data && <Associations char={data.focus.char} onPick={drill} />}
+            </>
+          )}
           {/* "Its parts" -- the decomposition editor and review queue -- is
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
@@ -112,16 +166,34 @@ export function App() {
             </div>
           )}
 
-          {!error && data && (
-            <KanjiGraph
-              data={data}
-              trail={trail}
-              filter={filter}
-              onFilter={setFilter}
-              onDrill={drill}
-              onPop={pop}
-              onHover={setHovered}
-            />
+          {!error && data && view === 'focus' && (
+            <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={setHovered} />
+          )}
+
+          {!error && mapOpened && (
+            <div className="map-host" hidden={view !== 'map'}>
+              <KanjiMap
+                scope={scopeOf(filter)}
+                focus={focus}
+                focusNode={data?.focus ?? null}
+                onSelect={drill}
+                onOpen={() => setView('focus')}
+                onScope={setFilter}
+              />
+            </div>
+          )}
+
+          {!error && (
+            <>
+              <Trail trail={trail} onPop={pop} />
+              <ViewSwitch view={view} onView={setView} />
+              <LevelFilter
+                filter={filter}
+                view={view}
+                onFilter={setFilter}
+                note={view === 'focus' && data ? containerNote(data, filter) : undefined}
+              />
+            </>
           )}
 
           <button
@@ -135,8 +207,19 @@ export function App() {
         </main>
       </div>
 
-      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} onPick={drill} />
+      <SearchOverlay
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onPick={drill}
+        onWord={openWord}
+      />
       <About open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   )
+}
+
+function containerNote(data: GraphResponse, filter: ContainerFilter): string {
+  const shown = data.containers.filter(keeps(filter)).length
+  const hidden = data.containers.length - shown
+  return `${shown} above${hidden > 0 ? `, ${hidden} hidden` : ''}`
 }

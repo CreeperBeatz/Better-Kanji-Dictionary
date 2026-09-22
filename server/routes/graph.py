@@ -16,7 +16,7 @@ component float up above something it is actually a part of.
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from .. import store
 from ..db import query, query_one
@@ -93,6 +93,36 @@ def _fetch(chars: list[str]) -> dict[str, dict]:
         tuple(chars),
     )
     return {r["char"]: _node(r) for r in rows}
+
+
+PEEK_LIMIT = 48
+
+
+# Registered before /{char}, like by-level below.
+@router.get("/containers")
+def containers_of(c: list[str] = Query(default=[], max_length=64)) -> dict:
+    """Direct containers of several characters at once, frequency-ordered.
+
+    This is what the graph's hover peek reads: one level further up from a
+    container. Batched so the client can prefetch the whole inner ring in one
+    request and the peek opens without a round trip.
+    """
+    out: dict[str, dict] = {}
+    for char in dict.fromkeys(ch for ch in c if len(ch) == 1):
+        parents = parents_of(char)
+        if not parents:
+            out[char] = {"total": 0, "containers": []}
+            continue
+        ph = ",".join("?" * len(parents))
+        rows = query(
+            f"SELECT {KANJI_COLS} FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
+            f"WHERE k.char IN ({ph}) "
+            f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
+            tuple(parents),
+        )
+        nodes = [_node(r) for r in rows]
+        out[char] = {"total": len(nodes), "containers": nodes[:PEEK_LIMIT]}
+    return out
 
 
 # Registered before /{char} -- FastAPI matches in declaration order, and

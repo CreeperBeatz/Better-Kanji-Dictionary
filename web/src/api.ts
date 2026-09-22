@@ -34,6 +34,30 @@ export interface GraphResponse {
   }
 }
 
+/** One map scope, column-wise: index i across every array is one character. */
+export interface MapResponse {
+  scope: string
+  chars: string[]
+  freq: (number | null)[]
+  jlpt: (number | null)[]
+  joyo: (0 | 1)[]
+  fanout: number[]
+  strokes: (number | null)[]
+  meaning: string[]
+  /** 1 = in the scope in its own right, 0 = pulled in only as a part */
+  target: (0 | 1)[]
+  /** flat parent,child index pairs */
+  edges: number[]
+  counts: { nodes: number; targets: number; edges: number }
+}
+
+export interface WordEntry {
+  word: Word
+  kanji: (KanjiNode & { curated: string | null })[]
+  /** `hit` is the [start, end) of the word itself, inflected as it appears. */
+  examples: { text: string; hit: [number, number] | null }[]
+}
+
 export interface RadicalGroup {
   strokeCount: number
   radicals: { radical: string; kanjiCount: number }[]
@@ -156,6 +180,17 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
 
 export const api = {
   kanji: (char: string) => get<GraphResponse>(`/api/kanji/${encodeURIComponent(char)}`),
+
+  /** Direct containers of several characters, for the hover peek. */
+  containersOf: (chars: string[]) =>
+    get<Record<string, { total: number; containers: KanjiNode[] }>>(
+      '/api/kanji/containers',
+      chars.map((c) => ['c', c] as [string, string]),
+    ),
+
+  map: (scope: string) => get<MapResponse>(`/api/map/${encodeURIComponent(scope)}`),
+
+  word: (id: number) => get<WordEntry>(`/api/search/word/${id}`),
 
   radicals: () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals'),
 

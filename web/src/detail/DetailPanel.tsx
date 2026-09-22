@@ -5,7 +5,7 @@ import { StrokeOrder } from './StrokeOrder'
 interface Props {
   data: GraphResponse
   hovered: KanjiNode | null
-  onPick: (char: string) => void
+  onWord: (word: Word) => void
 }
 
 function levelOf(n: KanjiNode): string | null {
@@ -16,7 +16,7 @@ function levelOf(n: KanjiNode): string | null {
   return 'outside the jōyō list'
 }
 
-export function DetailPanel({ data, hovered, onPick }: Props) {
+export function DetailPanel({ data, hovered, onWord }: Props) {
   const [words, setWords] = useState<Word[]>([])
 
   // Vocabulary follows the focus, not the hover -- otherwise it would thrash
@@ -100,11 +100,11 @@ export function DetailPanel({ data, hovered, onPick }: Props) {
           <ul>
             {words.slice(0, 8).map((w) => (
               <li key={w.id}>
-                <button className="vocab-word" onClick={() => onPick(data.focus.char)}>
-                  {w.headword}
+                <button className="vocab-row" onClick={() => onWord(w)} title="Open this entry">
+                  <span className="vocab-word">{w.headword}</span>
+                  <span className="vocab-reading">{w.reading}</span>
+                  <span className="vocab-gloss">{w.senses[0]?.gloss.split(';')[0]}</span>
                 </button>
-                <span className="vocab-reading">{w.reading}</span>
-                <span className="vocab-gloss">{w.senses[0]?.gloss.split(';')[0]}</span>
               </li>
             ))}
           </ul>

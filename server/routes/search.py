@@ -6,6 +6,8 @@ against the indexed word_form table by exact and prefix range instead, and FTS
 is reserved for English glosses.
 """
 
+import re
+
 from fastapi import APIRouter, Query
 
 from ..db import query
@@ -255,3 +257,63 @@ def examples(headword: str, limit: int = Query(5, ge=1, le=30)) -> dict:
         (headword, limit),
     )
     return {"headword": headword, "sentences": [r["text"] for r in rows]}
+
+
+@router.get("/word/{word_id}")
+def word_entry(word_id: int) -> dict:
+    """One dictionary entry, the way the side panel shows it.
+
+    Alongside the entry: each kanji it is written with, in order, so the panel
+    can link straight back into the graph, and a handful of example sentences.
+    """
+    from fastapi import HTTPException
+
+    from .graph import _fetch
+
+    w = _fetch_words([word_id]).get(word_id)
+    if w is None:
+        raise HTTPException(404, "no such word")
+
+    chars = [c for c in dict.fromkeys(w["headword"]) if "一" <= c <= "鿿" or "㐀" <= c <= "䶿"]
+    nodes = _fetch(chars)
+    curated = {
+        r["char"]: r["meaning"]
+        for r in query(
+            f"SELECT char, meaning FROM kanji_curated WHERE char IN ({','.join('?' * len(chars))})",
+            tuple(chars),
+        )
+    } if chars else {}
+    kanji = []
+    for c in chars:
+        if c in nodes:
+            kanji.append({**nodes[c], "curated": curated.get(c)})
+
+    rows = query(
+        "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
+        "WHERE sw.headword = ? ORDER BY LENGTH(s.text) LIMIT 6",
+        (w["headword"],),
+    )
+    return {"word": w, "kanji": kanji, "examples": [_sentence(r["text"], w["headword"]) for r in rows]}
+
+
+_ANNOTATION = re.compile(r"\(.*?\)|\[.*?\]|~")
+
+
+def _sentence(indexed: str, headword: str) -> dict:
+    """Rebuild the sentence from a Tatoeba index line, and find the word in it.
+
+    The stored text is the jpn_indices B-line, one token per space:
+    `lemma(reading)[sense]{surface}` -- only the lemma is mandatory, and the
+    surface form, when given, is what the sentence actually says. Matching on
+    the lemma is what lets 食べた be marked as an example of 食べる.
+    """
+    text = ""
+    hit = None
+    for token in indexed.split():
+        brace = token.find("{")
+        lemma = _ANNOTATION.sub("", token[:brace] if brace >= 0 else token)
+        surface = token[brace + 1 : token.find("}", brace)] if brace >= 0 else lemma
+        if hit is None and lemma == headword:
+            hit = [len(text), len(text) + len(surface)]
+        text += surface
+    return {"text": text, "hit": hit}

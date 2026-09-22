@@ -226,3 +226,52 @@ export function computeLayout(data: GraphResponse): Layout {
     },
   }
 }
+
+// --- the peek: a second level of containers fanned out around one container.
+
+export interface PeekItem {
+  char: string
+  x: number
+  y: number
+  radius: number
+  node: KanjiNode
+}
+
+const PEEK_RADIUS = 17
+const PEEK_GAP = 8
+const PEEK_FIRST = 30
+const PEEK_ROW = 44
+/** How far round the host the fan may wrap, centred on "away from the focus". */
+const PEEK_SPAN = Math.PI * 1.15
+
+/**
+ * Fan `above` out on arcs around `host`, facing away from the focus so the
+ * peek grows into open space instead of back over the graph. Frequency order
+ * is kept, nearest first, exactly as the main rings do it.
+ */
+export function placePeek(host: PositionedNode, above: KanjiNode[]): PeekItem[] {
+  const out: PeekItem[] = []
+  const facing = Math.atan2(host.y, host.x)
+  let i = 0
+  let row = 0
+  while (i < above.length) {
+    const r = host.radius + PEEK_FIRST + PEEK_RADIUS + row * PEEK_ROW
+    const capacity = Math.max(1, Math.floor((r * PEEK_SPAN) / (PEEK_RADIUS * 2 + PEEK_GAP)))
+    const slice = above.slice(i, i + capacity)
+    const step = PEEK_SPAN / capacity
+    const start = facing - (step * (slice.length - 1)) / 2
+    slice.forEach((node, k) => {
+      const a = start + k * step
+      out.push({
+        char: node.char,
+        x: host.x + Math.cos(a) * r,
+        y: host.y + Math.sin(a) * r,
+        radius: PEEK_RADIUS,
+        node,
+      })
+    })
+    i += capacity
+    row += 1
+  }
+  return out
+}

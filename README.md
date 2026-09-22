@@ -39,14 +39,36 @@ atoms, one row per level, the number under each component being how many jōyō
 characters it appears inside.
 
 Click any character to bring it to the centre. Backspace or the breadcrumb walks
-back out.
+back out. Hover one of the characters above to peek a level further up: what
+contains *it* fans out around it, and a small arc on a container's outer edge
+says it has anything above it at all.
+
+## The map
+
+**Map** (or `M`; `F` returns to the focus view) shows every character in a
+scope at once, to wander around in. The level buttons pick the scope: N5 to N1
+each include the parts their kanji are built from, `common` is the 2,501
+newspaper-ranked characters and their parts, and `all` is the whole graph,
+13,490 characters.
+
+Characters sit near the parts they share, larger when frequent or when many
+characters use them, and resolve from points into glyphs as you zoom in.
+Clicking one flies to it and makes it the focus; clicking the focus again opens
+it in the focus view. `◎` or `C` recentres on the focus.
+
+The layout is a force simulation in a Web Worker, run once per scope and kept in
+`localStorage` (about 2 s for N1, 7 s for `all`). Large scopes lay out the shared
+components first and then place each leaf character at a weighted centroid of
+its parts, which is what makes `all` tractable at all -- a plain simulation took
+40 s. Nodes are drawn from a glyph sprite atlas, so zooming does not re-rasterise
+text every frame.
 
 ## What each piece does
 
 | Area | Notes |
 |---|---|
 | **Search** | One box takes English, Japanese, or romaji. Returns characters *and* words. Full deinflection, so 食べたくなかった finds 食べる and shows the chain. |
-| **Dictionary** | JMdict with real `nf01`–`nf48` frequency ranks, pitch accent contours, and Tatoeba examples linked by lemma rather than substring. |
+| **Dictionary** | JMdict with real `nf01`–`nf48` frequency ranks, pitch accent contours, and Tatoeba examples linked by lemma rather than substring. Clicking a word opens its entry in the side panel: senses, other spellings, examples, and each kanji it is written with, any of which moves the graph there. |
 | **Draw** | Stroke matching against KanjiVG, server-side. One score, from shape plus a bonus for stroke order — writing it properly sharpens the answer, writing it any other way costs nothing, and the stroke count need not be exact. Picking a result opens it in the graph. |
 | **Radical picker** | KRADFILE's 253 radicals. After each pick, radicals present in no remaining candidate grey out, so you cannot build an empty result. |
 | **Associations** | Text, pasted or dropped images, and in-app sketches, on both kanji and components. A character's panel pulls in your notes on each of its parts, so the mnemonic assembles itself. Autosaves to disk. |
@@ -65,7 +87,8 @@ back out.
       japanese.py       romaji and deinflection
       store.py          associations and decomposition overrides on disk
     web/        React + TypeScript client
-      src/graph/layout.ts   the orbit-above / DAG-below geometry
+      src/graph/layout.ts   the orbit-above / DAG-below geometry, and the peek
+      src/map/              the map: canvas renderer, layout worker, sprite atlas
 
 `decomp.py` is the single source of truth for what "contains" means. It
 reproduces `build.py`'s 1,370-node closure and 391-component fan-out exactly.

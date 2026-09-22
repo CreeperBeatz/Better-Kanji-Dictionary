@@ -1,48 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type KanjiNode, type SearchResponse, type Word } from '../api'
 import { DrawPad } from '../draw/DrawPad'
+import { Pitch } from './Pitch'
 import { RadicalPicker } from './RadicalPicker'
 
 interface Props {
   open: boolean
   onClose: () => void
   onPick: (char: string) => void
+  onWord: (word: Word) => void
 }
 
 type Mode = 'search' | 'draw' | 'radicals' | 1 | 2 | 3 | 4 | 5
 
 const LEVELS: (1 | 2 | 3 | 4 | 5)[] = [5, 4, 3, 2, 1]
 
-/** Pitch accent as a contour over the reading: 0 = heiban, n = drop after mora n. */
-function Pitch({ reading, pitch }: { reading: string; pitch: string }) {
-  const drop = Number(pitch.split(',')[0])
-  if (Number.isNaN(drop)) return null
-
-  const mora: string[] = []
-  for (const ch of reading) {
-    if ('ゃゅょぁぃぅぇぉャュョァィゥェォ'.includes(ch) && mora.length) {
-      mora[mora.length - 1] += ch
-    } else {
-      mora.push(ch)
-    }
-  }
-
-  return (
-    <span className="pitch" aria-label={`pitch accent ${pitch}`}>
-      {mora.map((m, i) => {
-        const n = i + 1
-        const high = drop === 0 ? n > 1 : n <= drop && !(drop === 1 && n > 1)
-        return (
-          <span key={i} className="mora" data-high={high} data-drop={drop !== 0 && n === drop}>
-            {m}
-          </span>
-        )
-      })}
-    </span>
-  )
-}
-
-function WordRow({ w, onPick }: { w: Word; onPick: (c: string) => void }) {
+function WordRow({ w, onPick, onWord }: { w: Word; onPick: (c: string) => void; onWord: (w: Word) => void }) {
   return (
     <li className="word">
       <p className="word-head">
@@ -63,14 +36,15 @@ function WordRow({ w, onPick }: { w: Word; onPick: (c: string) => void }) {
       {w.inflection && w.inflection.length > 0 && (
         <p className="word-inflection">{w.inflection.join(', ')}</p>
       )}
-      <p className="word-gloss">
+      {/* The kanji above open the graph; the rest of the row opens the entry. */}
+      <button className="word-gloss word-open" onClick={() => onWord(w)} title="Open this entry">
         {w.senses.slice(0, 3).map((s, i) => (
           <span key={i} className="sense">
             {w.senses.length > 1 && <b>{i + 1}</b>}
             {s.gloss}
           </span>
         ))}
-      </p>
+      </button>
     </li>
   )
 }
@@ -98,7 +72,7 @@ function KanjiChip({ k, onPick, faint }: { k: ChipKanji; onPick: (c: string) => 
   )
 }
 
-export function SearchOverlay({ open, onClose, onPick }: Props) {
+export function SearchOverlay({ open, onClose, onPick, onWord }: Props) {
   const [mode, setMode] = useState<Mode>('search')
   const [q, setQ] = useState('')
   const [result, setResult] = useState<SearchResponse | null>(null)
@@ -220,7 +194,15 @@ export function SearchOverlay({ open, onClose, onPick }: Props) {
               {result.words.length > 0 && (
                 <ol className="words">
                   {result.words.map((w) => (
-                    <WordRow key={w.id} w={w} onPick={pick} />
+                    <WordRow
+                      key={w.id}
+                      w={w}
+                      onPick={pick}
+                      onWord={(word) => {
+                        onWord(word)
+                        onClose()
+                      }}
+                    />
                   ))}
                 </ol>
               )}
