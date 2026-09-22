@@ -26,7 +26,7 @@ if [ ! -f .env ]; then
 APP_URL=https://betterkanjidictionary.org
 # Without a key, sign-in links are shown in the page instead of mailed -- anyone could sign in as anyone.
 RESEND_API_KEY=
-MAIL_FROM=Better Kanji Dictionary <login@betterkanjidictionary.org>
+MAIL_FROM=Better Kanji Dictionary <no-reply@betterkanjidictionary.org>
 BETTERRTK_OWNER_EMAIL=
 ENV
   echo "  wrote .env -- set RESEND_API_KEY and BETTERRTK_OWNER_EMAIL"

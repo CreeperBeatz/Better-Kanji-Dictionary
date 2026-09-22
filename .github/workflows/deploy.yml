@@ -32,8 +32,11 @@ jobs:
           path: web/dist
           retention-days: 7
 
+  # Skipped until the Pi's runner is registered (deploy/pi-setup.sh with GH_RUNNER_TOKEN)
+  # and the repo variable PI_RUNNER is set to true; until then, deploy by hand.
   deploy:
     needs: build
+    if: vars.PI_RUNNER == 'true'
     runs-on: [self-hosted, betterrtk]
     steps:
       - uses: actions/download-artifact@v4
