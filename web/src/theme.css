@@ -2320,13 +2320,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: default;
 }
 
-/* Google draws its own button in an iframe; this only gives it the row. */
+/* Google draws its own button in an iframe; this only gives it the row, and
+   centres it where the panel is wider than Google's 400px limit. */
 .google-slot {
-  min-height: 40px;
+  display: flex;
+  justify-content: center;
 }
 
-.google-slot[hidden] {
-  display: none;
+.google-slot[data-shown] {
+  min-height: 40px;
 }
 
 .account-or {

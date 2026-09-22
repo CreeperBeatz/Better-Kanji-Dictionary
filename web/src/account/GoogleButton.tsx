@@ -44,16 +44,22 @@ function loadGoogle(): Promise<string | null> {
   return ready
 }
 
+// Google draws its button at a fixed pixel width, within these bounds.
+const MIN_WIDTH = 200
+const MAX_WIDTH = 400
+
 export function GoogleButton({ onError }: { onError: (message: string | null) => void }) {
   const slot = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(false)
 
   useEffect(() => {
     let cancelled = false
+    let observer: ResizeObserver | null = null
     loadGoogle().then((clientId) => {
       const el = slot.current
       if (cancelled || !clientId || !el || !window.google) return
-      window.google.accounts.id.initialize({
+      const gid = window.google.accounts.id
+      gid.initialize({
         client_id: clientId,
         ux_mode: 'popup',
         callback: ({ credential }) => {
@@ -63,26 +69,39 @@ export function GoogleButton({ onError }: { onError: (message: string | null) =>
           )
         },
       })
-      window.google.accounts.id.renderButton(el, {
-        theme: 'filled_black',
-        size: 'large',
-        text: 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        // The rest of the app is English; Google would otherwise follow the browser's language.
-        locale: 'en',
-        width: Math.min(el.clientWidth || 320, 400),
-      })
+      // The button does not stretch, so it is redrawn at the slot's width
+      // whenever that changes: a phone rotating, a window being resized.
+      let drawn = 0
+      const draw = () => {
+        const width = Math.round(Math.max(MIN_WIDTH, Math.min(el.clientWidth, MAX_WIDTH)))
+        if (width === drawn) return
+        drawn = width
+        gid.renderButton(el, {
+          theme: 'filled_black',
+          size: 'large',
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'center',
+          // The rest of the app is English; Google would otherwise follow the browser's language.
+          locale: 'en',
+          width,
+        })
+      }
+      draw()
+      observer = new ResizeObserver(draw)
+      observer.observe(el)
       setShown(true)
     })
     return () => {
       cancelled = true
+      observer?.disconnect()
     }
   }, [onError])
 
   return (
     <>
-      <div ref={slot} className="google-slot" hidden={!shown} />
+      {/* Laid out even before the button arrives, so its width can be measured. */}
+      <div ref={slot} className="google-slot" data-shown={shown || undefined} />
       {shown && <p className="account-or">or by email</p>}
     </>
   )
