@@ -3,8 +3,10 @@
 Run:
     .venv/Scripts/uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
 
-Bound to 0.0.0.0 so a phone on the same network can reach it; there is no auth,
-so keep it off untrusted networks.
+Bound to 0.0.0.0 so a phone on the same network can reach it. Writing notes
+needs a magic-link sign-in; with no RESEND_API_KEY the link is shown in the page
+rather than mailed, so anyone who can reach this can sign in as anyone. Keep it
+off untrusted networks until real mail is configured.
 """
 
 from fastapi import FastAPI
@@ -13,7 +15,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from .db import DatabaseMissing
-from .routes import assoc, atlas, decomp, graph, radicals, recognize, search
+from .routes import assoc, atlas, auth, decomp, graph, radicals, recognize, search
 
 app = FastAPI(
     title="BetterRTK Explorer",
@@ -44,6 +46,7 @@ app.include_router(radicals.router)
 app.include_router(graph.router)
 app.include_router(atlas.router)
 app.include_router(search.router)
+app.include_router(auth.router)
 app.include_router(assoc.router)
 app.include_router(decomp.router)
 app.include_router(recognize.router)

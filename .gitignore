@@ -9,3 +9,4 @@ data/betterrtk.sqlite*
 web/public/ort/
 web/public/models/
 data/associations/
+data/auth/

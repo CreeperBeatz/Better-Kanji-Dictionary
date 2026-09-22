@@ -1,5 +1,7 @@
 /** Typed client for the local BetterRTK server. */
 
+import { sessionToken } from './account/session'
+
 const BASE = import.meta.env.VITE_API ?? 'http://127.0.0.1:8000'
 
 export interface KanjiNode {
@@ -113,11 +115,25 @@ export interface Association {
   char: string
   author: string
   authorName?: string
+  /** Markdown. */
   text: string
   images: string[]
+  /** The images that are drawings and have a scene to reopen. */
+  drawings?: string[]
+  /** Private notes are shown only to their author. */
+  visibility: Visibility
   adoptedFrom: string | null
   created: string
   updated: string
+}
+
+export type Visibility = 'private' | 'public'
+
+export interface User {
+  id: string
+  email: string
+  /** Shown beside your public notes. */
+  name: string
 }
 
 export interface AssociationView {
@@ -154,10 +170,15 @@ class ApiError extends Error {
   }
 }
 
+function authHeaders(): Record<string, string> {
+  const token = sessionToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function get<T>(path: string, params?: [string, string][]): Promise<T> {
   const url = new URL(BASE + path)
   for (const [k, v] of params ?? []) url.searchParams.append(k, v)
-  const res = await fetch(url)
+  const res = await fetch(url, { headers: authHeaders() })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new ApiError(res.status, body.detail ?? body.error ?? res.statusText)
@@ -168,7 +189,7 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
 async function send<T>(path: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
     method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    headers: body === undefined ? authHeaders() : { ...authHeaders(), 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   if (!res.ok) {
@@ -207,16 +228,39 @@ export const api = {
   associations: (char: string) =>
     get<AssociationView>(`/api/assoc/for/${encodeURIComponent(char)}`),
 
-  saveAssociation: (char: string, text: string, images: string[]) =>
-    send<Association>(`/api/assoc/for/${encodeURIComponent(char)}`, 'PUT', { text, images }),
+  saveAssociation: (char: string, text: string, images: string[], visibility: Visibility) =>
+    send<Association>(`/api/assoc/for/${encodeURIComponent(char)}`, 'PUT', { text, images, visibility }),
 
   uploadImage: async (file: Blob, filename: string) => {
     const form = new FormData()
     form.append('file', file, filename)
-    const res = await fetch(BASE + '/api/assoc/image', { method: 'POST', body: form })
+    const res = await fetch(BASE + '/api/assoc/image', { method: 'POST', body: form, headers: authHeaders() })
     if (!res.ok) throw new ApiError(res.status, 'upload failed')
     return (await res.json()) as { name: string; url: string }
   },
+
+  uploadDrawing: async (png: Blob, scene: string) => {
+    const form = new FormData()
+    form.append('png', png, 'drawing.png')
+    form.append('scene', new Blob([scene], { type: 'application/json' }), 'drawing.excalidraw')
+    const res = await fetch(BASE + '/api/assoc/drawing', { method: 'POST', body: form, headers: authHeaders() })
+    if (!res.ok) throw new ApiError(res.status, 'saving the drawing failed')
+    return (await res.json()) as { name: string; url: string }
+  },
+
+  scene: (name: string) => get<Record<string, unknown>>(`/api/assoc/scene/${encodeURIComponent(name)}`),
+
+  requestLogin: (email: string) =>
+    send<{ sent: boolean; devLink: string | null }>('/api/auth/request', 'POST', { email }),
+
+  verifyLogin: (token: string) =>
+    send<{ session: string; user: User }>('/api/auth/verify', 'POST', { token }),
+
+  me: () => get<{ user: User | null }>('/api/auth/me'),
+
+  rename: (name: string) => send<{ user: User }>('/api/auth/me', 'PATCH', { name }),
+
+  logout: () => send<{ ok: boolean }>('/api/auth/logout', 'POST'),
 
   imageUrl: (name: string) => `${BASE}/api/assoc/image/${encodeURIComponent(name)}`,
 

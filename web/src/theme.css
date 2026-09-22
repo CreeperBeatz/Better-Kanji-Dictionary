@@ -819,19 +819,245 @@ body {
   display: block;
 }
 
-.sketch {
-  margin-top: 10px;
+.assoc-images figcaption {
+  display: flex;
+  gap: 10px;
 }
 
-.sketch canvas {
+.assoc-drawing {
+  display: block;
   width: 100%;
-  aspect-ratio: 1;
-  background: var(--sumi);
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.assoc-drawing:hover img {
+  border-color: var(--ai-deep);
+}
+
+.assoc-rendered {
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 8px 11px;
+  margin: 0 -11px;
+  cursor: text;
+}
+
+.assoc-rendered:hover {
+  border-color: var(--rule);
+}
+
+/* Markdown in notes: kept small and quiet so it reads as your own jotting,
+   not a document dropped into the rail. */
+.md {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+.assoc-part .md {
+  font-size: 13px;
+  color: var(--paper-dim);
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre,
+.md table {
+  margin: 0 0 0.6em;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 0.9em 0 0.35em;
+  font-family: var(--gothic);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--paper);
+}
+
+.md h1 {
+  font-size: 16px;
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.3em;
+}
+
+.md li + li {
+  margin-top: 0.15em;
+}
+
+.md a {
+  color: var(--ai);
+}
+
+.md strong {
+  font-weight: 700;
+}
+
+.md code {
+  font-size: 12.5px;
+  background: var(--sumi-sunk);
   border: 1px solid var(--rule);
   border-radius: 2px;
-  touch-action: none;
-  cursor: crosshair;
-  display: block;
+  padding: 0 4px;
+}
+
+.md pre {
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+
+.md pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.md blockquote {
+  border-left: 2px solid var(--ai-deep);
+  padding-left: 10px;
+  color: var(--paper-dim);
+}
+
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0.8em 0;
+}
+
+.md table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--rule);
+  padding: 3px 7px;
+  text-align: left;
+}
+
+.md img {
+  max-width: 100%;
+}
+
+/* ---------------------------------------------------------------- drawing modal */
+
+.sketch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vh 4vw;
+  background: rgba(8, 7, 6, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: sketch-in 180ms var(--ease);
+}
+
+@keyframes sketch-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.sketch-panel {
+  width: min(1200px, 100%);
+  height: min(860px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.sketch-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.sketch-head h2 {
+  margin: 0;
+  margin-right: auto;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
+.sketch-char {
+  font-family: var(--mincho);
+  font-size: 22px;
+  color: var(--paper);
+  vertical-align: -2px;
+}
+
+.sketch-done {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 16px;
+  background: var(--ai-deep);
+  color: var(--paper);
+  border: 1px solid var(--ai);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.sketch-done:hover:not(:disabled) {
+  background: var(--ai);
+  color: var(--sumi);
+}
+
+.sketch-done:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sketch-canvas {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .sketch-overlay {
+    padding: 0;
+  }
+
+  .sketch-panel {
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
 }
 
 .assoc-parts {
@@ -1886,4 +2112,138 @@ body {
   background: var(--sumi-sunk);
   border: 1px solid var(--rule);
   border-radius: 3px;
+}
+
+/* ---------------------------------------------------------------- account */
+
+.account-line {
+  margin: 8px 0 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.account-who {
+  color: var(--paper-dim);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-panel {
+  width: min(440px, 100%);
+  gap: 12px;
+}
+
+.account-panel h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--paper-dim);
+  overflow-wrap: anywhere;
+}
+
+.account-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.account-row {
+  display: flex;
+  gap: 8px;
+}
+
+.account-row .assoc-text {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+}
+
+.account-submit {
+  flex: none;
+  background: var(--ai-wash);
+  border: 1px solid var(--ai-deep);
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 12.5px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.account-submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.account-problem {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--shu);
+}
+
+.account-dev {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--rule-bright);
+  border-radius: 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+
+.account-dev a {
+  color: var(--ai);
+}
+
+/* Private / public: a quiet pair, so it reads as a setting on the note
+   rather than a second action beside "draw one". */
+.assoc-visibility {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.assoc-visibility button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.assoc-visibility button:hover {
+  color: var(--paper);
+}
+
+.assoc-visibility button[data-on='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.assoc-actions .tally {
+  margin-left: auto;
+}
+
+.assoc-local-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.assoc-local-note .clear {
+  font-size: 12px;
+}
+
+.assoc-image-pending {
+  display: block;
+  aspect-ratio: 1;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
 }

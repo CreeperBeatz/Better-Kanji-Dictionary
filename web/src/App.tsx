@@ -6,6 +6,8 @@ import { scopeOf } from './map/mapData'
 import { SearchOverlay } from './search/SearchOverlay'
 import { Associations } from './detail/Associations'
 import { About } from './About'
+import { AccountDialog, AccountLine } from './account/Account'
+import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel } from './detail/DetailPanel'
 import { WordPanel } from './detail/WordPanel'
 import { LevelFilter, Trail, ViewSwitch, type StageView } from './StageControls'
@@ -32,6 +34,10 @@ export function App() {
   const [hovered, setHovered] = useState<string | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const { error: authError } = useAuth()
+  // A sign-in link that did not work says why, where you would try again.
+  const accountShown = accountOpen || authError !== null
   const [filter, setFilter] = useState<ContainerFilter>('all')
   const [view, setViewState] = useState<StageView>(initialView)
   // The map is expensive to lay out, so once opened it stays mounted and keeps
@@ -51,6 +57,11 @@ export function App() {
   }, [])
 
   const focus = trail[trail.length - 1]
+
+  // Picks up a sign-in link in the URL, or a session saved from last time.
+  useEffect(() => {
+    startAuth()
+  }, [])
 
   useEffect(() => {
     let stale = false
@@ -125,6 +136,11 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [setView])
 
+  const closeAccount = useCallback(() => {
+    setAccountOpen(false)
+    clearAuthError()
+  }, [])
+
   const hoveredNode: KanjiNode | null = useMemo(() => {
     if (!data || !hovered) return null
     if (hovered === data.focus.char) return data.focus
@@ -135,7 +151,7 @@ export function App() {
     )
   }, [data, hovered])
 
-  const dimmed = searchOpen || aboutOpen
+  const dimmed = searchOpen || aboutOpen || accountShown
 
   return (
     <div className="shell">
@@ -146,6 +162,7 @@ export function App() {
               <span>Search, or browse a level</span>
               <kbd>/</kbd>
             </button>
+            <AccountLine onOpen={() => setAccountOpen(true)} />
           </div>
 
           {!selected ? (
@@ -162,7 +179,9 @@ export function App() {
           ) : (
             <>
               {data && <DetailPanel data={data} hovered={hoveredNode} onWord={openWord} />}
-              {data && <Associations char={data.focus.char} onPick={drill} />}
+              {data && (
+                <Associations char={data.focus.char} onPick={drill} onSignIn={() => setAccountOpen(true)} />
+              )}
             </>
           )}
           {/* "Its parts" -- the decomposition editor and review queue -- is
@@ -239,6 +258,7 @@ export function App() {
         onWord={openWord}
       />
       <About open={aboutOpen} onClose={() => setAboutOpen(false)} />
+      {accountShown && <AccountDialog onClose={closeAccount} />}
     </div>
   )
 }
