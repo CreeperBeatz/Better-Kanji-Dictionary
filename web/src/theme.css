@@ -1,0 +1,1302 @@
+/* BetterRTK Explorer
+ *
+ * Sumi ink on the dark: the canvas is a warm black because ground ink is warm,
+ * not blue-black, and glyphs are washi-paper white rather than pure white.
+ *
+ * Colour carries structure, not decoration:
+ *   paper     the character itself
+ *   indigo    everything beneath it -- components and the edges down to them
+ *   vermilion the seal on the focused character, and nothing else
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
+
+:root {
+  --sumi: #12100e;
+  --sumi-lift: #1b1815;
+  --sumi-sunk: #0c0a09;
+  --rule: #2e2a25;
+  --rule-bright: #443d35;
+
+  --paper: #ede6da;
+  --paper-dim: #9a9186;
+  --muted: #6b635a;
+  --faint: #453f38;
+
+  --ai: #7e9cc6;
+  --ai-deep: #4a628a;
+  --ai-wash: #22303f;
+
+  --shu: #d0452b;
+
+  --mincho: 'Shippori Mincho', 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+  --gothic: 'Zen Kaku Gothic New', 'Yu Gothic', system-ui, sans-serif;
+
+  --rail: 384px;
+  --ease: cubic-bezier(0.32, 0.72, 0.28, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--sumi);
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ai);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--ai-wash);
+  color: var(--paper);
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.shell {
+  height: 100%;
+}
+
+.shell-grid {
+  display: grid;
+  grid-template-columns: var(--rail) 1fr;
+  height: 100%;
+  transition: filter 180ms var(--ease), opacity 180ms var(--ease);
+}
+
+/* The graph stays visible behind the search, just pushed back. */
+.shell-grid[data-dimmed] {
+  filter: blur(7px) saturate(0.7);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.rail {
+  border-right: 1px solid var(--rule);
+  background: var(--sumi-sunk);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.stage {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 38%, #16130f 0%, var(--sumi) 70%);
+}
+
+/* ---------------------------------------------------------------- rail */
+
+.rail-section {
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.rail-section h2 {
+  margin: 0 0 12px;
+  font-family: var(--gothic);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--paper-dim);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- radical picker */
+
+.radical-strokes {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+
+.radical-strokes:first-of-type {
+  margin-top: 4px;
+}
+
+.radical-strokes .count {
+  flex: none;
+  width: 14px;
+  font-size: 11.5px;
+  color: var(--faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.radical-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.radical {
+  font-family: var(--mincho);
+  font-size: 18px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper-dim);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.radical:hover:not(:disabled) {
+  background: var(--sumi-lift);
+  color: var(--paper);
+}
+
+.radical[data-on='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.radical:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.result {
+  font-family: var(--mincho);
+  font-size: 22px;
+  line-height: 1;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper);
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.result:hover {
+  background: var(--ai-wash);
+}
+
+.result[data-joyo='false'] {
+  color: var(--muted);
+}
+
+.tally {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clear {
+  border: 0;
+  background: none;
+  color: var(--ai);
+  font-family: var(--gothic);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.clear:hover {
+  color: var(--paper);
+}
+
+/* ---------------------------------------------------------------- detail */
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.detail-glyph {
+  font-family: var(--mincho);
+  font-weight: 600;
+  font-size: 76px;
+  line-height: 0.92;
+  color: var(--paper);
+}
+
+.detail-meanings {
+  font-family: var(--mincho);
+  font-size: 19px;
+  line-height: 1.35;
+  margin: 2px 0 0;
+  color: var(--paper);
+}
+
+.detail-meanings .rest {
+  color: var(--paper-dim);
+  font-size: 15px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 18px 0 0;
+  font-size: 13.5px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dd .yomi {
+  font-family: var(--mincho);
+  font-size: 15px;
+  color: var(--paper);
+}
+
+.fanout-line {
+  margin: 16px 0 0;
+  font-size: 13.5px;
+  color: var(--paper-dim);
+}
+
+.fanout-line b {
+  font-weight: 500;
+  color: var(--ai);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- graph */
+
+.graph-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+.graph-svg:active {
+  cursor: grabbing;
+}
+
+.node {
+  cursor: pointer;
+  transition: transform 520ms var(--ease);
+}
+
+/* An outline on an SVG <g> draws a bounding box, which looks broken next to
+   round nodes. Chromium leaves its default ring on a clicked <g> even though
+   the element does not match :focus-visible, so suppress the ring on :focus
+   and put the keyboard indicator on the plate below. */
+.node:focus,
+.node:focus-visible {
+  outline: none;
+}
+
+.node:focus-visible .plate {
+  stroke: var(--ai);
+  stroke-width: 2;
+}
+
+.node text {
+  font-family: var(--mincho);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  user-select: none;
+}
+
+.node .glyph {
+  fill: var(--paper);
+}
+
+.node[data-kind='component'] .glyph {
+  fill: var(--ai);
+}
+
+.node[data-dim='true'] .glyph {
+  fill: var(--muted);
+}
+
+.node[data-kind='focus'] .glyph {
+  font-weight: 600;
+}
+
+.node .plate {
+  fill: var(--sumi);
+  stroke: var(--rule);
+  transition: fill 140ms var(--ease), stroke 140ms var(--ease);
+}
+
+.node[data-kind='component'] .plate {
+  stroke: var(--ai-deep);
+}
+
+.node:hover .plate {
+  fill: var(--sumi-lift);
+  stroke: var(--rule-bright);
+}
+
+.node[data-kind='focus'] .seal {
+  fill: none;
+  stroke: var(--shu);
+  stroke-width: 1.5;
+}
+
+.node .fanout {
+  font-family: var(--gothic);
+  font-size: 10px;
+  fill: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.edge {
+  stroke: var(--rule);
+  fill: none;
+  transition: d 520ms var(--ease);
+}
+
+.edge[data-down='true'] {
+  stroke: var(--ai-deep);
+}
+
+.edge[data-dim='true'] {
+  stroke: var(--faint);
+}
+
+/* ---------------------------------------------------------------- trail */
+
+.trail {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.trail button {
+  font-family: var(--mincho);
+  font-size: 17px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.trail button:hover {
+  color: var(--paper);
+  background: var(--sumi-lift);
+}
+
+.legend {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.7;
+  pointer-events: none;
+}
+
+.stage-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- narrow */
+
+@media (max-width: 900px) {
+  /* The grid moved to .shell-grid when the overlay was added; .shell is just
+     the positioning context now. */
+  .shell-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .rail {
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    max-height: 45vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node,
+  .edge {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- search */
+
+.search-input {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 14.5px;
+}
+
+.search-input::placeholder {
+  color: var(--faint);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--ai-deep);
+}
+
+.reading-note {
+  margin-top: 8px;
+  font-family: var(--mincho);
+}
+
+.kanji-hits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 14px;
+}
+
+.kanji-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 9px 4px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.kanji-hit:hover {
+  background: var(--sumi-lift);
+  border-color: var(--ai-deep);
+}
+
+.kanji-hit-glyph {
+  font-family: var(--mincho);
+  font-size: 25px;
+  line-height: 1;
+  color: var(--paper);
+}
+
+.kanji-hit-meaning {
+  font-size: 12px;
+  color: var(--paper-dim);
+  max-width: 128px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kanji-hit-fanout {
+  display: block;
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.words {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.word + .word {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
+
+.word-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+}
+
+.word-forms {
+  font-family: var(--mincho);
+  font-size: 21px;
+  color: var(--paper);
+}
+
+.word-char {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  border-bottom: 1px solid var(--ai-deep);
+}
+
+.word-char:hover {
+  color: var(--ai);
+}
+
+.word-reading,
+.pitch {
+  font-family: var(--mincho);
+  font-size: 14px;
+  color: var(--paper-dim);
+}
+
+/* Pitch contour: a high mora carries an overline, the drop closes it off. */
+.mora {
+  border-top: 1px solid transparent;
+}
+
+.mora[data-high='true'] {
+  border-top-color: var(--ai);
+}
+
+.mora[data-drop='true'] {
+  border-right: 1px solid var(--ai);
+}
+
+.word-common {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ai-deep);
+  align-self: center;
+}
+
+.word-inflection {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  color: var(--shu);
+  opacity: 0.85;
+}
+
+.word-gloss {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--paper-dim);
+  line-height: 1.5;
+}
+
+.sense + .sense {
+  margin-left: 8px;
+}
+
+.sense b {
+  color: var(--faint);
+  font-weight: 400;
+  font-size: 11px;
+  margin-right: 3px;
+  vertical-align: 1px;
+}
+
+/* ---------------------------------------------------------------- vocabulary */
+
+.vocab {
+  margin-top: 18px;
+}
+
+.vocab h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.vocab ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vocab li {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+
+.vocab-word {
+  font-family: var(--mincho);
+  font-size: 16px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.vocab-word:hover {
+  color: var(--ai);
+}
+
+.vocab-reading {
+  font-family: var(--mincho);
+  color: var(--muted);
+}
+
+.vocab-gloss {
+  color: var(--paper-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- draw pad */
+
+.drawpad {
+  width: 100%;
+  aspect-ratio: 1;
+  display: block;
+  margin-top: 4px;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* Whether stroke order is scored. Two words, sitting under the box where the
+   decision is actually made, rather than a labelled control above it. */
+.draw-modes {
+  display: flex;
+  gap: 2px;
+  margin: 10px 0 0;
+}
+
+.draw-modes button {
+  border: 0;
+  background: none;
+  padding: 3px 8px;
+  border-radius: 2px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.draw-modes button:hover {
+  color: var(--paper);
+}
+
+.draw-modes button[data-on='true'] {
+  color: var(--paper);
+  background: var(--ai-wash);
+}
+
+.drawpad-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0 0;
+}
+
+.drawpad-actions .clear:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.draw-group {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- associations */
+
+.assoc-text {
+  width: 100%;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 13.5px;
+  line-height: 1.55;
+  padding: 9px 11px;
+  resize: vertical;
+}
+
+.assoc-text::placeholder {
+  color: var(--faint);
+}
+
+.assoc-text:focus {
+  outline: none;
+  border-color: var(--ai-deep);
+}
+
+.assoc-actions {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 7px 0 0;
+}
+
+.assoc-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.assoc-images figure {
+  margin: 0;
+  width: 104px;
+}
+
+.assoc-images img {
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  display: block;
+}
+
+.sketch {
+  margin-top: 10px;
+}
+
+.sketch canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  touch-action: none;
+  cursor: crosshair;
+  display: block;
+}
+
+.assoc-parts {
+  margin-top: 18px;
+}
+
+.assoc-parts h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.assoc-part {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.assoc-part p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--paper-dim);
+  line-height: 1.5;
+}
+
+.assoc-part-glyph {
+  font-family: var(--mincho);
+  font-size: 24px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ai);
+  cursor: pointer;
+}
+
+.assoc-part-glyph:hover {
+  color: var(--paper);
+}
+
+.assoc-author {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- decomposition */
+
+.decomp-edit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.decomp-input {
+  flex: 1;
+  font-family: var(--mincho);
+  font-size: 19px;
+  padding: 6px 9px;
+}
+
+.decomp-edit .clear:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.review {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.review li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+}
+
+.review-glyph {
+  font-family: var(--mincho);
+  font-size: 22px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.review-glyph:hover {
+  color: var(--ai);
+}
+
+.review-why {
+  color: var(--muted);
+}
+
+.review-freq {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ---------------------------------------------------------------- stroke order */
+
+.strokes {
+  margin-top: 18px;
+}
+
+.strokes h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.strokes-count {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.strokes ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.strokes li {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.strokes svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.strokes path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 5.5;
+}
+
+.strokes .done path {
+  stroke: var(--faint);
+}
+
+.strokes .new {
+  stroke: var(--paper);
+}
+
+/* ---------------------------------------------------------------- overlay */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 7vh 20px 20px;
+  background: rgba(8, 7, 6, 0.55);
+  overscroll-behavior: contain;
+}
+
+.overlay-panel {
+  width: min(720px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  padding: 18px 20px 20px;
+}
+
+.overlay-input {
+  font-size: 17px;
+  padding: 11px 13px;
+}
+
+.overlay-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.overlay-tabs button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 12.5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.overlay-tabs button:hover {
+  background: var(--sumi);
+  color: var(--paper);
+}
+
+.overlay-tabs button[data-on='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.overlay-tab-rule {
+  width: 1px;
+  height: 16px;
+  background: var(--rule-bright);
+  margin: 0 6px;
+}
+
+.overlay-body {
+  margin-top: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.overlay-group {
+  margin: 18px 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.overlay-group:first-child {
+  margin-top: 0;
+}
+
+/* Level grids are for scanning a whole level, so the glyph is all there is. */
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 3px;
+  margin-top: 8px;
+}
+
+.level-cell {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  font-family: var(--mincho);
+  font-size: 24px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--paper);
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.level-cell:hover {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+}
+
+/* Components carry no level of their own: present, needed, not a target. */
+.level-cell[data-faint='true'],
+.kanji-hit[data-faint='true'] {
+  border-style: dashed;
+  border-color: var(--faint);
+  color: var(--muted);
+}
+
+.level-cell[data-faint='true']:hover {
+  color: var(--paper);
+}
+
+/* ---------------------------------------------------------------- search trigger */
+
+.rail-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--sumi-sunk);
+}
+
+.search-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), color 120ms var(--ease);
+}
+
+.search-trigger:hover {
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.search-trigger kbd {
+  font-family: var(--gothic);
+  font-size: 11px;
+  color: var(--faint);
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  padding: 0 5px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- graph filter */
+
+.filter {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.filter button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 11.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.filter button:hover {
+  background: var(--sumi-lift);
+  color: var(--paper);
+}
+
+.filter button[data-on='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.filter-count {
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.info-button {
+  position: absolute;
+  left: 20px;
+  bottom: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-bright);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mincho);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.info-button:hover {
+  color: var(--paper);
+  border-color: var(--paper-dim);
+}
+
+/* ---------------------------------------------------------------- credits dialog */
+
+.about-panel h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
+.about-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.about-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 14px;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 12.5px;
+}
+
+.about-list a {
+  color: var(--paper-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-bright);
+}
+
+.about-list a:hover {
+  color: var(--paper);
+}
+
+.about-list li span {
+  color: var(--muted);
+}
+
+.about-licence {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--faint) !important;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- draw in overlay */
+
+.drawpad-wrap {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.drawpad-left .drawpad {
+  margin-top: 0;
+}
+
+.drawpad-right:empty::before {
+  content: 'Draw a character or a part of one.';
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.drawpad-right .draw-group:first-child {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .drawpad-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The level replaces the fan-out under a node while it is hovered. */
+.node-level {
+  font-family: var(--gothic);
+  font-size: 10px;
+  fill: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}

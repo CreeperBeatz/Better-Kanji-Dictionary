@@ -1,0 +1,116 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset=UTF-8>
+<title>Find a kanji by drawing</title>
+
+<link rel=stylesheet href="kanji-45.css" media=all>
+<link rel=stylesheet href="help-45.css" media=all>
+<script type="text/javascript" src="kanji-45.js"></script>
+<script type="text/javascript">
+window.google_analytics_uacct = "UA-11731688-2";
+</script>
+</head>
+<body  onload="initialize_input_box (); ">
+
+
+<table id="kanji_menu">
+<tr>
+
+
+<td onclick='go_to ("codes.html");' class="page_tab not_chosen_tab"><a href="codes.html">Input codes
+</a>
+</td>
+
+<td onclick='go_to ("mr.html");' class="page_tab not_chosen_tab"><a href="mr.html">Multiradical
+</a>
+</td>
+
+<td onclick='go_to ("draw.html");' class="page_tab not_chosen_tab"><a href="draw.html">Handwritten
+</a>
+</td>
+
+<td onclick='go_to ("four.html");' class="page_tab not_chosen_tab"><a href="four.html">Four-corner
+</a>
+</td>
+
+<td onclick='go_to ("soft-keyboard.html");' class="page_tab not_chosen_tab"><a href="soft-keyboard.html">Kana input
+</a>
+</td>
+</tr><tr>
+
+
+<td onclick='go_to ("radicals.html");' class="page_tab not_chosen_tab"><a href="radicals.html">Radicals
+</a>
+</td>
+
+<td onclick='go_to ("mr-old.html");' class="page_tab not_chosen_tab"><a href="mr-old.html">Multiradical by type
+</a>
+</td>
+
+<td onclick='go_to ("draw-canvas.html");' class="page_tab not_chosen_tab"><a href="draw-canvas.html">Handwritten (HTML5)
+</a>
+</td>
+
+<td onclick='go_to ("skip.html");' class="page_tab not_chosen_tab"><a href="skip.html">SKIP
+</a>
+</td>
+
+<td onclick='go_to ("option.html");' class="page_tab not_chosen_tab"><a href="option.html">Options
+</a>
+</td>
+</tr>
+</table>
+
+<div id='lang-switch'>
+<small>
+Language:
+</small>
+<select id="lang_select" onchange="change_language()">
+<option value="draw-help.html" selected>English</option><option value="draw-helpj.html">日本語</option><option value="draw-help.ru.html">Русский</option><option value="draw-help.es.html">Español</option><option value="draw-help.de.html">Deutsch</option><option value="draw-help.fr.html">Français</option><option value="draw-help.th.html">ภาษาไทย</option><option value="draw-help.ko.html">한국어</option><option value="draw-help.pt.html">Português</option><option value="draw-help.fi.html">Suomi</option><option value="draw-help.tr.html">Türkçe</option><option value="draw-help.zh-TW.html">繁體中文</option><option value="draw-help.zh-CN.html">简体中文</option><option value="draw-help.vi.html">Tiếng Việt</option><option value="draw-help.it.html">Italiano</option>
+</select>
+
+</div>
+
+
+<h2>Find a kanji by drawing</h2>
+
+<p>Handwritten kanji recognition. Draw a kanji in the box with the
+mouse. The computer will try to recognize it. Be careful about drawing
+strokes in <a href="http://www.sljfaq.org/afaq/stroke-order.html">the correct order and direction</a>.</p> 
+
+<h2>Acknowledgements</h2>
+
+<p class='acknowledgement'>Kanji information used in this recognition system comes from
+the <a href='http://kanjivg.tagaini.net/'>KanjiVG project</a>. The
+kanji data is copyright (C) Ulrich Apel 2009-2013 and is used under
+the terms of
+a <a href='http://creativecommons.org/licenses/by-sa/3.0/'>Creative
+Commons licence</a>.</p> 
+
+<p id="contact-info">
+For queries, please
+email <a href="mailto:benkasminbullock@gmail.com?subject=kanji.sljfaq.org%20-%20draw-help" target="_blank">Ben Bullock</a>
+or use the
+<a href="http://groups.google.com/group/sljfaqorg">discussion forum</a>.
+/ <a href="https://www.sljfaq.org/privacy.html">Privacy</a>
+</p>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-11731688-2', 'auto');
+  ga('send', 'pageview');
+
+</script>
+<script>
+var ml = new Object ();
+ml.empty_search="There is nothing to search for.";
+</script>
+</body>
+</html>
+

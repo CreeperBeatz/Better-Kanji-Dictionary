@@ -1,0 +1,231 @@
+"""The component graph -- the view the whole app is built around.
+
+GET /api/kanji/{char} returns everything one focus view needs:
+
+  focus       the selected character and its metadata
+  containers  characters that DIRECTLY contain it, one level up only,
+              ordered by frequency so the client can map rank -> orbit radius
+  components  its full decomposition down to atoms, as a layered DAG
+              (a component can be shared between branches, so nodes + edges,
+              not a tree)
+
+Depth is assigned server-side by longest path from the focus, which is what
+makes the downward layering deterministic -- shortest path would let a shared
+component float up above something it is actually a part of.
+"""
+
+import json
+
+from fastapi import APIRouter, HTTPException
+
+from .. import store
+from ..db import query, query_one
+
+router = APIRouter(prefix="/api/kanji", tags=["graph"])
+
+MAX_DEPTH = 25
+
+
+# --- user overrides are applied here, at query time.
+#
+# The edge table is built offline, so a decomposition you fix from the graph
+# would not move anything until the next rebuild. Overriding on read keeps the
+# edit immediate; the override file is still what a rebuild consumes, so the two
+# never drift.
+
+
+def children_of(chars: list[str]) -> dict[str, list[str]]:
+    """Components of each character, with overrides substituted wholesale."""
+    if not chars:
+        return {}
+    ov = store.decomposition_overrides()
+    out: dict[str, list[str]] = {c: list(ov[c]) for c in chars if c in ov}
+
+    stored = [c for c in chars if c not in ov]
+    if stored:
+        ph = ",".join("?" * len(stored))
+        for r in query(f"SELECT parent, child FROM edge WHERE parent IN ({ph})", tuple(stored)):
+            out.setdefault(r["parent"], []).append(r["child"])
+    return out
+
+
+def parents_of(char: str) -> list[str]:
+    """Characters directly containing `char`, honouring overrides in both directions."""
+    ov = store.decomposition_overrides()
+    base = {r["parent"] for r in query("SELECT parent FROM edge WHERE child = ?", (char,))}
+    # An override replaces that character's parts entirely, so it can both drop
+    # an edge the table has and introduce one it does not.
+    base = {p for p in base if p not in ov or char in ov[p]}
+    base |= {p for p, comps in ov.items() if char in comps}
+    return sorted(base)
+
+
+def _node(row) -> dict:
+    """Shape one character row for the client."""
+    return {
+        "char": row["char"],
+        "strokes": row["strokes"],
+        "grade": row["grade"],
+        "freq": row["freq"],
+        "jlpt": row["jlpt"],
+        "joyo": bool(row["joyo"]),
+        "inKanjidic": bool(row["in_kanjidic"]),
+        "meanings": json.loads(row["meanings"] or "[]"),
+        "onYomi": json.loads(row["on_yomi"] or "[]"),
+        "kunYomi": json.loads(row["kun_yomi"] or "[]"),
+        "fanout": row["joyo_count"] if "joyo_count" in row.keys() else None,
+    }
+
+
+KANJI_COLS = """
+    k.char, k.strokes, k.grade, k.freq, k.jlpt, k.joyo, k.in_kanjidic,
+    k.meanings, k.on_yomi, k.kun_yomi, COALESCE(f.joyo_count, 0) AS joyo_count
+"""
+
+
+def _fetch(chars: list[str]) -> dict[str, dict]:
+    if not chars:
+        return {}
+    ph = ",".join("?" * len(chars))
+    rows = query(
+        f"SELECT {KANJI_COLS} FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
+        f"WHERE k.char IN ({ph})",
+        tuple(chars),
+    )
+    return {r["char"]: _node(r) for r in rows}
+
+
+# Registered before /{char} -- FastAPI matches in declaration order, and
+# "by-level" would otherwise be read as a (too long) character.
+@router.get("/by-level/{level}")
+def by_level(level: int) -> dict:
+    """Every kanji at one JLPT level, plus the parts they are built from.
+
+    The components are the point: a level's kanji pull in bound forms and
+    non-jōyō characters that have no level of their own, and those are exactly
+    the things you have to learn anyway. They come back separately so the client
+    can show them as present but not-a-target.
+    """
+    if level not in (1, 2, 3, 4, 5):
+        raise HTTPException(400, "level must be 1-5")
+
+    rows = query(
+        f"SELECT {KANJI_COLS} FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
+        f"WHERE k.jlpt = ? ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
+        (level,),
+    )
+    kanji = [_node(r) for r in rows]
+
+    # Walk down from the level's kanji and keep whatever has no JLPT level.
+    targets = {k["char"] for k in kanji}
+    seen: set[str] = set(targets)
+    frontier = list(targets)
+    extra: set[str] = set()
+    depth = 0
+    while frontier and depth < MAX_DEPTH:
+        nxt: list[str] = []
+        for children in children_of(frontier).values():
+            for c in children:
+                if c in seen:
+                    continue
+                seen.add(c)
+                extra.add(c)
+                nxt.append(c)
+        frontier = nxt
+        depth += 1
+
+    components: list[dict] = []
+    if extra:
+        chars = sorted(extra)
+        ph = ",".join("?" * len(chars))
+        comp_rows = query(
+            f"SELECT {KANJI_COLS} FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
+            f"WHERE k.char IN ({ph}) AND k.jlpt IS NULL "
+            f"ORDER BY COALESCE(f.joyo_count, 0) DESC, k.char",
+            tuple(chars),
+        )
+        components = [_node(r) for r in comp_rows]
+
+    return {
+        "level": level,
+        "kanji": kanji,
+        "components": components,
+        "counts": {"kanji": len(kanji), "components": len(components)},
+    }
+
+
+@router.get("/{char}")
+def get_kanji(char: str) -> dict:
+    if len(char) != 1:
+        raise HTTPException(400, "expected a single character")
+
+    focus_row = query_one(
+        f"SELECT {KANJI_COLS} FROM kanji k LEFT JOIN fanout f ON f.char = k.char WHERE k.char = ?",
+        (char,),
+    )
+    if focus_row is None:
+        raise HTTPException(404, f"{char} is not in the graph")
+
+    # --- containers: one level up only, frequency-ordered (NULL freq = rarest)
+    parent_chars = parents_of(char)
+    containers: list[dict] = []
+    if parent_chars:
+        ph = ",".join("?" * len(parent_chars))
+        container_rows = query(
+            f"SELECT {KANJI_COLS} FROM kanji k "
+            f"LEFT JOIN fanout f ON f.char = k.char "
+            f"WHERE k.char IN ({ph}) "
+            f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
+            tuple(parent_chars),
+        )
+        containers = [_node(r) for r in container_rows]
+
+    # --- components: full descent to atoms, depth = longest path from focus
+    depth: dict[str, int] = {char: 0}
+    edges: list[dict] = []
+    seen_edges: set[tuple[str, str]] = set()
+    frontier = [char]
+    level = 0
+    while frontier and level < MAX_DEPTH:
+        kids = children_of(frontier)
+        nxt: list[str] = []
+        for parent, children in kids.items():
+            for child in children:
+                key = (parent, child)
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    edges.append({"parent": parent, "child": child})
+                # longest path wins, so a shared component sinks to its deepest use
+                if depth.get(child, -1) < level + 1:
+                    depth[child] = level + 1
+                    nxt.append(child)
+        frontier = list(dict.fromkeys(nxt))
+        level += 1
+
+    component_chars = [c for c in depth if c != char]
+    nodes = _fetch(component_chars)
+    components = []
+    for c in component_chars:
+        n = nodes.get(c) or {
+            "char": c, "strokes": None, "grade": None, "freq": None, "jlpt": None,
+            "joyo": False, "inKanjidic": False, "meanings": [], "onYomi": [],
+            "kunYomi": [], "fanout": 0,
+        }
+        n["depth"] = depth[c]
+        components.append(n)
+    components.sort(key=lambda n: (n["depth"], -(n["fanout"] or 0), n["char"]))
+
+    stroke_row = query_one("SELECT paths FROM stroke WHERE char = ?", (char,))
+
+    return {
+        "focus": _node(focus_row),
+        "strokes": json.loads(stroke_row["paths"]) if stroke_row else [],
+        "containers": containers,
+        "components": {"nodes": components, "edges": edges},
+        "counts": {
+            "containers": len(containers),
+            "containersJoyo": sum(1 for c in containers if c["joyo"]),
+            "components": len(components),
+            "maxDepth": max(depth.values()) if depth else 0,
+        },
+    }

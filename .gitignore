@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+web/dist/
+pipeline/data/
+data/betterrtk.sqlite*
+*.part
+web/public/ort/
+web/public/models/
+data/associations/images/

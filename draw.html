@@ -1,0 +1,295 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset=UTF-8>  <meta name="google-site-verification" content="Sv3ick5O5loVuXvEft5nwd7OFuZFllp84jmxUAGxe0s" />
+  <title>Handwritten kanji search at sljfaq.org</title>
+  <link rel=stylesheet href="kanji-107.css" media=all>
+  <link rel=stylesheet href="draw-107.css" media=all>
+  <script type="text/javascript" src="canvas-107.js"></script>
+  <script type="text/javascript" src="draw-107.js"></script>
+  <script type="text/javascript" src="kanji-107.js"></script>
+  <script type="text/javascript">
+  window.google_analytics_uacct = "UA-11731688-2";
+  </script>
+</head>
+<body onload="initialize_input_box (); drawkanji_onload();">
+  <noscript>
+    <div class="nojavascript">
+      <p>
+        This page uses JavaScript, but JavaScript does not seem to be
+        available in your browser. I apologize for the inconvenience, but
+        please try either switching on your browser's JavaScript, or visit
+        again with a different browser.
+      </p>
+    </div>
+  </noscript>
+  <table id="kanji-menu">
+    <tr>
+      <td id="kanji-menu-codes" onclick='goTo(event, "codes.html");' class="page-tab not-chosen-tab">
+        <a href="codes.html">Input codes</a>
+      </td>
+      <td id="kanji-menu-mr" onclick='goTo(event, "mr.html");' class="page-tab not-chosen-tab">
+        <a href="mr.html">Multiradical</a>
+      </td>
+      <td class="page-tab chosen-tab">Handwritten</td>
+      <td id="kanji-menu-four" onclick='goTo(event, "four.html");' class="page-tab not-chosen-tab">
+        <a href="four.html">Four-corner</a>
+      </td>
+      <td id="kanji-menu-soft-keyboard" onclick='goTo(event, "soft-keyboard.html");' class="page-tab not-chosen-tab">
+        <a href="soft-keyboard.html">Kana input</a>
+      </td>
+    </tr>
+    <tr>
+      <td id="kanji-menu-radicals" onclick='goTo(event, "radicals.html");' class="page-tab not-chosen-tab">
+        <a href="radicals.html">Radicals</a>
+      </td>
+      <td id="kanji-menu-mr-old" onclick='goTo(event, "mr-old.html");' class="page-tab not-chosen-tab">
+        <a href="mr-old.html">Multiradical by type</a>
+      </td>
+      <td id="kanji-menu-draw-old" onclick='goTo(event, "draw-old.html");' class="page-tab not-chosen-tab">
+        <a href="draw-old.html">Handwritten (old)</a>
+      </td>
+      <td id="kanji-menu-skip" onclick='goTo(event, "skip.html");' class="page-tab not-chosen-tab">
+        <a href="skip.html">SKIP</a>
+      </td>
+      <td id="kanji-menu-option" onclick='goTo(event, "option.html");' class="page-tab not-chosen-tab">
+        <a href="option.html">Options</a>
+      </td>
+    </tr>
+  </table>
+  <div class="google-ad-horizontal">
+    <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <ins class="adsbygoogle"
+         style="display:inline-block;width:728px;height:90px"
+         data-ad-client="ca-pub-6052617510425031"
+         data-ad-slot="9134310014"></ins>
+    <script>
+      (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  </div>
+  <div id='input-box-div'>
+    <form action='#' id="input-box" onsubmit="return false;"> 
+      <input type='search' size='20' id='input-box-input'>
+      <input type='reset' onclick='clear_input_box ();' value='Clear'>
+      <input type='submit' onclick='search_input_box ();' value='Search'>
+    </form> 
+  </div>
+  <div id="msg-box" style="display:none;">
+    <span id="msg-con" style="display:inline;"></span>
+    <span id="close-msg-box" onclick="clearMessage();">X</span>
+  </div>
+<table id='master-table'>
+  <tr>
+    <td class='master'>
+      <p class='instructions'>Handwritten kanji recognition. Draw a kanji in the box with the
+mouse. The computer will try to recognize it.</p> 
+      <table class="drawkanji-table"> 
+        <tr>
+          <td class='draw-cell'>
+            <div id="input">
+              <canvas id="drawkanji-canvas"
+            	  class="drawkanji-canvas"
+            	  width="300"
+            	  height="300">
+              </canvas>
+              <button id='revert' disabled='true'>
+                <img id='revert-image' class='disabled' src='revert-1.png'>
+              </button>
+              <button id='clear' disabled='true'>
+                <img id='clear-image' class='disabled' src='clear-1.png'>
+              </button>
+            </div>
+          </td>
+          <td class='draw-cell'>
+            <div class='draw-results-div'>
+          <table class="controls"> 
+            <tr>
+              <td>
+                <input type='radio' name='search-select' id='stroke-dependent' onchange='searchSelect("stroke-dependent")'>
+                <label for='stroke-dependent'>Use stroke order</label>
+                (Draw strokes in <a
+            href="http://www.sljfaq.org/afaq/stroke-order.html">the correct order
+            and direction</a>.)
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <input type="checkbox" id="look-ahead" checked="checked" disabled >
+                <label for="look-ahead">Look ahead (don't match exactly)</label>
+                <script type="text/javascript">
+                  drawCookieSet("look-ahead");
+                </script>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <input type='radio' name='search-select' id='stroke-independent' checked onchange='searchSelect("stroke-independent")'>
+                <label for='stroke-independent'>Ignore stroke order</label>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <input type='radio' name='search-select' id='shape-match' onchange='searchSelect("shape-match")'>
+                <label for='shape-match'>Match shape</label>
+                (<a href='help/shape-match-help.html'>Help</a>)
+              </td>
+            </tr>
+            <tr> 
+              <td class="caption"> 
+                The computer will write the top twenty kanji which it thinks match
+          your drawing below. The best match is on the left. You can change where the links on the kanji go to on the <a href="option.html">Options</a> page.
+              </td> 
+            </tr> 
+          </table>
+            </div>
+          </td>
+        </tr> 
+        <tr>
+          <td>
+            <form name="foundKanji" method="post" action="/redirect/" lang="ja">
+              <div id="found-kanji">
+              </div>
+              <input type="hidden" name="drawing">
+              <input type="hidden" name="kanji">
+              <input type="hidden" name="lang" value="en">
+              <input type="hidden" name="site">
+            </form>
+          </td>
+        </tr>
+        <tr>
+          <td class='draw-cell'>
+            <table>
+              <tr id="draw-old-controls" style="display:none;">
+                <td> 
+                  <button class='control' id='drawkanji-clear-button' type='submit'>
+                    <span class="icon">×</span>
+                    Clear everything
+                  </button>
+                  <button class='control' id='drawkanji-back-line-button' type='submit'>
+                    <span class="icon">⟲</span>
+                    Remove last stroke
+                  </button>
+                </td> 
+              </tr> 
+              
+              <tr>
+                <td>
+                  <table>
+                    <tr>
+                      <td>
+                        <input id="drawkanji-make-image-button" type="button"
+                               value="Make image file">
+                      </td>
+                      <td>
+                        <form target='_blank' id='send_image' name='send_image'
+                              method='post'
+                              action='sendpng-17.cgi'>
+                          <input id="drawkanji-send-image-button" type="button"
+                                 value="Download this image">
+                          <input name='palette' type='hidden'>
+                          <input name='image_data' type='hidden'>
+                        </form>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+          <td>
+          </td>        </tr>
+      </table> 
+      <p>
+        <a href='kanjivg.html'>See also kanji stroke order diagrams.</a>
+      </p>
+    </td>
+  </tr>
+</table><div class="google-ad-doubles">
+  <div style='float:left'>
+    <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <ins class="adsbygoogle"
+	 style="display:inline-block;width:336px;height:280px"
+	 data-ad-client="ca-pub-6052617510425031"
+	 data-ad-slot="0319395307"></ins>
+    <script>
+      (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  </div>
+  <div>
+    <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <ins class="adsbygoogle"
+	 style="display:inline-block;width:336px;height:280px"
+	 data-ad-client="ca-pub-6052617510425031"
+	 data-ad-slot="0319395307"></ins>
+    <script>
+      (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+  </div>
+</div>
+<div id='page-bottom'>  
+	<div id='page-bottom-info'>
+		    <div id='lang-switch'>
+      <small>
+        Language:
+      </small>
+      <select id="lang_select" onchange="change_language()">
+        <option value="draw.html" selected>English</option>
+        <option value="drawj.html">日本語</option>
+        <option value="draw.ru.html">Русский</option>
+        <option value="draw.es.html">Español</option>
+        <option value="draw.de.html">Deutsch</option>
+        <option value="draw.fr.html">Français</option>
+        <option value="draw.th.html">ภาษาไทย</option>
+        <option value="draw.ko.html">한국어</option>
+        <option value="draw.pt.html">Português</option>
+        <option value="draw.fi.html">Suomi</option>
+        <option value="draw.tr.html">Türkçe</option>
+        <option value="draw.zh-TW.html">繁體中文</option>
+        <option value="draw.zh-CN.html">简体中文</option>
+        <option value="draw.vi.html">Tiếng Việt</option>
+        <option value="draw.it.html">Italiano</option>
+      </select>
+    </div>
+    <div id='help-link-div'>
+      <a class='help-link'      href='help/draw-help.html'>😃 Help</a>
+    </div>
+		    <div id="contact-info">
+    🙋 For queries, please
+    email <a href="mailto:benkasminbullock@gmail.com?subject=kanji.sljfaq.org%20-%20Handwritten%20kanji%20search%20at%20sljfaq.org" target="_blank">Ben Bullock</a>
+    or use the
+    <a href="http://groups.google.com/group/sljfaqorg">discussion forum</a>.
+    / <a href="https://www.sljfaq.org/privacy.html">Privacy</a>
+    </div>
+
+		/
+		<a href="https://www.sljfaq.org/news/">News</a>
+	</div>
+</div>
+
+<hr>
+
+
+The kanji information used to make the above graphics comes from the KanjiVG project. The kanji data is copyright (C) Ulrich Apel 2009 and is used under the terms of a Creative Commons licence. Please see the project page for more details.
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-11731688-2', 'auto');
+  ga('send', 'pageview');
+
+</script>
+
+<script>
+var ml = new Object ();
+ml.no_image = "There is nothing to make an image of.";
+ml.too_many_strokes = "Too many strokes";
+ml.squiggle = "That looks like a squiggly line";
+ml.scribble = "That looks like a scribble";
+ml.drawn_image_url = "drawn-image.html";
+ml.empty_search = "There is nothing to search for.";
+</script>
+</body>
+</html>

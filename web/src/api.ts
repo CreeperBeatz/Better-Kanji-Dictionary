@@ -1,0 +1,216 @@
+/** Typed client for the local BetterRTK server. */
+
+const BASE = import.meta.env.VITE_API ?? 'http://127.0.0.1:8000'
+
+export interface KanjiNode {
+  char: string
+  strokes: number | null
+  grade: number | null
+  freq: number | null
+  jlpt: number | null
+  joyo: boolean
+  inKanjidic: boolean
+  meanings: string[]
+  onYomi: string[]
+  kunYomi: string[]
+  fanout: number | null
+  depth?: number
+}
+
+export interface GraphResponse {
+  focus: KanjiNode
+  /** SVG path data in writing order, on KanjiVG's 109x109 canvas. */
+  strokes: string[]
+  containers: KanjiNode[]
+  components: {
+    nodes: KanjiNode[]
+    edges: { parent: string; child: string }[]
+  }
+  counts: {
+    containers: number
+    containersJoyo: number
+    components: number
+    maxDepth: number
+  }
+}
+
+export interface RadicalGroup {
+  strokeCount: number
+  radicals: { radical: string; kanjiCount: number }[]
+}
+
+export interface RadicalSearchResponse {
+  selected: string[]
+  kanji: string[]
+  available: string[]
+  total: number
+  truncated?: boolean
+}
+
+export interface Sense {
+  pos: string[]
+  misc: string[]
+  gloss: string
+}
+
+export interface Word {
+  id: number
+  headword: string
+  reading: string
+  common: boolean
+  nf: number | null
+  pitch: string | null
+  senses: Sense[]
+  forms: { text: string; kana: boolean; rare: boolean }[]
+  inflection?: string[]
+}
+
+export interface KanjiHit {
+  char: string
+  meanings: string[]
+  curated: string | null
+  freq: number | null
+  jlpt: number | null
+  joyo: boolean
+  strokes: number | null
+  fanout: number
+}
+
+export interface SearchResponse {
+  query: string
+  interpretation: { kind: string; reading?: string } | null
+  kanji: KanjiHit[]
+  words: Word[]
+  total: number
+}
+
+export interface Association {
+  id: string
+  char: string
+  author: string
+  authorName?: string
+  text: string
+  images: string[]
+  adoptedFrom: string | null
+  created: string
+  updated: string
+}
+
+export interface AssociationView {
+  char: string
+  own: Association[]
+  components: { char: string; notes: Association[] }[]
+}
+
+export interface ReviewItem {
+  char: string
+  freq: number | null
+  strokes: number | null
+  parts: number
+  score: number
+  reasons: string[]
+}
+
+/** One handwriting candidate. `score` is 0-100 agreement, not a probability. */
+export interface DrawCandidate {
+  char: string
+  score: number
+  /** Stroke count of the matched reference -- differs from yours on a near miss. */
+  strokes: number
+  freq: number | null
+  meanings: string[]
+}
+
+class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function get<T>(path: string, params?: [string, string][]): Promise<T> {
+  const url = new URL(BASE + path)
+  for (const [k, v] of params ?? []) url.searchParams.append(k, v)
+  const res = await fetch(url)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, body.detail ?? body.error ?? res.statusText)
+  }
+  return res.json()
+}
+
+async function send<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const res = await fetch(BASE + path, {
+    method,
+    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, detail.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export const api = {
+  kanji: (char: string) => get<GraphResponse>(`/api/kanji/${encodeURIComponent(char)}`),
+
+  radicals: () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals'),
+
+  search: (q: string) => get<SearchResponse>('/api/search', [['q', q]]),
+
+  wordsFor: (char: string) =>
+    get<{ char: string; words: Word[] }>(`/api/search/words-for/${encodeURIComponent(char)}`),
+
+  byLevel: (level: 1 | 2 | 3 | 4 | 5) =>
+    get<{ level: number; kanji: KanjiNode[]; components: KanjiNode[]; counts: { kanji: number; components: number } }>(
+      `/api/kanji/by-level/${level}`,
+    ),
+
+  associations: (char: string) =>
+    get<AssociationView>(`/api/assoc/for/${encodeURIComponent(char)}`),
+
+  saveAssociation: (char: string, text: string, images: string[]) =>
+    send<Association>(`/api/assoc/for/${encodeURIComponent(char)}`, 'PUT', { text, images }),
+
+  uploadImage: async (file: Blob, filename: string) => {
+    const form = new FormData()
+    form.append('file', file, filename)
+    const res = await fetch(BASE + '/api/assoc/image', { method: 'POST', body: form })
+    if (!res.ok) throw new ApiError(res.status, 'upload failed')
+    return (await res.json()) as { name: string; url: string }
+  },
+
+  imageUrl: (name: string) => `${BASE}/api/assoc/image/${encodeURIComponent(name)}`,
+
+  reviewQueue: (limit = 40) =>
+    get<{ total: number; fixed: number; items: ReviewItem[] }>('/api/decomp/review', [
+      ['limit', String(limit)],
+    ]),
+
+  setDecomposition: (char: string, components: string[]) =>
+    send<{ char: string; components: string[] }>(
+      `/api/decomp/${encodeURIComponent(char)}`,
+      'PUT',
+      { components },
+    ),
+
+  clearDecomposition: (char: string) =>
+    send<{ char: string; cleared: boolean }>(`/api/decomp/${encodeURIComponent(char)}`, 'DELETE'),
+
+  recognize: (strokes: [number, number][][]) =>
+    send<{ candidates: DrawCandidate[]; strokes: number }>('/api/recognize', 'POST', { strokes }),
+
+  /** Builds the reference index server-side so the first stroke is not slow. */
+  recognizerReady: () => get<{ chars: number; buckets: number }>('/api/recognize/ready'),
+
+  searchByRadicals: (radicals: string[]) =>
+    get<RadicalSearchResponse>(
+      '/api/radicals/search',
+      radicals.map((r) => ['r', r] as [string, string]),
+    ),
+}
+
+export { ApiError }

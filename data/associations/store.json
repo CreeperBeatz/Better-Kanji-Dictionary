@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "authors": {
+    "local": {
+      "id": "local",
+      "name": "me",
+      "local": true,
+      "imported": null
+    }
+  },
+  "associations": {
+    "bc6676fe5bb04b1f80962acd39c249c8": {
+      "id": "bc6676fe5bb04b1f80962acd39c249c8",
+      "char": "寺",
+      "author": "local",
+      "text": "A temple: earth (土) measured by hand (寸).",
+      "images": [],
+      "adoptedFrom": null,
+      "created": "2026-09-22T15:11:11+00:00",
+      "updated": "2026-09-22T15:11:11+00:00"
+    },
+    "a2b1401b94184d6aa99177f4eaea31bf": {
+      "id": "a2b1401b94184d6aa99177f4eaea31bf",
+      "char": "言",
+      "author": "local",
+      "text": "Mouth with the breath of speech rising out of it — every word starts here.",
+      "images": [],
+      "adoptedFrom": null,
+      "created": "2026-09-22T15:11:11+00:00",
+      "updated": "2026-09-22T15:14:39+00:00"
+    },
+    "1f02a9482b494812afc17b8ed5f71b23": {
+      "id": "1f02a9482b494812afc17b8ed5f71b23",
+      "char": "戊",
+      "author": "local",
+      "text": "Just like a halberd",
+      "images": [],
+      "adoptedFrom": null,
+      "created": "2026-09-22T15:57:57+00:00",
+      "updated": "2026-09-22T15:57:57+00:00"
+    }
+  },
+  "decomposition": {}
+}
