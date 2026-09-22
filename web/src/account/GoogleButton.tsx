@@ -71,8 +71,6 @@ export function GoogleButton({ onError }: { onError: (message: string | null) =>
         logo_alignment: 'left',
         // The rest of the app is English; Google would otherwise follow the browser's language.
         locale: 'en',
-        // The rest of the app is English; Google would otherwise follow the browser's language.
-        locale: 'en',
         width: Math.min(el.clientWidth || 320, 400),
       })
       setShown(true)
