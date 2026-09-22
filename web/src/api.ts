@@ -2,7 +2,8 @@
 
 import { sessionToken } from './account/session'
 
-const BASE = import.meta.env.VITE_API ?? 'http://127.0.0.1:8000'
+// A production build is served by the API server itself, so it talks to its own origin.
+const BASE = import.meta.env.VITE_API ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 
 export interface KanjiNode {
   char: string

@@ -9,10 +9,13 @@ rather than mailed, so anyone who can reach this can sign in as anyone. Keep it
 off untrusted networks until real mail is configured.
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .db import DatabaseMissing
 from .routes import assoc, atlas, auth, decomp, graph, radicals, recognize, search
@@ -58,3 +61,19 @@ def health() -> dict:
 
     row = query_one("SELECT COUNT(*) AS n FROM radical")
     return {"status": "ok", "radicals": row["n"]}
+
+
+# The built frontend (`npm run build` in web/), when present. Unknown non-API
+# paths fall back to index.html, which is how `/?login=...` links land.
+DIST = Path(__file__).parent.parent / "web" / "dist"
+if DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend(path: str):
+        if path.startswith("api/"):
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
+        file = (DIST / path).resolve()
+        if path and file.is_file() and file.is_relative_to(DIST.resolve()):
+            return FileResponse(file)
+        return FileResponse(DIST / "index.html")

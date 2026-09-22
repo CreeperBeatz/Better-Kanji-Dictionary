@@ -1,0 +1,50 @@
+name: deploy
+
+# Push to main -> build the frontend on GitHub's runner -> the Pi's self-hosted runner
+# (label: betterrtk) resets its checkout, unpacks the build into web/dist and restarts.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-pi
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, betterrtk]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist-new
+      - name: Swap in the new frontend
+        run: |
+          APP=/home/dani/Better-Kanji-Dictionary
+          rm -rf "$APP/web/dist.old"
+          [ -d "$APP/web/dist" ] && mv "$APP/web/dist" "$APP/web/dist.old"
+          mv dist-new "$APP/web/dist"
+      - name: Pull, install and restart
+        run: bash /home/dani/Better-Kanji-Dictionary/deploy/update.sh
