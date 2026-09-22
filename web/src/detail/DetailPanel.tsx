@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { StrokeOrder } from './StrokeOrder'
 
+/**
+ * What the panel needs of a character. The counts come with the graph, from
+ * the server; the rest the device can answer by itself from the offline pack,
+ * so the panel fills in before the graph arrives, and without a connection.
+ */
+export type DetailData = Pick<GraphResponse, 'focus' | 'strokes'> & { counts?: GraphResponse['counts'] }
+
 interface Props {
-  data: GraphResponse
+  data: DetailData
   hovered: KanjiNode | null
   onWord: (word: Word) => void
 }
@@ -40,6 +47,7 @@ export function DetailPanel({ data, hovered, onWord }: Props) {
 
   const [lead, ...rest] = n.meanings
   const level = levelOf(n)
+  const counts = data.counts
 
   return (
     <section className="rail-section">
@@ -111,16 +119,14 @@ export function DetailPanel({ data, hovered, onWord }: Props) {
         </div>
       )}
 
-      {!isPreview && (
+      {!isPreview && counts && (
         <p className="fanout-line">
-          Built from <b>{data.counts.components}</b>{' '}
-          {data.counts.components === 1 ? 'part' : 'parts'}
-          {data.counts.maxDepth > 1 && ` across ${data.counts.maxDepth} levels`}.
-          {data.counts.containers > 0 && (
+          Built from <b>{counts.components}</b> {counts.components === 1 ? 'part' : 'parts'}
+          {counts.maxDepth > 1 && ` across ${counts.maxDepth} levels`}.
+          {counts.containers > 0 && (
             <>
               {' '}
-              Contained by <b>{data.counts.containers}</b>, of which{' '}
-              <b>{data.counts.containersJoyo}</b> are jōyō.
+              Contained by <b>{counts.containers}</b>, of which <b>{counts.containersJoyo}</b> are jōyō.
             </>
           )}
         </p>

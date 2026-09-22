@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { api, type Word, type WordEntry } from '../api'
+import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
 
 interface Props {
@@ -45,6 +46,12 @@ export function WordPanel({ word, from, onBack, onPick }: Props) {
     let stale = false
     setEntry(null)
     setFailed(false)
+    // The device has everything but the example sentences, and answers
+    // first; the server's full entry replaces it when it comes.
+    local.wordEntry(word.id)?.then(
+      (d) => !stale && d && setEntry((e) => e ?? d),
+      () => {},
+    )
     api.word(word.id).then(
       (d) => !stale && setEntry(d),
       () => !stale && setFailed(true),
@@ -146,7 +153,11 @@ export function WordPanel({ word, from, onBack, onPick }: Props) {
         </div>
       )}
 
-      {failed && <p className="hint">The rest of this entry could not be loaded.</p>}
+      {failed && (
+        <p className="hint">
+          {entry ? 'Example sentences need a connection.' : 'The rest of this entry could not be loaded.'}
+        </p>
+      )}
     </section>
   )
 }

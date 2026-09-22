@@ -9,6 +9,7 @@ rather than mailed, so anyone who can reach this can sign in as anyone. Keep it
 off untrusted networks until real mail is configured.
 """
 
+import mimetypes
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -19,8 +20,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .db import DatabaseMissing
 from . import auth as accounts
+from . import offline as offline_pack
 from . import store
-from .routes import assoc, atlas, auth, comments, decomp, graph, radicals, recognize, search
+from .routes import assoc, atlas, auth, comments, decomp, graph, offline, radicals, recognize, search
 
 app = FastAPI(
     title="Better Kanji Dictionary",
@@ -56,6 +58,7 @@ app.include_router(assoc.router)
 app.include_router(comments.router)
 app.include_router(decomp.router)
 app.include_router(recognize.router)
+app.include_router(offline.router)
 
 
 @app.on_event("startup")
@@ -63,6 +66,13 @@ def migrate_accounts() -> None:
     # Accounts from before usernames get one, and every author's public card
     # (name, username, picture) is brought in line with their account.
     store.sync_authors(accounts.migrate())
+
+
+@app.on_event("startup")
+def build_offline_pack() -> None:
+    # In the background: a changed database means a new pack, which takes a
+    # while on the Pi, and nothing else should wait for it.
+    offline_pack.ensure_async()
 
 
 @app.get("/api/health")
@@ -76,6 +86,13 @@ def health() -> dict:
 # The built frontend (`npm run build` in web/), when present. Unknown non-API
 # paths fall back to index.html, which is how `/?login=...` links land.
 DIST = Path(__file__).parent.parent / "web" / "dist"
+
+# Not in every platform's table, and the install prompt wants it right.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
+# The page and the service worker name every other file by hash, so they are
+# the two that must never be served from a stale cache.
+REVALIDATE = {"index.html", "sw.js", "manifest.webmanifest"}
 if DIST.is_dir():
     app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
 
@@ -85,5 +102,6 @@ if DIST.is_dir():
             return JSONResponse(status_code=404, content={"detail": "Not Found"})
         file = (DIST / path).resolve()
         if path and file.is_file() and file.is_relative_to(DIST.resolve()):
-            return FileResponse(file)
-        return FileResponse(DIST / "index.html")
+            headers = {"Cache-Control": "no-cache"} if file.name in REVALIDATE else None
+            return FileResponse(file, headers=headers)
+        return FileResponse(DIST / "index.html", headers={"Cache-Control": "no-cache"})

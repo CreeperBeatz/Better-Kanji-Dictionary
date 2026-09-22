@@ -10,6 +10,7 @@ web/public/ort/
 web/public/models/
 data/associations/
 data/auth/
+data/offline/
 prod-credentials.env
 *.env
 .env

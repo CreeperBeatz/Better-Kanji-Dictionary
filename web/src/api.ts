@@ -1,6 +1,13 @@
-/** Typed client for the Better Kanji Dictionary server. */
+/**
+ * Typed client for the Better Kanji Dictionary server.
+ *
+ * Lookups -- search, drawing, radicals, levels -- are answered on the device
+ * instead when the offline pack is there (see local/), and fall back to the
+ * server when it is not, or when the device's answer fails.
+ */
 
 import { sessionToken } from './account/session'
+import { local } from './local/local'
 
 // A production build is served by the API server itself, so it talks to its own origin.
 const BASE = import.meta.env.VITE_API ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
@@ -236,6 +243,11 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
   return res.json()
 }
 
+/** The device's answer if it has one, the server's otherwise. */
+function localFirst<T>(fromDevice: Promise<T> | null, fromServer: () => Promise<T>): Promise<T> {
+  return fromDevice ? fromDevice.catch(fromServer) : fromServer()
+}
+
 async function send<T>(path: string, method: string, body?: unknown): Promise<T> {
   const res = await fetch(BASE + path, {
     method,
@@ -263,16 +275,21 @@ export const api = {
 
   word: (id: number) => get<WordEntry>(`/api/search/word/${id}`),
 
-  radicals: () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals'),
+  radicals: () =>
+    localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
 
-  search: (q: string) => get<SearchResponse>('/api/search', [['q', q]]),
+  search: (q: string) => localFirst(local.search(q), () => get<SearchResponse>('/api/search', [['q', q]])),
 
   wordsFor: (char: string) =>
-    get<{ char: string; words: Word[] }>(`/api/search/words-for/${encodeURIComponent(char)}`),
+    localFirst(local.wordsFor(char), () =>
+      get<{ char: string; words: Word[] }>(`/api/search/words-for/${encodeURIComponent(char)}`),
+    ),
 
   byLevel: (level: 1 | 2 | 3 | 4 | 5) =>
-    get<{ level: number; kanji: KanjiNode[]; components: KanjiNode[]; counts: { kanji: number; components: number } }>(
-      `/api/kanji/by-level/${level}`,
+    localFirst(local.byLevel(level), () =>
+      get<{ level: number; kanji: KanjiNode[]; components: KanjiNode[]; counts: { kanji: number; components: number } }>(
+        `/api/kanji/by-level/${level}`,
+      ),
     ),
 
   associations: (char: string) =>
@@ -383,15 +400,20 @@ export const api = {
     send<{ char: string; cleared: boolean }>(`/api/decomp/${encodeURIComponent(char)}`, 'DELETE'),
 
   recognize: (strokes: [number, number][][]) =>
-    send<{ candidates: DrawCandidate[]; strokes: number }>('/api/recognize', 'POST', { strokes }),
+    localFirst(local.recognize(strokes), () =>
+      send<{ candidates: DrawCandidate[]; strokes: number }>('/api/recognize', 'POST', { strokes }),
+    ),
 
-  /** Builds the reference index server-side so the first stroke is not slow. */
-  recognizerReady: () => get<{ chars: number; buckets: number }>('/api/recognize/ready'),
+  /** Builds the reference index ahead of time, so the first stroke is not slow. */
+  recognizerReady: () =>
+    localFirst(local.recognizerReady(), () => get<{ chars: number; buckets: number }>('/api/recognize/ready')),
 
   searchByRadicals: (radicals: string[]) =>
-    get<RadicalSearchResponse>(
-      '/api/radicals/search',
-      radicals.map((r) => ['r', r] as [string, string]),
+    localFirst(local.searchByRadicals(radicals), () =>
+      get<RadicalSearchResponse>(
+        '/api/radicals/search',
+        radicals.map((r) => ['r', r] as [string, string]),
+      ),
     ),
 }
 

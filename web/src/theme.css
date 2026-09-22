@@ -1617,6 +1617,47 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-top: 1px solid var(--rule);
 }
 
+/* ---------------------------------------------------------------- offline lookup */
+
+.offline {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.offline h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
+.offline .assoc-actions {
+  margin: 2px 0 0;
+}
+
+.offline-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.offline-bar {
+  height: 3px;
+  background: var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.offline-bar span {
+  display: block;
+  height: 100%;
+  background: var(--ai);
+  transition: width 0.3s var(--ease);
+}
+
 .account-about summary {
   font-size: 12px;
   color: var(--muted);
