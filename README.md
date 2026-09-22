@@ -1,4 +1,4 @@
-# BetterRTK Explorer
+# Better Kanji Dictionary
 
 A kanji explorer built around one view: select a character and see what it is
 made of, all the way down, and what it builds into, ordered by how common those

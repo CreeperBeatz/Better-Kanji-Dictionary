@@ -52,29 +52,39 @@ export function LevelFilter({
   )
 }
 
-export function Trail({
-  trail,
-  selected,
-  onPop,
-}: {
-  trail: string[]
-  selected: boolean
-  onPop: (index: number) => void
-}) {
-  if (trail.length < 2) return null
+interface RecentProps {
+  recent: string[]
+  /** The character open now, if any. */
+  current: string | null
+  onPick: (char: string) => void
+}
+
+/** The Recent tab: everything opened, newest first. Opening one leaves the list as it is. */
+export function RecentGrid({ recent, current, onPick, onClear }: RecentProps & { onClear: () => void }) {
+  const newest = [...recent].reverse()
   return (
-    <nav className="trail" aria-label="Where you came from">
-      {trail.map((c, i) => (
-        <button
-          key={`${c}-${i}`}
-          onClick={() => onPop(i)}
-          disabled={selected && i === trail.length - 1}
-          aria-current={selected && i === trail.length - 1 ? 'page' : undefined}
-        >
-          {c}
-        </button>
-      ))}
-    </nav>
+    <section className="rail-section">
+      <h2>Recently opened</h2>
+      <div className="recent-grid">
+        {newest.map((c) => (
+          <button
+            key={c}
+            className="recent-glyph"
+            onClick={() => onPick(c)}
+            aria-current={c === current ? 'page' : undefined}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      {recent.length > 1 && (
+        <p className="assoc-actions">
+          <button className="clear" onClick={onClear}>
+            clear the list
+          </button>
+        </p>
+      )}
+    </section>
   )
 }
 

@@ -1,4 +1,4 @@
-"""Download every external data source BetterRTK Explorer needs.
+"""Download every external data source Better Kanji Dictionary needs.
 
 Supersedes fetch.sh, which only handled the original three decomposition sources.
 Idempotent: files already present are skipped unless --force.

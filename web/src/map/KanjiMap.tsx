@@ -25,6 +25,9 @@ import type { LayoutMessage, LayoutRequest } from './layout.worker'
 import { GlyphAtlas, type SpriteStyle } from './glyphs'
 import { cachedLayout, loadMap, storeLayout, type MapData, type Scope } from './mapData'
 
+/** Press this long on a touch screen to see a character, as hovering does. */
+const HOLD_DELAY = 450
+
 interface Props {
   scope: Scope
   /** null when nothing is selected */
@@ -701,7 +704,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
   )
 
   const setHover = useCallback(
-    (i: number, px: number, py: number) => {
+    (i: number, px: number, py: number, aboveFinger = false) => {
       const tip = tipRef.current
       const d = s.data
       if (i !== s.hover) {
@@ -714,7 +717,10 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
         return
       }
       tip.hidden = false
-      tip.style.transform = `translate(${px + 14}px, ${py + 12}px)`
+      // Under a finger the tip goes above it, where it can be seen.
+      tip.style.transform = aboveFinger
+        ? `translate(${px}px, ${py - 28}px) translate(-50%, -100%)`
+        : `translate(${px + 14}px, ${py + 12}px)`
       const meaning = d.meaning[i] || (d.target[i] ? 'no recorded meaning' : 'component')
       tip.innerHTML = ''
       const g = document.createElement('b')
@@ -729,7 +735,15 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
   )
 
   const pointers = useRef(new Map<number, { x: number; y: number }>())
-  const gesture = useRef<{ x: number; y: number; moved: number; pinch: number | null } | null>(null)
+  const gesture = useRef<{
+    x: number
+    y: number
+    moved: number
+    pinch: number | null
+    /** Pressed and held on a touch screen: showing the tip instead of panning. */
+    held: boolean
+    timer?: number
+  } | null>(null)
 
   function local(e: React.PointerEvent | React.WheelEvent) {
     const r = canvasRef.current!.getBoundingClientRect()
@@ -741,8 +755,20 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
     canvasRef.current?.setPointerCapture(e.pointerId)
     const [x, y] = local(e)
     pointers.current.set(e.pointerId, { x, y })
-    if (pointers.current.size === 1) gesture.current = { x, y, moved: 0, pinch: null }
-    else if (gesture.current) {
+    if (pointers.current.size === 1) {
+      const g: NonNullable<typeof gesture.current> = { x, y, moved: 0, pinch: null, held: false }
+      gesture.current = g
+      // Touch has no hover: pressing and holding shows what hovering would.
+      if (e.pointerType === 'touch') {
+        g.timer = window.setTimeout(() => {
+          const i = pick(x, y)
+          if (gesture.current !== g || g.moved > 4 || i < 0) return
+          g.held = true
+          setHover(i, x, y, true)
+        }, HOLD_DELAY)
+      }
+    } else if (gesture.current) {
+      clearTimeout(gesture.current.timer)
       const [a, b] = [...pointers.current.values()]
       gesture.current.pinch = Math.hypot(a.x - b.x, a.y - b.y)
       gesture.current.moved = 99 // a pinch is never a click
@@ -759,6 +785,12 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
     }
     pointers.current.set(e.pointerId, { x, y })
 
+    // While held, sliding the finger reads whatever is under it.
+    if (g.held) {
+      setHover(pick(x, y), x, y, true)
+      return
+    }
+
     if (pointers.current.size >= 2 && g.pinch) {
       const [a, b] = [...pointers.current.values()]
       const dist = Math.hypot(a.x - b.x, a.y - b.y)
@@ -771,6 +803,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
     const dy = y - prev.y
     g.moved += Math.abs(dx) + Math.abs(dy)
     if (g.moved > 4) {
+      clearTimeout(g.timer)
       s.cam = { ...s.cam, x: s.cam.x - dx / s.cam.k, y: s.cam.y - dy / s.cam.k }
       s.anim = null
       s.userMoved = true
@@ -785,6 +818,12 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
     pointers.current.delete(e.pointerId)
     if (pointers.current.size > 0) return
     gesture.current = null
+    if (g) clearTimeout(g.timer)
+    // Letting go of a hold only hides the tip.
+    if (g?.held) {
+      setHover(-1, x, y)
+      return
+    }
     if (!g || g.moved > 4) return
     const i = pick(x, y)
     const d = s.data
@@ -833,6 +872,8 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onPointerLeave={(e) => !gesture.current && setHover(-1, ...local(e))}
+        // A long press would otherwise open the browser's own menu.
+        onContextMenu={(e) => e.preventDefault()}
       />
       <div className="map-tip" ref={tipRef} hidden />
 

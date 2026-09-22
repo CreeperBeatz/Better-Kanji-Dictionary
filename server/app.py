@@ -1,4 +1,4 @@
-"""BetterRTK Explorer -- local API server.
+"""Better Kanji Dictionary -- the API server.
 
 Run:
     .venv/Scripts/uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
@@ -23,7 +23,7 @@ from . import store
 from .routes import assoc, atlas, auth, comments, decomp, graph, radicals, recognize, search
 
 app = FastAPI(
-    title="BetterRTK Explorer",
+    title="Better Kanji Dictionary",
     description="Kanji component graph, dictionary and handwriting lookup.",
     version="0.1.0",
 )

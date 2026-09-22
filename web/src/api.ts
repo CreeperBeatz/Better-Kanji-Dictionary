@@ -1,4 +1,4 @@
-/** Typed client for the local BetterRTK server. */
+/** Typed client for the Better Kanji Dictionary server. */
 
 import { sessionToken } from './account/session'
 

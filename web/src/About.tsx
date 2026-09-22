@@ -20,7 +20,7 @@ const SOURCES: { name: string; what: string; href: string; licence: string }[] =
 export function Credits() {
   return (
     <details className="account-about">
-      <summary>About BetterRTK · built on</summary>
+      <summary>About Better Kanji Dictionary · built on</summary>
       <ul className="about-list">
         {SOURCES.map((s) => (
           <li key={s.name}>
