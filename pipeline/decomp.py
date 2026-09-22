@@ -8,6 +8,9 @@ research pipeline agree on what "contains" means:
   * purely numeric args are anonymous intermediate nodes, expanded recursively
   * CJK stroke codepoints (U+31C0-31EF) are dropped, not treated as components
 
+One deliberate departure: variant codepoints of the same component are folded
+together (see ALIASES), so meaning and usage land on one node.
+
 build.py is left untouched -- it is the frozen research artifact that produced
 order-n2.tsv, and re-running it must keep giving the same answer. New work reads
 this module instead.
@@ -18,8 +21,10 @@ decomposition from the graph. It wins over both source files.
 
 from __future__ import annotations
 
+import io
 import json
 import re
+import zipfile
 from pathlib import Path
 
 DATA = Path(__file__).parent / "data"
@@ -30,20 +35,60 @@ ATOMIC_TYPES = {"fix", "lock", "ba", "built"}
 MAX_DEPTH = 25
 
 
+# cjk-decomp writes some components with a CJK Radicals Supplement codepoint (or
+# a glyph variant) while KANJIDIC files the meaning under the unified ideograph,
+# so the app saw two unrelated nodes: ⺙ in 38 jōyō with no meaning, 攵 with the
+# meaning in one. Each pair here draws the same shape, so folding them keeps the
+# visual-containment rule intact. Look-alikes that are NOT the same shape stay
+# separate on purpose: ⺈ is not 刀, ⺁ is not 厂, ⺍ is not ⺌, 㔾 is not 卩.
+ALIASES = {
+    "⺙": "攵",
+    "⺆": "冂",
+    "户": "戸",
+    "戶": "戸",
+    "⺊": "卜",
+    "⺹": "耂",
+    "⻭": "歯",
+}
+
+# 卄 is overloaded: the grass top of 草/花 and the two-hands shape of 弁/戒/弄.
+# KRADFILE marks grass with the placeholder 艾, so that decides which one a
+# given character holds.
+GRASS_SOURCE, GRASS = "卄", "艹"
+KRAD_GRASS = "艾"
+
+
 def is_stroke(c: str) -> bool:
     """CJK stroke block -- rendering primitives, not meaningful components."""
     return len(c) == 1 and 0x31C0 <= ord(c) <= 0x31EF
 
 
+def _krad_grass() -> frozenset[str]:
+    path = DATA / "kradfile.json.zip"
+    if not path.exists():
+        return frozenset()
+    with zipfile.ZipFile(path) as z, z.open(z.namelist()[0]) as f:
+        krad = json.load(io.TextIOWrapper(f, encoding="utf-8"))["kanji"]
+    return frozenset(k for k, comps in krad.items() if KRAD_GRASS in comps)
+
+
 class Decomposition:
-    def __init__(self, raw: dict[str, tuple[str, list[str]]]):
+    def __init__(
+        self,
+        raw: dict[str, tuple[str, list[str]]],
+        grass: frozenset[str] = frozenset(),
+        fold_variants: bool = True,
+    ):
         self.raw = raw
+        self.grass = grass  # characters KRADFILE says carry the grass radical
+        self.fold_variants = fold_variants
         self._direct_cache: dict[str, list[str]] = {}
 
     # ---------------------------------------------------------------- loading
 
     @classmethod
-    def load(cls, *, user_overrides: bool = True) -> "Decomposition":
+    def load(cls, *, user_overrides: bool = True, fold_variants: bool = True) -> "Decomposition":
+        """`fold_variants=False` reproduces build.py exactly, for the regression check."""
         raw: dict[str, tuple[str, list[str]]] = {}
         for path in (DATA / "cjk-decomp.txt", DATA / "cjk-override.txt"):
             if not path.exists():
@@ -59,7 +104,7 @@ class Decomposition:
                     ch, typ, args = m.group(1), m.group(2), m.group(3)
                     raw[ch] = (typ, [p for p in args.split(",") if p])
 
-        d = cls(raw)
+        d = cls(raw, _krad_grass() if fold_variants else frozenset(), fold_variants)
         if user_overrides and USER_OVERRIDES.exists():
             d.apply_user_overrides(json.loads(USER_OVERRIDES.read_text(encoding="utf-8")))
         return d
@@ -97,6 +142,10 @@ class Decomposition:
         out: set[str] = set()
         for p in entry[1]:
             out |= self._expand(p, 0, frozenset({ch}))
+        if self.fold_variants:
+            out = {ALIASES.get(c, c) for c in out}
+        if GRASS_SOURCE in out and ch in self.grass:
+            out = (out - {GRASS_SOURCE}) | {GRASS}
         out.discard(ch)
         result = sorted(c for c in out if not is_stroke(c))
         self._direct_cache[ch] = result

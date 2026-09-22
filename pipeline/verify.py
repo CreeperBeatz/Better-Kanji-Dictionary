@@ -80,6 +80,13 @@ def main() -> int:
     self_containing = [c for c, roots in anc.items() if c in roots]
     check("no character contains itself", not self_containing, "".join(self_containing[:10]))
 
+    # A variant codepoint left in the edge table splits a component's meaning
+    # from its usage again (⺙ used in 38 jōyō, 攵 holding the meaning in 1).
+    from decomp import ALIASES
+
+    stray = [c for c in ALIASES if one("SELECT COUNT(*) FROM edge WHERE child = ?", c)]
+    check("variant codepoints are folded", not stray, "".join(stray))
+
     print("\ndictionary")
     check("JMdict entries = 218,798", one("SELECT COUNT(*) FROM word") == 218798)
     ranked = one("SELECT COUNT(*) FROM word WHERE nf IS NOT NULL")
@@ -167,6 +174,9 @@ def main() -> int:
     target = {k for k, v in K.items() if v.get("jlpt_new") in (5, 4, 3, 2)}
     check("N5-N2 target set = 979", len(target) == 979, str(len(target)))
 
+    # Parsing must still match build.py; variant folding is the one intended
+    # difference, so it is switched off for this comparison.
+    d = Decomposition.load(user_overrides=False, fold_variants=False)
     new_closure = {k: sorted(v) for k, v in d.closure(target).items()}
     old_closure = {k: sorted(v) for k, v in old_graph["comps"].items()}
     check(
