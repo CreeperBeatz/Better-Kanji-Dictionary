@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError, type Author, type PublicNote, type Reply, type Visibility } from '../api'
+import { api, ApiError, type Author, type PublicNote, type Reply } from '../api'
 import { sessionLost, useAuth } from '../account/auth'
 import { Avatar } from '../account/Avatar'
 import { Note, NoteImage } from './NoteContent'
@@ -12,7 +12,6 @@ export interface OwnActions {
   local: boolean
   onEdit: () => void
   onDelete: () => Promise<void>
-  onVisibility?: (v: Visibility) => Promise<void>
 }
 
 function Byline({ author, when, mine }: { author: Author | null; when: string; mine: boolean }) {
@@ -31,7 +30,8 @@ function Byline({ author, when, mine }: { author: Author | null; when: string; m
 
 /**
  * One association, in its own box. Someone else's public note can be liked
- * and replied to; your own can be edited, deleted, and made public or private.
+ * and replied to; your own can be edited and deleted. Whether yours is public
+ * is shown here but changed only from edit, so a stray tap cannot publish it.
  */
 export function CommentCard({
   note,
@@ -137,17 +137,13 @@ export function CommentCard({
                 in this browser
               </span>
             ) : (
-              own.onVisibility && (
-                <button
-                  className="comment-badge"
-                  data-public={shared || undefined}
-                  disabled={busy}
-                  onClick={() => act(() => own.onVisibility!(shared ? 'private' : 'public'))}
-                  title={shared ? 'Public: everyone sees it. Click to make it private.' : 'Private: only you see it. Click to make it public.'}
-                >
-                  {shared ? 'public' : 'private'}
-                </button>
-              )
+              <span
+                className="comment-badge"
+                data-public={shared || undefined}
+                title={shared ? 'Public: everyone sees it. Change it from edit.' : 'Private: only you see it. Change it from edit.'}
+              >
+                {shared ? 'public' : 'private'}
+              </span>
             )}
             {confirming ? (
               <>

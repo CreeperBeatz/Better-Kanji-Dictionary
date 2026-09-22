@@ -3072,15 +3072,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   line-height: 1.6;
 }
 
-button.comment-badge {
-  cursor: pointer;
-}
-
-button.comment-badge:hover:not(:disabled) {
-  color: var(--paper);
-  border-color: var(--paper-dim);
-}
-
 .comment-badge[data-public] {
   border-color: var(--ai-deep);
   color: var(--ai);

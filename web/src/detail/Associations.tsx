@@ -174,12 +174,6 @@ export function Associations({ char, onPick, onSignIn, onCount }: Props) {
         else await api.deleteAssociation(n.id)
         reload()
       },
-      onVisibility: local
-        ? undefined
-        : async (v: Visibility) => {
-            await api.editAssociation(n.id, { visibility: v })
-            reload()
-          },
     }
   }
 
