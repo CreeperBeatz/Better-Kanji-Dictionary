@@ -52,6 +52,8 @@ def _send_resend(to: str, subject: str, text: str) -> None:
         headers={
             "Authorization": f"Bearer {os.environ['RESEND_API_KEY']}",
             "Content-Type": "application/json",
+            # Resend sits behind Cloudflare, which rejects urllib's default agent (error 1010).
+            "User-Agent": "BetterRTK/0.1",
         },
     )
     try:
