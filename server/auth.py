@@ -24,6 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 AUTH_DIR = ROOT / "data" / "auth"
 AUTH_FILE = AUTH_DIR / "auth.json"
+AVATARS = AUTH_DIR / "avatars"
 
 LINK_TTL = timedelta(minutes=15)
 SESSION_TTL = timedelta(days=60)
@@ -31,11 +32,18 @@ SESSION_TTL = timedelta(days=60)
 RESEND_GAP = timedelta(seconds=30)
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# A username is the handle others see under your comments, so it is unique and
+# kept to what reads the same everywhere: lowercase letters, digits, _ and -.
+USERNAME_RE = re.compile(r"^[a-z0-9_-]{3,24}$")
 
 _lock = threading.Lock()
 
 
 class TooSoon(Exception):
+    pass
+
+
+class UsernameTaken(Exception):
     pass
 
 
@@ -69,6 +77,41 @@ def _prune(data: dict) -> None:
 def normalise_email(email: str) -> str | None:
     email = (email or "").strip().lower()
     return email if EMAIL_RE.match(email) and len(email) <= 254 else None
+
+
+def normalise_username(username: str) -> str | None:
+    username = (username or "").strip().lower().lstrip("@")
+    return username if USERNAME_RE.match(username) else None
+
+
+def _free_username(data: dict, wanted: str, user_id: str | None = None) -> str:
+    """`wanted`, cleaned into a valid handle, with a number on it if it is taken."""
+    base = re.sub(r"[^a-z0-9_-]+", "", wanted.lower())[:20] or "user"
+    if len(base) < 3:
+        base = f"{base}{'_' * (3 - len(base))}"
+    taken = {u.get("username") for u in data["users"].values() if u["id"] != user_id}
+    candidate, n = base, 1
+    while candidate in taken:
+        n += 1
+        candidate = f"{base}{n}"
+    return candidate
+
+
+def migrate() -> list[dict]:
+    """Give every account made before usernames existed one. Returns all users."""
+    with _lock:
+        data = _load()
+        changed = False
+        for user in data["users"].values():
+            if not user.get("username"):
+                user["username"] = _free_username(data, user["email"].split("@")[0], user["id"])
+                changed = True
+            if "avatar" not in user:
+                user["avatar"] = None
+                changed = True
+        if changed:
+            _save(data)
+        return [dict(u) for u in data["users"].values()]
 
 
 def request_link(email: str) -> str:
@@ -110,6 +153,8 @@ def redeem_link(token: str) -> tuple[str, dict, bool] | None:
                 "email": link["email"],
                 # What others see beside your public notes; never the whole address.
                 "name": link["email"].split("@")[0][:40],
+                "username": _free_username(data, link["email"].split("@")[0]),
+                "avatar": None,
                 "created": _now().isoformat(),
             }
             data["users"][user["id"]] = user
@@ -142,12 +187,41 @@ def end_session(session: str) -> None:
             _save(data)
 
 
-def rename(user_id: str, name: str) -> dict | None:
+def update_profile(user_id: str, name: str | None = None, username: str | None = None) -> dict | None:
     with _lock:
         data = _load()
         user = data["users"].get(user_id)
         if not user:
             return None
-        user["name"] = name
+        if username is not None and username != user.get("username"):
+            if any(u.get("username") == username for u in data["users"].values() if u["id"] != user_id):
+                raise UsernameTaken()
+            user["username"] = username
+        if name is not None:
+            user["name"] = name
         _save(data)
+        return dict(user)
+
+
+def set_avatar(user_id: str, raw: bytes | None, suffix: str = ".png") -> dict | None:
+    """Replace this account's picture with `raw`, or remove it when `raw` is None.
+
+    Each upload gets a fresh name, so browsers never show a cached old picture.
+    """
+    with _lock:
+        data = _load()
+        user = data["users"].get(user_id)
+        if not user:
+            return None
+        old = user.get("avatar")
+        if raw is None:
+            user["avatar"] = None
+        else:
+            AVATARS.mkdir(parents=True, exist_ok=True)
+            name = f"{user_id}-{secrets.token_hex(6)}{suffix}"
+            (AVATARS / name).write_bytes(raw)
+            user["avatar"] = name
+        _save(data)
+        if old and old != user["avatar"]:
+            (AVATARS / Path(old).name).unlink(missing_ok=True)
         return dict(user)

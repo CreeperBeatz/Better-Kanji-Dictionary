@@ -29,9 +29,9 @@ def send_magic_link(email: str, link: str) -> None:
         return
     _send_resend(
         to=email,
-        subject="Sign in to BetterRTK",
+        subject="Sign in to Better Kanji Dictionary",
         text=(
-            "Open this link to sign in to BetterRTK:\n\n"
+            "Open this link to sign in to Better Kanji Dictionary:\n\n"
             f"{link}\n\n"
             "It works once and expires in 15 minutes. If you did not ask for it, ignore this email."
         ),
@@ -40,7 +40,7 @@ def send_magic_link(email: str, link: str) -> None:
 
 def _send_resend(to: str, subject: str, text: str) -> None:
     body = json.dumps({
-        "from": os.environ.get("MAIL_FROM", "BetterRTK <login@example.com>"),
+        "from": os.environ.get("MAIL_FROM", "Better Kanji Dictionary <login@example.com>"),
         "to": [to],
         "subject": subject,
         "text": text,

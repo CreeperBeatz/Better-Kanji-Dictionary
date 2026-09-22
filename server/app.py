@@ -1,4 +1,4 @@
-"""BetterRTK Explorer -- local API server.
+"""Better Kanji Dictionary -- the API server.
 
 Run:
     .venv/Scripts/uvicorn server.app:app --reload --host 0.0.0.0 --port 8000
@@ -18,10 +18,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import DatabaseMissing
-from .routes import assoc, atlas, auth, decomp, graph, radicals, recognize, search
+from . import auth as accounts
+from . import store
+from .routes import assoc, atlas, auth, comments, decomp, graph, radicals, recognize, search
 
 app = FastAPI(
-    title="BetterRTK Explorer",
+    title="Better Kanji Dictionary",
     description="Kanji component graph, dictionary and handwriting lookup.",
     version="0.1.0",
 )
@@ -51,8 +53,16 @@ app.include_router(atlas.router)
 app.include_router(search.router)
 app.include_router(auth.router)
 app.include_router(assoc.router)
+app.include_router(comments.router)
 app.include_router(decomp.router)
 app.include_router(recognize.router)
+
+
+@app.on_event("startup")
+def migrate_accounts() -> None:
+    # Accounts from before usernames get one, and every author's public card
+    # (name, username, picture) is brought in line with their account.
+    store.sync_authors(accounts.migrate())
 
 
 @app.get("/api/health")

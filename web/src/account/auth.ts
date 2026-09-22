@@ -51,7 +51,7 @@ export async function startAuth() {
       const { session, user } = await api.verifyLogin(token)
       setSessionToken(session)
       set({ syncing: true })
-      await moveLocalNotes(user)
+      await moveLocalNotes()
       set({ user, ready: true, syncing: false })
       return
     } catch (e) {
@@ -90,8 +90,15 @@ export function sessionLost() {
   set({ user: null })
 }
 
-export async function rename(name: string) {
-  const { user } = await api.rename(name)
+export async function updateProfile(patch: { name?: string; username?: string }) {
+  const { user } = await api.updateProfile(patch)
+  set({ user })
+}
+
+export async function setAvatar(file: Blob | null) {
+  // A browser that cannot encode WebP hands back a PNG instead.
+  const name = file?.type === 'image/webp' ? 'avatar.webp' : 'avatar.png'
+  const { user } = file ? await api.uploadAvatar(file, name) : await api.removeAvatar()
   set({ user })
 }
 
@@ -100,13 +107,11 @@ export function clearAuthError() {
 }
 
 /**
- * Upload every signed-out note into the account, as private notes.
- *
- * Where the account already has a note on the same character, the browser's
- * text is added below it rather than replacing it. A note that fails to move
- * stays in the browser to try again next sign-in.
+ * Upload every signed-out note into the account, each as its own private note
+ * beside any the account already has. A note that fails to move stays in the
+ * browser to try again next sign-in.
  */
-async function moveLocalNotes(user: User) {
+async function moveLocalNotes() {
   let notes: LocalNote[]
   try {
     notes = await allNotes()
@@ -130,19 +135,12 @@ async function moveLocalNotes(user: User) {
         uploaded.push(res.name)
       }
 
-      const existing = (await api.associations(note.char)).own.find((a) => a.author === user.id)
-      const text =
-        existing?.text && note.text && existing.text.trim() !== note.text.trim()
-          ? `${existing.text}\n\n${note.text}`
-          : existing?.text || note.text
-      await api.saveAssociation(
-        note.char,
-        text,
-        [...new Set([...(existing?.images ?? []), ...uploaded])],
-        existing?.visibility ?? 'private',
-      )
+      // Its pictures may have gone missing from the browser; an empty note is not worth keeping.
+      if (note.text.trim() || uploaded.length) {
+        await api.postAssociation(note.char, note.text, uploaded, 'private')
+      }
 
-      await forgetNote(note.char)
+      await forgetNote(note.id)
       for (const name of note.images) if (isLocalImage(name)) await deleteImage(name)
     } catch {
       // left in the browser for next time

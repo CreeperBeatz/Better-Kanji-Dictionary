@@ -12,8 +12,9 @@ the scene is what lets a drawing be reopened and carried on with.
 
 Everything is layered by author. An author is a signed-in account (see
 server/auth.py) or an imported bundle, which belongs to the account that
-imported it. Each account has at most one note per character, and each note is
-`private` (only its author sees it) or `public` (everyone does). Imported
+imported it. An account can post any number of notes on a character, like
+comments, and each is `private` (only its author sees it) or `public`
+(everyone does). Imported
 layers are only ever shown to their importer.
 
 Notes written before accounts existed belong to the author "local" and are
@@ -21,6 +22,11 @@ invisible until an account claims them -- the one whose email is
 BETTERRTK_OWNER_EMAIL, or the first to sign in if that is unset.
 
 Signed-out notes never reach this file; the browser keeps them (web/src/localNotes.ts).
+
+Public notes are also the comment section under each character: others can give
+one a thumbs up (`likes`, note id -> the accounts that liked it) and reply to it
+(`replies`, flat, oldest first). Both go with the note when it is deleted, and
+are hidden with it when it is made private again.
 """
 
 from __future__ import annotations
@@ -58,6 +64,8 @@ def _empty() -> dict:
         },
         "associations": {},
         "decomposition": {},
+        "likes": {},
+        "replies": {},
     }
 
 
@@ -75,6 +83,8 @@ def load() -> dict:
     data.setdefault("authors", _empty()["authors"])
     data.setdefault("associations", {})
     data.setdefault("decomposition", {})
+    data.setdefault("likes", {})
+    data.setdefault("replies", {})
     return data
 
 
@@ -120,15 +130,38 @@ def for_char(char: str, viewer: str | None, only_mine: bool = False) -> list[dic
     return rows
 
 
-def ensure_author(user_id: str, name: str) -> None:
-    """Keep an account's entry in the author list, and its display name, current."""
+def ensure_author(user: dict) -> None:
+    """Keep an account's entry in the author list, and its public profile, current."""
+    entry = {
+        "id": user["id"],
+        "name": user["name"],
+        "username": user.get("username"),
+        "avatar": user.get("avatar"),
+        "local": True,
+        "imported": None,
+    }
     with _lock:
         data = load()
-        entry = data["authors"].get(user_id)
-        if entry and entry.get("name") == name:
+        if data["authors"].get(user["id"]) == entry:
             return
-        data["authors"][user_id] = {"id": user_id, "name": name, "local": True, "imported": None}
+        data["authors"][user["id"]] = entry
         save(data)
+
+
+def sync_authors(users: list[dict]) -> None:
+    for user in users:
+        ensure_author(user)
+
+
+def author_card(data: dict, author_id: str) -> dict:
+    """What a comment shows about who wrote it. Never the email address."""
+    a = data["authors"].get(author_id, {})
+    return {
+        "id": author_id,
+        "name": a.get("name", author_id),
+        "username": a.get("username"),
+        "avatar": a.get("avatar"),
+    }
 
 
 def claim_legacy(user_id: str, email: str) -> int:
@@ -140,11 +173,9 @@ def claim_legacy(user_id: str, email: str) -> int:
             return 0
         if owner and owner != email:
             return 0
-        # This account's own notes win over legacy ones on the same character.
-        taken = {a["char"] for a in data["associations"].values() if a["author"] == user_id}
         moved = 0
         for rec in data["associations"].values():
-            if rec["author"] != LOCAL_AUTHOR or rec["char"] in taken:
+            if rec["author"] != LOCAL_AUTHOR:
                 continue
             rec["author"] = user_id
             rec.setdefault("visibility", "private")
@@ -170,87 +201,237 @@ def _drop_unused(images: list[str], data: dict) -> None:
             scene_path(img).unlink(missing_ok=True)
 
 
-def upsert(char: str, text: str, images: list[str], author: str, visibility: str = "private") -> dict:
+class NotFound(Exception):
+    pass
+
+
+class Forbidden(Exception):
+    pass
+
+
+def _record(char: str, author: str, text: str, images: list[str], visibility: str, adopted: str | None = None) -> dict:
+    return {
+        "id": uuid.uuid4().hex,
+        "char": char,
+        "author": author,
+        "text": text,
+        "images": images,
+        "visibility": visibility,
+        "adoptedFrom": adopted,
+        "created": _now(),
+        "updated": _now(),
+    }
+
+
+def create(char: str, text: str, images: list[str], author: str, visibility: str = "private") -> dict:
+    """Post a new note. Several per character are fine, like comments."""
     with _lock:
         data = load()
-        existing = next(
-            (a for a in data["associations"].values() if a["char"] == char and a["author"] == author),
-            None,
-        )
-        if existing:
-            dropped = [i for i in existing.get("images", []) if i not in images]
-            existing.update(text=text, images=images, visibility=visibility, updated=_now())
-            record = existing
-        else:
-            record = {
-                "id": uuid.uuid4().hex,
-                "char": char,
-                "author": author,
-                "text": text,
-                "images": images,
-                "visibility": visibility,
-                "adoptedFrom": None,
-                "created": _now(),
-                "updated": _now(),
-            }
-            data["associations"][record["id"]] = record
-            dropped = []
+        record = _record(char, author, text, images, visibility)
+        data["associations"][record["id"]] = record
+        save(data)
+        return record
+
+
+def _own(data: dict, assoc_id: str, author: str) -> dict:
+    rec = data["associations"].get(assoc_id)
+    if not rec:
+        raise NotFound()
+    if rec["author"] != author:
+        raise Forbidden()
+    return rec
+
+
+def update(assoc_id: str, author: str, text: str | None = None, images: list[str] | None = None,
+           visibility: str | None = None) -> dict:
+    """Edit your own note; any field left as None keeps its value."""
+    with _lock:
+        data = load()
+        rec = _own(data, assoc_id, author)
+        dropped = [i for i in rec.get("images", []) if images is not None and i not in images]
+        if text is not None:
+            rec["text"] = text
+        if images is not None:
+            rec["images"] = images
+        if visibility is not None:
+            rec["visibility"] = visibility
+        rec["updated"] = _now()
         save(data)
         # Only after saving: an edited drawing replaces its old PNG in the list,
         # and the old one should not outlive the save that let go of it.
         _drop_unused(dropped, data)
-        return record
+        return rec
 
 
-def delete(char: str, author: str) -> bool:
+def delete(assoc_id: str, author: str) -> None:
     with _lock:
         data = load()
-        target = next(
-            (a for a in data["associations"].values() if a["char"] == char and a["author"] == author),
-            None,
-        )
-        if not target:
-            return False
-        del data["associations"][target["id"]]
+        target = _own(data, assoc_id, author)
+        del data["associations"][assoc_id]
+        _drop_thread(data, assoc_id)
         save(data)
         # Drop images this record owned and nothing else references.
         _drop_unused(target.get("images", []), data)
-        return True
 
 
 def adopt(assoc_id: str, author: str) -> dict | None:
-    """Copy someone else's note into your own layer, keeping the attribution."""
+    """Copy someone else's note into your own layer, as a new private note."""
     with _lock:
         data = load()
         src = data["associations"].get(assoc_id)
         if not src or src["author"] == author or not _visible(src, author, data["authors"]):
             return None
-        mine = next(
-            (
-                a
-                for a in data["associations"].values()
-                if a["char"] == src["char"] and a["author"] == author
-            ),
-            None,
-        )
-        if mine:
-            mine.update(text=src["text"], images=list(src["images"]), adoptedFrom=src["id"], updated=_now())
-            record = mine
-        else:
-            record = {
-                "id": uuid.uuid4().hex,
-                "char": src["char"],
-                "author": author,
-                "text": src["text"],
-                "images": list(src["images"]),
-                "visibility": "private",
-                "adoptedFrom": src["id"],
-                "created": _now(),
-                "updated": _now(),
-            }
-            data["associations"][record["id"]] = record
+        record = _record(src["char"], author, src["text"], list(src["images"]), "private", src["id"])
+        data["associations"][record["id"]] = record
         save(data)
         return record
+
+
+# ---------------------------------------------------------------- comments
+
+
+def _discussable(rec: dict | None) -> bool:
+    """A note others can like and reply to: public, and written by an account."""
+    return bool(rec) and rec.get("visibility") == "public" and rec["author"].startswith("u-")
+
+
+def _drop_thread(data: dict, assoc_id: str) -> None:
+    data["likes"].pop(assoc_id, None)
+    for rid in [r["id"] for r in data["replies"].values() if r["assoc"] == assoc_id]:
+        del data["replies"][rid]
+
+
+SORTS = ("liked", "new")
+
+
+def notes_for(char: str, viewer: str | None, offset: int, limit: int, sort: str = "liked") -> dict:
+    """What the associations tab shows for one character.
+
+    `mine` is all of the viewer's own notes, never paged: private first, then
+    public, newest first within each. `items` is one page of everyone else's
+    public notes, most liked or newest first; `total` counts those.
+    """
+    data = load()
+    reply_counts: dict[str, int] = {}
+    for r in data["replies"].values():
+        reply_counts[r["assoc"]] = reply_counts.get(r["assoc"], 0) + 1
+
+    def likes(a: dict) -> list[str]:
+        return data["likes"].get(a["id"], [])
+
+    def view(a: dict) -> dict:
+        return {
+            "id": a["id"],
+            "char": a["char"],
+            "author": author_card(data, a["author"]),
+            "text": a["text"],
+            "images": a.get("images", []),
+            "drawings": [i for i in a.get("images", []) if scene_path(i).exists()],
+            "visibility": a.get("visibility", "private"),
+            "created": a.get("created"),
+            "updated": a.get("updated"),
+            "likes": len(likes(a)),
+            "liked": viewer in likes(a) if viewer else False,
+            "replies": reply_counts.get(a["id"], 0),
+            "mine": a["author"] == viewer,
+        }
+
+    # Latest-added first, so notes posted within the same second still read newest first.
+    on_char = [a for a in reversed(data["associations"].values()) if a["char"] == char]
+    mine = [a for a in on_char if viewer and a["author"] == viewer]
+    mine.sort(key=lambda a: a.get("created", ""), reverse=True)
+    mine.sort(key=lambda a: a.get("visibility") == "public")
+
+    others = [a for a in on_char if a["author"] != viewer and _discussable(a)]
+    others.sort(key=lambda a: a.get("created", ""), reverse=True)
+    if sort == "liked":
+        others.sort(key=lambda a: len(likes(a)), reverse=True)
+    return {
+        "char": char,
+        "sort": sort,
+        "mine": [view(a) for a in mine],
+        "total": len(others),
+        "offset": offset,
+        "items": [view(a) for a in others[offset : offset + limit]],
+    }
+
+
+def set_like(assoc_id: str, user_id: str, liked: bool) -> dict:
+    with _lock:
+        data = load()
+        rec = data["associations"].get(assoc_id)
+        if not _discussable(rec):
+            raise NotFound()
+        if rec["author"] == user_id:
+            raise Forbidden()
+        who = data["likes"].setdefault(assoc_id, [])
+        if liked and user_id not in who:
+            who.append(user_id)
+        elif not liked and user_id in who:
+            who.remove(user_id)
+        if not who:
+            del data["likes"][assoc_id]
+        save(data)
+        return {"id": assoc_id, "likes": len(who), "liked": liked}
+
+
+def _reply_view(data: dict, r: dict, viewer: str | None) -> dict:
+    return {
+        "id": r["id"],
+        "assoc": r["assoc"],
+        "author": author_card(data, r["author"]),
+        "text": r["text"],
+        "created": r["created"],
+        "mine": r["author"] == viewer,
+    }
+
+
+def replies(assoc_id: str, viewer: str | None, offset: int, limit: int) -> dict:
+    """One page of the replies to a public note, oldest first so they read as a thread."""
+    data = load()
+    if not _discussable(data["associations"].get(assoc_id)):
+        raise NotFound()
+    thread = sorted(
+        (r for r in data["replies"].values() if r["assoc"] == assoc_id),
+        key=lambda r: r["created"],
+    )
+    return {
+        "assoc": assoc_id,
+        "total": len(thread),
+        "offset": offset,
+        "items": [_reply_view(data, r, viewer) for r in thread[offset : offset + limit]],
+    }
+
+
+def add_reply(assoc_id: str, author: str, text: str) -> dict:
+    with _lock:
+        data = load()
+        if not _discussable(data["associations"].get(assoc_id)):
+            raise NotFound()
+        # Microseconds, not the store's usual seconds: replies sort by this.
+        rec = {
+            "id": uuid.uuid4().hex,
+            "assoc": assoc_id,
+            "author": author,
+            "text": text,
+            "created": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        }
+        data["replies"][rec["id"]] = rec
+        save(data)
+        return _reply_view(data, rec, author)
+
+
+def delete_reply(reply_id: str, user_id: str) -> None:
+    """Only a reply's author may take it back."""
+    with _lock:
+        data = load()
+        rec = data["replies"].get(reply_id)
+        if not rec:
+            raise NotFound()
+        if rec["author"] != user_id:
+            raise Forbidden()
+        del data["replies"][reply_id]
+        save(data)
 
 
 def add_image(raw: bytes, suffix: str) -> str:

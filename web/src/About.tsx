@@ -1,13 +1,11 @@
-import { useEffect } from 'react'
-
 /**
- * Credits, behind an (i) rather than on screen.
+ * Credits, in the account dialog rather than on screen.
  *
  * They are not optional: EDRDG requires acknowledgement visible wherever its
  * dictionary content is shown, and KanjiVG requires a credit and a link --
  * which it earns twice over, since the handwriting lookup matches against its
- * stroke data. A dialog one click away satisfies that without spending the
- * rail on it.
+ * stroke data. The profile button is on screen in every view, so they stay
+ * one click away without spending the rail on them.
  */
 const SOURCES: { name: string; what: string; href: string; licence: string }[] = [
   { name: 'JMdict, KANJIDIC, KRADFILE', what: 'words, character data, radicals', href: 'https://www.edrdg.org/', licence: 'CC BY-SA 4.0 · EDRDG' },
@@ -18,47 +16,27 @@ const SOURCES: { name: string; what: string; href: string; licence: string }[] =
   { name: 'Kanji Alive', what: 'curated meanings', href: 'https://github.com/kanjialive/kanji-data-media', licence: 'CC BY 4.0' },
 ]
 
-export function About({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useEffect(() => {
-    if (!open) return
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
+/** The sources and their licences, shown in the account dialog. */
+export function Credits() {
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="overlay-panel about-panel" role="dialog" aria-modal="true" aria-label="Built on">
-        <h2>Built on</h2>
-        <ul className="about-list">
-          {SOURCES.map((s) => (
-            <li key={s.name}>
-              <a href={s.href} target="_blank" rel="noreferrer noopener">
-                {s.name}
-              </a>
-              <span>{s.what}</span>
-              <span className="about-licence">{s.licence}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="hint">
-          Meanings are KANJIDIC's own, shown in full rather than reduced to one keyword. No
-          WaniKani, Heisig or jpdb content — all closed, and any of them would rule out sharing
-          this.
-        </p>
-        <p className="assoc-actions">
-          <button className="clear" onClick={onClose}>
-            close
-          </button>
-        </p>
-      </div>
-    </div>
+    <details className="account-about">
+      <summary>About Better Kanji Dictionary · built on</summary>
+      <ul className="about-list">
+        {SOURCES.map((s) => (
+          <li key={s.name}>
+            <a href={s.href} target="_blank" rel="noreferrer noopener">
+              {s.name}
+            </a>
+            <span>{s.what}</span>
+            <span className="about-licence">{s.licence}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="hint">
+        Meanings are KANJIDIC's own, shown in full rather than reduced to one keyword. No
+        WaniKani, Heisig or jpdb content — all closed, and any of them would rule out sharing
+        this.
+      </p>
+    </details>
   )
 }

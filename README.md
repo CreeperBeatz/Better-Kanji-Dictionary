@@ -1,4 +1,4 @@
-# BetterRTK Explorer
+# Better Kanji Dictionary
 
 A kanji explorer built around one view: select a character and see what it is
 made of, all the way down, and what it builds into, ordered by how common those
@@ -103,6 +103,10 @@ a real folder, so they survive a cleared cache and can be committed. Every
 record carries an author and provenance, and imports arrive as a separate
 attributed layer rather than overwriting yours, so browsing and adopting other
 people's associations later needs no migration.
+
+A public association is also a comment under its character: others can give it
+a thumbs up and reply to it. Likes and replies live in the same store file;
+accounts, their usernames and profile pictures live in `data/auth/`.
 
 Decomposition fixes are mirrored to `data/decomp_overrides.json`, which
 `pipeline/decomp.py` loads as its top layer — so a rebuild keeps them.

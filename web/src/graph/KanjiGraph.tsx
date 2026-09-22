@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode } from '../api'
+import { HoldCard } from './HoldCard'
 import { computeLayout, placePeek, type PeekItem, type PositionedNode } from './layout'
 
 export type ContainerFilter = 'all' | 'common' | 1 | 2 | 3 | 4 | 5
@@ -10,6 +11,8 @@ interface Props {
   /** `via` is the container a peeked character was reached through. */
   onDrill: (char: string, via?: string) => void
   onHover: (char: string | null) => void
+  /** Show how to read the graph, opened from the (i). */
+  legend: boolean
 }
 
 /** What to call a character's level, including the things that have none. */
@@ -65,6 +68,8 @@ const PREFETCH = 64
 /** Hover this long before the peek opens, so sweeping across the graph is quiet. */
 const OPEN_DELAY = 120
 const CLOSE_DELAY = 200
+/** Press this long on a touch screen to see a character's details, as hovering does. */
+const HOLD_DELAY = 450
 
 async function fetchAbove(chars: string[]): Promise<void> {
   const missing = chars.filter((c) => !aboveCache.has(c))
@@ -81,7 +86,7 @@ interface Peek {
   hidden: number
 }
 
-export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
+export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
   const shown = useMemo(() => data.containers.filter(keeps(filter)), [data.containers, filter])
@@ -97,6 +102,14 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
   const [, setAboveVersion] = useState(0)
   const timers = useRef<{ open?: number; close?: number }>({})
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null)
+  const [held, setHeld] = useState<{ node: KanjiNode; x: number; y: number } | null>(null)
+  const hold = useRef<{ timer?: number; shown: boolean }>({ shown: false })
+  // The full entries, for the hold card: layout nodes carry only what drawing needs.
+  const entries = useMemo(() => {
+    const m = new Map<string, KanjiNode>()
+    for (const n of [data.focus, ...data.containers, ...data.components.nodes]) m.set(n.char, n)
+    return m
+  }, [data])
 
   // Refit whenever the focus changes: the component tree below and the number of
   // container rings above both vary a lot between characters.
@@ -114,6 +127,23 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
       scale,
     })
   }, [layout, data.focus.char, filter])
+
+  // Keep the graph where it was relative to the middle as the stage changes
+  // size -- dragging the rail wider or narrower, say.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    let last = svg.getBoundingClientRect()
+    const ro = new ResizeObserver(() => {
+      const now = svg.getBoundingClientRect()
+      const dx = (now.width - last.width) / 2
+      const dy = (now.height - last.height) / 2
+      last = now
+      if (dx || dy) setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+    })
+    ro.observe(svg)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     let stale = false
@@ -204,6 +234,31 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
     drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
   }
 
+  // Touch has no hover, so pressing and holding stands in for it. Letting go
+  // hides the card and does not open the character.
+  function startHold(e: React.PointerEvent, char: string) {
+    hold.current.shown = false
+    if (e.pointerType !== 'touch') return
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    clearTimeout(hold.current.timer)
+    hold.current.timer = window.setTimeout(() => {
+      const node = entries.get(char)
+      if (!node) return
+      hold.current.shown = true
+      drag.current = null
+      setPeek(null)
+      setHeld({ node, x, y })
+    }, HOLD_DELAY)
+  }
+
+  function endHold() {
+    clearTimeout(hold.current.timer)
+    setHeld(null)
+  }
+
   function onPointerMove(e: React.PointerEvent) {
     const d = drag.current
     if (!d) return
@@ -212,6 +267,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
     // Capture only once it is really a drag, or the click lands on the svg
     // instead of the node under the pointer.
     if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+      clearTimeout(hold.current.timer)
       d.moved = true
       svgRef.current?.setPointerCapture?.(e.pointerId)
       setPeek(null)
@@ -221,9 +277,15 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
 
   function onPointerUp() {
     drag.current = null
+    endHold()
   }
 
   function activate(node: PositionedNode) {
+    // The click that ends a press-and-hold only closes the card.
+    if (hold.current.shown) {
+      hold.current.shown = false
+      return
+    }
     if (node.kind === 'focus') return
     onDrill(node.char)
   }
@@ -244,6 +306,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover }: Props) {
           opacity: extra ? 1 : n.weight === undefined ? 1 : 0.42 + n.weight * 0.58,
         }}
         onClick={() => activate(n)}
+        onPointerDown={(e) => startHold(e, n.char)}
         onMouseEnter={() => {
           setOver(n.char)
           onHover(n.char)
@@ -315,6 +378,9 @@ ${levelOf(n)}`}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
+        onPointerCancel={onPointerUp}
+        // A long press would otherwise open the browser's own menu.
+        onContextMenu={(e) => e.preventDefault()}
       >
         <defs>
           <radialGradient id="peek-veil">
@@ -353,13 +419,24 @@ ${levelOf(n)}`}
         </g>
       </svg>
 
-      <p className="legend">
-        above, characters that contain it, nearest first by frequency
-        <br />
-        below, what it is made of, down to atoms
-        <br />
-        hover one above to see what contains it in turn
-      </p>
+      {held && (
+        <HoldCard
+          node={held.node}
+          x={held.x}
+          y={held.y}
+          width={svgRef.current?.getBoundingClientRect().width ?? 0}
+        />
+      )}
+
+      {legend && (
+        <p className="legend" id="stage-legend">
+          above, characters that contain it, nearest first by frequency
+          <br />
+          below, what it is made of, down to atoms
+          <br />
+          hover one above to see what contains it in turn
+        </p>
+      )}
     </>
   )
 }

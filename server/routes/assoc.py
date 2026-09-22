@@ -58,24 +58,61 @@ def get_for(
     return result
 
 
-@router.put("/for/{char}")
-def put_for(char: str, payload: dict = Body(...), user: dict = Depends(require_user)) -> dict:
+MAX_TEXT = 20000
+
+
+def _content(payload: dict) -> tuple[str, list[str]]:
+    text = (payload.get("text") or "").strip()
+    if len(text) > MAX_TEXT:
+        raise HTTPException(400, f"a note is at most {MAX_TEXT} characters")
+    images = [i for i in (payload.get("images") or []) if isinstance(i, str)]
+    # Only names this server handed out, never paths.
+    if any(Path(i).name != i or not (store.IMAGES / i).is_file() for i in images):
+        raise HTTPException(400, "unknown image")
+    if not text and not images:
+        raise HTTPException(400, "a note needs some text or a picture")
+    return text, images
+
+
+def _visibility(payload: dict, default: str | None) -> str | None:
+    visibility = payload.get("visibility", default)
+    if visibility is not None and visibility not in store.VISIBILITIES:
+        raise HTTPException(400, "visibility must be private or public")
+    return visibility
+
+
+@router.post("/for/{char}")
+def post_for(char: str, payload: dict = Body(...), user: dict = Depends(require_user)) -> dict:
+    """Post a new note on this character; it joins any you already have."""
     if len(char) != 1:
         raise HTTPException(400, "expected a single character")
-    text = (payload.get("text") or "").strip()
-    images = [i for i in (payload.get("images") or []) if isinstance(i, str)]
-    visibility = payload.get("visibility", "private")
-    if visibility not in store.VISIBILITIES:
-        raise HTTPException(400, "visibility must be private or public")
-    if not text and not images:
-        store.delete(char, user["id"])
-        return {"char": char, "deleted": True}
-    return store.upsert(char, text, images, user["id"], visibility)
+    text, images = _content(payload)
+    return store.create(char, text, images, user["id"], _visibility(payload, "private"))
 
 
-@router.delete("/for/{char}")
-def delete_for(char: str, user: dict = Depends(require_user)) -> dict:
-    return {"char": char, "deleted": store.delete(char, user["id"])}
+@router.patch("/{assoc_id}")
+def edit(assoc_id: str, payload: dict = Body(...), user: dict = Depends(require_user)) -> dict:
+    """Change a note of yours: its text and pictures, its visibility, or both."""
+    text = images = None
+    if "text" in payload or "images" in payload:
+        text, images = _content(payload)
+    try:
+        return store.update(assoc_id, user["id"], text, images, _visibility(payload, None))
+    except store.NotFound:
+        raise HTTPException(404, "no such association")
+    except store.Forbidden:
+        raise HTTPException(403, "that association is not yours")
+
+
+@router.delete("/{assoc_id}")
+def remove(assoc_id: str, user: dict = Depends(require_user)) -> dict:
+    try:
+        store.delete(assoc_id, user["id"])
+    except store.NotFound:
+        raise HTTPException(404, "no such association")
+    except store.Forbidden:
+        raise HTTPException(403, "that association is not yours")
+    return {"id": assoc_id, "deleted": True}
 
 
 @router.post("/adopt/{assoc_id}")

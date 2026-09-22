@@ -8,7 +8,7 @@ interface Props {
   onWord: (word: Word) => void
 }
 
-function levelOf(n: KanjiNode): string | null {
+export function levelOf(n: KanjiNode): string | null {
   if (n.jlpt) return `JLPT N${n.jlpt}`
   if (n.grade && n.grade <= 6) return `learned in grade ${n.grade}`
   if (n.joyo) return 'jōyō, secondary school'
