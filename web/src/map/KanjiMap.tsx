@@ -383,13 +383,24 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
   const flyTo = useCallback(
     (to: Camera) => {
       const from = s.cam
-      const zi = interpolateZoom([from.x, from.y, s.w / from.k], [to.x, to.y, s.w / to.k])
+      // Hidden behind the focus view the map is 0 px wide, and a flight
+      // measured in 0 px widths is 0/0 -- the camera went NaN and the map
+      // stayed blank. With nothing to watch, just be there.
+      const w = s.w
+      if (!w || !isFinite(from.k) || !isFinite(from.x) || !isFinite(from.y)) {
+        s.anim = null
+        s.cam = to
+        request()
+        return
+      }
+      const zi = interpolateZoom([from.x, from.y, w / from.k], [to.x, to.y, w / to.k])
       s.anim = {
         start: performance.now(),
         dur: Math.max(380, Math.min(1400, zi.duration * 0.75)),
+        // The width is captured: the map can be hidden mid-flight.
         at: (t) => {
           const [x, y, width] = zi(t)
-          return { x, y, k: s.w / width }
+          return { x, y, k: w / width }
         },
       }
       request()
@@ -444,8 +455,10 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
       // Arriving from nowhere, start from the whole map and fly in from there.
       if (!s.placed) {
         const fit = fitCamera()
-        if (fit) s.cam = fit
-        s.placed = true
+        if (fit) {
+          s.cam = fit
+          s.placed = true
+        }
       }
       lastLayout = { data: d, pos }
       setPhase('ready')
@@ -503,8 +516,10 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
           // Follow the forming map until the user takes the camera.
           if (!s.userMoved) {
             const fit = fitCamera()
-            if (fit) s.cam = fit
-            s.placed = true
+            if (fit) {
+              s.cam = fit
+              s.placed = true
+            }
           }
           request()
         }
@@ -547,6 +562,15 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
       canvas.height = Math.round(r.height * s.dpr)
       canvas.style.width = `${r.width}px`
       canvas.style.height = `${r.height}px`
+      // Shown for the first time since loading while hidden: frame it now.
+      if (s.w && s.pos && !s.placed) {
+        const fit = fitCamera()
+        if (fit) {
+          s.cam = fit
+          s.placed = true
+          if (s.focus >= 0) centreOn(s.focus, true)
+        }
+      }
       request()
     })
     ro.observe(wrap)
@@ -561,7 +585,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
       if (s.raf) cancelAnimationFrame(s.raf)
       s.raf = 0
     }
-  }, [s, request])
+  }, [s, request, fitCamera, centreOn])
 
   // ------------------------------------------------------------------ input
 
