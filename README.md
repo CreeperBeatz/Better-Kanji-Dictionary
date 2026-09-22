@@ -53,8 +53,11 @@ newspaper-ranked characters and their parts, and `all` is the whole graph,
 
 Characters sit near the parts they share, larger when frequent or when many
 characters use them, and resolve from points into glyphs as you zoom in.
-Clicking one flies to it and makes it the focus; clicking the focus again opens
-it in the focus view. `◎` or `C` recentres on the focus.
+Links are drawn only for the selected character (its parts in indigo, the
+characters it appears in as paper) and for the one under the pointer; a haze of
+all 27k said little and cost most of every frame. Clicking a character flies to
+it and makes it the focus; clicking the focus again opens it in the focus view.
+`◎` or `C` recentres on the focus.
 
 The layout is a force simulation in a Web Worker, run once per scope and kept in
 `localStorage` (about 2 s for N1, 7 s for `all`). Large scopes lay out the shared

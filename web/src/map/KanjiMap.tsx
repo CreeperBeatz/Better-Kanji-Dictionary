@@ -8,6 +8,10 @@
  * the parts many others share -- carry a glyph, and the rest are points of
  * light that resolve into characters as you get close.
  *
+ * Links are drawn only for the selected and the hovered character. Stroking
+ * all 27k every frame was most of the cost of a pan, and as a haze they said
+ * little; as spokes from one character they say everything.
+ *
  * Clicking a character flies to it and makes it the focus; clicking the focus
  * again opens it in the focus view.
  */
@@ -45,8 +49,13 @@ const READABLE_RADIUS = 13
 /** How many of the focus's neighbours are always drawn as legible glyphs. */
 const NEAR_LIMIT = 48
 const GLYPH_PX = 64
-/** New glyph sprites one frame may render; the rest follow on later frames. */
-const SPRITES_PER_FRAME = 120
+/** Milliseconds a frame may spend rendering the sprites it found missing, once its drawing is done. */
+const SPRITE_MS = 4
+/** Past this point in a frame, a node without a sprite gets its plate live but no glyph until the next. */
+const LIVE_UNTIL_MS = 14
+/** Distant nodes are batched by colour and by this many steps of opacity. */
+const ALPHA_STEPS = 12
+const TAU = Math.PI * 2
 const MINCHO = '"Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif'
 
 // The last finished layout seeds the next scope, so switching N4 -> N3 grows
@@ -80,6 +89,7 @@ function spriteStyles(c: ReturnType<typeof palette>) {
 }
 
 const atlas = new GlyphAtlas()
+let fontLoaded = false
 
 function levelLabel(d: MapData, i: number): string {
   const j = d.jlpt[i]
@@ -128,10 +138,68 @@ function createState() {
     near: new Set<number>(),
     nearOf: -1,
     nearData: null as MapData | null,
+    /** colour class per node: 0 jōyō target, 1 other target, 2 part */
+    cls: null as Uint8Array | null,
+    clsOf: null as MapData | null,
+    /** scratch lists for the batched dot pass, one per colour × opacity step */
+    bins: Array.from({ length: 3 * ALPHA_STEPS }, () => [] as number[]),
+    /** cancels the idle sprite prewarm, if one is running */
+    warm: null as null | (() => void),
   }
 }
 
 type MapState = ReturnType<typeof createState>
+
+function classes(s: MapState, d: MapData): Uint8Array {
+  if (s.clsOf !== d || !s.cls) {
+    const cls = new Uint8Array(d.n)
+    for (let i = 0; i < d.n; i++) cls[i] = d.target[i] ? (d.joyo[i] ? 0 : 1) : 2
+    s.cls = cls
+    s.clsOf = d
+  }
+  return s.cls
+}
+
+function stopPrewarm(s: MapState) {
+  s.warm?.()
+  s.warm = null
+}
+
+/**
+ * Render a tiny sprite for every character in the scope while the page is
+ * idle, largest first, so that zooming in finds them ready. Needs the data,
+ * not the layout, so it runs while the worker is still laying the map out.
+ */
+function startPrewarm(s: MapState) {
+  stopPrewarm(s)
+  const d = s.data
+  if (!d || !fontLoaded) return
+  const styles = (s.styles ??= spriteStyles((s.colors ??= palette())))
+  const styleOf = [styles.paper, styles.muted, styles.part]
+  const cls = classes(s, d)
+  const order = Array.from({ length: d.n }, (_, i) => i)
+    .sort((a, b) => d.size[b] - d.size[a])
+    .slice(0, atlas.capacity)
+  let at = 0
+  const idle = (fn: () => void) => {
+    if ('requestIdleCallback' in window) {
+      const id = requestIdleCallback(fn, { timeout: 250 })
+      return () => cancelIdleCallback(id)
+    }
+    const id = setTimeout(fn, 16)
+    return () => clearTimeout(id)
+  }
+  const step = () => {
+    s.warm = null
+    const until = performance.now() + 6
+    while (at < order.length && performance.now() < until) {
+      const i = order[at++]
+      if (!atlas.prewarm(d.chars[i], styleOf[cls[i]])) return
+    }
+    if (at < order.length) s.warm = idle(step)
+  }
+  s.warm = idle(step)
+}
 
 /** Draw one frame; true while a camera flight still needs more. */
 function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
@@ -139,6 +207,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   const d = s.data
   const pos = s.pos
   if (!canvas || !ctx) return false
+  const frameStart = performance.now()
   const c = (s.colors ??= palette())
   const { w, h, dpr } = s
 
@@ -166,24 +235,6 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
 
   const f = s.focus
   const hv = s.hover
-
-  // --- ambient edges fade in with zoom; a small scope shows them always.
-  const edgeAlpha = d.n < 1200 ? 0.55 : Math.max(0, Math.min(1, (k - 0.55) / 0.9)) * 0.55
-  if (edgeAlpha > 0.02) {
-    ctx.globalAlpha = edgeAlpha
-    ctx.strokeStyle = c.rule
-    ctx.lineWidth = 1
-    ctx.beginPath()
-    const e = d.edges
-    for (let m = 0; m < e.length; m += 2) {
-      const a = e[m]
-      const b = e[m + 1]
-      if (!inView(a) && !inView(b)) continue
-      ctx.moveTo(pos[2 * a] * k + ox, pos[2 * a + 1] * k + oy)
-      ctx.lineTo(pos[2 * b] * k + ox, pos[2 * b + 1] * k + oy)
-    }
-    ctx.stroke()
-  }
 
   // --- the focus's own edges: parts in indigo, users in paper.
   const spokes = (i: number, alpha: number, width: number) => {
@@ -227,63 +278,88 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   }
   const near = s.near
 
-  const colorOf = (i: number) => (d.target[i] ? (d.joyo[i] ? c.paper : c.muted) : c.ai)
+  const cls = classes(s, d)
+  const colors = [c.paper, c.muted, c.ai]
 
-  // --- distant nodes as points, batched by colour to keep state changes few.
-  for (const col of [c.paper, c.muted, c.ai]) {
-    ctx.fillStyle = col
-    for (let i = 0; i < d.n; i++) {
+  // --- distant nodes as points, gathered into a handful of paths by colour
+  // and (stepped) opacity, so the pass costs a few dozen fills rather than
+  // one per node. Across the band where a glyph fades in, its dot fades out,
+  // so nothing pops from one to the other while zooming.
+  const bins = s.bins
+  for (const b of bins) b.length = 0
+  for (let i = 0; i < d.n; i++) {
+    const r = d.size[i] * k
+    if (r >= LABEL_FULL || i === f || near.has(i) || !inView(i)) continue
+    const fade = r <= LABEL_FROM ? 1 : (LABEL_FULL - r) / (LABEL_FULL - LABEL_FROM)
+    const alpha = (0.28 + 0.6 * Math.min(1, r / LABEL_FROM)) * fade
+    const q = Math.min(ALPHA_STEPS - 1, Math.floor(alpha * ALPHA_STEPS))
+    bins[cls[i] * ALPHA_STEPS + q].push(i)
+  }
+  for (let b = 0; b < bins.length; b++) {
+    const list = bins[b]
+    if (!list.length) continue
+    ctx.fillStyle = colors[Math.floor(b / ALPHA_STEPS)]
+    ctx.globalAlpha = ((b % ALPHA_STEPS) + 0.5) / ALPHA_STEPS
+    ctx.beginPath()
+    for (const i of list) {
       const r = d.size[i] * k
-      if (r >= LABEL_FROM || near.has(i) || colorOf(i) !== col || !inView(i)) continue
       const x = pos[2 * i] * k + ox
       const y = pos[2 * i + 1] * k + oy
-      ctx.globalAlpha = 0.28 + 0.6 * Math.min(1, r / LABEL_FROM)
-      if (r < 1.4) {
-        ctx.fillRect(x - 0.7, y - 0.7, 1.4, 1.4)
-      } else {
-        ctx.beginPath()
-        ctx.arc(x, y, r * 0.55, 0, Math.PI * 2)
-        ctx.fill()
+      if (r < 1.4) ctx.rect(x - 0.7, y - 0.7, 1.4, 1.4)
+      else {
+        ctx.moveTo(x + r * 0.55, y)
+        ctx.arc(x, y, r * 0.55, 0, TAU)
       }
     }
+    ctx.fill()
   }
 
   // --- near nodes as plates and glyphs, least important first so the big
   // ones land on top.
   // Every node but the focus comes from the sprite atlas: fillText at a new
   // scale re-rasterises the glyph, which made every zoom frame redo them all.
+  // A node whose sprite is not rendered yet is drawn live this frame rather
+  // than left out, so a zoom never shows a gap that fills in later.
   const styles = (s.styles ??= spriteStyles(c))
-  const glyph = (i: number, x: number, y: number, r: number, alpha: number) => {
-    ctx.globalAlpha = alpha
-    const style = d.target[i] ? (d.joyo[i] ? styles.paper : styles.muted) : styles.part
-    atlas.draw(ctx, d.chars[i], style, x, y, r, dpr)
-  }
+  const styleOf = [styles.paper, styles.muted, styles.part]
 
-  /** The focus alone is drawn live, in the heavier weight. */
-  const liveGlyph = (i: number, x: number, y: number, r: number) => {
-    ctx.globalAlpha = 1
+  const livePlate = (i: number, x: number, y: number, r: number, plate: string, stroke: string, glyphColor: string | null) => {
     ctx.beginPath()
-    ctx.arc(x, y, r, 0, Math.PI * 2)
-    ctx.fillStyle = c.sumi
+    ctx.arc(x, y, r, 0, TAU)
+    ctx.fillStyle = plate
     ctx.fill()
-    ctx.lineWidth = 0.75
-    ctx.strokeStyle = d.target[i] ? c.rule : c.aiDeep
+    ctx.lineWidth = Math.max(0.3, r / 22)
+    ctx.strokeStyle = stroke
     ctx.stroke()
+    if (glyphColor === null) return
     const sc = (r * 1.28) / GLYPH_PX
-    ctx.setTransform(dpr * sc, 0, 0, dpr * sc, dpr * x, dpr * y)
-    ctx.fillStyle = colorOf(i)
+    ctx.setTransform(dpr * sc, 0, 0, dpr * sc, dpr * x, dpr * (y + r * 0.04))
+    ctx.fillStyle = glyphColor
     ctx.fillText(d.chars[i], 0, 0)
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
+  const glyph = (i: number, x: number, y: number, r: number, alpha: number) => {
+    ctx.globalAlpha = alpha
+    const style = styleOf[cls[i]]
+    if (!atlas.draw(ctx, d.chars[i], style, x, y, r, dpr)) {
+      // Text is the costly part; past the frame's budget the plate alone
+      // holds the place and the glyph lands on the next frame.
+      const withText = performance.now() - frameStart < LIVE_UNTIL_MS
+      livePlate(i, x, y, r, style.plate, style.stroke, withText ? style.glyph : null)
+    }
+  }
+
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  atlas.beginFrame(SPRITES_PER_FRAME)
+  ctx.font = `${GLYPH_PX}px ${MINCHO}`
+  atlas.beginFrame()
   for (let i = 0; i < d.n; i++) {
     const r = d.size[i] * k
     if (r < LABEL_FROM || i === f || near.has(i) || !inView(i)) continue
     const a = Math.min(1, (r - LABEL_FROM) / (LABEL_FULL - LABEL_FROM))
-    glyph(i, pos[2 * i] * k + ox, pos[2 * i + 1] * k + oy, r, 0.35 + 0.65 * a)
+    if (a < 0.02) continue
+    glyph(i, pos[2 * i] * k + ox, pos[2 * i + 1] * k + oy, r, a)
   }
   for (const i of near) {
     if (!inView(i)) continue
@@ -301,8 +377,9 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
     ctx.globalAlpha = 1
     ctx.fillStyle = glow
     ctx.fillRect(x - r * 3.2, y - r * 3.2, r * 6.4, r * 6.4)
+    // The focus alone is drawn live in the heavier weight.
     ctx.font = `600 ${GLYPH_PX}px ${MINCHO}`
-    liveGlyph(f, x, y, r)
+    livePlate(f, x, y, r, c.sumi, d.target[f] ? c.rule : c.aiDeep, colors[cls[f]])
     ctx.strokeStyle = c.shu
     ctx.lineWidth = 1.5
     ctx.beginPath()
@@ -323,6 +400,9 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   }
   ctx.globalAlpha = 1
 
+  // Sprites this frame lacked are rendered now that all drawing is done, and
+  // the frame after picks them up.
+  atlas.endFrame(SPRITE_MS)
   return s.anim !== null || atlas.pending > 0
 }
 
@@ -480,6 +560,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
         s.focus = -1
         s.maxSize = d.size.reduce((a, b) => Math.max(a, b), 1)
         setCounts({ nodes: d.n, edges: d.edges.length / 2 })
+        startPrewarm(s)
 
         const cached = cachedLayout(d)
         if (cached) {
@@ -532,6 +613,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
     return () => {
       cancelled = true
       worker?.terminate()
+      stopPrewarm(s)
     }
   }, [scope, s, centreOn, fitCamera, flyTo, request])
 
@@ -576,8 +658,11 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
     ro.observe(wrap)
     // Canvas text does not wait for web fonts; redraw once Mincho is in.
     document.fonts?.load(`${GLYPH_PX}px "Shippori Mincho"`, '字').then(() => {
+      if (fontLoaded) return
+      fontLoaded = true
       // Sprites rendered before the font arrived are in the fallback face.
       atlas.clear()
+      startPrewarm(s)
       request()
     }, () => {})
     return () => {
@@ -793,7 +878,7 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onOpen, onScope }:
         <br />
         larger is more frequent, or a part more characters share
         <br />
-        click to centre and select, click again to open
+        click to select and see its links, click again to open
       </p>
     </div>
   )
