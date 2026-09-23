@@ -212,7 +212,7 @@ export function App() {
   const { error: authError } = useAuth()
   // A sign-in link that did not work says why, where you would try again.
   const accountShown = accountOpen || authError !== null
-  const [filter, setFilter] = useState<ContainerFilter>(openedOnPhone ? 'all' : 'common')
+  const [filter, setFilter] = useState<ContainerFilter>('common')
   const [view, setViewState] = useState<StageView>(initialView)
   // The map is expensive to lay out, so once opened it stays mounted and keeps
   // its camera while the focus view is showing.

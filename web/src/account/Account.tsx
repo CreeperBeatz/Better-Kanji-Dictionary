@@ -147,6 +147,9 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="overlay-panel account-panel" role="dialog" aria-modal="true" aria-label={t('account')}>
+        <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
+          ×
+        </button>
         {user ? (
           <Profile onClose={onClose} />
         ) : sent ? (

@@ -603,8 +603,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
      along the bottom where the thumb is, and between them one pane at a time --
      the rail's pages or the stage. The hidden one keeps its size, so the graph
      and the map keep their framing and the pages their scroll. */
+  /* minmax(0, ...) so a row that scrolls sideways, like the draw pad's
+     guesses, scrolls inside the screen instead of widening it. */
   .shell-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: 'head' 'main' 'bar';
   }
@@ -2001,12 +2003,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 0;
 }
 
-.drawpad-right:empty::before {
-  content: 'Draw a character or a part of one.';
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .drawpad-right .draw-group:first-child {
   margin-top: 0;
 }
@@ -2615,8 +2611,38 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* ---------------------------------------------------------------- account */
 
 .account-panel {
+  position: relative;
   width: min(440px, 100%);
   gap: 12px;
+}
+
+/* In the corner, clear of the heading and the name beside the picture. */
+.account-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.account-x:hover {
+  color: var(--paper);
+  background: var(--sumi-sunk);
+}
+
+.account-panel h2,
+.account-panel .profile-head {
+  padding-right: 28px;
 }
 
 .account-panel h2 {

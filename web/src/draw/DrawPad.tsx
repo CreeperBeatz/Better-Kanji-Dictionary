@@ -9,7 +9,6 @@ const S = strings(
     undo: 'undo stroke',
     clear: 'clear',
     waking: 'waking the recogniser',
-    fill: 'Fill the box. Stroke order helps but is not needed.',
     strokes_one: '{n} stroke',
     strokes_other: '{n} strokes',
     didYouMean: 'Did you mean',
@@ -21,7 +20,6 @@ const S = strings(
     undo: 'върнете черта',
     clear: 'изчистете',
     waking: 'разпознаването се зарежда',
-    fill: 'Запълнете полето. Редът на чертите помага, но не е задължителен.',
     strokes_one: '{n} черта',
     strokes_other: '{n} черти',
     didYouMean: 'Може би',
@@ -175,7 +173,7 @@ export function DrawPad({ onPick }: Props) {
           </button>
         </p>
         <p className="hint">
-          {error ? error : !ready ? t('waking') : drawn === 0 ? t('fill') : t.plural('strokes', drawn)}
+          {error ? error : !ready ? t('waking') : drawn === 0 ? null : t.plural('strokes', drawn)}
         </p>
       </div>
 
