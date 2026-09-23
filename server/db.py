@@ -33,12 +33,15 @@ def get_db() -> sqlite3.Connection:
 
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'sense_bg'").fetchone():
-        conn.close()
-        raise DatabaseMissing(
-            f"{DB_PATH} predates the Bulgarian tables. Run:\n"
-            f"  python pipeline/build_db.py bg"
-        )
+    # Tables added after the first deploy, and the stage that builds each: the
+    # database is copied by hand, so an old one must fail here, not on a page.
+    for table, what, stage in (("sense_bg", "the Bulgarian tables", "bg"), ("similar", "similar kanji", "similar")):
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (table,)).fetchone():
+            conn.close()
+            raise DatabaseMissing(
+                f"{DB_PATH} predates {what}. Run:\n"
+                f"  python pipeline/build_db.py {stage}"
+            )
     _local.conn = conn
     return conn
 
