@@ -26,7 +26,14 @@ import requests
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
 MODEL = "anthropic/claude-sonnet-5"
-TIMEOUT = 45
+TIMEOUT = 60
+# Sonnet 5 decides for itself how long to think, and the thinking counts against
+# max_tokens: left to it with a 1,500 cap, a shape puzzle ("king on top, clothes
+# below") spent all of it thinking and answered nothing. Low effort thinks not at
+# all on the easy queries and a few seconds on the hard ones, and the cap leaves
+# room for the answer after.
+REASONING = {"effort": "low"}
+MAX_TOKENS = 4000
 
 MAX_KANJI = 12
 MAX_WORDS = 10
@@ -110,7 +117,8 @@ def _call(q: str, lang: str) -> dict:
             },
             json={
                 "model": MODEL,
-                "max_tokens": 1500,
+                "max_tokens": MAX_TOKENS,
+                "reasoning": REASONING,
                 "temperature": 0.2,
                 "messages": [
                     {"role": "system", "content": _PROMPT.replace("{language}", _LANGUAGE.get(lang, "English"))},
@@ -126,9 +134,12 @@ def _call(q: str, lang: str) -> dict:
         print(f"[semantic] OpenRouter {res.status_code}: {res.text[:300]}", flush=True)
         raise Unavailable(f"OpenRouter answered {res.status_code}")
     try:
-        text = res.json()["choices"][0]["message"]["content"] or ""
+        choice = res.json()["choices"][0]
+        text = choice["message"]["content"] or ""
     except (ValueError, KeyError, IndexError, TypeError) as e:
         raise Unavailable("OpenRouter's answer had no message") from e
+    if not text and choice.get("finish_reason") == "length":
+        raise Unavailable(f"the model thought past max_tokens ({MAX_TOKENS}) and never answered")
     return _parse(text)
 
 
