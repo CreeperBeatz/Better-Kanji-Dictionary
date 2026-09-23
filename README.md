@@ -16,7 +16,7 @@ and `pipeline/verify.py` asserts on every run that the two still agree.
 
     python pipeline/fetch_sources.py      # ~35 MB, skips what already exists
     python pipeline/build_db.py           # assembles data/betterrtk.sqlite (~165 MB)
-    python pipeline/verify.py             # 51 correctness checks
+    python pipeline/verify.py             # 60 correctness checks
 
     .venv/Scripts/python -m uvicorn server.app:app --port 8000 --host 0.0.0.0
     cd web && npm install && npm run dev
@@ -52,7 +52,9 @@ each include the parts their kanji are built from, `common` is the 2,501
 newspaper-ranked characters and their parts, and `all` is the whole graph,
 13,490 characters.
 
-Characters sit near the parts they share, larger when frequent or when many
+Characters sit near the parts they share, and parts that look alike (人 and
+入) are drawn toward each other; see `layout.worker.ts` for why only parts,
+not every character. Characters are larger when frequent or when many
 characters use them, and resolve from points into glyphs as you zoom in.
 Links are drawn only for the selected character (its parts in indigo, the
 characters it appears in as paper) and for the one under the pointer; a haze of
@@ -78,6 +80,7 @@ text every frame.
 | **Draw** | Stroke matching against KanjiVG, server-side. One score, from shape plus a bonus for stroke order — writing it properly sharpens the answer, writing it any other way costs nothing, and the stroke count need not be exact. Picking a result opens it in the graph. |
 | **Radical picker** | KRADFILE's 253 radicals. After each pick, radicals present in no remaining candidate grey out, so you cannot build an empty result. |
 | **Associations** | Text, pasted or dropped images, and in-app sketches, on both kanji and components. A character's panel pulls in your notes on each of its parts, so the mnemonic assembles itself. Autosaves to disk. |
+| **Similar kanji** | Under the words on each kanji's page: *Similar meaning* (near-synonyms: 家 → 宅 邸 室), *Looks like* (未 → 末 朱 来), *Same reading* (早 → 速, with 早い・速い as the reason), and other forms (会 → 會). All from open data, no language model: the lookalikes are what the handwriting model DaKanji confuses each glyph with when it is drawn from KanjiVG and in Noto Sans and Serif JP, fused with pixel and shared-part measures; readings and meanings come from JMdict words spelled with either kanji, Bunkacho's 異字同訓 list, Japanese WordNet and KANJIDIC, with Unihan's variant tables kept apart. Human lists (Yencken's, kanjium's) always show. Built by the `similar` stage (`pipeline/similar.py`, which needs numpy, pillow, onnx, onnxruntime and pyyaml); `tests/similar_eval.py` scores it against those human lists. |
 | **Stroke order** | A static diagram from KanjiVG: one small glyph per stroke, each adding the next, so the whole order reads at a glance. |
 | **Decomposition** | Fix a bad split from the graph and it redraws immediately. A review queue ranks what is worth fixing by how much a bad split actually costs. |
 | **Offline lookup** | Installed to a home screen or as a desktop app, it downloads the dictionary once (about 21 MB) and from then on search, drawing, radicals, levels and each character's details answer on the device, with or without a connection. See below. |

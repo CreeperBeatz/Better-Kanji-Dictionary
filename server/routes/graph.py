@@ -193,14 +193,11 @@ def similar_to(char: str) -> dict:
 
     Built offline by pipeline/similar.py. Every stored neighbour comes back,
     closest first; the client filters by level, as it does containers.
-    Lookalikes carry their stroke paths, so the client can show which ones differ.
     """
     if len(char) != 1:
         raise HTTPException(400, "expected a single character")
     rows = query(
-        "SELECT s.other, s.kind, s.score, s.note, st.paths FROM similar s "
-        "LEFT JOIN stroke st ON st.char = s.other AND s.kind = 'look' "
-        "WHERE s.char = ? ORDER BY s.kind, s.rank",
+        "SELECT other, kind, score, note FROM similar WHERE char = ? ORDER BY kind, rank",
         (char,),
     )
     nodes = _fetch(list(dict.fromkeys(r["other"] for r in rows)))
@@ -210,8 +207,6 @@ def similar_to(char: str) -> dict:
         if n is None:
             continue
         item = {**n, "score": r["score"]}
-        if r["kind"] == "look":
-            item["paths"] = json.loads(r["paths"]) if r["paths"] else []
         if r["kind"] in ("read", "mean"):
             item["why"] = json.loads(r["note"]) if r["note"] else None
         out[r["kind"]].append(item)

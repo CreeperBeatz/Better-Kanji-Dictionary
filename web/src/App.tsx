@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { api, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { KanjiMap } from './map/KanjiMap'
-import { SimilarView } from './similar/SimilarView'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
@@ -35,7 +34,6 @@ const S = strings(
     associations: 'Associations',
     focus: 'Focus',
     map: 'Map',
-    similar: 'Similar',
     recent: 'Recent',
     back: 'Back (Backspace)',
     backTo: 'back to {page}',
@@ -45,7 +43,6 @@ const S = strings(
     hideLegend: 'Hide the legend',
     howMap: 'How to read the map',
     howGraph: 'How to read the graph',
-    howSimilar: 'How to read the Similar view',
     legend: 'Legend',
   },
   {
@@ -58,7 +55,6 @@ const S = strings(
     associations: 'Асоциации',
     focus: 'Фокус',
     map: 'Карта',
-    similar: 'Подобни',
     recent: 'Скорошни',
     back: 'Назад (Backspace)',
     backTo: 'назад към {page}',
@@ -68,7 +64,6 @@ const S = strings(
     hideLegend: 'Скрийте легендата',
     howMap: 'Как се чете картата',
     howGraph: 'Как се чете графът',
-    howSimilar: 'Как се чете изгледът „Подобни“',
     legend: 'Легенда',
   },
 )
@@ -142,8 +137,7 @@ function initialView(): StageView {
   if (linked) return 'focus'
   if (!openedOnPhone) return 'map'
   try {
-    const saved = localStorage.getItem(VIEW_KEY)
-    return saved === 'map' || saved === 'similar' ? saved : 'focus'
+    return localStorage.getItem(VIEW_KEY) === 'map' ? 'map' : 'focus'
   } catch {
     return 'focus'
   }
@@ -214,9 +208,6 @@ export function App() {
   const [onDevice, setOnDevice] = useState<DetailData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
-  // The Similar view's characters are not in the graph's data, so it hands
-  // over the whole entry for the rail to preview.
-  const [hoveredSimilar, setHoveredSimilar] = useState<KanjiNode | null>(null)
   // How to read the graph or map, behind the (i) rather than always on screen.
   const [legendOpen, setLegendOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -306,7 +297,6 @@ export function App() {
   const drill = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
-      setHoveredSimilar(null)
       if (via && via !== char) visit(via, char)
       setFocus(char)
       reset({ kind: 'kanji', char })
@@ -328,7 +318,6 @@ export function App() {
   const openKanji = useCallback(
     (char: string) => {
       setHovered(null)
-      setHoveredSimilar(null)
       setPane('rail')
       if (under?.kind === 'kanji' && under.char === char) pop()
       else push({ kind: 'kanji', char })
@@ -390,7 +379,6 @@ export function App() {
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
       if (e.key === 'f' || e.key === 'F') setView('focus')
-      if (e.key === 's' || e.key === 'S') setView('similar')
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
         e.preventDefault()
@@ -408,7 +396,6 @@ export function App() {
   const signIn = useCallback(() => setAccountOpen(true), [])
 
   const hoveredNode: KanjiNode | null = useMemo(() => {
-    if (view === 'similar') return hoveredSimilar
     if (!data || !hovered) return null
     if (hovered === data.focus.char) return data.focus
     return (
@@ -416,7 +403,7 @@ export function App() {
       data.components.nodes.find((n) => n.char === hovered) ??
       null
     )
-  }, [data, hovered, view, hoveredSimilar])
+  }, [data, hovered])
 
   function page(p: Page) {
     switch (p.kind) {
@@ -451,7 +438,6 @@ export function App() {
             hovered={hoveredNode}
             onWord={openWord}
             onKanji={openKanji}
-            onSimilar={mobile || view !== 'similar' ? () => setView('similar') : undefined}
             onComponents={mobile || view !== 'focus' ? () => setView('focus') : undefined}
           />
         ) : (
@@ -515,9 +501,6 @@ export function App() {
                   </button>
                   <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
                     {t('map')}
-                  </button>
-                  <button role="tab" aria-selected={onStage && view === 'similar'} onClick={() => setView('similar')}>
-                    {t('similar')}
                   </button>
                 </>
               )}
@@ -594,7 +577,7 @@ export function App() {
             </div>
           )}
 
-          {!selected && view !== 'map' && (
+          {!selected && view === 'focus' && (
             <div className="stage-empty">
               <p className="hint">{t('selectKanji')}</p>
             </div>
@@ -602,18 +585,6 @@ export function App() {
 
           {!error && data && selected && view === 'focus' && (
             <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={setHovered} legend={legendOpen} />
-          )}
-
-          {!error && data && selected && view === 'similar' && (
-            <SimilarView
-              focus={data.focus}
-              strokes={data.strokes}
-              filter={filter}
-              onDrill={drill}
-              onHover={setHoveredSimilar}
-              onFilter={setFilter}
-              legend={legendOpen}
-            />
           )}
 
           {!error && mapOpened && (
@@ -646,9 +617,7 @@ export function App() {
             onClick={() => setLegendOpen((o) => !o)}
             aria-expanded={legendOpen}
             aria-controls="stage-legend"
-            title={
-              legendOpen ? t('hideLegend') : t(view === 'map' ? 'howMap' : view === 'similar' ? 'howSimilar' : 'howGraph')
-            }
+            title={legendOpen ? t('hideLegend') : t(view === 'map' ? 'howMap' : 'howGraph')}
             aria-label={t('legend')}
           >
             i

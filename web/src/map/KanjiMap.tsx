@@ -677,8 +677,15 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
           }
           request()
         }
-        const req: LayoutRequest = { id: 1, n: d.n, edges: d.edges.slice(), size: d.size.slice(), seed }
-        worker.postMessage(req, [req.edges.buffer, req.size.buffer, req.seed.buffer])
+        const req: LayoutRequest = {
+          id: 1,
+          n: d.n,
+          edges: d.edges.slice(),
+          size: d.size.slice(),
+          seed,
+          similar: d.similar.slice(),
+        }
+        worker.postMessage(req, [req.edges.buffer, req.size.buffer, req.seed.buffer, req.similar!.buffer])
       },
       () => !cancelled && setPhase('error'),
     )

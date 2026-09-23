@@ -3893,36 +3893,16 @@ html {
 }
 
 .similar-rows h3 {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin: 14px 0 8px;
+  margin: 0 0 8px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--muted);
-}
-
-.similar-rows h3:first-child {
-  margin-top: 0;
 }
 
 .similar-rows ul {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-.similar-all {
-  padding: 0;
-  background: none;
-  border: 0;
-  color: var(--paper-dim);
-  font: inherit;
-  cursor: pointer;
-}
-
-.similar-all:hover {
-  color: var(--paper);
 }
 
 .similar-glyphs {
@@ -3979,140 +3959,4 @@ html {
   margin: 14px 0 0;
   font-size: 12.5px;
   color: var(--muted);
-}
-
-/* The view. Lookalikes, same readings and near-synonyms are characters in
-   their own right, so they are paper, like containers -- indigo stays with
-   parts. The two lower lists differ in their rim, and in their names. */
-.similar-svg {
-  cursor: default;
-}
-
-.similar-edge {
-  stroke: var(--rule);
-  stroke-width: 0.75;
-}
-
-.similar-node[data-kind='read'] .plate {
-  stroke: var(--rule-bright);
-}
-
-.similar-node[data-kind='mean'] .plate {
-  stroke: var(--rule-bright);
-  stroke-dasharray: 2 3;
-}
-
-.similar-node[data-kind='variant'] .plate {
-  stroke: var(--faint);
-}
-
-.similar-node .similar-meaning {
-  font-family: var(--gothic);
-  font-size: 9px;
-  fill: var(--paper-dim);
-}
-
-.similar-node .similar-why-label {
-  font-family: var(--mincho);
-  font-size: 9px;
-  fill: var(--muted);
-}
-
-.similar-label {
-  font-family: var(--gothic);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  fill: var(--muted);
-}
-
-.similar-empty {
-  position: absolute;
-  left: 50%;
-  bottom: 18%;
-  transform: translateX(-50%);
-  text-align: center;
-}
-
-.compare-card {
-  position: absolute;
-  right: 20px;
-  bottom: 16px;
-  z-index: 4;
-  padding: 10px 14px 12px;
-  background: var(--sumi-sunk);
-  border: 1px solid var(--rule-bright);
-  border-radius: 4px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-  animation: legend-in 120ms var(--ease);
-}
-
-.compare-card > p {
-  margin: 0 0 8px;
-  max-width: 250px;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-
-.compare-pair {
-  display: flex;
-  gap: 16px;
-}
-
-.compare-pair figure {
-  margin: 0;
-  width: 116px;
-}
-
-.compare-pair svg {
-  display: block;
-  width: 116px;
-  height: 116px;
-  background: var(--sumi);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-}
-
-.compare-pair path {
-  fill: none;
-  stroke: var(--faint);
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.compare-pair path[data-lit] {
-  stroke: var(--paper);
-}
-
-.compare-pair figcaption {
-  margin-top: 5px;
-  font-size: 11.5px;
-  color: var(--paper-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.compare-char {
-  font-family: var(--mincho);
-  font-size: 15px;
-  color: var(--paper);
-}
-
-@media (max-width: 900px) {
-  .compare-card {
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-  }
-
-  .compare-pair figure,
-  .compare-pair svg {
-    width: 96px;
-  }
-
-  .compare-pair svg {
-    height: 96px;
-  }
 }

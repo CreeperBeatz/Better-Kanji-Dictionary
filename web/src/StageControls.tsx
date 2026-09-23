@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import type { ContainerFilter } from './graph/KanjiGraph'
 import { strings, useLang } from './i18n'
 
-export type StageView = 'focus' | 'map' | 'similar'
+export type StageView = 'focus' | 'map'
 
 const S = strings(
   {
@@ -33,9 +33,6 @@ const S = strings(
     focusTitle: 'One character, what it is made of and what it builds (F)',
     map: 'Map',
     mapTitle: 'Every character at this level, to wander around in (M)',
-    similar: 'Similar',
-    similarTitle: 'One character, what looks like it and what means much the same (S)',
-    similarFocus: 'which lookalikes and near-synonyms to show',
   },
   {
     all: 'всички',
@@ -63,9 +60,6 @@ const S = strings(
     focusTitle: 'Един йероглиф — от какво е съставен и какво изгражда (F)',
     map: 'Карта',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
-    similar: 'Подобни',
-    similarTitle: 'Един йероглиф — какво прилича на него и какво означава почти същото (S)',
-    similarFocus: 'кои подобни да се показват',
   },
 )
 
@@ -93,11 +87,7 @@ export function LevelFilter({
 }) {
   const t = S(useLang())
   return (
-    <div
-      className="filter"
-      role="group"
-      aria-label={t(view === 'map' ? 'filterMap' : view === 'similar' ? 'similarFocus' : 'filterFocus')}
-    >
+    <div className="filter" role="group" aria-label={t(view === 'map' ? 'filterMap' : 'filterFocus')}>
       {FILTERS.map((f) => (
         <button
           key={String(f.value)}
@@ -171,20 +161,6 @@ function MapIcon() {
   )
 }
 
-/** A character with its lookalikes above and its near-synonyms below. */
-function SimilarIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden>
-      <circle cx="8" cy="8" r="2.4" className="solid" />
-      <circle cx="3.4" cy="3.6" r="1.4" />
-      <circle cx="8" cy="2.4" r="1.4" />
-      <circle cx="12.6" cy="3.6" r="1.4" />
-      <circle cx="4.6" cy="13" r="1.4" />
-      <circle cx="11.4" cy="13" r="1.4" />
-    </svg>
-  )
-}
-
 /** Labelled whenever the labels fit beside the rest of the row it sits in,
     icons alone when they do not; the labels stay for screen readers and the
     titles on hover either way. */
@@ -237,16 +213,6 @@ export function ViewSwitch({ view, onView }: { view: StageView; onView: (v: Stag
       >
         <MapIcon />
         <span className="view-label">{t('map')}</span>
-      </button>
-      <button
-        role={live ? 'tab' : undefined}
-        aria-selected={live ? view === 'similar' : undefined}
-        onClick={live ? () => onView('similar') : undefined}
-        title={live ? t('similarTitle') : undefined}
-        tabIndex={live ? undefined : -1}
-      >
-        <SimilarIcon />
-        <span className="view-label">{t('similar')}</span>
       </button>
     </>
   )

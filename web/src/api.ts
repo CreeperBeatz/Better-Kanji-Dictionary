@@ -60,8 +60,7 @@ export type SimilarWhy = { words: string[] } | { kun: string } | { gloss: string
  */
 export interface SimilarResponse {
   char: string
-  /** Stroke paths, as GraphResponse.strokes, so the two can be compared stroke by stroke. */
-  look: (KanjiNode & { score: number; paths: string[] })[]
+  look: (KanjiNode & { score: number })[]
   read: (KanjiNode & { score: number; why: SimilarWhy | null })[]
   mean: (KanjiNode & { score: number; why: SimilarWhy | null })[]
   variant: (KanjiNode & { score: number })[]
@@ -83,6 +82,8 @@ export interface MapResponse {
   target: (0 | 1)[]
   /** flat parent,child index pairs */
   edges: number[]
+  /** flat a,b index pairs of lookalikes, each pair once; they pull on the layout */
+  similar: number[]
   counts: { nodes: number; targets: number; edges: number }
 }
 
@@ -362,7 +363,7 @@ export const api = {
 
   map: (scope: string) => get<MapResponse>(`/api/map/${encodeURIComponent(scope)}`),
 
-  /** Kept for the session: the kanji page and the Similar view both ask. */
+  /** Kept for the session: a character's page is opened again and again. */
   similar: (char: string): Promise<SimilarResponse> => {
     let p = similarCache.get(char)
     if (!p) {
