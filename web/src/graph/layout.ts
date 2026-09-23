@@ -251,8 +251,12 @@ const PEEK_RADIUS = 17
 const PEEK_GAP = 8
 const PEEK_FIRST = 30
 const PEEK_ROW = 44
-/** How far round the host the fan may wrap, centred on "away from the focus". */
-const PEEK_SPAN = Math.PI * 1.15
+/**
+ * How wide the fan opens, centred on "away from the focus": a cone, narrow
+ * enough that the characters either side of the host stay outside it and can
+ * still be hovered. It grows outward in rows rather than wrapping round.
+ */
+export const PEEK_SPAN = Math.PI * 0.6
 
 /**
  * Fan `above` out on arcs around `host`, facing away from the focus so the

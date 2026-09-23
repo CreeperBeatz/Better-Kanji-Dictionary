@@ -3,7 +3,7 @@ import { api, type GraphResponse, type KanjiNode } from '../api'
 import { strings, useLang, type Translate } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { HoldCard } from './HoldCard'
-import { computeLayout, placePeek, type PeekItem, type PositionedNode } from './layout'
+import { computeLayout, PEEK_SPAN, placePeek, type PeekItem, type PositionedNode } from './layout'
 
 export type ContainerFilter = 'all' | 'common' | 1 | 2 | 3 | 4 | 5
 
@@ -32,8 +32,6 @@ const S = strings(
     legendHover: 'hover one above to see what contains it in turn',
     legendVia: 'dashed, not at this level itself, but inside characters that are',
     via: 'not at this level itself, but inside characters that are',
-    more: '+{n} more',
-    hidden: '{n} hidden by level',
   },
   {
     joyo: 'джойо',
@@ -49,8 +47,6 @@ const S = strings(
     legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
     legendVia: 'с прекъсната линия - не е от това ниво, но е част от йероглифи, които са',
     via: 'не е от това ниво, но е част от йероглифи, които са',
-    more: '+{n} още',
-    hidden: '{n} скрити заради нивото',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -154,8 +150,6 @@ async function fetchAbove(chars: string[]): Promise<void> {
 interface Peek {
   host: PositionedNode
   items: PeekItem[]
-  total: number
-  hidden: number
   via: Set<string>
 }
 
@@ -273,8 +267,6 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
       host,
       items: placePeek(host, kept),
       via,
-      total: above.total,
-      hidden: above.containers.length - kept.length,
     })
     return true
   }
@@ -423,7 +415,9 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
 
   const renderNode = (n: PositionedNode, extra?: { className?: string; onEnter?: () => void }) => {
     const above = n.kind === 'container' ? aboveCache.get(n.char) : undefined
-    const hasAbove = above !== undefined && above.total > 0
+    // Only if the filter would show something up there: a mark that opens
+    // onto nothing is a promise the peek does not keep.
+    const hasAbove = above !== undefined && sieve(above.containers, filter).shown.length > 0
     // The "more above" mark sits on the outer side, pointing away from the focus.
     const out = Math.atan2(n.y, n.x)
     return (
@@ -516,13 +510,6 @@ ${t('via')}`}
         // A long press would otherwise open the browser's own menu.
         onContextMenu={(e) => e.preventDefault()}
       >
-        <defs>
-          <radialGradient id="peek-veil">
-            <stop offset="0%" stopColor="var(--sumi)" stopOpacity="0.94" />
-            <stop offset="70%" stopColor="var(--sumi)" stopOpacity="0.82" />
-            <stop offset="100%" stopColor="var(--sumi)" stopOpacity="0" />
-          </radialGradient>
-        </defs>
         <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
           <g className="graph-main" data-peek={peek ? true : undefined}>
             {layout.edges.map((e) => (
@@ -627,8 +614,15 @@ function PeekLayer({
   const t = S(useLang())
   const { host: h, items } = peek
   const reach = items.reduce((m, it) => Math.max(m, Math.hypot(it.x - h.x, it.y - h.y) + it.radius), 0) + 26
-  const more = peek.total - items.length - peek.hidden
+  // The cone the peek fans out in, from the host away from the focus. It is
+  // both the veil behind the peek and what holds it open: moving off it --
+  // sideways onto the next character, say -- lets that one be hovered.
   const out = Math.atan2(h.y, h.x)
+  const half = PEEK_SPAN / 2 + 0.3
+  const cone =
+    `M ${h.x} ${h.y} ` +
+    `L ${h.x + Math.cos(out - half) * reach} ${h.y + Math.sin(out - half) * reach} ` +
+    `A ${reach} ${reach} 0 0 1 ${h.x + Math.cos(out + half) * reach} ${h.y + Math.sin(out + half) * reach} Z`
 
   return (
     // mouseover, not mouseenter: it fires again on every child, which cancels
@@ -639,9 +633,14 @@ function PeekLayer({
       onMouseOver={onEnter}
       onMouseLeave={onLeave}
     >
-      {/* The veil catches the pointer across the whole peek, so moving
-          between its characters never falls through and closes it. */}
-      <circle className="peek-veil" cx={h.x} cy={h.y} r={reach} fill="url(#peek-veil)" />
+      <defs>
+        <radialGradient id="peek-veil-cone" gradientUnits="userSpaceOnUse" cx={h.x} cy={h.y} r={reach}>
+          <stop offset="0%" stopColor="var(--sumi)" stopOpacity="0.94" />
+          <stop offset="70%" stopColor="var(--sumi)" stopOpacity="0.82" />
+          <stop offset="100%" stopColor="var(--sumi)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <path className="peek-veil" d={cone} fill="url(#peek-veil-cone)" />
 
       {items.map((it, i) => (
         <path
@@ -700,17 +699,6 @@ ${t('via')}`}
         </g>
       ))}
 
-      {(more > 0 || peek.hidden > 0) && (
-        <text
-          className="peek-more"
-          x={h.x + Math.cos(out) * (reach - 8)}
-          y={h.y + Math.sin(out) * (reach - 8)}
-        >
-          {more > 0 && t('more', { n: more })}
-          {more > 0 && peek.hidden > 0 && ' · '}
-          {peek.hidden > 0 && t('hidden', { n: peek.hidden })}
-        </text>
-      )}
     </g>
   )
 }

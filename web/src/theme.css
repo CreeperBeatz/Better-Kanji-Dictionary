@@ -2687,15 +2687,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   fill: var(--muted);
 }
 
-.peek-more {
-  font-family: var(--gothic);
-  font-size: 9px;
-  fill: var(--muted);
-  text-anchor: middle;
-  dominant-baseline: central;
-  pointer-events: none;
-}
-
 /* A short arc on a container's outer edge: there is more above this one. */
 .above-mark {
   fill: none;
