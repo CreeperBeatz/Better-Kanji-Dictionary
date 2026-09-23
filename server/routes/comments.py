@@ -1,4 +1,4 @@
-"""The comment section under each character: public notes, thumbs up, replies.
+"""The comment section under each character or word: public notes, thumbs up, replies.
 
 A public note is the top-level comment -- someone's interpretation of the
 character. Reading needs no account; liking and replying do. Both lists are
@@ -8,6 +8,7 @@ paged, since a common character could gather many of each.
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from .. import store
+from .assoc import subject_or_400
 from .auth import optional_user, require_user
 
 router = APIRouter(prefix="/api/comments", tags=["comments"])
@@ -27,8 +28,7 @@ def notes_for(
     sort: str = Query("liked"),
     user: dict | None = Depends(optional_user),
 ) -> dict:
-    if len(char) != 1:
-        raise HTTPException(400, "expected a single character")
+    char = subject_or_400(char)
     if sort not in store.SORTS:
         raise HTTPException(400, "sort must be liked or new")
     return store.notes_for(char, _viewer(user), offset, limit, sort)

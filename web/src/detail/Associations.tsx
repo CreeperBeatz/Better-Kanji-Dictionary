@@ -17,7 +17,10 @@ const PAGE = 10
 const SORT_KEY = 'betterrtk:sort'
 
 interface Props {
-  char: string
+  /** A character, or a word as `word:<id>`. */
+  subject: string
+  /** How the subject is written, for the page. */
+  label: string
   onPick: (char: string) => void
   onSignIn: () => void
   /** How many associations there are here, yours and others', for the tab. */
@@ -52,14 +55,16 @@ function localView(n: LocalNote, drawings: string[]): PublicNote {
 }
 
 /**
- * The associations tab: write one like a comment, then yours (private before
+ * The associations tab, for a character or a word: write one like a comment, then yours (private before
  * public) and everyone else's public ones, most liked or newest first.
  *
  * Signed out, your associations live in this browser (localNotes.ts) and move
  * into your account when you log in. Others' public ones come from the server
  * either way.
  */
-export function Associations({ char, onPick, onSignIn, onCount }: Props) {
+export function Associations({ subject, label, onPick, onSignIn, onCount }: Props) {
+  const char = subject
+  const isWord = subject.startsWith('word:')
   const { user, ready, syncing } = useAuth()
   const me = user?.id ?? null
   const [sort, setSortState] = useState<NoteSort>(rememberedSort)
@@ -187,12 +192,20 @@ export function Associations({ char, onPick, onSignIn, onCount }: Props) {
   const noted = parts.filter((p) => p.texts.length > 0)
 
   return (
-    <section className="rail-section assoc-tab">
-      <Composer key={char} char={char} author={user} draftKey={char} onSubmit={post} onSignIn={onSignIn} />
+    <section className="rail-section assoc-tab" aria-label={`Associations for ${label}`}>
+      <Composer
+        key={char}
+        label={label}
+        placeholder={isWord ? `How do you remember ${label}?` : `What does ${label} look like to you?`}
+        author={user}
+        draftKey={char}
+        onSubmit={post}
+        onSignIn={onSignIn}
+      />
 
       {noted.length > 0 && (
         <div className="assoc-parts">
-          <h3>From its parts</h3>
+          <h3>{isWord ? 'From its kanji' : 'From its parts'}</h3>
           {noted.map((p) => (
             <div key={p.char} className="assoc-part">
               <button className="assoc-part-glyph" onClick={() => onPick(p.char)}>
@@ -217,7 +230,7 @@ export function Associations({ char, onPick, onSignIn, onCount }: Props) {
             editing === n.id ? (
               <Composer
                 key={n.id}
-                char={char}
+                label={label}
                 author={user}
                 initial={{
                   text: n.text,
@@ -273,7 +286,7 @@ export function Associations({ char, onPick, onSignIn, onCount }: Props) {
           <p className="discussion-empty">Could not load what others wrote.</p>
         ) : others.length === 0 && !loading ? (
           <p className="discussion-empty">
-            Nobody has shared one for {char} yet. Post yours as public and it shows here for others
+            Nobody has shared one for {label} yet. Post yours as public and it shows here for others
             to read, like and reply to.
           </p>
         ) : (

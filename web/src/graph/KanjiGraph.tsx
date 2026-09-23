@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode } from '../api'
 import { HoldCard } from './HoldCard'
 import { computeLayout, placePeek, type PeekItem, type PositionedNode } from './layout'
@@ -102,6 +102,11 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   const [, setAboveVersion] = useState(0)
   const timers = useRef<{ open?: number; close?: number }>({})
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null)
+  // Fingers on the graph, for a two-finger pinch; `dist` is their last spread.
+  const touches = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null)
+  // A pinch ends with fingers lifting over nodes, which must not open them.
+  const pinched = useRef(false)
   const [held, setHeld] = useState<{ node: KanjiNode; x: number; y: number } | null>(null)
   const hold = useRef<{ timer?: number; shown: boolean }>({ shown: false })
   // The full entries, for the hold card: layout nodes carry only what drawing needs.
@@ -111,9 +116,8 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     return m
   }, [data])
 
-  // Refit whenever the focus changes: the component tree below and the number of
-  // container rings above both vary a lot between characters.
-  useEffect(() => {
+  /** Frame the whole graph. */
+  const fit = useCallback(() => {
     const svg = svgRef.current
     if (!svg) return
     const { width, height } = svg.getBoundingClientRect()
@@ -126,7 +130,23 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
       y: height / 2 - ((b.minY + b.maxY) / 2) * scale,
       scale,
     })
-  }, [layout, data.focus.char, filter])
+  }, [layout])
+
+  // Refit whenever the focus changes: the component tree below and the number of
+  // container rings above both vary a lot between characters.
+  useEffect(fit, [fit, data.focus.char, filter])
+
+  /** The svg's middle, which the buttons zoom about. */
+  function middle(): [number, number] {
+    const r = svgRef.current?.getBoundingClientRect()
+    return r ? [r.width / 2, r.height / 2] : [0, 0]
+  }
+
+  /** Put the focused character, which the layout keeps at its origin, in the middle. */
+  function recentre() {
+    const [mx, my] = middle()
+    setView((v) => ({ ...v, x: mx, y: my }))
+  }
 
   // Keep the graph where it was relative to the middle as the stage changes
   // size -- dragging the rail wider or narrower, say.
@@ -214,23 +234,44 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     clearTimeout(timers.current.close)
   }
 
-  function onWheel(e: React.WheelEvent) {
-    e.preventDefault()
-    const svg = svgRef.current
-    if (!svg) return
-    const rect = svg.getBoundingClientRect()
-    const px = e.clientX - rect.left
-    const py = e.clientY - rect.top
-    const factor = Math.exp(-e.deltaY * 0.0015)
+  /** Zoom by `factor` about a point in the svg, then move by (dx, dy). */
+  function zoomAt(factor: number, px: number, py: number, dx = 0, dy = 0) {
     setView((v) => {
       const scale = Math.min(Math.max(v.scale * factor, 0.12), 6)
       const k = scale / v.scale
-      return { scale, x: px - (px - v.x) * k, y: py - (py - v.y) * k }
+      return { scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy }
     })
+  }
+
+  function onWheel(e: React.WheelEvent) {
+    e.preventDefault()
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect) return
+    zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top)
+  }
+
+  function spread() {
+    const [a, b] = [...touches.current.values()]
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
   }
 
   function onPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return
+    if (e.pointerType === 'touch') {
+      const rect = svgRef.current?.getBoundingClientRect()
+      touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
+      if (touches.current.size === 1) pinched.current = false
+      if (touches.current.size === 2) {
+        // A second finger turns the drag into a pinch.
+        for (const id of touches.current.keys()) svgRef.current?.setPointerCapture?.(id)
+        drag.current = null
+        pinched.current = true
+        clearTimeout(hold.current.timer)
+        setPeek(null)
+        pinch.current = spread()
+        return
+      }
+    }
     drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
   }
 
@@ -260,6 +301,17 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (touches.current.has(e.pointerId)) {
+      const rect = svgRef.current?.getBoundingClientRect()
+      touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
+      const p = pinch.current
+      if (p && touches.current.size >= 2) {
+        const now = spread()
+        if (p.dist > 0) zoomAt(now.dist / p.dist, now.mx, now.my, now.mx - p.mx, now.my - p.my)
+        pinch.current = now
+        return
+      }
+    }
     const d = drag.current
     if (!d) return
     const dx = e.clientX - d.x
@@ -275,7 +327,9 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     if (d.moved) setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
   }
 
-  function onPointerUp() {
+  function onPointerUp(e: React.PointerEvent) {
+    touches.current.delete(e.pointerId)
+    if (touches.current.size < 2) pinch.current = null
     drag.current = null
     endHold()
   }
@@ -286,6 +340,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
       hold.current.shown = false
       return
     }
+    if (pinched.current) return
     if (node.kind === 'focus') return
     onDrill(node.char)
   }
@@ -418,6 +473,22 @@ ${levelOf(n)}`}
           )}
         </g>
       </svg>
+
+      {/* The same corner and buttons as the map's. */}
+      <div className="map-zoom" role="group" aria-label="Zoom">
+        <button onClick={recentre} aria-label={`Recentre on ${data.focus.char}`} title={`Recentre on ${data.focus.char}`}>
+          ◎
+        </button>
+        <button onClick={() => zoomAt(1.6, ...middle())} aria-label="Zoom in" title="Zoom in">
+          +
+        </button>
+        <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label="Zoom out" title="Zoom out">
+          −
+        </button>
+        <button onClick={fit} aria-label="Show the whole graph" title="Show the whole graph">
+          ⤢
+        </button>
+      </div>
 
       {held && (
         <HoldCard
