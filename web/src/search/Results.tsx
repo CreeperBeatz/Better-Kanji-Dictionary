@@ -65,6 +65,8 @@ const S = strings(
     semanticNothing: 'Semantic search found nothing either.',
     semanticUnavailable: 'Semantic search is not available right now.',
     semanticSignIn: 'Sign in to search by meaning.',
+    semanticAsk: 'Search by meaning',
+    semanticAskTitle: 'Ask semantic search what this could mean (Enter)',
   },
   {
     common: 'честа',
@@ -106,6 +108,8 @@ const S = strings(
     semanticNothing: 'И семантичното търсене не откри нищо.',
     semanticUnavailable: 'Семантичното търсене не е достъпно в момента.',
     semanticSignIn: 'Влезте, за да търсите по смисъл.',
+    semanticAsk: 'Търсене по смисъл',
+    semanticAskTitle: 'Попитайте семантичното търсене какво може да означава това (Enter)',
   },
 )
 
@@ -234,9 +238,12 @@ interface SearchProps {
   onLevel: (level: Level) => void
   /** Search for something else, as if it had been typed: a suggested reading. */
   onSearch: (q: string) => void
+  /** The query semantic search was asked for (Enter), and how to ask for one. */
+  asked: string | null
+  onAsk: (q: string) => void
 }
 
-export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -371,8 +378,15 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
       )}
       {/* When semantic search takes over, it says what it found instead; it
           hands the line back when it will not run (signed out, offline, off). */}
-      {unmatched && isSentence(unmatched) ? (
-        <Semantic q={unmatched} onKanji={onKanji} onWord={onWord} nothing={empty ? nothing : null} />
+      {unmatched ? (
+        <Semantic
+          q={unmatched}
+          asked={asked === unmatched}
+          onAsk={() => onAsk(unmatched)}
+          onKanji={onKanji}
+          onWord={onWord}
+          nothing={empty ? nothing : null}
+        />
       ) : (
         empty && nothing
       )}
@@ -381,39 +395,36 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   )
 }
 
-/** Long enough to be a description rather than a word half typed. */
-function isSentence(q: string): boolean {
-  return q.length >= 8 || q.split(/\s+/).length >= 2
-}
-
 // What semantic search said for each query, so going back to one does not ask again.
 const understood = new Map<string, SemanticResponse>()
 
-// How long typing must pause before the model is asked. Each call costs money
-// and takes seconds, so not on every key.
-const SEMANTIC_PAUSE = 400
-
 /**
- * Where an answer is: waiting (the pause, then the request on its way),
+ * Where an answer is: idle (not asked for yet), waiting (the request on its way),
  * thinking (the model has it), streaming (results arriving), done -- or
  * unavailable, or off when the server has no model set up at all.
  */
 interface SemanticState {
-  phase: 'waiting' | 'thinking' | 'streaming' | 'done' | 'unavailable' | 'off'
+  phase: 'idle' | 'waiting' | 'thinking' | 'streaming' | 'done' | 'unavailable' | 'off'
   answer: SemanticResponse | null
 }
 
 /**
  * What a language model takes a query to mean, for when the dictionary found
- * nothing: signed-in users only, and online only -- the device has no model.
+ * nothing: signed-in users only, online only -- the device has no model -- and
+ * only when asked, with Enter or its button, since each answer costs money and
+ * takes seconds. An answer already given shows again without asking.
  */
 function Semantic({
   q,
+  asked,
+  onAsk,
   onKanji,
   onWord,
   nothing,
 }: {
   q: string
+  asked: boolean
+  onAsk: () => void
   onKanji: (c: string) => void
   onWord: (w: Word) => void
   /** The dictionary's "nothing matched", shown only when semantic search will not run. */
@@ -425,7 +436,7 @@ function Semantic({
   const key = `${lang} ${q}`
   const [state, setState] = useState<SemanticState>(() => {
     const known = understood.get(key)
-    return known ? { phase: 'done', answer: known } : { phase: 'waiting', answer: null }
+    return known ? { phase: 'done', answer: known } : { phase: asked ? 'waiting' : 'idle', answer: null }
   })
 
   useEffect(() => {
@@ -434,8 +445,11 @@ function Semantic({
       setState({ phase: 'done', answer: known })
       return
     }
+    if (!asked || !user || !navigator.onLine) {
+      setState({ phase: 'idle', answer: null })
+      return
+    }
     setState({ phase: 'waiting', answer: null })
-    if (!user || !navigator.onLine) return
     const abort = new AbortController()
     let answer: SemanticResponse = { query: q, note: null, kanji: [], words: [] }
     let done = false
@@ -466,25 +480,20 @@ function Semantic({
     // says semantic search is not available.
     const broke = () => show(answer.kanji.length || answer.words.length ? 'done' : 'unavailable')
 
-    const timer = setTimeout(() => {
-      api.semantic(q, lang, onEvent, abort.signal).then(
-        () => {
-          if (!done) broke()
-        },
-        (e) => {
-          if (abort.signal.aborted) return
-          // Not set up at all: say nothing. Set up but failing -- the spend cap,
-          // OpenRouter down -- say so, once, and let the search stand as it is.
-          if (e instanceof ApiError && e.code === 'semantic_off') show('off')
-          else broke()
-        },
-      )
-    }, SEMANTIC_PAUSE)
-    return () => {
-      abort.abort()
-      clearTimeout(timer)
-    }
-  }, [key, q, lang, user])
+    api.semantic(q, lang, onEvent, abort.signal).then(
+      () => {
+        if (!done) broke()
+      },
+      (e) => {
+        if (abort.signal.aborted) return
+        // Not set up at all: say nothing. Set up but failing -- the spend cap,
+        // OpenRouter down -- say so, once, and let the search stand as it is.
+        if (e instanceof ApiError && e.code === 'semantic_off') show('off')
+        else broke()
+      },
+    )
+    return () => abort.abort()
+  }, [key, q, lang, user, asked])
 
   if (!ready || state.phase === 'off') return nothing
   if (!user)
@@ -494,7 +503,21 @@ function Semantic({
         <p className="hint semantic-invite">{t('semanticSignIn')}</p>
       </>
     )
-  if (state.phase === 'waiting' && !navigator.onLine) return nothing
+  if (state.phase === 'idle') {
+    if (!navigator.onLine) return nothing
+    return (
+      <>
+        {nothing}
+        <button className="semantic-ask" onClick={onAsk} title={t('semanticAskTitle')}>
+          <span className="semantic-mark" aria-hidden="true">
+            ✦
+          </span>
+          {t('semanticAsk')}
+          <kbd>Enter</kbd>
+        </button>
+      </>
+    )
+  }
 
   const { phase, answer } = state
   const explained = answer?.kanji.some((k) => k.why)

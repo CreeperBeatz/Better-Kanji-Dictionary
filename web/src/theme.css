@@ -751,6 +751,43 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--ai);
 }
 
+/* Asking for semantic search: Enter, or this. The key hint is for keyboards;
+   on a phone the keyboard's own search key is the Enter. */
+.semantic-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ai);
+  background: transparent;
+  border: 1px solid var(--ai-deep);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.semantic-ask:hover {
+  background: var(--ai-wash);
+}
+
+.semantic-ask kbd {
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 5px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+}
+
+@media (pointer: coarse) {
+  .semantic-ask kbd {
+    display: none;
+  }
+}
+
 .semantic-mark {
   font-size: 11px;
 }

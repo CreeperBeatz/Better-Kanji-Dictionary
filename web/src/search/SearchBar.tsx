@@ -48,12 +48,14 @@ interface Props {
    * another page, in which case the text is selected, ready to be replaced.
    */
   onFocus: () => boolean
+  /** Enter, or the search key on a phone's keyboard. */
+  onSubmit: () => void
   inputRef: React.RefObject<HTMLInputElement | null>
 }
 
 const coarse = () => window.matchMedia('(pointer: coarse)').matches
 
-export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
+export function SearchBar({ q, onType, onFocus, onSubmit, inputRef }: Props) {
   const [tool, setTool] = useState<Tool | null>(null)
   const t = S(useLang())
 
@@ -90,8 +92,12 @@ export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
                 setTool(null)
                 e.currentTarget.blur()
               }
-              // Enter is done typing: put the keyboard away to show the results.
-              if (e.key === 'Enter' && coarse()) e.currentTarget.blur()
+              // Enter is done typing: put the keyboard away to show the results,
+              // and ask semantic search if the dictionary found nothing.
+              if (e.key === 'Enter') {
+                onSubmit()
+                if (coarse()) e.currentTarget.blur()
+              }
             }}
             placeholder={t('placeholder')}
             aria-label={t('search')}

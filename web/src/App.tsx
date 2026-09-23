@@ -197,6 +197,8 @@ export function App() {
   // The search box's text. It is the bottom page's query while that is a
   // search, and is left as it was when a pick on the graph starts a new stack.
   const [q, setQ] = useState(root.kind === 'search' ? root.q : '')
+  // The query Enter was last pressed on: semantic search runs only when asked.
+  const [asked, setAsked] = useState<string | null>(null)
   useEffect(() => {
     if (root.kind === 'search') setQ(root.q)
   }, [root])
@@ -406,7 +408,17 @@ export function App() {
   function page(p: Page) {
     switch (p.kind) {
       case 'search':
-        return <SearchPage q={p.q} onKanji={openKanji} onWord={openWord} onLevel={openLevel} onSearch={type} />
+        return (
+          <SearchPage
+            q={p.q}
+            onKanji={openKanji}
+            onWord={openWord}
+            onLevel={openLevel}
+            onSearch={type}
+            asked={asked}
+            onAsk={setAsked}
+          />
+        )
       case 'level':
         return <LevelPage level={p.level} onKanji={openKanji} />
       case 'word':
@@ -463,6 +475,7 @@ export function App() {
             q={q}
             onType={type}
             onFocus={focusSearch}
+            onSubmit={() => setAsked(q.trim())}
             inputRef={inputRef}
           />
           <div className="rail-head">
