@@ -110,10 +110,12 @@ body {
 }
 
 .rail-head {
+  container: rail-head / inline-size;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 22px;
+  /* Flush with the search row above on both sides. */
+  padding: 0 16px 0 22px;
   border-bottom: 1px solid var(--rule);
 }
 
@@ -620,6 +622,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   }
 
   .rail-head {
+    container-type: normal;
     grid-area: head;
     padding: 0 12px 0 8px;
     background: var(--sumi-sunk);
@@ -1904,26 +1907,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* ---------------------------------------------------------------- graph filter */
 
-/* The stage's width, not the window's, decides what fits along its top edge:
-   the rail can be dragged wide. */
-.stage {
-  container: stage / inline-size;
-}
-
-/* Along the top of the stage: the view switch in the middle, and in the corner
-   the level filter, then who you are. The switch stays centred
-   while the corner leaves it room, and moves aside when it does not -- how wide
-   the corner is depends on the language. */
+/* Along the top of the stage, in the corner: the level filter, then who you are. */
 .stage-top {
   position: absolute;
   top: 10px;
   left: 16px;
   right: 16px;
   z-index: 3;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
-  align-items: center;
-  gap: 12px;
+  display: flex;
+  justify-content: flex-end;
   pointer-events: none;
 }
 .stage-top > * {
@@ -1931,27 +1923,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .stage-corner {
-  grid-column: 3;
-  justify-self: end;
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-/* Too narrow for both in one row: the switch drops below the corner. */
-@container stage (max-width: 780px) {
-  .stage-top {
-    grid-template-columns: 1fr;
-  }
-  .stage-corner {
-    grid-row: 1;
-    grid-column: 1;
-  }
-  .view-switch {
-    grid-row: 2;
-    grid-column: 1;
-    justify-self: center;
-  }
 }
 
 .filter {
@@ -2146,18 +2120,22 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* ---------------------------------------------------------------- stage controls */
 
+/* At the end of the rail's tabs: which view the stage shows. Boxed, so it
+   reads as a switch for the stage rather than one more tab of the rail. */
 .view-switch {
-  grid-column: 2;
+  flex: none;
   display: flex;
   gap: 2px;
   padding: 2px;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: var(--sumi-sunk);
-  z-index: 3;
+  background: var(--sumi);
 }
 
 .view-switch button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: 0;
   border-radius: 2px;
@@ -2165,9 +2143,23 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-family: var(--gothic);
   font-size: 12px;
   letter-spacing: 0.02em;
-  padding: 3px 12px;
+  padding: 3px 10px;
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.view-switch svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+}
+.view-switch svg .solid,
+.view-switch svg.solid {
+  fill: currentColor;
+  stroke: none;
 }
 
 .view-switch button:hover {
@@ -2178,6 +2170,22 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--sumi-lift);
   color: var(--paper);
   box-shadow: inset 0 -1px 0 var(--shu);
+}
+
+/* A narrower rail keeps the tabs whole and lets the switch go to icons; its
+   labels stay for screen readers and its titles on hover. */
+@container rail-head (max-width: 479px) {
+  .view-switch button {
+    padding: 4px 8px;
+  }
+  .view-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .filter,
@@ -3400,6 +3408,37 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-size: 11px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
+}
+
+/* A narrow rail closes its tabs up, to leave room for the view switch. */
+@container rail-head (max-width: 399px) {
+  .rail-tabs {
+    gap: 0;
+  }
+  .rail-tabs button {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+  .rail-tabs button:first-child {
+    margin-left: -7px;
+  }
+  .rail-tabs button[aria-selected='true']::after {
+    left: 7px;
+    right: 7px;
+  }
+}
+
+/* At the narrowest the tabs scroll sideways under the switch, fading out at
+   the edge so it shows there is more. */
+@container rail-head (max-width: 359px) {
+  .rail-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+  }
+  .rail-tabs button[aria-selected='true']::after {
+    bottom: 0;
+  }
 }
 
 /* ---------------------------------------------------------------- composer */

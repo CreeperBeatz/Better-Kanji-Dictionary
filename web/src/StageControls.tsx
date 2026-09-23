@@ -138,15 +138,41 @@ export function RecentGrid({ recent, current, onPick, onClear }: RecentProps & {
   )
 }
 
+/** A character with what it is made of and what it builds. */
+function FocusIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden>
+      <path d="M8 8V3M8 8l-4.5 3.5M8 8l4.5 3.5" />
+      <circle cx="8" cy="8" r="2.4" className="solid" />
+      <circle cx="8" cy="2.6" r="1.5" />
+      <circle cx="3.2" cy="12" r="1.5" />
+      <circle cx="12.8" cy="12" r="1.5" />
+    </svg>
+  )
+}
+
+/** A field of characters. */
+function MapIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="solid">
+      {[3, 8, 13].flatMap((y) => [3, 8, 13].map((x) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.3" />))}
+    </svg>
+  )
+}
+
+/** Labelled when the rail has room, icons alone when it does not; the label
+    stays for screen readers either way. */
 export function ViewSwitch({ view, onView }: { view: StageView; onView: (v: StageView) => void }) {
   const t = S(useLang())
   return (
     <div className="view-switch" role="tablist" aria-label={t('view')}>
       <button role="tab" aria-selected={view === 'focus'} onClick={() => onView('focus')} title={t('focusTitle')}>
-        {t('focus')}
+        <FocusIcon />
+        <span className="view-label">{t('focus')}</span>
       </button>
       <button role="tab" aria-selected={view === 'map'} onClick={() => onView('map')} title={t('mapTitle')}>
-        {t('map')}
+        <MapIcon />
+        <span className="view-label">{t('map')}</span>
       </button>
     </div>
   )
