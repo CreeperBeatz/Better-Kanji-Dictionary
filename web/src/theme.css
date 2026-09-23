@@ -519,6 +519,19 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke: var(--faint);
 }
 
+/* Kept above for what it leads up to, not for itself: 关 is no JLPT kanji,
+   but it is how 丷 gets into 送. Dashed, so it reads as a way through. */
+.node[data-via] .plate,
+.peek-node[data-via] .plate {
+  stroke: var(--rule-bright);
+  stroke-dasharray: 2.5 2.5;
+}
+
+.edge[data-via],
+.peek-edge[data-via] {
+  stroke-dasharray: 3 4;
+}
+
 /* ---------------------------------------------------------------- recent tab */
 
 .recent-grid {

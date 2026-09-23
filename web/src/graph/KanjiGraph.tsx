@@ -30,6 +30,8 @@ const S = strings(
     legendAbove: 'above, characters that contain it, nearest first by frequency',
     legendBelow: 'below, what it is made of, down to atoms',
     legendHover: 'hover one above to see what contains it in turn',
+    legendVia: 'dashed, not at this level itself, but inside characters that are',
+    via: 'not at this level itself, but inside characters that are',
     more: '+{n} more',
     hidden: '{n} hidden by level',
   },
@@ -45,6 +47,8 @@ const S = strings(
     legendAbove: 'отгоре - йероглифите, които го съдържат, най-честите най-близо',
     legendBelow: 'отдолу - от какво е съставен, чак до най-простите части',
     legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
+    legendVia: 'с прекъсната линия - не е от това ниво, но е част от йероглифи, които са',
+    via: 'не е от това ниво, но е част от йероглифи, които са',
     more: '+{n} още',
     hidden: '{n} скрити заради нивото',
   },
@@ -71,6 +75,32 @@ export function keeps(filter: ContainerFilter) {
     if (filter === 'common') return n.freq !== null
     return n.jlpt !== null && n.jlpt >= filter
   }
+}
+
+/**
+ * Whether something the filter keeps is further up from `n` -- 关 is no
+ * JLPT kanji, but 送 above it is, so 关 is the way from 丷 up to 送.
+ */
+function leadsUp(filter: ContainerFilter) {
+  return (n: KanjiNode) => {
+    if (filter === 'all') return false
+    if (filter === 'common') return !!n.upFreq
+    return n.upJlpt != null && n.upJlpt >= filter
+  }
+}
+
+/** What the filter shows above: what it keeps, and what leads up to that. */
+function sieve(nodes: KanjiNode[], filter: ContainerFilter) {
+  const keep = keeps(filter)
+  const leads = leadsUp(filter)
+  const via = new Set<string>()
+  const shown = nodes.filter((n) => {
+    if (keep(n)) return true
+    if (!leads(n)) return false
+    via.add(n.char)
+    return true
+  })
+  return { shown, via }
 }
 
 interface View {
@@ -126,16 +156,18 @@ interface Peek {
   items: PeekItem[]
   total: number
   hidden: number
+  via: Set<string>
 }
 
 export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
-  const shown = useMemo(() => data.containers.filter(keeps(filter)), [data.containers, filter])
+  // A container outside the level stays if it leads up to something inside it.
+  const { shown, via } = useMemo(() => sieve(data.containers, filter), [data.containers, filter])
   const layout = useMemo(
-    () => computeLayout({ ...data, containers: shown }),
-    [data, shown],
+    () => computeLayout({ ...data, containers: shown }, via),
+    [data, shown, via],
   )
   const svgRef = useRef<SVGSVGElement>(null)
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
@@ -232,7 +264,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   function openPeek(host: PositionedNode) {
     const above = aboveCache.get(host.char)
     if (!above) return false
-    const kept = above.containers.filter(keeps(filter))
+    const { shown: kept, via } = sieve(above.containers, filter)
     if (kept.length === 0) {
       setPeek(null)
       return true
@@ -240,6 +272,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     setPeek({
       host,
       items: placePeek(host, kept),
+      via,
       total: above.total,
       hidden: above.containers.length - kept.length,
     })
@@ -399,6 +432,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
         className={`node ${extra?.className ?? ''}`}
         data-kind={n.kind}
         data-dim={n.dim}
+        data-via={n.via || undefined}
         style={{
           transform: `translate(${n.x}px, ${n.y}px)`,
           opacity: extra ? 1 : n.weight === undefined ? 1 : 0.42 + n.weight * 0.58,
@@ -430,6 +464,8 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
           {titleMeanings(n, t)}
           {`
 ${levelOf(n, t)}`}
+          {n.via && `
+${t('via')}`}
         </title>
 
         <circle className="plate" r={n.radius} strokeWidth={n.kind === 'focus' ? 1 : 0.75} />
@@ -496,6 +532,7 @@ ${levelOf(n, t)}`}
                 d={edgePath(e.from, e.to)}
                 data-down={e.id.startsWith('e:')}
                 data-dim={e.dim}
+                data-via={e.via || undefined}
                 strokeWidth={e.id.startsWith('c:') ? 0.75 : 1.1}
               />
             ))}
@@ -553,6 +590,8 @@ ${levelOf(n, t)}`}
           {t('legendBelow')}
           <br />
           {t('legendHover')}
+          <br />
+          {t('legendVia')}
         </p>
       )}
     </>
@@ -608,6 +647,7 @@ function PeekLayer({
         <path
           key={`e:${it.char}`}
           className="peek-edge"
+          data-via={peek.via.has(it.char) || undefined}
           d={edgePath(it, h)}
           style={{ animationDelay: `${Math.min(i, 24) * 14}ms` }}
         />
@@ -620,6 +660,7 @@ function PeekLayer({
           key={it.char}
           className="peek-node"
           data-dim={!it.node.joyo}
+          data-via={peek.via.has(it.char) || undefined}
           style={
             {
               '--from': `translate(${h.x}px, ${h.y}px) scale(0.35)`,
@@ -646,6 +687,8 @@ function PeekLayer({
             {titleMeanings(it.node, t)}
             {`
 ${levelOf(it.node, t)}`}
+            {peek.via.has(it.char) && `
+${t('via')}`}
           </title>
           <circle className="plate" r={it.radius} />
           <text className="glyph" fontSize={it.radius * 1.28}>
