@@ -1956,6 +1956,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .drawpop .drawpad-wrap {
   display: flex;
   flex-direction: column-reverse;
+  align-items: stretch;
   gap: 8px;
 }
 
