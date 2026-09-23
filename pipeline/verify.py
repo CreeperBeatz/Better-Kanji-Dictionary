@@ -62,6 +62,16 @@ def main() -> int:
     kids = [r["child"] for r in db.execute("SELECT child FROM edge WHERE parent = ?", ("言",))]
     check("言 is built from 口 二 亠", sorted(kids) == sorted(["口", "二", "亠"]), "".join(kids))
 
+    # The override file's fixes are read (記 used to come out with no parts),
+    # but it may not break primitives down into strokes.
+    kids = [r["child"] for r in db.execute("SELECT child FROM edge WHERE parent = ?", ("記",))]
+    check("記 is built from 言 己", sorted(kids) == sorted(["言", "己"]), "".join(kids))
+    whole = [c for c in "口月門心" if one("SELECT COUNT(*) FROM edge WHERE parent = ?", c)]
+    check("口 月 門 心 stay whole", not whole, "".join(whole))
+    bare = one("SELECT COUNT(*) FROM kanji k WHERE k.freq IS NOT NULL AND NOT EXISTS "
+               "(SELECT 1 FROM edge e WHERE e.parent = k.char)")
+    check("common characters without parts <= 60", bare <= 60, str(bare))
+
     n_containers = one("SELECT COUNT(*) FROM edge WHERE child = ?", "言")
     n_joyo = one(
         "SELECT COUNT(*) FROM edge e JOIN kanji k ON k.char = e.parent "
@@ -174,9 +184,9 @@ def main() -> int:
     target = {k for k, v in K.items() if v.get("jlpt_new") in (5, 4, 3, 2)}
     check("N5-N2 target set = 979", len(target) == 979, str(len(target)))
 
-    # Parsing must still match build.py; variant folding is the one intended
-    # difference, so it is switched off for this comparison.
-    d = Decomposition.load(user_overrides=False, fold_variants=False)
+    # Parsing must still match build.py once the intended differences (variant
+    # folding, override args) are switched off for this comparison.
+    d = Decomposition.load(user_overrides=False, as_build_py=True)
     new_closure = {k: sorted(v) for k, v in d.closure(target).items()}
     old_closure = {k: sorted(v) for k, v in old_graph["comps"].items()}
     check(
