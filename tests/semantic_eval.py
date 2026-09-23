@@ -117,35 +117,30 @@ MODELS: dict[str, tuple[str, dict | None]] = {
     "gemini-3.8-flash": ("google/gemini-3.8-flash", LOW),
     "haiku-4.5": ("anthropic/claude-haiku-4.5", None),
     "sonnet-5-low": ("anthropic/claude-sonnet-5", LOW),
+    # The line format the site streams (the runs above answered in JSON).
+    "luna-lines-low": ("openai/gpt-6-luna", LOW),
+    "luna-lines-medium": ("openai/gpt-6-luna", {"effort": "medium"}),
 }
 
 def prompt(with_parts: bool) -> str:
     """The site's prompt, which asks for parts -- or, for the plain runs, the
-    same with that rule and field taken out."""
-    base = sem._PROMPT.replace("{language}", "English")
+    same with that rule and its example line taken out."""
+    base = sem.prompt("en")
     if with_parts:
         return base
-    base = base[: base.index('- "parts":')] + base[base.index('- Write "why"') :]
-    return base.replace(', "parts": [["..."]]}', "}")
-
-
-def parts_of(raw: dict) -> list[list[str]]:
-    out = []
-    for p in raw.get("parts") or []:
-        if isinstance(p, str):
-            p = [p]
-        if isinstance(p, list):
-            forms = [f.strip() for f in p if isinstance(f, str) and f.strip()]
-            if forms:
-                out.append(forms)
-    return out
+    base = base[: base.index("- P: ")] + base[base.index("- K: ") :]
+    return base.replace("P 日 月\n", "")
 
 
 def ask(model: str, reasoning: dict | None, q: str, with_parts: bool) -> dict:
+    """One query, streamed the way the site asks, timing the first thought and
+    the first suggestion as well as the whole answer."""
     body = {
         "model": model,
-        "max_tokens": 4000,
+        "max_tokens": sem.MAX_TOKENS,
         "temperature": 0.2,
+        "stream": True,
+        "usage": {"include": True},
         "messages": [
             {"role": "system", "content": prompt(with_parts)},
             {"role": "user", "content": q},
@@ -154,23 +149,38 @@ def ask(model: str, reasoning: dict | None, q: str, with_parts: bool) -> dict:
     if reasoning:
         body["reasoning"] = reasoning
     t = time.time()
+    first_thought = first_line = None
+    text, usage, error = "", {}, None
     try:
-        r = requests.post(sem.URL, headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"}, json=body, timeout=120)
-        d = r.json()
-        choice = d["choices"][0]
-        raw = sem._parse(choice["message"]["content"] or "")
-        answer = sem._clean(raw)
-        answer["parts"] = parts_of(raw) if with_parts else []
+        r = requests.post(sem.URL, headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
+                          json=body, timeout=120, stream=True)
+        r.raise_for_status()
+        for raw in r.iter_lines():
+            if not raw.startswith(b"data: ") or raw == b"data: [DONE]":
+                continue
+            chunk = json.loads(raw[6:].decode("utf-8"))
+            if "error" in chunk:
+                raise RuntimeError(chunk["error"])
+            usage = chunk.get("usage") or usage
+            delta = ((chunk.get("choices") or [{}])[0]).get("delta") or {}
+            if first_thought is None and (delta.get("reasoning") or delta.get("reasoning_details")):
+                first_thought = time.time() - t
+            text += delta.get("content") or ""
+            if first_line is None and "\n" in text and any(l[:2] in ("K ", "W ") for l in text.splitlines()[:-1]):
+                first_line = time.time() - t
+        answer = sem.parse_lines(text)
+        if not with_parts:
+            answer["parts"] = []
         answer["model_kanji"] = [k["char"] for k in answer["kanji"]]
         if answer["parts"]:
             answer["kanji"] = [{"char": c, "why": None} for c in kanji_parts.rerank(answer["model_kanji"], answer["parts"])]
-        error = None
     except Exception as e:  # noqa: BLE001 -- a failure is a result here
-        d, answer, error = locals().get("d") or {}, {"kanji": [], "words": [], "note": None}, f"{type(e).__name__}: {e}"
-    usage = d.get("usage") or {}
+        answer, error = {"kanji": [], "words": [], "note": None}, f"{type(e).__name__}: {e}"
     return {
         "q": q,
         "seconds": round(time.time() - t, 1),
+        "first_thought": first_thought and round(first_thought, 1),
+        "first_line": round(first_line if first_line is not None else time.time() - t, 1),
         "cost": usage.get("cost") or 0,
         "reasoning_tokens": (usage.get("completion_tokens_details") or {}).get("reasoning_tokens"),
         "answer": answer,
@@ -202,7 +212,7 @@ def load(name: str) -> dict[str, dict]:
 
 
 def report(models: list[str]) -> None:
-    print(f"\n{'model':32} " + " ".join(f"{g:>13}" for g in GROUPS) + f" {'all top1':>9} {'median s':>9} {'$ / 100':>8} {'fails':>6}")
+    print(f"\n{'model':32} " + " ".join(f"{g:>13}" for g in GROUPS) + f" {'all top1':>9} {'median s':>9} {'1st line':>9} {'$ / 100':>8} {'fails':>6}")
     rows = [(f"{m}", m, "model") for m in models]
     rows += [(f"{m} +parts, model's own list", f"{m}+parts", "model") for m in models]
     rows += [(f"{m} +parts, checked by the db", f"{m}+parts", "db") for m in models]
@@ -220,9 +230,11 @@ def report(models: list[str]) -> None:
             cells.append(f"{t1:>2}/{t3:>2} of {len(cases):>2}")
         rs = [results[c[1]] for c in CASES if c[1] in results]
         secs = sorted(r["seconds"] for r in rs)
+        firsts = sorted(r.get("first_line") or 0 for r in rs)
+        first = f"{firsts[len(firsts) // 2]:>9}" if any(firsts) else f"{'-':>9}"
         cost = sum(r["cost"] for r in rs) / len(rs) * 100
         fails = sum(1 for r in rs if r["error"])
-        print(f"{label:32} " + " ".join(f"{c:>13}" for c in cells) + f" {top1_all:>5}/{len(rs)} {secs[len(secs) // 2]:>9} {cost:>8.2f} {fails:>6}")
+        print(f"{label:32} " + " ".join(f"{c:>13}" for c in cells) + f" {top1_all:>5}/{len(rs)} {secs[len(secs) // 2]:>9} {first} {cost:>8.2f} {fails:>6}")
     print("\ncells are top-1/top-3 right of the group's queries; $ / 100 is the cost of 100 queries")
 
 

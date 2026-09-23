@@ -12,6 +12,7 @@ import {
   type SearchOrder,
   type SearchResponse,
   type SearchSort,
+  type SemanticEvent,
   type SemanticResponse,
   type Word,
 } from '../api'
@@ -60,6 +61,7 @@ const S = strings(
     bound: 'bound form',
     semantic: 'Semantic search',
     semanticAsking: 'Searching by meaning…',
+    semanticThinking: 'Thinking…',
     semanticNothing: 'Semantic search found nothing either.',
     semanticUnavailable: 'Semantic search is not available right now.',
     semanticSignIn: 'Sign in to search by meaning.',
@@ -100,6 +102,7 @@ const S = strings(
     bound: 'свързана форма',
     semantic: 'Семантично търсене',
     semanticAsking: 'Търсене по смисъл…',
+    semanticThinking: 'Обмисляне…',
     semanticNothing: 'И семантичното търсене не откри нищо.',
     semanticUnavailable: 'Семантичното търсене не е достъпно в момента.',
     semanticSignIn: 'Влезте, за да търсите по смисъл.',
@@ -388,13 +391,17 @@ const understood = new Map<string, SemanticResponse>()
 
 // How long typing must pause before the model is asked. Each call costs money
 // and takes seconds, so not on every key.
-const SEMANTIC_PAUSE = 700
+const SEMANTIC_PAUSE = 400
 
-type SemanticState =
-  | { kind: 'waiting' }
-  | { kind: 'done'; answer: SemanticResponse }
-  | { kind: 'unavailable' }
-  | { kind: 'off' }
+/**
+ * Where an answer is: waiting (the pause, then the request on its way),
+ * thinking (the model has it), streaming (results arriving), done -- or
+ * unavailable, or off when the server has no model set up at all.
+ */
+interface SemanticState {
+  phase: 'waiting' | 'thinking' | 'streaming' | 'done' | 'unavailable' | 'off'
+  answer: SemanticResponse | null
+}
 
 /**
  * What a language model takes a query to mean, for when the dictionary found
@@ -418,39 +425,68 @@ function Semantic({
   const key = `${lang} ${q}`
   const [state, setState] = useState<SemanticState>(() => {
     const known = understood.get(key)
-    return known ? { kind: 'done', answer: known } : { kind: 'waiting' }
+    return known ? { phase: 'done', answer: known } : { phase: 'waiting', answer: null }
   })
 
   useEffect(() => {
     const known = understood.get(key)
     if (known) {
-      setState({ kind: 'done', answer: known })
+      setState({ phase: 'done', answer: known })
       return
     }
-    setState({ kind: 'waiting' })
+    setState({ phase: 'waiting', answer: null })
     if (!user || !navigator.onLine) return
-    let stale = false
+    const abort = new AbortController()
+    let answer: SemanticResponse = { query: q, note: null, kanji: [], words: [] }
+    let done = false
+    const show = (phase: SemanticState['phase']) => {
+      if (!abort.signal.aborted) setState({ phase, answer })
+    }
+
+    function onEvent(e: SemanticEvent) {
+      if (e.type === 'thinking') show('thinking')
+      else if (e.type === 'kanji') {
+        answer = { ...answer, kanji: [...answer.kanji, e.kanji] }
+        show('streaming')
+      } else if (e.type === 'word') {
+        answer = { ...answer, words: [...answer.words, e.word] }
+        show('streaming')
+      } else if (e.type === 'note') {
+        answer = { ...answer, note: e.note }
+        show('streaming')
+      } else if (e.type === 'done') {
+        done = true
+        understood.set(key, answer)
+        if (understood.size > 60) understood.delete(understood.keys().next().value!)
+        show('done')
+      }
+    }
+
+    // What came before a failure stays up; only an answer with nothing in it
+    // says semantic search is not available.
+    const broke = () => show(answer.kanji.length || answer.words.length ? 'done' : 'unavailable')
+
     const timer = setTimeout(() => {
-      api.semantic(q, lang).then(
-        (answer) => {
-          understood.set(key, answer)
-          if (understood.size > 60) understood.delete(understood.keys().next().value!)
-          if (!stale) setState({ kind: 'done', answer })
+      api.semantic(q, lang, onEvent, abort.signal).then(
+        () => {
+          if (!done) broke()
         },
         (e) => {
+          if (abort.signal.aborted) return
           // Not set up at all: say nothing. Set up but failing -- the spend cap,
           // OpenRouter down -- say so, once, and let the search stand as it is.
-          if (!stale) setState({ kind: e instanceof ApiError && e.code === 'semantic_off' ? 'off' : 'unavailable' })
+          if (e instanceof ApiError && e.code === 'semantic_off') show('off')
+          else broke()
         },
       )
     }, SEMANTIC_PAUSE)
     return () => {
-      stale = true
+      abort.abort()
       clearTimeout(timer)
     }
   }, [key, q, lang, user])
 
-  if (!ready || state.kind === 'off') return nothing
+  if (!ready || state.phase === 'off') return nothing
   if (!user)
     return (
       <>
@@ -458,20 +494,21 @@ function Semantic({
         <p className="hint semantic-invite">{t('semanticSignIn')}</p>
       </>
     )
-  if (state.kind === 'waiting' && !navigator.onLine) return nothing
+  if (state.phase === 'waiting' && !navigator.onLine) return nothing
 
-  const answer = state.kind === 'done' ? state.answer : null
+  const { phase, answer } = state
   const explained = answer?.kanji.some((k) => k.why)
   return (
-    <section className="semantic" aria-busy={state.kind === 'waiting'}>
+    <section className="semantic" aria-busy={phase !== 'done' && phase !== 'unavailable'}>
       <h3 className="semantic-label">
         <span className="semantic-mark" aria-hidden="true">
           ✦
         </span>
         {t('semantic')}
       </h3>
-      {state.kind === 'waiting' && <p className="hint semantic-asking">{t('semanticAsking')}</p>}
-      {state.kind === 'unavailable' && <p className="hint">{t('semanticUnavailable')}</p>}
+      {phase === 'waiting' && <p className="hint semantic-asking">{t('semanticAsking')}</p>}
+      {phase === 'thinking' && <p className="hint semantic-asking">{t('semanticThinking')}</p>}
+      {phase === 'unavailable' && <p className="hint">{t('semanticUnavailable')}</p>}
       {answer?.note && <p className="semantic-note">{answer.note}</p>}
       {answer && answer.kanji.length > 0 && explained && (
         <ul className="semantic-kanji">
@@ -497,7 +534,7 @@ function Semantic({
           ))}
         </ol>
       )}
-      {answer && answer.kanji.length === 0 && answer.words.length === 0 && (
+      {phase === 'done' && answer && answer.kanji.length === 0 && answer.words.length === 0 && (
         <p className="hint">{t('semanticNothing')}</p>
       )}
     </section>

@@ -80,6 +80,11 @@ def _wanted(parts: list[list[str]]) -> list[set[str]]:
     return out
 
 
+def is_joyo(char: str) -> bool:
+    _load()
+    return _info.get(char, (False,))[0]
+
+
 def holds(char: str, parts: list[list[str]]) -> bool:
     _load()
     below = _descendants(char)
@@ -125,7 +130,7 @@ def rerank(model_kanji: list[str], parts: list[list[str]], limit: int = 12, poli
     others = [k for k in model_kanji if k not in held]
     fill = [k for k in candidates if k not in held]
     if held:
-        order = held + [k for k in fill if _info.get(k, (False,))[0]][:3] + others
+        order = held + [k for k in fill if is_joyo(k)][:3] + others
     elif policy == "A":
         order = fill[:3] + others
     else:

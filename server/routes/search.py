@@ -12,10 +12,13 @@ Latin letters -- before English. When romaji wins but the Bulgarian reading
 would have found words too, that reading comes back in `alternatives`.
 """
 
+import json
 import re
 import threading
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 from .. import bulgarian as bg
 from .. import kanji_parts
@@ -389,38 +392,100 @@ def semantic(
     q: str = Query(min_length=1, max_length=200),
     lang: str = Query("en", pattern="^(en|bg)$"),
     user: dict = Depends(require_user),
-) -> dict:
+):
     """What a language model takes the query to mean, for when the dictionary
-    found nothing: kanji and words in the model's order, each with its note, and
-    the model's note over them all. A character described by its parts is
-    checked against the decomposition graph, which puts those truly built from
-    them first and adds any the model missed. Only what the database has
-    survives; an empty answer is an answer (gibberish finds nothing)."""
+    found nothing, streamed as server-sent events while the model writes:
+
+        {"type": "thinking"}
+        {"type": "kanji", "kanji": {...a kanji result, "why"}}
+        {"type": "word", "word": {...a word entry, "why"}}
+        {"type": "note", "note": "..."}
+        {"type": "done"}                 or {"type": "error", "code": ...}
+
+    Kanji and words keep the model's order, and only what the database has is
+    sent. A character described by its parts is checked against the
+    decomposition graph as the model names it: those truly built from the parts
+    go out at once, the rest wait for the end, behind at most three jōyō ones
+    the model missed -- the order kanji_parts.rerank gives, without anything on
+    the page moving. An empty answer is an answer (gibberish finds nothing).
+
+    Failing to reach the model at all is a 503 like any other error, so the
+    page can tell "not set up" from "not available now"."""
     q = q.strip()
-    if not q:
-        return {"query": q, "note": None, "kanji": [], "words": []}
     try:
-        answer = sem.ask(q, lang)
+        events = sem.open_stream(q, lang)
     except sem.Off:
         raise AppError(503, "semantic_off", "semantic search is not set up on this server")
     except sem.Unavailable as e:
         print(f"[semantic] {q!r}: {e}", flush=True)
         raise AppError(503, "semantic_unavailable", "semantic search is not available right now")
+    return StreamingResponse(
+        _semantic_events(q, events),
+        media_type="text/event-stream",
+        # No proxy on the way (the Cloudflare tunnel, nginx) may hold events back.
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
 
-    why = {k["char"]: k["why"] for k in answer["kanji"]}
-    chars = [k["char"] for k in answer["kanji"]]
-    if answer["parts"]:
-        chars = kanji_parts.rerank(chars, answer["parts"], limit=sem.MAX_KANJI)
-    hits = {k["char"]: k for k in _kanji_hits(chars)}
-    kanji = [{**hits[c], "why": why.get(c)} for c in chars if c in hits]
 
-    words, seen = [], set()
-    for s in answer["words"]:
-        w = _word_for(s["word"], s["reading"])
-        if w and w["id"] not in seen:
-            seen.add(w["id"])
-            words.append({**w, "why": s["why"]})
-    return {"query": q, "note": answer["note"], "kanji": kanji, "words": words}
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _semantic_events(q: str, events) -> Iterator[str]:
+    candidates: list[str] = []  # what the database says holds the parts
+    parts: list[list[str]] = []
+    sent: list[str] = []  # kanji already on the page
+    later: list[tuple[str, str | None]] = []  # the model's kanji that do not hold the parts
+    words_sent: set[int] = set()
+
+    def kanji(char: str, why: str | None) -> str | None:
+        if char in sent or len(sent) >= sem.MAX_KANJI:
+            return None
+        hit = _kanji_hits([char])
+        if not hit:
+            return None
+        sent.append(char)
+        return _sse({"type": "kanji", "kanji": {**hit[0], "why": why}})
+
+    try:
+        for kind, value in events:
+            out = None
+            if kind == "thinking":
+                out = _sse({"type": "thinking"})
+            elif kind == "parts":
+                parts = value
+                candidates = kanji_parts.containing(parts)
+                if not candidates:
+                    parts = []  # nothing holds them: the model's order stands
+            elif kind == "kanji":
+                if not parts or kanji_parts.holds(value["char"], parts):
+                    out = kanji(value["char"], value["why"])
+                else:
+                    later.append((value["char"], value["why"]))
+            elif kind == "word":
+                w = _word_for(value["word"], value["reading"])
+                if w and w["id"] not in words_sent:
+                    words_sent.add(w["id"])
+                    out = _sse({"type": "word", "word": {**w, "why": value["why"]}})
+            elif kind == "note":
+                out = _sse({"type": "note", "note": value})
+            elif kind == "answer" and parts:
+                # The end of the model's kanji: what it missed, then what it
+                # guessed that does not hold the parts -- rerank's order.
+                model = {c for c, _ in later} | set(sent)
+                fill = [(c, None) for c in candidates if c not in model]
+                if sent:
+                    tail = [f for f in fill if kanji_parts.is_joyo(f[0])][:3] + later
+                else:
+                    tail = later[:1] + fill[:3] + later[1:]
+                out = "".join(e for c, why in tail if (e := kanji(c, why)))
+            if out:
+                yield out
+    except sem.Unavailable as e:
+        print(f"[semantic] {q!r}: {e}", flush=True)
+        yield _sse({"type": "error", "code": "semantic_unavailable"})
+        return
+    yield _sse({"type": "done"})
 
 
 def _word_for(text: str, reading: str | None) -> dict | None:

@@ -157,6 +157,15 @@ export interface SemanticResponse {
   words: (Word & { why: string | null })[]
 }
 
+/** What the semantic search stream says, in order: thinking, then results as the model names them, then done. */
+export type SemanticEvent =
+  | { type: 'thinking' }
+  | { type: 'kanji'; kanji: KanjiHit & { why: string | null } }
+  | { type: 'word'; word: Word & { why: string | null } }
+  | { type: 'note'; note: string }
+  | { type: 'done' }
+  | { type: 'error'; code: string }
+
 export interface Association {
   id: string
   char: string
@@ -346,12 +355,32 @@ export const api = {
       ]),
     ),
 
-  /** Always the server's: the device has no model to ask. Needs a signed-in user. */
-  semantic: (q: string, lang: string) =>
-    get<SemanticResponse>('/api/search/semantic', [
-      ['q', q],
-      ['lang', lang],
-    ]),
+  /**
+   * Semantic search, streamed: `onEvent` hears each result as the model names
+   * it. Always the server's -- the device has no model to ask -- and only for a
+   * signed-in user. Resolves when the stream ends, whether or not it said done.
+   */
+  semantic: async (q: string, lang: string, onEvent: (e: SemanticEvent) => void, signal: AbortSignal) => {
+    const url = new URL(BASE + '/api/search/semantic', window.location.origin)
+    url.searchParams.set('q', q)
+    url.searchParams.set('lang', lang)
+    const res = await fetch(url, { headers: authHeaders(), signal })
+    if (!res.ok) throw await refusal(res)
+    // Server-sent events: `data: {json}` blocks, a blank line after each.
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
+    let buffer = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) return
+      buffer += value
+      let end
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, end)
+        buffer = buffer.slice(end + 2)
+        for (const line of block.split('\n')) if (line.startsWith('data: ')) onEvent(JSON.parse(line.slice(6)))
+      }
+    }
+  },
 
   wordsFor: (char: string) =>
     localFirst(local.wordsFor(char), () =>
