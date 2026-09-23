@@ -9,7 +9,7 @@ const S = strings(
     found_other: '{n} characters',
     searching: 'searching',
     startOver: 'start over',
-    radicalIn: '{r} — in {n} characters',
+    radicalIn: '{r} - in {n} characters',
   },
   {
     pick: 'Изберете частите, които виждате. Комбинирайте няколко, за да стесните търсенето.',
@@ -17,7 +17,7 @@ const S = strings(
     found_other: '{n} йероглифа',
     searching: 'търсене',
     startOver: 'започнете отначало',
-    radicalIn: '{r} — в {n} йероглифа',
+    radicalIn: '{r} - в {n} йероглифа',
   },
 )
 

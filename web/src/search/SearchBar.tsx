@@ -8,7 +8,7 @@
  * read but not type is built up the same way as one you can.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DrawPad } from '../draw/DrawPad'
 import { strings, useLang } from '../i18n'
 import { RadicalPicker } from './RadicalPicker'
@@ -26,6 +26,7 @@ const S = strings(
     radicalsTitle: 'Pick a character by its parts',
     radicals: 'Radicals',
     done: 'done',
+    close: 'Close',
   },
   {
     placeholder: 'японски, български или ромаджи',
@@ -37,6 +38,7 @@ const S = strings(
     radicalsTitle: 'Изберете йероглиф по частите му',
     radicals: 'Радикали',
     done: 'готово',
+    close: 'Затворете',
   },
 )
 
@@ -58,6 +60,28 @@ const coarse = () => window.matchMedia('(pointer: coarse)').matches
 export function SearchBar({ q, onType, onFocus, onSubmit, inputRef }: Props) {
   const [tool, setTool] = useState<Tool | null>(null)
   const t = S(useLang())
+  const drawRef = useRef<HTMLDivElement>(null)
+  const drawButton = useRef<HTMLButtonElement>(null)
+
+  // The draw pad is a popup: a press anywhere outside it, or Escape, puts it
+  // away. Its own button is left to toggle it.
+  useEffect(() => {
+    if (tool !== 'draw') return
+    function onDown(e: PointerEvent) {
+      const at = e.target as Node
+      if (drawRef.current?.contains(at) || drawButton.current?.contains(at)) return
+      setTool(null)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setTool(null)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [tool])
 
   function toggle(which: Tool) {
     setTool((cur) => (cur === which ? null : which))
@@ -122,6 +146,7 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef }: Props) {
           {!q && !coarse() && <kbd className="searchbar-kbd">/</kbd>}
         </div>
         <button
+          ref={drawButton}
           className="searchbar-tool"
           data-on={tool === 'draw' || undefined}
           aria-pressed={tool === 'draw'}
@@ -147,10 +172,21 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef }: Props) {
         </button>
       </div>
 
-      {tool && (
+      {tool === 'draw' && (
+        <div ref={drawRef} className="drawpop" role="dialog" aria-label={t('drawTitle')}>
+          <div className="drawpop-head">
+            <h2>{t('drawTitle')}</h2>
+            <button className="account-x" onClick={() => setTool(null)} aria-label={t('close')} title={t('close')}>
+              ×
+            </button>
+          </div>
+          <DrawPad onPick={pick} />
+        </div>
+      )}
+
+      {tool === 'radicals' && (
         <div className="searchtools">
-          {tool === 'draw' && <DrawPad onPick={pick} />}
-          {tool === 'radicals' && <RadicalPicker onPick={pick} />}
+          <RadicalPicker onPick={pick} />
           <button className="searchtools-close clear" onClick={() => setTool(null)}>
             {t('done')}
           </button>

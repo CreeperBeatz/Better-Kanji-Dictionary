@@ -14,7 +14,7 @@ const S = strings(
     strokes_other: '{n} strokes',
     didYouMean: 'Did you mean',
     noEntry: 'no dictionary entry',
-    candidate: '{m} — {n} strokes',
+    candidate: '{m} - {n} strokes',
   },
   {
     area: 'Поле за рисуване',
@@ -25,7 +25,7 @@ const S = strings(
     strokes_other: '{n} черти',
     didYouMean: 'Може би',
     noEntry: 'няма речникова статия',
-    candidate: '{m} — {n} черти',
+    candidate: '{m} - {n} черти',
   },
 )
 

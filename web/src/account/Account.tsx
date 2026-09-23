@@ -11,7 +11,7 @@ import { GoogleButton } from './GoogleButton'
 const S = strings(
   {
     moving: "Moving this browser's notes into your account",
-    profileOf: '{name} (@{username}) — profile',
+    profileOf: '{name} (@{username}) - profile',
     logIn: 'Log in',
     account: 'Account',
     checkEmail: 'Check your email',
@@ -45,7 +45,7 @@ const S = strings(
   },
   {
     moving: 'Бележките от този браузър се преместват в профила ви',
-    profileOf: '{name} (@{username}) — профил',
+    profileOf: '{name} (@{username}) - профил',
     logIn: 'Вход',
     account: 'Профил',
     checkEmail: 'Проверете имейла си',

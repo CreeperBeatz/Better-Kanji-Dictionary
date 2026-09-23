@@ -1913,24 +1913,89 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 10px 0 0 auto;
 }
 
-/* In the rail the draw pad stacks: what it guessed above, the box below. */
-.searchtools .drawpad-wrap {
+/* The draw pad, a popup under the search box (above it on a phone). Every
+   part has a fixed size, so it does not jump about as the guesses come and
+   go: what it guessed on top, two rows of them and then a scroll, the box
+   below, and one line for the buttons and the stroke count. */
+.searchbar {
+  position: relative;
+  z-index: 20;
+}
+
+.drawpop {
+  position: absolute;
+  top: calc(100% - 6px);
+  left: 16px;
+  right: 16px;
+  padding: 10px 14px 12px;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.drawpop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.drawpop-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
+.drawpop-head .account-x {
+  position: static;
+  margin-right: -8px;
+}
+
+.drawpop .drawpad-wrap {
   display: flex;
   flex-direction: column-reverse;
-  align-items: stretch;
-  gap: 10px;
+  gap: 8px;
 }
 
-.searchtools .drawpad {
-  max-width: 300px;
-}
-
-.searchtools .draw-group {
+.drawpop .draw-group {
   display: none;
 }
 
-.searchtools .drawpad-right {
-  min-height: 38px;
+.drawpop .drawpad-right {
+  height: 78px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.drawpop .results {
+  margin-top: 0;
+}
+
+.drawpop .drawpad-left {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+}
+
+.drawpop .drawpad {
+  grid-column: 1 / -1;
+  width: min(100%, 300px);
+  justify-self: center;
+  margin: 0;
+}
+
+.drawpop .drawpad-actions {
+  margin-top: 8px;
+}
+
+.drawpop .drawpad-left .hint {
+  min-height: 1.5em;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .searchtools .results {
@@ -1999,17 +2064,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     max-height: 52vh;
   }
 
-  .searchtools .drawpad {
-    max-width: min(100%, 30vh);
-    margin: 0 auto;
+  .drawpop {
+    top: auto;
+    bottom: calc(100% + 6px);
+    left: 10px;
+    right: 10px;
   }
 
-  .searchtools .drawpad-actions {
-    justify-content: center;
-  }
-
-  .searchtools .drawpad-left .hint {
-    text-align: center;
+  .drawpop .drawpad {
+    width: min(100%, 34vh);
   }
 
 }
@@ -2144,19 +2207,50 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   transition: width 0.3s var(--ease);
 }
 
-.account-about summary {
+.account-about-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 12px;
   color: var(--muted);
   cursor: pointer;
 }
 
-.account-about summary:hover {
+.account-about-open:hover {
   color: var(--paper);
 }
 
-.account-about[open] summary {
-  margin-bottom: 10px;
+/* Over the account dialog: the list is long, so it scrolls inside the panel
+   while the heading and the close button stay put. */
+.about-overlay {
+  z-index: 41;
+}
+
+.about-panel {
+  position: relative;
+  width: min(560px, 100%);
+}
+
+.about-panel h2 {
+  margin: 0 0 12px;
+  padding-right: 28px;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--paper-dim);
+}
+
+.about-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.about-body h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
 }
 
 .about-list {
@@ -2845,6 +2939,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   position: relative;
   width: min(440px, 100%);
   gap: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* In the corner, clear of the heading and the name beside the picture. */

@@ -42,8 +42,8 @@ const S = strings(
     zoomIn: 'Приближете',
     zoomOut: 'Отдалечете',
     whole: 'Покажете целия граф',
-    legendAbove: 'отгоре — йероглифите, които го съдържат, най-честите най-близо',
-    legendBelow: 'отдолу — от какво е съставен, чак до най-простите части',
+    legendAbove: 'отгоре - йероглифите, които го съдържат, най-честите най-близо',
+    legendBelow: 'отдолу - от какво е съставен, чак до най-простите части',
     legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
     more: '+{n} още',
     hidden: '{n} скрити заради нивото',
@@ -61,7 +61,7 @@ function levelOf(n: { jlpt: number | null; joyo: boolean; fanout: number | null 
 /** "水 — water, liquid" as a node's tooltip names it. */
 function titleMeanings(n: { meanings: string[]; meaningsBg?: string[] | null }, t: T): string {
   const m = meaningsOf(n, t.lang).value
-  return m.length > 0 ? ` — ${m.slice(0, 3).join(', ')}` : ''
+  return m.length > 0 ? ` - ${m.slice(0, 3).join(', ')}` : ''
 }
 
 /** JLPT runs N5 (easiest) to N1, so "up to N3" means jlpt >= 3. */
