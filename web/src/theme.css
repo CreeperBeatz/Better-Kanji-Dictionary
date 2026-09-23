@@ -3428,19 +3428,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   }
 }
 
-/* At the narrowest the tabs scroll sideways under the switch, fading out at
-   the edge so it shows there is more. */
-@container rail-head (max-width: 359px) {
-  .rail-tabs {
-    overflow-x: auto;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
-  }
-  .rail-tabs button[aria-selected='true']::after {
-    bottom: 0;
-  }
-}
-
 /* ---------------------------------------------------------------- composer */
 
 .composer {
