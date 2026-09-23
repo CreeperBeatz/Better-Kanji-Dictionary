@@ -11,10 +11,12 @@ import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import { Engine, type EntryStore, type KanjiPack, type RawWord } from '../src/local/engine'
+import { normalize, shlyokavitsa, terms } from '../src/local/bulgarian'
 import type { SearchResponse } from '../src/api'
 
 interface Golden {
-  search: { q: string; out: SearchResponse }[]
+  search: { q: string; lang: string; out: SearchResponse }[]
+  bulgarian: { text: string; normalized: string; terms: string[]; candidates: string[] }[]
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
   wordsFor: { char: string; out: number[] }[]
@@ -57,22 +59,36 @@ function note(kind: string, what: string, want: unknown, got: unknown) {
 
 let searchMs = 0
 let exact = 0
-for (const { q, out } of golden.search) {
+for (const { q, lang, out } of golden.search) {
   const s = performance.now()
-  const got = await engine.search(q)
+  const got = await engine.search(q, 30, lang)
   searchMs += performance.now() - s
   const shape = (r: SearchResponse) => ({
     interpretation: r.interpretation,
+    alternatives: r.alternatives,
     kanji: r.kanji.map((k) => k.char),
     words: r.words.map((w) => w.id),
     inflection: r.words.map((w) => w.inflection ?? null),
     total: r.total,
   })
-  if (!same(shape(out), shape(got))) note('search', JSON.stringify(q), shape(out), shape(got))
-  else if (!same(out, got)) note('search entry', JSON.stringify(q), out, got)
+  if (!same(shape(out), shape(got))) note('search', `${JSON.stringify(q)} (${lang})`, shape(out), shape(got))
+  else if (!same(out, got)) note('search entry', `${JSON.stringify(q)} (${lang})`, out, got)
   else exact++
 }
 console.log(`search: ${exact}/${golden.search.length} identical, ${(searchMs / golden.search.length).toFixed(1)} ms per query`)
+
+let bgOk = 0
+for (const b of golden.bulgarian) {
+  const got = {
+    text: b.text,
+    normalized: normalize(b.text),
+    terms: terms(b.text),
+    candidates: shlyokavitsa(b.text).slice(0, b.candidates.length),
+  }
+  if (same(b, got)) bgOk++
+  else note('bulgarian', JSON.stringify(b.text), b, got)
+}
+console.log(`bulgarian text: ${bgOk}/${golden.bulgarian.length} identical`)
 
 let drawOk = 0
 let drawTop = 0

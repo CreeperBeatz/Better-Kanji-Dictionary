@@ -1,5 +1,33 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type GraphResponse, type ReviewItem } from '../api'
+import { strings, useLang } from '../i18n'
+
+const S = strings(
+  {
+    title: 'Its parts',
+    hint: 'cjk-decomp is mechanically right and sometimes useless. Correct {c} here and the graph follows.',
+    components: 'Components of {c}',
+    saving: 'saving',
+    use: 'use this',
+    reset: 'reset',
+    hideQueue: 'hide the review queue',
+    showQueue: 'what else needs fixing',
+    loading: 'loading',
+    nothing: 'Nothing flagged.',
+  },
+  {
+    title: 'Части',
+    hint: 'cjk-decomp е механично вярно, но понякога безполезно. Поправете {c} тук и графът ще го последва.',
+    components: 'Части на {c}',
+    saving: 'запазване',
+    use: 'използвайте това',
+    reset: 'нулирайте',
+    hideQueue: 'скрийте опашката за преглед',
+    showQueue: 'какво още трябва да се поправи',
+    loading: 'зареждане',
+    nothing: 'Нищо не е отбелязано.',
+  },
+)
 
 interface Props {
   data: GraphResponse
@@ -15,6 +43,7 @@ interface Props {
  * while you are already looking at it, and the graph redraws.
  */
 export function DecompPanel({ data, onPick, onChanged }: Props) {
+  const t = S(useLang())
   const char = data.focus.char
   const direct = data.components.nodes.filter((n) => n.depth === 1).map((n) => n.char)
 
@@ -62,12 +91,9 @@ export function DecompPanel({ data, onPick, onChanged }: Props) {
 
   return (
     <section className="rail-section">
-      <h2>Its parts</h2>
+      <h2>{t('title')}</h2>
 
-      <p className="hint">
-        cjk-decomp is mechanically right and sometimes useless. Correct {char} here and the
-        graph follows.
-      </p>
+      <p className="hint">{t('hint', { c: char })}</p>
 
       <div className="decomp-edit">
         <input
@@ -75,26 +101,26 @@ export function DecompPanel({ data, onPick, onChanged }: Props) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           spellCheck={false}
-          aria-label={`Components of ${char}`}
+          aria-label={t('components', { c: char })}
         />
         <button className="clear" onClick={apply} disabled={!changed || busy}>
-          {busy ? 'saving' : 'use this'}
+          {busy ? t('saving') : t('use')}
         </button>
         <button className="clear" onClick={revert} disabled={busy}>
-          reset
+          {t('reset')}
         </button>
       </div>
 
       <p className="assoc-actions">
         <button className="clear" onClick={() => setOpen((o) => !o)}>
-          {open ? 'hide the review queue' : 'what else needs fixing'}
+          {open ? t('hideQueue') : t('showQueue')}
         </button>
       </p>
 
       {open && (
         <ol className="review">
-          {queue === null && <li className="hint">loading</li>}
-          {queue?.length === 0 && <li className="hint">Nothing flagged.</li>}
+          {queue === null && <li className="hint">{t('loading')}</li>}
+          {queue?.length === 0 && <li className="hint">{t('nothing')}</li>}
           {queue?.map((it) => (
             <li key={it.char}>
               <button className="review-glyph" onClick={() => onPick(it.char)}>

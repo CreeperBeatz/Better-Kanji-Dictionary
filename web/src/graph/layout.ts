@@ -30,6 +30,7 @@ export interface PositionedNode {
   jlpt: number | null
   joyo: boolean
   meanings: string[]
+  meaningsBg: string[] | null
   onYomi: string[]
   ring?: number
   /** 1 at the innermost container ring, 0 at the rim. Drives opacity. */
@@ -121,6 +122,7 @@ function placeContainers(containers: KanjiNode[]): PositionedNode[] {
         jlpt: node.jlpt,
         joyo: node.joyo,
         meanings: node.meanings,
+        meaningsBg: node.meaningsBg ?? null,
         onYomi: node.onYomi,
         ring,
         weight,
@@ -158,6 +160,7 @@ function placeComponents(components: KanjiNode[]): PositionedNode[] {
         jlpt: node.jlpt,
         joyo: node.joyo,
         meanings: node.meanings,
+        meaningsBg: node.meaningsBg ?? null,
         onYomi: node.onYomi,
       })
     })
@@ -179,6 +182,7 @@ export function computeLayout(data: GraphResponse): Layout {
     jlpt: data.focus.jlpt,
     joyo: data.focus.joyo,
     meanings: data.focus.meanings,
+    meaningsBg: data.focus.meaningsBg ?? null,
     onYomi: data.focus.onYomi,
   }
 

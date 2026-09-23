@@ -19,15 +19,16 @@ import type {
   Word,
   WordEntry,
 } from '../api'
-import { FtsIndex, phrasesOf } from './fts'
+import { bestReading, hasCyrillic, isLatinQuery, terms as bgTerms } from './bulgarian'
+import { FtsIndex, phrasesOf, type Phrase } from './fts'
 import { deinflect, hasJapanese, posMatches, pySplit, pyStrip, romajiToKana, type Candidate } from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
 import { compareCodePoints, readSections, SortedStrings, starts } from './sections'
 
-/** char, strokes, grade, freq, jlpt, joyo, inKanjidic, meanings, onYomi, kunYomi, fanout, curated */
+/** char, strokes, grade, freq, jlpt, joyo, inKanjidic, meanings, onYomi, kunYomi, fanout, curated, meaningsBg */
 type KanjiRow = [
   string, number | null, number | null, number | null, number | null, number, number,
-  string[], string[], string[], number, string | null,
+  string[], string[], string[], number, string | null, (string[] | null)?,
 ]
 
 export interface LevelResponse {
@@ -49,10 +50,10 @@ export interface KanjiPack {
   wordsFor: Record<string, number[]>
 }
 
-/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss], forms [text, kana, rare] */
+/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare] */
 export type RawWord = [
   number, string, string, number, number | null, string | null,
-  [string | null, string | null, string][], [string, number, number][],
+  [string | null, string | null, string, (string | null)?][], [string, number, number][],
 ]
 
 /** Where the entries and stroke paths are kept: IndexedDB in the app, memory in tests. */
@@ -71,10 +72,13 @@ function toWord(r: RawWord): Word {
     common: !!r[3],
     nf: r[4],
     pitch: r[5],
-    senses: r[6].map(([pos, misc, gloss]) => ({
+    // Rows from a pack before Bulgarian have no fourth field; the words store
+    // is not versioned, so they can still be there.
+    senses: r[6].map(([pos, misc, gloss, glossBg]) => ({
       pos: pos ? pos.split(',') : [],
       misc: misc ? misc.split(',') : [],
       gloss,
+      glossBg: glossBg ?? null,
     })),
     forms: r[7].map(([text, kana, rare]) => ({ text, kana: !!kana, rare: !!rare })),
   }
@@ -90,6 +94,7 @@ function toNode(r: KanjiRow): KanjiNode {
     joyo: !!r[5],
     inKanjidic: !!r[6],
     meanings: r[7],
+    meaningsBg: r[12] ?? null,
     onYomi: r[8],
     kunYomi: r[9],
     fanout: r[10],
@@ -98,6 +103,16 @@ function toNode(r: KanjiRow): KanjiNode {
 
 function isCjk(c: string): boolean {
   return c >= '一' && c <= '鿿'
+}
+
+/** The server's Bulgarian query: every stem a quoted phrase of its own. */
+function bgPhrases(stems: string[]): Phrase[] {
+  return phrasesOf(stems)
+}
+
+/** Python's dict.fromkeys over a list: first occurrences, in order. */
+function distinct(xs: number[]): number[] {
+  return [...new Set(xs)]
 }
 
 export class Engine {
@@ -120,6 +135,11 @@ export class Engine {
   private readonly glossWord: Uint32Array
   private readonly kfts: FtsIndex
   private readonly kftsChar: Uint32Array
+  // Bulgarian glosses and kanji meanings, indexed by stem
+  private readonly bgGloss: FtsIndex
+  private readonly bgGlossWord: Uint32Array
+  private readonly bgKfts: FtsIndex
+  private readonly bgKftsChar: Uint32Array
 
   private readonly kanjiAt = new Map<string, number>()
   private readonly byRadical = new Map<string, Set<string>>()
@@ -150,6 +170,16 @@ export class Engine {
       s.u32('kfts.pstart'), s.u32('kfts.doc'), s.u8('kfts.tf'), s.u8('kfts.pos'), s.u16('kfts.doclen'),
     )
     this.kftsChar = s.u32('kfts.docchar')
+    this.bgGloss = new FtsIndex(
+      new SortedStrings(s.text('bggloss.term'), starts(s.u8('bggloss.tlen'))),
+      s.u32('bggloss.pstart'), s.u32('bggloss.doc'), s.u8('bggloss.tf'), s.u8('bggloss.pos'), s.u16('bggloss.doclen'),
+    )
+    this.bgGlossWord = s.u32('bggloss.docword')
+    this.bgKfts = new FtsIndex(
+      new SortedStrings(s.text('bgkfts.term'), starts(s.u8('bgkfts.tlen'))),
+      s.u32('bgkfts.pstart'), s.u32('bgkfts.doc'), s.u8('bgkfts.tf'), s.u8('bgkfts.pos'), s.u16('bgkfts.doclen'),
+    )
+    this.bgKftsChar = s.u32('bgkfts.docchar')
 
     pack.kanji.forEach((r, i) => this.kanjiAt.set(r[0], i))
     for (const [kanji, radicals] of Object.entries(pack.kanjiRadicals)) {
@@ -224,16 +254,46 @@ export class Engine {
     return [this.common[i] ? 0 : 1, this.nf[i] || 99, this.hwlen[i]]
   }
 
-  async search(input: string, limit = 30): Promise<SearchResponse> {
+  /** How many Bulgarian glosses and kanji hold a stem: the server's fts5vocab sum. */
+  private bgDocs = (stem: string): number => this.bgGloss.docs(stem) + this.bgKfts.docs(stem)
+
+  /** The Cyrillic a Latin query most likely stands for, or null. */
+  private shlyokavitsa(q: string): string | null {
+    const readings: string[] = []
+    for (const word of pySplit(q)) {
+      const r = bestReading(word, this.bgDocs)
+      if (r === null) return null
+      readings.push(r)
+    }
+    return readings.join(' ') || null
+  }
+
+  /** Words whose Bulgarian glosses hold every stem, best match first. */
+  private bulgarianWords(stems: string[], limit: number): number[] {
+    if (!stems.length) return []
+    return distinct(this.bgGloss.search(bgPhrases(stems), limit * 8).map((d) => this.bgGlossWord[d]))
+  }
+
+  async search(input: string, limit = 30, lang = 'en'): Promise<SearchResponse> {
     const q = pyStrip(input)
-    if (!q) return { query: q, interpretation: null, kanji: [], words: [], total: 0 }
+    if (!q) return { query: q, interpretation: null, alternatives: [], kanji: [], words: [], total: 0 }
 
     let wordIdx: number[] = []
     let interpretation: SearchResponse['interpretation'] = null
+    const alternatives: SearchResponse['alternatives'] = []
     const inflections = new Map<number, string[]>()
+    let bgStems: string[] | null = null // set when the words were found in Bulgarian
 
     const japanese = hasJapanese(q)
-    let kanaGuess = japanese ? '' : romajiToKana(q)
+    const cyrillic = !japanese && hasCyrillic(q)
+    let kanaGuess = japanese || cyrillic ? '' : romajiToKana(q)
+    const latinBg = lang === 'bg' && !japanese && !cyrillic && isLatinQuery(q)
+
+    if (cyrillic) {
+      bgStems = bgTerms(q)
+      wordIdx = this.bulgarianWords(bgStems, limit)
+      interpretation = { kind: 'bulgarian' }
+    }
 
     if (japanese || kanaGuess) {
       const target = japanese ? q : kanaGuess
@@ -272,13 +332,26 @@ export class Engine {
       }
 
       wordIdx = checked
+      if (latinBg) {
+        const reading = this.shlyokavitsa(q)
+        const found = reading ? this.bulgarianWords(bgTerms(reading), limit) : []
+        if (wordIdx.length && found.length) {
+          // Romaji won, but the Bulgarian reading is one tap away.
+          alternatives.push({ kind: 'bulgarian', query: reading! })
+        } else if (found.length) {
+          wordIdx = found
+          bgStems = bgTerms(reading!)
+          interpretation = { kind: 'bulgarian', reading: reading! }
+          kanaGuess = ''
+        }
+      }
       if (!japanese && !wordIdx.length) {
         kanaGuess = '' // romaji reading found nothing, fall through to English
         interpretation = null
       }
 
       // Prefix match tops up short result sets, so typing 時 still suggests 時間.
-      if (wordIdx.length < limit) {
+      if (bgStems === null && wordIdx.length < limit) {
         const lo = this.forms.lowerBound(target)
         const hi = this.forms.lowerBound(target + '￿')
         const extra: number[] = []
@@ -299,9 +372,18 @@ export class Engine {
           }
         }
       }
+    } else if (latinBg) {
+      // Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.
+      const reading = this.shlyokavitsa(q)
+      const found = reading ? this.bulgarianWords(bgTerms(reading), limit) : []
+      if (found.length) {
+        wordIdx = found
+        bgStems = bgTerms(reading!)
+        interpretation = { kind: 'bulgarian', reading: reading! }
+      }
     }
 
-    if (!wordIdx.length && !japanese) {
+    if (!wordIdx.length && !japanese && bgStems === null) {
       const safe = pyStrip(q.replaceAll('"', ' '))
       if (safe) {
         const seen = new Set<number>()
@@ -331,14 +413,29 @@ export class Engine {
       if (reasons && reasons.length) w.inflection = reasons
     }
 
-    return { query: q, interpretation, kanji: this.searchKanji(q, japanese, kanaGuess), words, total: pool.length }
+    return {
+      query: q,
+      interpretation,
+      alternatives,
+      kanji: this.searchKanji(q, japanese, kanaGuess, bgStems),
+      words,
+      total: pool.length,
+    }
   }
 
-  private searchKanji(q: string, japanese: boolean, kanaGuess: string): KanjiHit[] {
+  private searchKanji(q: string, japanese: boolean, kanaGuess: string, bgStems: string[] | null): KanjiHit[] {
     let chars: string[] = []
     if (japanese) chars = [...new Set([...q])].filter(isCjk)
 
-    if (!chars.length && !japanese && !kanaGuess) {
+    if (bgStems !== null) {
+      if (bgStems.length) {
+        chars = []
+        for (const d of this.bgKfts.search(bgPhrases(bgStems), 80)) {
+          const k = this.bgKftsChar[d]
+          if (k !== NO_INDEX) chars.push(this.pack.kanji[k][0])
+        }
+      }
+    } else if (!chars.length && !japanese && !kanaGuess) {
       const safe = pySplit(q.replaceAll('"', ' '))
       if (safe.length) {
         for (const d of this.kfts.search(phrasesOf(safe), 80)) {
@@ -358,6 +455,7 @@ export class Engine {
     return rows.slice(0, 12).map((r) => ({
       char: r[0],
       meanings: r[7],
+      meaningsBg: r[12] ?? null,
       curated: r[11],
       freq: r[3],
       jlpt: r[4],
@@ -464,7 +562,7 @@ export class Engine {
         this.pack.glyphs,
         (c) => {
           const r = this.row(c)
-          return r ? { freq: r[3], meanings: r[7] } : undefined
+          return r ? { freq: r[3], meanings: r[7], meaningsBg: r[12] ?? null } : undefined
         },
         this.pack.strokePower,
       )

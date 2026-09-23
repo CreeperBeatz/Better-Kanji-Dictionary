@@ -29,7 +29,9 @@
 
   --shu: #d0452b;
 
-  --mincho: 'Shippori Mincho', 'Yu Mincho', 'Hiragino Mincho ProN', serif;
+  /* Shippori has no Cyrillic, and Yu Mincho's is full-width: a proportional
+     serif in between catches Bulgarian before it reaches the Japanese faces. */
+  --mincho: 'Shippori Mincho', Georgia, 'Times New Roman', 'Yu Mincho', 'Hiragino Mincho ProN', serif;
   --gothic: 'Zen Kaku Gothic New', 'Yu Gothic', system-ui, sans-serif;
 
   --rail: 384px;
@@ -2416,6 +2418,32 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+/* JMdict codes: the full name on hover, without the browser's dotted underline. */
+.entry-pos abbr {
+  text-decoration: none;
+  cursor: help;
+}
+
+/* An English gloss standing in for a Bulgarian one not translated yet. */
+.sense .gloss-fallback,
+.entry-fallback {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  vertical-align: 2px;
+  cursor: help;
+}
+
+.entry-machine {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .entry-forms {
   margin: 16px 0 0;
   font-size: 12px;
@@ -2709,6 +2737,42 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .avatar-none svg {
   margin-top: 18%;
+}
+
+/* EN · БГ: the language the whole interface and the dictionary's glosses are in. */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  color: var(--muted);
+  font: 500 12px/1 var(--gothic);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), color 120ms var(--ease);
+}
+.lang-switch:hover {
+  border-color: var(--paper-dim);
+}
+.lang-switch [data-on] {
+  color: var(--paper);
+}
+.lang-switch:focus-visible {
+  outline: 2px solid var(--ai);
+  outline-offset: 2px;
+}
+.account-language {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rail-head .lang-switch {
+  margin-left: auto;
+  margin-right: 8px;
 }
 
 .profile-button {

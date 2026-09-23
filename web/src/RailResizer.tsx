@@ -5,6 +5,15 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { strings, useLang } from './i18n'
+
+const S = strings(
+  { resize: 'Resize the side panel', hint: 'Drag to resize, double-click to reset' },
+  {
+    resize: 'Променете ширината на страничния панел',
+    hint: 'Плъзнете, за да промените ширината; двоен клик я връща',
+  },
+)
 
 const KEY = 'betterrtk:rail'
 export const RAIL_DEFAULT = 384
@@ -57,6 +66,7 @@ export function useRailWidth() {
 export function RailResizer({ width, onWidth }: { width: number; onWidth: (px: number, persist: boolean) => void }) {
   const drag = useRef<{ startX: number; startW: number; last: number } | null>(null)
   const [dragging, setDragging] = useState(false)
+  const t = S(useLang())
 
   useEffect(() => {
     if (!dragging) return
@@ -69,12 +79,12 @@ export function RailResizer({ width, onWidth }: { width: number; onWidth: (px: n
       className="rail-resizer"
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize the side panel"
+      aria-label={t('resize')}
       aria-valuemin={RAIL_MIN}
       aria-valuemax={RAIL_MAX}
       aria-valuenow={width}
       tabIndex={0}
-      title="Drag to resize, double-click to reset"
+      title={t('hint')}
       data-dragging={dragging || undefined}
       onPointerDown={(e) => {
         if (e.button !== 0) return

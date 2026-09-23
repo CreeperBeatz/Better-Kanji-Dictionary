@@ -1,5 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrawCandidate } from '../api'
+import { strings, useLang } from '../i18n'
+import { meaningsOf } from '../i18n/content'
+
+const S = strings(
+  {
+    area: 'Drawing area',
+    undo: 'undo stroke',
+    clear: 'clear',
+    waking: 'waking the recogniser',
+    fill: 'Fill the box. Stroke order helps but is not needed.',
+    strokes_one: '{n} stroke',
+    strokes_other: '{n} strokes',
+    didYouMean: 'Did you mean',
+    noEntry: 'no dictionary entry',
+    candidate: '{m} — {n} strokes',
+  },
+  {
+    area: 'Поле за рисуване',
+    undo: 'върнете черта',
+    clear: 'изчистете',
+    waking: 'разпознаването се зарежда',
+    fill: 'Запълнете полето. Редът на чертите помага, но не е задължителен.',
+    strokes_one: '{n} черта',
+    strokes_other: '{n} черти',
+    didYouMean: 'Може би',
+    noEntry: 'няма речникова статия',
+    candidate: '{m} — {n} черти',
+  },
+)
 
 interface Props {
   onPick: (char: string) => void
@@ -10,6 +39,8 @@ const SIZE = 300
 type Stroke = [number, number][]
 
 export function DrawPad({ onPick }: Props) {
+  const lang = useLang()
+  const t = S(lang)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const strokes = useRef<Stroke[]>([])
   const drawing = useRef(false)
@@ -132,25 +163,19 @@ export function DrawPad({ onPick }: Props) {
           onPointerMove={move}
           onPointerUp={up}
           onPointerLeave={up}
-          aria-label="Drawing area"
+          aria-label={t('area')}
         />
 
         <p className="drawpad-actions">
           <button className="clear" onClick={undo} disabled={drawn === 0}>
-            undo stroke
+            {t('undo')}
           </button>
           <button className="clear" onClick={clear} disabled={drawn === 0}>
-            clear
+            {t('clear')}
           </button>
         </p>
         <p className="hint">
-          {error
-            ? error
-            : !ready
-              ? 'waking the recogniser'
-              : drawn === 0
-                ? 'Fill the box. Stroke order helps but is not needed.'
-                : `${drawn} stroke${drawn === 1 ? '' : 's'}`}
+          {error ? error : !ready ? t('waking') : drawn === 0 ? t('fill') : t.plural('strokes', drawn)}
         </p>
       </div>
 
@@ -159,7 +184,7 @@ export function DrawPad({ onPick }: Props) {
       <div className="drawpad-right">
         {candidates.length > 0 && (
           <>
-            <h3 className="draw-group">Did you mean</h3>
+            <h3 className="draw-group">{t('didYouMean')}</h3>
             <div className="results">
               {candidates.map((c) => (
                 <button
@@ -169,7 +194,7 @@ export function DrawPad({ onPick }: Props) {
                     onPick(c.char)
                     clear()
                   }}
-                  title={`${c.meanings[0] ?? 'no dictionary entry'} — ${c.strokes} strokes`}
+                  title={t('candidate', { m: meaningsOf(c, lang).value[0] ?? t('noEntry'), n: c.strokes })}
                 >
                   {c.char}
                 </button>

@@ -33,6 +33,12 @@ def get_db() -> sqlite3.Connection:
 
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'sense_bg'").fetchone():
+        conn.close()
+        raise DatabaseMissing(
+            f"{DB_PATH} predates the Bulgarian tables. Run:\n"
+            f"  python pipeline/build_db.py bg"
+        )
     _local.conn = conn
     return conn
 

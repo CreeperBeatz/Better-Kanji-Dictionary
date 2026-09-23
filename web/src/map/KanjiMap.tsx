@@ -21,6 +21,8 @@ import { quadtree, type Quadtree } from 'd3-quadtree'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KanjiNode } from '../api'
 import type { ContainerFilter } from '../graph/KanjiGraph'
+import { strings, useLang, type Translate } from '../i18n'
+import { mapMeaning } from '../i18n/content'
 import type { LayoutMessage, LayoutRequest } from './layout.worker'
 import { GlyphAtlas, type SpriteStyle } from './glyphs'
 import { cachedLayout, loadMap, storeLayout, type MapData, type Scope } from './mapData'
@@ -98,11 +100,69 @@ function spriteStyles(c: ReturnType<typeof palette>) {
 const atlas = new GlyphAtlas()
 let fontLoaded = false
 
-function levelLabel(d: MapData, i: number): string {
+const S = strings(
+  {
+    joyo: 'jōyō',
+    part: 'part',
+    rare: 'rare',
+    scopeCommon: 'common',
+    scopeAll: 'full',
+    none: 'no recorded meaning',
+    component: 'component',
+    clickOpen: '{level} · click to open',
+    fetching: 'Fetching the map',
+    laying: 'Laying out {n} characters',
+    error: 'The map could not be loaded.',
+    absent: '{c} is not on the {scope} map',
+    showOn: 'show on {scope}',
+    zoom: 'Zoom',
+    recentreOn: 'Recentre on {c}',
+    recentreKey: 'Recentre on {c} (C)',
+    recentre: 'Recentre',
+    nothing: 'Nothing selected',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    whole: 'Show the whole map',
+    counts: '{n} characters, {e} links',
+    legendSize: 'larger is more frequent, or a part more characters share',
+    legendClick: 'click to select and see its links, click again to open,',
+    legendEmpty: 'click empty space to deselect',
+  },
+  {
+    joyo: 'джойо',
+    part: 'част',
+    rare: 'рядък',
+    scopeCommon: 'чести',
+    scopeAll: 'пълна',
+    none: 'няма записано значение',
+    component: 'част',
+    clickOpen: '{level} · кликнете, за да отворите',
+    fetching: 'Картата се зарежда',
+    laying: 'Подреждат се {n} йероглифа',
+    error: 'Картата не можа да се зареди.',
+    absent: '{c} го няма на картата „{scope}“',
+    showOn: 'покажете на „{scope}“',
+    zoom: 'Мащаб',
+    recentreOn: 'Центрирайте върху {c}',
+    recentreKey: 'Центрирайте върху {c} (C)',
+    recentre: 'Центрирайте',
+    nothing: 'Нищо не е избрано',
+    zoomIn: 'Приближете',
+    zoomOut: 'Отдалечете',
+    whole: 'Покажете цялата карта',
+    counts: '{n} йероглифа, {e} връзки',
+    legendSize: 'по-големият е по-чест или е част, споделена от повече йероглифи',
+    legendClick: 'кликнете, за да изберете и видите връзките, кликнете пак, за да отворите,',
+    legendEmpty: 'кликнете в празно, за да отмените избора',
+  },
+)
+type T = Translate<Parameters<ReturnType<typeof S>>[0]>
+
+function levelLabel(d: MapData, i: number, t: T): string {
   const j = d.jlpt[i]
   if (j) return `N${j}`
-  if (d.joyo[i]) return 'jōyō'
-  return d.fanout[i] > 0 ? 'part' : 'rare'
+  if (d.joyo[i]) return t('joyo')
+  return d.fanout[i] > 0 ? t('part') : t('rare')
 }
 
 /** The narrowest scope a character appears in, for the "not on this map" hint. */
@@ -112,14 +172,10 @@ function homeScope(n: KanjiNode | null): ContainerFilter {
   return 'all'
 }
 
-const SCOPE_NAME: Record<Scope, string> = {
-  '5': 'N5',
-  '4': 'N4',
-  '3': 'N3',
-  '2': 'N2',
-  '1': 'N1',
-  common: 'common',
-  all: 'full',
+function scopeName(scope: Scope, t: T): string {
+  if (scope === 'common') return t('scopeCommon')
+  if (scope === 'all') return t('scopeAll')
+  return `N${scope}`
 }
 
 function createState() {
@@ -420,6 +476,14 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
   const [phase, setPhase] = useState<'fetch' | 'layout' | 'ready' | 'error'>('fetch')
   const [counts, setCounts] = useState<{ nodes: number; edges: number } | null>(null)
   const [present, setPresent] = useState(true)
+  const lang = useLang()
+  const t = S(lang)
+  const num = (n: number) => n.toLocaleString(lang === 'bg' ? 'bg-BG' : undefined)
+  // The tooltip is written outside React, from event handlers bound once.
+  const tRef = useRef(t)
+  useEffect(() => {
+    tRef.current = t
+  })
 
   // Everything the draw loop reads lives in one mutable bag, so a pan or a
   // hover never goes through React.
@@ -721,14 +785,15 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
       tip.style.transform = aboveFinger
         ? `translate(${px}px, ${py - 28}px) translate(-50%, -100%)`
         : `translate(${px + 14}px, ${py + 12}px)`
-      const meaning = d.meaning[i] || (d.target[i] ? 'no recorded meaning' : 'component')
+      const tt = tRef.current
+      const meaning = mapMeaning(d, i, tt.lang).value || (d.target[i] ? tt('none') : tt('component'))
       tip.innerHTML = ''
       const g = document.createElement('b')
       g.textContent = d.chars[i]
       const m = document.createElement('span')
       m.textContent = meaning
       const l = document.createElement('em')
-      l.textContent = i === s.focus ? `${levelLabel(d, i)} · click to open` : levelLabel(d, i)
+      l.textContent = i === s.focus ? tt('clickOpen', { level: levelLabel(d, i, tt) }) : levelLabel(d, i, tt)
       tip.append(g, m, l)
     },
     [s, request],
@@ -879,35 +944,35 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
 
       {phase !== 'ready' && (
         <p className="map-status" role="status">
-          {phase === 'fetch' && 'Fetching the map'}
-          {phase === 'layout' && counts && `Laying out ${counts.nodes.toLocaleString()} characters`}
-          {phase === 'error' && 'The map could not be loaded.'}
+          {phase === 'fetch' && t('fetching')}
+          {phase === 'layout' && counts && t('laying', { n: num(counts.nodes) })}
+          {phase === 'error' && t('error')}
           {phase !== 'error' && <span className="map-status-dots" aria-hidden />}
         </p>
       )}
 
       {phase === 'ready' && !present && (
         <p className="map-status map-absent">
-          <span className="map-absent-glyph">{focus}</span> is not on the {SCOPE_NAME[scope]} map
+          {t.node('absent', { c: <span className="map-absent-glyph">{focus}</span>, scope: scopeName(scope, t) })}
           {String(home) !== scope && (
-            <button onClick={() => onScope(home)}>show on {SCOPE_NAME[String(home) as Scope]}</button>
+            <button onClick={() => onScope(home)}>{t('showOn', { scope: scopeName(String(home) as Scope, t) })}</button>
           )}
         </p>
       )}
 
-      <div className="map-zoom" role="group" aria-label="Zoom">
+      <div className="map-zoom" role="group" aria-label={t('zoom')}>
         <button
           onClick={() => s.focus >= 0 && centreOn(s.focus)}
           disabled={!focus || !present || phase !== 'ready'}
-          aria-label={focus ? `Recentre on ${focus}` : 'Recentre'}
-          title={focus ? `Recentre on ${focus} (C)` : 'Nothing selected'}
+          aria-label={focus ? t('recentreOn', { c: focus }) : t('recentre')}
+          title={focus ? t('recentreKey', { c: focus }) : t('nothing')}
         >
           ◎
         </button>
-        <button onClick={() => zoomBy(1.6)} aria-label="Zoom in" title="Zoom in">
+        <button onClick={() => zoomBy(1.6)} aria-label={t('zoomIn')} title={t('zoomIn')}>
           +
         </button>
-        <button onClick={() => zoomBy(1 / 1.6)} aria-label="Zoom out" title="Zoom out">
+        <button onClick={() => zoomBy(1 / 1.6)} aria-label={t('zoomOut')} title={t('zoomOut')}>
           −
         </button>
         <button
@@ -915,8 +980,8 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
             const fit = fitCamera()
             if (fit) flyTo(fit)
           }}
-          aria-label="Show the whole map"
-          title="Show the whole map"
+          aria-label={t('whole')}
+          title={t('whole')}
         >
           ⤢
         </button>
@@ -924,13 +989,13 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
 
       {legend && (
         <p className="legend" id="stage-legend">
-          {counts && `${counts.nodes.toLocaleString()} characters, ${counts.edges.toLocaleString()} links`}
+          {counts && t('counts', { n: num(counts.nodes), e: num(counts.edges) })}
           <br />
-          larger is more frequent, or a part more characters share
+          {t('legendSize')}
           <br />
-          click to select and see its links, click again to open,
+          {t('legendClick')}
           <br />
-          click empty space to deselect
+          {t('legendEmpty')}
         </p>
       )}
     </div>

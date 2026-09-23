@@ -9,9 +9,47 @@ import {
   updateNote,
   type LocalNote,
 } from '../localNotes'
+import { strings, useLang } from '../i18n'
 import { CommentCard } from './CommentCard'
 import { Composer, savedAttachments } from './Composer'
 import { Note } from './NoteContent'
+
+const S = strings(
+  {
+    you: 'You',
+    tabLabel: 'Associations for {label}',
+    askWord: 'How do you remember {label}?',
+    askKanji: 'What does {label} look like to you?',
+    fromKanji: 'From its kanji',
+    fromParts: 'From its parts',
+    yours: 'Yours',
+    fromOthers: 'From others',
+    sort: 'Sort',
+    mostLiked: 'most liked',
+    newest: 'newest',
+    failed: 'Could not load what others wrote.',
+    empty: 'Nobody has shared one for {label} yet. Post yours as public and it shows here for others to read, like and reply to.',
+    loading: 'loading',
+    showMore: 'show more ({n})',
+  },
+  {
+    you: 'Вие',
+    tabLabel: 'Асоциации за {label}',
+    askWord: 'Как запомняте {label}?',
+    askKanji: 'На какво ви прилича {label}?',
+    fromKanji: 'От йероглифите ѝ',
+    fromParts: 'От частите му',
+    yours: 'Вашите',
+    fromOthers: 'От други',
+    sort: 'Подреждане',
+    mostLiked: 'най-харесвани',
+    newest: 'най-нови',
+    failed: 'Не успяхме да заредим какво са написали другите.',
+    empty: 'Още никой не е споделил асоциация за {label}. Публикувайте своята като публична и тя ще се появи тук, за да я четат, харесват и да ѝ отговарят другите.',
+    loading: 'зареждане',
+    showMore: 'покажете още ({n})',
+  },
+)
 
 const PAGE = 10
 const SORT_KEY = 'betterrtk:sort'
@@ -36,11 +74,11 @@ function rememberedSort(): NoteSort {
 }
 
 /** A browser-only note, shaped like a server one so the same card shows it. */
-function localView(n: LocalNote, drawings: string[]): PublicNote {
+function localView(n: LocalNote, drawings: string[], you: string): PublicNote {
   return {
     id: n.id,
     char: n.char,
-    author: { id: 'local', name: 'You', username: null, avatar: null },
+    author: { id: 'local', name: you, username: null, avatar: null },
     text: n.text,
     images: n.images,
     drawings,
@@ -66,6 +104,8 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
   const char = subject
   const isWord = subject.startsWith('word:')
   const { user, ready, syncing } = useAuth()
+  const t = S(useLang())
+  const you = t('you')
   const me = user?.id ?? null
   const [sort, setSortState] = useState<NoteSort>(rememberedSort)
   const [mine, setMine] = useState<PublicNote[]>([])
@@ -107,7 +147,7 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
       if (!me) {
         const local = await notesFor(char).catch(() => [])
         own = await Promise.all(
-          local.map(async (n) => localView(n, await drawingsAmong(n.images).catch(() => []))),
+          local.map(async (n) => localView(n, await drawingsAmong(n.images).catch(() => []), you)),
         )
       }
       if (stale) return
@@ -120,7 +160,7 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
     return () => {
       stale = true
     }
-  }, [char, me, ready, syncing, sort, shown, version])
+  }, [char, me, ready, syncing, sort, shown, version, you])
 
   // What you wrote on this character's parts, so a mnemonic can build on them.
   useEffect(() => {
@@ -137,7 +177,7 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
               texts: (await notesFor(c.char).catch(() => [])).map((n) => n.text),
             })),
           )
-      if (!stale) setParts(found.map((p) => ({ ...p, texts: p.texts.filter((t) => t.trim()) })))
+      if (!stale) setParts(found.map((p) => ({ ...p, texts: p.texts.filter((x) => x.trim()) })))
     })()
     return () => {
       stale = true
@@ -192,11 +232,11 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
   const noted = parts.filter((p) => p.texts.length > 0)
 
   return (
-    <section className="rail-section assoc-tab" aria-label={`Associations for ${label}`}>
+    <section className="rail-section assoc-tab" aria-label={t('tabLabel', { label })}>
       <Composer
         key={char}
         label={label}
-        placeholder={isWord ? `How do you remember ${label}?` : `What does ${label} look like to you?`}
+        placeholder={t(isWord ? 'askWord' : 'askKanji', { label })}
         author={user}
         draftKey={char}
         onSubmit={post}
@@ -205,15 +245,15 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
 
       {noted.length > 0 && (
         <div className="assoc-parts">
-          <h3>{isWord ? 'From its kanji' : 'From its parts'}</h3>
+          <h3>{t(isWord ? 'fromKanji' : 'fromParts')}</h3>
           {noted.map((p) => (
             <div key={p.char} className="assoc-part">
               <button className="assoc-part-glyph" onClick={() => onPick(p.char)}>
                 {p.char}
               </button>
               <div>
-                {p.texts.map((t, i) => (
-                  <Note key={i} text={t} />
+                {p.texts.map((text, i) => (
+                  <Note key={i} text={text} />
                 ))}
               </div>
             </div>
@@ -224,7 +264,8 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
       {mine.length > 0 && (
         <div className="assoc-group">
           <h3>
-            Yours<span className="discussion-count">{mine.length}</span>
+            {t('yours')}
+            <span className="discussion-count">{mine.length}</span>
           </h3>
           {mine.map((n) =>
             editing === n.id ? (
@@ -237,7 +278,7 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
                   attachments: savedAttachments(n.images, n.drawings),
                   visibility: n.visibility,
                 }}
-                onSubmit={(t, i, v) => saveEdit(n, t, i, v)}
+                onSubmit={(text, i, v) => saveEdit(n, text, i, v)}
                 onCancel={() => setEditing(null)}
                 onSignIn={onSignIn}
               />
@@ -258,14 +299,15 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
       <div className="assoc-group">
         <div className="assoc-group-head">
           <h3>
-            From others{total > 0 && <span className="discussion-count">{total}</span>}
+            {t('fromOthers')}
+            {total > 0 && <span className="discussion-count">{total}</span>}
           </h3>
           {total > 1 && (
-            <span className="assoc-sort" role="radiogroup" aria-label="Sort">
+            <span className="assoc-sort" role="radiogroup" aria-label={t('sort')}>
               {(
                 [
-                  ['liked', 'most liked'],
-                  ['new', 'newest'],
+                  ['liked', t('mostLiked')],
+                  ['new', t('newest')],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -283,12 +325,9 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
         </div>
 
         {failed ? (
-          <p className="discussion-empty">Could not load what others wrote.</p>
+          <p className="discussion-empty">{t('failed')}</p>
         ) : others.length === 0 && !loading ? (
-          <p className="discussion-empty">
-            Nobody has shared one for {label} yet. Post yours as public and it shows here for others
-            to read, like and reply to.
-          </p>
+          <p className="discussion-empty">{t('empty', { label })}</p>
         ) : (
           others.map((n) => (
             <CommentCard key={n.id} note={n} signedIn={me !== null} onSignIn={onSignIn} onChange={patch} />
@@ -297,7 +336,7 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
 
         {others.length < total && (
           <button className="discussion-more" disabled={loading} onClick={() => setShown((s) => s + PAGE)}>
-            {loading ? 'loading' : `show more (${total - others.length})`}
+            {loading ? t('loading') : t('showMore', { n: total - others.length })}
           </button>
         )}
       </div>

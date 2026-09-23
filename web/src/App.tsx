@@ -7,6 +7,8 @@ import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
+import { LangSwitch } from './i18n/LangSwitch'
+import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
@@ -18,8 +20,59 @@ import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
 
 const START = '言'
 
-// What a failed graph fetch says when the network, not the server, is why.
-const OFFLINE = 'The graph needs a connection.'
+// What a failed graph fetch says when the network, not the server, is why:
+// a marker, shown in the interface language.
+const OFFLINE = 'offline'
+
+const S = strings(
+  {
+    offline: 'The graph needs a connection.',
+    offlineHint: "Search, drawing and each character's details work without one.",
+    startServer: 'Start the server with',
+    selectKanji: 'Select a kanji',
+    sidePanel: 'Side panel',
+    dictionary: 'Dictionary',
+    associations: 'Associations',
+    focus: 'Focus',
+    map: 'Map',
+    recent: 'Recent',
+    back: 'Back (Backspace)',
+    backTo: 'back to {page}',
+    theWord: 'the word',
+    search: 'search',
+    thisWord: 'this word',
+    hideLegend: 'Hide the legend',
+    howMap: 'How to read the map',
+    howGraph: 'How to read the graph',
+    legend: 'Legend',
+    above: '{n} above',
+    aboveHidden: '{n} above, {h} hidden',
+  },
+  {
+    offline: 'Графът има нужда от връзка.',
+    offlineHint: 'Търсенето, рисуването и подробностите за всеки йероглиф работят и без нея.',
+    startServer: 'Стартирайте сървъра с',
+    selectKanji: 'Изберете йероглиф',
+    sidePanel: 'Страничен панел',
+    dictionary: 'Речник',
+    associations: 'Асоциации',
+    focus: 'Фокус',
+    map: 'Карта',
+    recent: 'Скорошни',
+    back: 'Назад (Backspace)',
+    backTo: 'назад към {page}',
+    theWord: 'думата',
+    search: 'търсенето',
+    thisWord: 'тази дума',
+    hideLegend: 'Скрийте легендата',
+    howMap: 'Как се чете картата',
+    howGraph: 'Как се чете графът',
+    legend: 'Легенда',
+    above: '{n} отгоре',
+    aboveHidden: '{n} отгоре, {h} скрити',
+  },
+)
+type T = Translate<Parameters<ReturnType<typeof S>>[0]>
 const VIEW_KEY = 'betterrtk:view'
 
 // Matches the narrow layout in theme.css.
@@ -105,11 +158,12 @@ function kanjiIn(stack: Stack): string | null {
 }
 
 /** How a page is named in "back to ...". */
-function nameOf(p: Page) {
+function nameOf(p: Page, t: T) {
   if (p.kind === 'kanji') return <span className="back-glyph">{p.char}</span>
-  if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? 'the word'}</span>
+  if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? t('theWord')}</span>
   if (p.kind === 'level') return <>N{p.level}</>
-  return p.q ? <>“{p.q}”</> : <>search</>
+  if (!p.q) return <>{t('search')}</>
+  return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
 
 function titleOf(p: Page): string {
@@ -121,6 +175,7 @@ function titleOf(p: Page): string {
 }
 
 export function App() {
+  const t = S(useLang())
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const { stack, push, reset, replaceTop, pop } = useNav(scroller)
@@ -356,7 +411,7 @@ export function App() {
   function page(p: Page) {
     switch (p.kind) {
       case 'search':
-        return <SearchPage q={p.q} onKanji={openKanji} onWord={openWord} onLevel={openLevel} />
+        return <SearchPage q={p.q} onKanji={openKanji} onWord={openWord} onLevel={openLevel} onSearch={type} />
       case 'level':
         return <LevelPage level={p.level} onKanji={openKanji} />
       case 'word':
@@ -388,7 +443,7 @@ export function App() {
     top.kind === 'kanji'
       ? { key: top.char, label: top.char }
       : top.kind === 'word'
-        ? { key: `word:${top.id}`, label: top.word?.headword ?? 'this word' }
+        ? { key: `word:${top.id}`, label: top.word?.headword ?? t('thisWord') }
         : null
   const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
   const inDictionary = !onStage && tab === 'dictionary'
@@ -411,9 +466,9 @@ export function App() {
             inputRef={inputRef}
           />
           <div className="rail-head">
-            <div className="rail-tabs" role="tablist" aria-label="Side panel">
+            <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
               <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
-                Dictionary
+                {t('dictionary')}
               </button>
               {subject && (
                 <button
@@ -421,24 +476,25 @@ export function App() {
                   aria-selected={!onStage && tab === 'associations'}
                   onClick={() => chooseRailTab('associations')}
                 >
-                  Associations
+                  {t('associations')}
                   {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
               )}
               {mobile && (
                 <>
                   <button role="tab" aria-selected={onStage && view === 'focus'} onClick={() => setView('focus')}>
-                    Focus
+                    {t('focus')}
                   </button>
                   <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
-                    Map
+                    {t('map')}
                   </button>
                 </>
               )}
               <button role="tab" aria-selected={!onStage && tab === 'recent'} onClick={() => chooseRailTab('recent')}>
-                Recent
+                {t('recent')}
               </button>
             </div>
+            {mobile && <LangSwitch />}
             {mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
@@ -450,8 +506,8 @@ export function App() {
                 {(under || current) && (
                   <div className="rail-crumb">
                     {under ? (
-                      <button className="back-link rail-back" onClick={() => pop()} title="Back (Backspace)">
-                        <span aria-hidden>←</span> back to {nameOf(under)}
+                      <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
+                        <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(under, t) })}
                       </button>
                     ) : (
                       <span />
@@ -491,13 +547,13 @@ export function App() {
           {error && selected && (
             <div className="stage-empty">
               <p>
-                {error}
+                {error === OFFLINE ? t('offline') : error}
                 <br />
                 {error === OFFLINE ? (
-                  <span className="hint">Search, drawing and each character's details work without one.</span>
+                  <span className="hint">{t('offlineHint')}</span>
                 ) : (
                   <span className="hint">
-                    Start the server with{' '}
+                    {t('startServer')}{' '}
                     <code>.venv/Scripts/uvicorn server.app:app --port 8000</code>
                   </span>
                 )}
@@ -507,7 +563,7 @@ export function App() {
 
           {!selected && view === 'focus' && (
             <div className="stage-empty">
-              <p className="hint">Select a kanji</p>
+              <p className="hint">{t('selectKanji')}</p>
             </div>
           )}
 
@@ -539,10 +595,11 @@ export function App() {
                 filter={filter}
                 view={view}
                 onFilter={setFilter}
-                note={view === 'focus' && data && selected ? containerNote(data, filter) : undefined}
+                note={view === 'focus' && data && selected ? containerNote(data, filter, t) : undefined}
               />
             )}
-            {/* On a phone it sits beside the tabs instead, where it is always on screen. */}
+            {/* On a phone they sit beside the tabs instead, where they are always on screen. */}
+            {!mobile && <LangSwitch />}
             {!mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
@@ -551,8 +608,8 @@ export function App() {
             onClick={() => setLegendOpen((o) => !o)}
             aria-expanded={legendOpen}
             aria-controls="stage-legend"
-            title={legendOpen ? 'Hide the legend' : `How to read the ${view === 'map' ? 'map' : 'graph'}`}
-            aria-label="Legend"
+            title={legendOpen ? t('hideLegend') : t(view === 'map' ? 'howMap' : 'howGraph')}
+            aria-label={t('legend')}
           >
             i
           </button>
@@ -564,8 +621,8 @@ export function App() {
   )
 }
 
-function containerNote(data: GraphResponse, filter: ContainerFilter): string {
+function containerNote(data: GraphResponse, filter: ContainerFilter, t: T): string {
   const shown = data.containers.filter(keeps(filter)).length
   const hidden = data.containers.length - shown
-  return `${shown} above${hidden > 0 ? `, ${hidden} hidden` : ''}`
+  return hidden > 0 ? t('aboveHidden', { n: shown, h: hidden }) : t('above', { n: shown })
 }

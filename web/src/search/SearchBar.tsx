@@ -10,9 +10,35 @@
 
 import { useState } from 'react'
 import { DrawPad } from '../draw/DrawPad'
+import { strings, useLang } from '../i18n'
 import { RadicalPicker } from './RadicalPicker'
 
 type Tool = 'draw' | 'radicals'
+
+const S = strings(
+  {
+    placeholder: 'English, Japanese or romaji',
+    search: 'Search',
+    clearSearch: 'Clear the search',
+    clear: 'Clear',
+    drawTitle: 'Draw a character',
+    draw: 'Draw',
+    radicalsTitle: 'Pick a character by its parts',
+    radicals: 'Radicals',
+    done: 'done',
+  },
+  {
+    placeholder: 'японски, български или ромаджи',
+    search: 'Търсене',
+    clearSearch: 'Изчистете търсенето',
+    clear: 'Изчистете',
+    drawTitle: 'Нарисувайте йероглиф',
+    draw: 'Рисуване',
+    radicalsTitle: 'Изберете йероглиф по частите му',
+    radicals: 'Радикали',
+    done: 'готово',
+  },
+)
 
 interface Props {
   q: string
@@ -29,9 +55,10 @@ const coarse = () => window.matchMedia('(pointer: coarse)').matches
 
 export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
   const [tool, setTool] = useState<Tool | null>(null)
+  const t = S(useLang())
 
-  function toggle(t: Tool) {
-    setTool((cur) => (cur === t ? null : t))
+  function toggle(which: Tool) {
+    setTool((cur) => (cur === which ? null : which))
     // The keyboard and the pad cannot share a phone screen.
     if (coarse()) inputRef.current?.blur()
   }
@@ -66,8 +93,8 @@ export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
               // Enter is done typing: put the keyboard away to show the results.
               if (e.key === 'Enter' && coarse()) e.currentTarget.blur()
             }}
-            placeholder="English, Japanese or romaji"
-            aria-label="Search"
+            placeholder={t('placeholder')}
+            aria-label={t('search')}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -80,8 +107,8 @@ export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
                 onType('')
                 if (!tool) inputRef.current?.focus()
               }}
-              aria-label="Clear the search"
-              title="Clear"
+              aria-label={t('clearSearch')}
+              title={t('clear')}
             >
               ×
             </button>
@@ -93,24 +120,24 @@ export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
           data-on={tool === 'draw' || undefined}
           aria-pressed={tool === 'draw'}
           onClick={() => toggle('draw')}
-          title="Draw a character"
+          title={t('drawTitle')}
         >
           <svg viewBox="0 0 20 20" aria-hidden>
             <path d="M3 17c2-.4 3.2-1.2 4.3-2.3L16.5 5.5a1.8 1.8 0 0 0-2.5-2.5L4.8 12.2C3.7 13.3 3.2 14.8 3 17Z" />
           </svg>
-          <span>Draw</span>
+          <span>{t('draw')}</span>
         </button>
         <button
           className="searchbar-tool"
           data-on={tool === 'radicals' || undefined}
           aria-pressed={tool === 'radicals'}
           onClick={() => toggle('radicals')}
-          title="Pick a character by its parts"
+          title={t('radicalsTitle')}
         >
           <span className="searchbar-tool-glyph" aria-hidden>
             部
           </span>
-          <span>Radicals</span>
+          <span>{t('radicals')}</span>
         </button>
       </div>
 
@@ -119,7 +146,7 @@ export function SearchBar({ q, onType, onFocus, inputRef }: Props) {
           {tool === 'draw' && <DrawPad onPick={pick} />}
           {tool === 'radicals' && <RadicalPicker onPick={pick} />}
           <button className="searchtools-close clear" onClick={() => setTool(null)}>
-            done
+            {t('done')}
           </button>
         </div>
       )}

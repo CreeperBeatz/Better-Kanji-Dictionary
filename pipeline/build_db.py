@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(ROOT))  # server.bulgarian: the index and the queries must stem alike
 DATA = ROOT / "pipeline" / "data"
 DB_PATH = ROOT / "data" / "betterrtk.sqlite"
 
@@ -491,6 +492,105 @@ def build_examples(db: sqlite3.Connection) -> None:
     print(f"  links         {len(links):>7,} word-to-sentence links")
 
 
+BG_OUT = ROOT / "pipeline" / "translate" / "out"
+
+
+@stage("bg", "translate/out/*.json -> Bulgarian glosses, kanji meanings and their search indexes")
+def build_bulgarian(db: sqlite3.Connection) -> None:
+    """Load whatever the translating agents have handed back (see translate/TASK.md).
+
+    Checked only for shape here -- each sense must be one JMdict has -- since
+    check.py is where the language gets checked. The search indexes hold
+    stems (server/bulgarian.py `terms`), so a query for водата finds вода.
+    """
+    from server.bulgarian import terms
+
+    db.executescript("""
+        DROP TABLE IF EXISTS sense_bg;
+        DROP TABLE IF EXISTS kanji_bg;
+        DROP TABLE IF EXISTS bg_gloss_fts;
+        DROP TABLE IF EXISTS bg_kanji_fts;
+        CREATE TABLE sense_bg (
+            word_id INTEGER NOT NULL,
+            ord     INTEGER NOT NULL,
+            gloss   TEXT NOT NULL,     -- "; "-joined, like sense.gloss
+            source  TEXT NOT NULL,     -- who wrote it: "mt:claude-sonnet-5", later perhaps a dictionary
+            PRIMARY KEY (word_id, ord)
+        );
+        CREATE TABLE kanji_bg (
+            char     TEXT PRIMARY KEY,
+            meanings TEXT NOT NULL,    -- JSON array
+            source   TEXT NOT NULL
+        );
+        CREATE VIRTUAL TABLE bg_gloss_fts USING fts5(
+            terms, word_id UNINDEXED, tokenize = 'unicode61 remove_diacritics 2'
+        );
+        CREATE VIRTUAL TABLE bg_kanji_fts USING fts5(
+            terms, char UNINDEXED, tokenize = 'unicode61 remove_diacritics 2'
+        );
+    """)
+
+    known_senses = {(w, o) for w, o in db.execute("SELECT word_id, ord FROM sense")}
+    known_kanji = {r[0] for r in db.execute("SELECT char FROM kanji")}
+
+    def glosses(bg) -> list[str] | None:
+        if not isinstance(bg, list):
+            return None
+        out = [g.strip() for g in bg if isinstance(g, str) and g.strip()]
+        return out or None
+
+    senses: dict[tuple[int, int], tuple[str, str]] = {}
+    kanji: dict[str, tuple[list[str], str]] = {}
+    files = sorted(BG_OUT.glob("*.json")) if BG_OUT.exists() else []
+    skipped = 0
+    for path in files:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, UnicodeDecodeError) as e:
+            print(f"  skip {path.name}: {e}")
+            continue
+        source = "mt:" + str(data.get("by") or "unknown").strip()
+        for e in data.get("entries") or []:
+            for s in (e.get("senses") or []) if isinstance(e, dict) else []:
+                ok = isinstance(s, dict) and isinstance(e.get("id"), int) and isinstance(s.get("i"), int)
+                key = (e["id"], s["i"]) if ok else None
+                g = glosses(s.get("bg")) if key in known_senses else None
+                if g is None:
+                    skipped += 1
+                    continue
+                senses[key] = ("; ".join(g), source)
+        for k in data.get("kanji") or []:
+            char = k.get("char") if isinstance(k, dict) else None
+            g = glosses(k.get("bg")) if char in known_kanji else None
+            if g is None:
+                skipped += 1
+                continue
+            kanji[char] = (g, source)
+
+    rows = sorted(senses.items())
+    db.executemany("INSERT INTO sense_bg VALUES (?,?,?,?)", [(w, o, g, src) for (w, o), (g, src) in rows])
+    db.executemany(
+        "INSERT INTO bg_gloss_fts (terms, word_id) VALUES (?, ?)",
+        [(" ".join(terms(g)), w) for (w, _), (g, _) in rows],
+    )
+    krows = sorted(kanji.items())
+    db.executemany(
+        "INSERT INTO kanji_bg VALUES (?,?,?)",
+        [(c, json.dumps(m, ensure_ascii=False), src) for c, (m, src) in krows],
+    )
+    db.executemany(
+        "INSERT INTO bg_kanji_fts (terms, char) VALUES (?, ?)",
+        [(" ".join(terms(", ".join(m))), c) for c, (m, _) in krows],
+    )
+
+    words = len({w for w, _ in senses})
+    print(f"  files         {len(files):>7,} in {BG_OUT}")
+    print(f"  senses        {len(rows):>7,} Bulgarian senses over {words:,} words")
+    print(f"  kanji         {len(krows):>7,} characters with Bulgarian meanings")
+    if skipped:
+        print(f"  skipped       {skipped:>7,} senses or kanji that match nothing in the dictionary")
+
+
 # ---------------------------------------------------------------- driver
 
 
@@ -506,7 +606,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("stages", nargs="*", help="stages to run (default: all)")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--bg-out", type=Path, help="translated chunks for the bg stage (default: pipeline/translate/out)")
     args = ap.parse_args()
+
+    global BG_OUT
+    if args.bg_out:
+        BG_OUT = args.bg_out.resolve()
 
     if args.list:
         for name, desc in STAGES.items():

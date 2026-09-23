@@ -71,6 +71,7 @@ def _node(row) -> dict:
         "joyo": bool(row["joyo"]),
         "inKanjidic": bool(row["in_kanjidic"]),
         "meanings": json.loads(row["meanings"] or "[]"),
+        "meaningsBg": json.loads(row["meanings_bg"]) if row["meanings_bg"] else None,
         "onYomi": json.loads(row["on_yomi"] or "[]"),
         "kunYomi": json.loads(row["kun_yomi"] or "[]"),
         "fanout": row["joyo_count"] if "joyo_count" in row.keys() else None,
@@ -79,7 +80,8 @@ def _node(row) -> dict:
 
 KANJI_COLS = """
     k.char, k.strokes, k.grade, k.freq, k.jlpt, k.joyo, k.in_kanjidic,
-    k.meanings, k.on_yomi, k.kun_yomi, COALESCE(f.joyo_count, 0) AS joyo_count
+    k.meanings, k.on_yomi, k.kun_yomi, COALESCE(f.joyo_count, 0) AS joyo_count,
+    (SELECT kb.meanings FROM kanji_bg kb WHERE kb.char = k.char) AS meanings_bg
 """
 
 
@@ -238,7 +240,7 @@ def get_kanji(char: str) -> dict:
     for c in component_chars:
         n = nodes.get(c) or {
             "char": c, "strokes": None, "grade": None, "freq": None, "jlpt": None,
-            "joyo": False, "inKanjidic": False, "meanings": [], "onYomi": [],
+            "joyo": False, "inKanjidic": False, "meanings": [], "meaningsBg": None, "onYomi": [],
             "kunYomi": [], "fanout": 0,
         }
         n["depth"] = depth[c]

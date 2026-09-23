@@ -47,8 +47,9 @@ def _build(scope: str) -> dict:
         r["char"]: r
         for r in query(
             "SELECT k.char, k.freq, k.jlpt, k.joyo, k.strokes, k.meanings, "
-            "COALESCE(f.joyo_count, 0) AS fanout "
-            "FROM kanji k LEFT JOIN fanout f ON f.char = k.char"
+            "COALESCE(f.joyo_count, 0) AS fanout, kb.meanings AS meanings_bg "
+            "FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
+            "LEFT JOIN kanji_bg kb ON kb.char = k.char"
         )
     }
 
@@ -93,10 +94,12 @@ def _build(scope: str) -> dict:
     def col(name: str, default=None):
         return [rows[c][name] if c in rows else default for c in chars]
 
-    meanings = []
+    meanings, meanings_bg = [], []
     for c in chars:
         m = json.loads(rows[c]["meanings"] or "[]") if c in rows else []
         meanings.append(m[0] if m else "")
+        b = json.loads(rows[c]["meanings_bg"] or "[]") if c in rows else []
+        meanings_bg.append(b[0] if b else "")
 
     return {
         "scope": scope,
@@ -107,6 +110,7 @@ def _build(scope: str) -> dict:
         "fanout": col("fanout", 0),
         "strokes": col("strokes"),
         "meaning": meanings,
+        "meaningBg": meanings_bg,
         # 1 = in the scope in its own right, 0 = pulled in only as a part
         "target": [1 if c in targets else 0 for c in chars],
         "edges": edges,

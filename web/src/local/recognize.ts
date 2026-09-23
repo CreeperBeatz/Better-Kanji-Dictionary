@@ -313,11 +313,13 @@ export interface Candidate {
   strokes: number
   freq: number | null
   meanings: string[]
+  meaningsBg: string[] | null
 }
 
 export interface KanjiMeta {
   freq: number | null
   meanings: string[]
+  meaningsBg: string[] | null
 }
 
 export class Recognizer {
@@ -379,6 +381,7 @@ export class Recognizer {
         strokes: size,
         freq: m?.freq ?? null,
         meanings: (m?.meanings ?? []).slice(0, 3),
+        meaningsBg: m?.meaningsBg ? m.meaningsBg.slice(0, 3) : null,
       }
     })
   }

@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import DatabaseMissing
+from .errors import AppError, app_error_handler
 from . import auth as accounts
 from . import offline as offline_pack
 from . import store
@@ -42,6 +43,9 @@ app.add_middleware(
 
 # The map payload is a few hundred KB of repetitive JSON at the widest scope.
 app.add_middleware(GZipMiddleware, minimum_size=2048)
+
+
+app.add_exception_handler(AppError, app_error_handler)
 
 
 @app.exception_handler(DatabaseMissing)

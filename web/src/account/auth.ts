@@ -10,6 +10,8 @@
 
 import { useSyncExternalStore } from 'react'
 import { api, ApiError, type User } from '../api'
+import { getLang, strings } from '../i18n'
+import { errorText } from '../i18n/errors'
 import { allNotes, deleteImage, forgetNote, getImage, isLocalImage, type LocalNote } from '../localNotes'
 import { sessionToken, setSessionToken } from './session'
 
@@ -22,6 +24,8 @@ export interface AuthState {
   /** A sign-in link that failed, to say so once. */
   error: string | null
 }
+
+const S = strings({ failed: 'signing in failed' }, { failed: 'входът не успя' })
 
 let state: AuthState = { user: null, ready: false, syncing: false, error: null }
 const listeners = new Set<() => void>()
@@ -52,7 +56,8 @@ export async function startAuth() {
       await finishSignIn(await api.verifyLogin(token))
       return
     } catch (e) {
-      set({ error: e instanceof ApiError ? e.message : 'signing in failed', syncing: false })
+      const lang = getLang()
+      set({ error: e instanceof ApiError ? errorText(e, lang) : S(lang)('failed'), syncing: false })
     }
   }
 
@@ -72,7 +77,7 @@ export async function startAuth() {
 }
 
 export async function requestLink(email: string) {
-  return api.requestLogin(email)
+  return api.requestLogin(email, getLang())
 }
 
 /** Trade the credential from Google's button for a session. */

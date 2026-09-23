@@ -77,7 +77,18 @@ SOURCES = {
     "wiktionary": (
         "raw-wiktextract-data.jsonl.gz",
         "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz",
-        "glyph origin / etymology (2.9 GB, opt in)",
+        "glyph origin / etymology, and Bulgarian translation hints (2.9 GB, opt in)",
+    ),
+    # --- Bulgarian translation hints: the two wordnets share Princeton synset ids
+    "omw-bul": (
+        "wn-data-bul.tab",
+        "https://raw.githubusercontent.com/omwn/omw-data/main/wns/bul/wn-data-bul.tab",
+        "BulTreeBank wordnet, CC BY 3.0",
+    ),
+    "omw-jpn": (
+        "wn-data-jpn.tab",
+        "https://raw.githubusercontent.com/omwn/omw-data/main/wns/jpn/wn-data-jpn.tab",
+        "Japanese WordNet (NICT licence)",
     ),
 }
 

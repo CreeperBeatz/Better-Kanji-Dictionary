@@ -13,8 +13,8 @@ hold in memory. A phone cannot keep 218,000 dictionary entries as JavaScript
 objects, so the pack is split in two:
 
   index.bin    everything a query touches: word ranking columns, every
-               written and kana form in sorted order, and the English
-               full-text indexes. Binary, so the client maps typed arrays
+               written and kana form in sorted order, and the English and
+               Bulgarian full-text indexes. Binary, so the client maps typed arrays
                straight onto it instead of parsing.
   words-NN     the entries themselves, in chunks, which the client files away
                in IndexedDB and reads back only for the results it shows.
@@ -22,7 +22,7 @@ objects, so the pack is split in two:
                levels and each kanji's common words. Small enough to hold.
   strokes.json stroke paths, for the stroke-order diagram.
 
-The English indexes are read back out of the database's own FTS5 tables
+The full-text indexes are read back out of the database's own FTS5 tables
 through fts5vocab rather than re-tokenised here, so the client's index is
 exactly the one the server searches.
 """
@@ -44,7 +44,8 @@ from pathlib import Path
 from .db import DB_PATH
 
 # Bump when the pack's layout changes, so every client fetches a new one.
-FORMAT = 1
+# 2: Bulgarian glosses, kanji meanings and their indexes.
+FORMAT = 2
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -297,9 +298,10 @@ def _kanji_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT k.char, k.strokes, k.grade, k.freq, k.jlpt, k.joyo, k.in_kanjidic, "
         "       k.meanings, k.on_yomi, k.kun_yomi, COALESCE(f.joyo_count, 0) AS fanout, "
-        "       c.meaning AS curated "
+        "       c.meaning AS curated, kb.meanings AS meanings_bg "
         "FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
-        "LEFT JOIN kanji_curated c ON c.char = k.char"
+        "LEFT JOIN kanji_curated c ON c.char = k.char "
+        "LEFT JOIN kanji_bg kb ON kb.char = k.char"
     ).fetchall()
 
 
@@ -327,8 +329,11 @@ def build(force: bool = False) -> dict:
 
     senses: dict[int, list] = {}
     pos_mask = array("B", [0] * len(words))
-    for r in conn.execute("SELECT word_id, pos, misc, gloss FROM sense ORDER BY word_id, ord"):
-        senses.setdefault(r[0], []).append([r[1], r[2], r[3]])
+    for r in conn.execute(
+        "SELECT s.word_id, s.pos, s.misc, s.gloss, b.gloss FROM sense s "
+        "LEFT JOIN sense_bg b ON b.word_id = s.word_id AND b.ord = s.ord ORDER BY s.word_id, s.ord"
+    ):
+        senses.setdefault(r[0], []).append([r[1], r[2], r[3], r[4]])
         i = index_of.get(r[0])
         if i is not None:
             pos_mask[i] |= _pos_mask(r[1])
@@ -393,6 +398,14 @@ def build(force: bool = False) -> dict:
     # the server's join would drop it; 0xFFFFFFFF marks it.
     sec.add("kfts.docchar", "u32", [kanji_at.get(kfts_char[r], 0xFFFFFFFF) for r in kfts_rowids])
 
+    # --- Bulgarian: the same two indexes, over stems (see server/bulgarian.py)
+    bg_rowids = _fts(conn, "bg_gloss_fts", sec, "bggloss")
+    bg_word = dict(conn.execute("SELECT rowid, word_id FROM bg_gloss_fts"))
+    sec.add("bggloss.docword", "u32", [index_of.get(bg_word[r], 0) for r in bg_rowids])
+    bgk_rowids = _fts(conn, "bg_kanji_fts", sec, "bgkfts")
+    bgk_char = dict(conn.execute("SELECT rowid, char FROM bg_kanji_fts"))
+    sec.add("bgkfts.docchar", "u32", [kanji_at.get(bgk_char[r], 0xFFFFFFFF) for r in bgk_rowids])
+
     files["index.bin"] = sec.tobytes()
 
     # --- the character table and the small lookups hung off it
@@ -445,13 +458,14 @@ def build(force: bool = False) -> dict:
     files["kanji.json"] = _json(
         {
             # char, strokes, grade, freq, jlpt, joyo, inKanjidic, meanings,
-            # onYomi, kunYomi, fanout, curated -- sorted by char
+            # onYomi, kunYomi, fanout, curated, meaningsBg -- sorted by char
             "kanji": [
                 [
                     r["char"], r["strokes"], r["grade"], r["freq"], r["jlpt"], r["joyo"],
                     r["in_kanjidic"], json.loads(r["meanings"] or "[]"),
                     json.loads(r["on_yomi"] or "[]"), json.loads(r["kun_yomi"] or "[]"),
                     r["fanout"], r["curated"],
+                    json.loads(r["meanings_bg"]) if r["meanings_bg"] else None,
                 ]
                 for r in kanji
             ],

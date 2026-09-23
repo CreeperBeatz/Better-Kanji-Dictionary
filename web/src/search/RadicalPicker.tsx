@@ -1,5 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type RadicalGroup, type RadicalSearchResponse } from '../api'
+import { strings, useLang } from '../i18n'
+
+const S = strings(
+  {
+    pick: 'Pick the parts you can see. Combine several to narrow it down.',
+    found_one: '{n} character',
+    found_other: '{n} characters',
+    searching: 'searching',
+    startOver: 'start over',
+    radicalIn: '{r} — in {n} characters',
+  },
+  {
+    pick: 'Изберете частите, които виждате. Комбинирайте няколко, за да стесните търсенето.',
+    found_one: '{n} йероглиф',
+    found_other: '{n} йероглифа',
+    searching: 'търсене',
+    startOver: 'започнете отначало',
+    radicalIn: '{r} — в {n} йероглифа',
+  },
+)
 
 interface Props {
   onPick: (char: string) => void
@@ -10,6 +30,7 @@ export function RadicalPicker({ onPick }: Props) {
   const [selected, setSelected] = useState<string[]>([])
   const [result, setResult] = useState<RadicalSearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const t = S(useLang())
 
   useEffect(() => {
     api.radicals().then(
@@ -51,14 +72,12 @@ export function RadicalPicker({ onPick }: Props) {
   return (
     <div>
       {selected.length === 0 ? (
-        <p className="hint">Pick the parts you can see. Combine several to narrow it down.</p>
+        <p className="hint">{t('pick')}</p>
       ) : (
         <p className="hint">
-          <span className="tally">
-            {result ? `${result.total} character${result.total === 1 ? '' : 's'}` : 'searching'}
-          </span>{' '}
+          <span className="tally">{result ? t.plural('found', result.total) : t('searching')}</span>{' '}
           <button className="clear" onClick={() => setSelected([])}>
-            start over
+            {t('startOver')}
           </button>
         </p>
       )}
@@ -86,7 +105,7 @@ export function RadicalPicker({ onPick }: Props) {
                   data-on={on}
                   disabled={!on && live !== null && !live.has(r.radical)}
                   onClick={() => toggle(r.radical)}
-                  title={`${r.radical} — in ${r.kanjiCount} characters`}
+                  title={t('radicalIn', { r: r.radical, n: r.kanjiCount })}
                 >
                   {r.radical}
                 </button>

@@ -18,6 +18,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from fastapi.responses import FileResponse, JSONResponse
 
 from .. import store
+from ..errors import AppError
 from ..db import query, query_one
 from .auth import optional_user, require_user
 
@@ -90,13 +91,13 @@ MAX_TEXT = 20000
 def _content(payload: dict) -> tuple[str, list[str]]:
     text = (payload.get("text") or "").strip()
     if len(text) > MAX_TEXT:
-        raise HTTPException(400, f"a note is at most {MAX_TEXT} characters")
+        raise AppError(400, "note_too_long", f"a note is at most {MAX_TEXT} characters", max=MAX_TEXT)
     images = [i for i in (payload.get("images") or []) if isinstance(i, str)]
     # Only names this server handed out, never paths.
     if any(Path(i).name != i or not (store.IMAGES / i).is_file() for i in images):
-        raise HTTPException(400, "unknown image")
+        raise AppError(400, "image_unknown", "unknown image")
     if not text and not images:
-        raise HTTPException(400, "a note needs some text or a picture")
+        raise AppError(400, "note_empty", "a note needs some text or a picture")
     return text, images
 
 
@@ -124,9 +125,9 @@ def edit(assoc_id: str, payload: dict = Body(...), user: dict = Depends(require_
     try:
         return store.update(assoc_id, user["id"], text, images, _visibility(payload, None))
     except store.NotFound:
-        raise HTTPException(404, "no such association")
+        raise AppError(404, "assoc_not_found", "no such association")
     except store.Forbidden:
-        raise HTTPException(403, "that association is not yours")
+        raise AppError(403, "assoc_not_yours", "that association is not yours")
 
 
 @router.delete("/{assoc_id}")
@@ -134,9 +135,9 @@ def remove(assoc_id: str, user: dict = Depends(require_user)) -> dict:
     try:
         store.delete(assoc_id, user["id"])
     except store.NotFound:
-        raise HTTPException(404, "no such association")
+        raise AppError(404, "assoc_not_found", "no such association")
     except store.Forbidden:
-        raise HTTPException(403, "that association is not yours")
+        raise AppError(403, "assoc_not_yours", "that association is not yours")
     return {"id": assoc_id, "deleted": True}
 
 
@@ -144,7 +145,7 @@ def remove(assoc_id: str, user: dict = Depends(require_user)) -> dict:
 def adopt(assoc_id: str, user: dict = Depends(require_user)) -> dict:
     rec = store.adopt(assoc_id, user["id"])
     if rec is None:
-        raise HTTPException(404, "no such association, or it is already yours")
+        raise AppError(404, "assoc_not_adoptable", "no such association, or it is already yours")
     return rec
 
 
@@ -152,10 +153,10 @@ def adopt(assoc_id: str, user: dict = Depends(require_user)) -> dict:
 async def upload_image(file: UploadFile = File(...), user: dict = Depends(require_user)) -> dict:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_IMAGE:
-        raise HTTPException(400, f"unsupported image type {suffix!r}")
+        raise AppError(400, "image_type", f"unsupported image type {suffix!r}", type=suffix)
     raw = await file.read()
     if len(raw) > MAX_IMAGE_BYTES:
-        raise HTTPException(413, "image larger than 8MB")
+        raise AppError(413, "image_too_big", "image larger than 8MB")
     name = store.add_image(raw, suffix)
     return {"name": name, "url": f"/api/assoc/image/{name}"}
 
@@ -169,18 +170,18 @@ async def upload_drawing(
     """A drawing is saved twice: the PNG to look at, the scene to keep editing."""
     raw = await png.read()
     if len(raw) > MAX_IMAGE_BYTES:
-        raise HTTPException(413, "drawing larger than 8MB")
+        raise AppError(413, "drawing_too_big", "drawing larger than 8MB")
     if not raw.startswith(b"\x89PNG"):
-        raise HTTPException(400, "drawing is not a PNG")
+        raise AppError(400, "drawing_not_png", "drawing is not a PNG")
     scene_raw = await scene.read()
     if len(scene_raw) > MAX_SCENE_BYTES:
-        raise HTTPException(413, "scene larger than 32MB")
+        raise AppError(413, "scene_too_big", "scene larger than 32MB")
     try:
         parsed = json.loads(scene_raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
-        raise HTTPException(400, f"scene is not valid JSON: {e}")
+        raise AppError(400, "scene_invalid", f"scene is not valid JSON: {e}")
     if not isinstance(parsed, dict) or parsed.get("type") != "excalidraw":
-        raise HTTPException(400, "scene is not an Excalidraw file")
+        raise AppError(400, "scene_not_excalidraw", "scene is not an Excalidraw file")
     name = store.add_drawing(raw, scene_raw.decode("utf-8"))
     return {"name": name, "url": f"/api/assoc/image/{name}"}
 
@@ -190,7 +191,7 @@ def get_scene(name: str):
     """The Excalidraw scene behind a drawing, looked up by the drawing's PNG name."""
     path = store.scene_path(Path(name).name)
     if not path.exists():
-        raise HTTPException(404, "no scene for that image")
+        raise AppError(404, "scene_not_found", "no scene for that image")
     return FileResponse(path, media_type="application/json")
 
 
@@ -200,7 +201,7 @@ def get_image(name: str):
     safe = Path(name).name
     path = store.IMAGES / safe
     if not path.exists():
-        raise HTTPException(404, "no such image")
+        raise AppError(404, "image_not_found", "no such image")
     return FileResponse(path, media_type=ALLOWED_IMAGE.get(path.suffix.lower(), "application/octet-stream"))
 
 
@@ -223,7 +224,7 @@ async def import_bundle(
     try:
         bundle = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
-        raise HTTPException(400, f"not a valid bundle: {e}")
+        raise AppError(400, "bundle_invalid", f"not a valid bundle: {e}")
     if not isinstance(bundle, dict) or "associations" not in bundle:
-        raise HTTPException(400, "bundle has no associations")
+        raise AppError(400, "bundle_empty", "bundle has no associations")
     return store.import_bundle(bundle, owner=user["id"], author_name=name)

@@ -20,12 +20,33 @@ import { SortedStrings } from './sections'
 const K1 = 1.2
 const B = 0.75
 
-/** unicode61 with remove_diacritics 2: fold case, drop marks, split on anything not a letter or number. */
+// unicode61 drops only these combining marks; every other mark splits a token.
+const DROPPED = /[\u0300-\u0304\u0306-\u030C\u030F\u0311\u031B\u0323-\u0328\u032D-\u032E\u0330-\u0331]/g
+// It folds accented letters only in the Latin blocks: é is e, but the Cyrillic
+// й, ё and ѝ are letters of their own and stay as they are.
+const LATIN = /[\u00C0-\u024F\u1E00-\u1EFF]/g
+// Case folds that toLowerCase does not make.
+const FOLD: Record<string, string> = {
+  µ: 'μ', ſ: 's', ẛ: 's', ς: 'σ', ϐ: 'β', ϑ: 'θ', ϕ: 'φ', ϖ: 'π', ϰ: 'κ', ϱ: 'ρ', ϵ: 'ε',
+}
+
+function unaccent(c: string): string {
+  if (c === 'Ǡ' || c === 'ǡ') return c // its table has no entry for a with dot and macron
+  const d = c.normalize('NFD')
+  return /^[A-Za-z]$/.test(d[0]) && d.length > 1 && d.slice(1).replace(DROPPED, '') === '' ? d[0] : c
+}
+
+/**
+ * unicode61 with remove_diacritics 2: fold case, drop the marks it drops,
+ * split on anything not a letter or number. Checked against SQLite for every
+ * character in the Latin, Greek, Cyrillic and kana blocks.
+ */
 export function tokenize(s: string): string[] {
   return s
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
+    .replace(LATIN, unaccent)
+    .replace(DROPPED, '')
     .toLowerCase()
+    .replace(/[µſẛςϐϑϕϖϰϱϵ]/g, (c) => FOLD[c])
     .split(/[^\p{L}\p{N}\p{Co}]+/u)
     .filter(Boolean)
 }
@@ -73,6 +94,12 @@ export class FtsIndex {
 
   get size(): number {
     return this.doclen.length
+  }
+
+  /** How many documents hold `term` -- fts5vocab's `doc` column. */
+  docs(term: string): number {
+    const t = this.terms.indexOf(term)
+    return t < 0 ? 0 : this.pstart[t + 1] - this.pstart[t]
   }
 
   /** How often each document contains one token. */
