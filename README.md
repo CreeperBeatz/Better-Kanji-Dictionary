@@ -71,7 +71,8 @@ text every frame.
 
 | Area | Notes |
 |---|---|
-| **Search** | One box takes English, Japanese, or romaji. Returns characters *and* words. Full deinflection, so 食べたくなかった finds 食べる and shows the chain. |
+| **Search** | One box takes English, Bulgarian, Japanese, or romaji, and in the Bulgarian interface also Bulgarian typed in Latin letters (shlyokavitsa: `4ovek`, `voda`). Returns characters *and* words. Full deinflection, so 食べたくなかった finds 食べる and shows the chain. |
+| **Two languages** | The EN · БГ switch in the profile dialog turns the interface and the dictionary's glosses Bulgarian; a browser set to Bulgarian starts there. See [Bulgarian](#bulgarian). |
 | **Dictionary** | JMdict with real `nf01`–`nf48` frequency ranks, pitch accent contours, and Tatoeba examples linked by lemma rather than substring. Clicking a word opens its entry in the side panel: senses, other spellings, examples, and each kanji it is written with, any of which moves the graph there. |
 | **Draw** | Stroke matching against KanjiVG, server-side. One score, from shape plus a bonus for stroke order — writing it properly sharpens the answer, writing it any other way costs nothing, and the stroke count need not be exact. Picking a result opens it in the graph. |
 | **Radical picker** | KRADFILE's 253 radicals. After each pick, radicals present in no remaining candidate grey out, so you cannot build an empty result. |
@@ -107,22 +108,57 @@ Change the search or the matcher on one side and the test fails until the other
 follows. Change what the pack contains and bump `FORMAT` in `server/offline.py`,
 or a deployed server keeps its old pack.
 
+## Bulgarian
+
+The interface's strings sit beside each component in two tables, English and
+Bulgarian, which the compiler holds to the same keys (`web/src/i18n/`). Every
+entry and character carries both its English and its Bulgarian glosses, so the
+switch needs no refetch; where there is no Bulgarian yet, the English stands in
+and is marked.
+
+No open Japanese–Bulgarian dictionary exists, so the Bulgarian glosses are
+machine-translated from JMdict and KANJIDIC by agents, a hundred entries at a
+time, from the brief in `pipeline/translate/TASK.md`:
+
+    python pipeline/fetch_sources.py wiktionary omw-bul omw-jpn   # hint sources (2.9 GB, optional)
+    python pipeline/translate/hints.py                            # Bulgarian candidates per word
+    python pipeline/translate/make_chunks.py                      # pipeline/translate/in/, ~2,300 chunks
+    python pipeline/translate/check.py --pending 20               # what is left to translate
+    python pipeline/build_db.py bg                                # load pipeline/translate/out/
+
+Each agent writes `pipeline/translate/out/<chunk>.json` and runs `check.py` on
+it until it passes; `STATUS.md` counts what is done. Outputs are committed:
+they are the source data, CC BY-SA 4.0 like the EDRDG files they come from,
+and `sense_bg.source` records who wrote each sense, so a better source can
+replace the machine translation sense by sense later.
+
+Search follows the script: Cyrillic is Bulgarian, Latin is romaji first. The
+Bulgarian indexes hold stems (`server/bulgarian.py`, a port of Lucene's light
+Bulgarian stemmer), so водата finds вода. With the interface in Bulgarian,
+Latin that romaji cannot read is tried as shlyokavitsa before English, and when
+romaji wins but the Bulgarian reading would also have found words, a chip
+offers it. `web/src/local/bulgarian.ts` is the device's twin, and the parity
+test compares the two word by word.
+
 ## Layout
 
     pipeline/   data acquisition and database assembly
       fetch_sources.py  downloads every source (supersedes fetch.sh)
       decomp.py         decomposition graph, shared by app and pipeline
       build_db.py       staged SQLite build (run one stage: `build_db.py graph`)
+      translate/        the Bulgarian translation kit: TASK.md, chunks, checker
       verify.py         invariants + regression against build.py / fanout.py
       build.py          frozen research pipeline, produced order-n2.tsv
     server/     FastAPI read-only API, plus the association store
       japanese.py       romaji and deinflection
+      bulgarian.py      Bulgarian normalising, stemming, shlyokavitsa
       store.py          associations and decomposition overrides on disk
       offline.py        builds the offline pack from the database
     web/        React + TypeScript client
       src/graph/layout.ts   the orbit-above / DAG-below geometry, and the peek
       src/map/              the map: canvas renderer, layout worker, sprite atlas
       src/local/            offline lookup: the pack, its worker, and the ports
+      src/i18n/             interface language, gloss choice, grammar labels
     tests/      offline_parity.py -- the device and the server must agree
 
 `decomp.py` is the single source of truth for what "contains" means. It
@@ -158,6 +194,9 @@ CC BY-**NC**-SA unlike the rest of that file and are stripped during the build.
 | kanjium | pitch accent | CC BY-SA 4.0 |
 | Tatoeba | example sentences | CC BY 2.0 FR |
 | Kanji Alive | curated meanings | CC BY 4.0 |
+| Bulgarian glosses (machine-translated from JMdict/KANJIDIC) | Bulgarian meanings | CC BY-SA 4.0 |
+| English Wiktionary translation tables | hints for the Bulgarian | CC BY-SA 4.0 |
+| BulTreeBank Wordnet, Japanese WordNet | hints for the Bulgarian | CC BY 3.0; NICT licence |
 
 Deliberately excluded: WaniKani mnemonics, Heisig keywords, and jpdb data — all
 closed, and any of them would end the option of open-sourcing this.

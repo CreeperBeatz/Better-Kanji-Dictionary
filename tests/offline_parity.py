@@ -8,7 +8,10 @@ Asks the server's own route functions -- search, recognise, the radical
 picker, words-for -- then has web/scripts/parity.ts put the same questions to
 the TypeScript engine over the built offline pack, and lists every answer
 that differs. Queries are the hand-picked hard cases below plus a seeded
-random sample of real headwords, readings, glosses and their prefixes.
+random sample of real headwords, readings, glosses and their prefixes, each
+searched with the interface in English and some again in Bulgarian, where
+Latin input can also be shlyokavitsa. server/bulgarian.py's normalising,
+stemming and shlyokavitsa readings are compared word by word too.
 
 Needs the database and `npm install` in web/. Builds the pack if it is stale.
 """
@@ -25,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from server import offline, recognize  # noqa: E402
+from server import bulgarian, offline, recognize  # noqa: E402
 from server.db import query  # noqa: E402
 from server.japanese import katakana_to_hiragana  # noqa: E402
 from server.routes.radicals import search_by_radicals  # noqa: E402
@@ -44,7 +47,48 @@ HARD = [
     "書かれた", "着ます", "話せる", "泳いだ", "死んだ", "買った", "待って", "飲みたい", "寒かった",
     "ありがとう", "こんにちは", "ラーメン", "コーヒー", "漢字", "東京", "大学生", "する", "くる",
     "𠮟る", "𩸽", "〆切", "ー", "ぁ",
+    # letters unicode61 keeps apart from their unaccented look-alikes
+    "йод", "иод", "ёж", "ѝ", "край", "ǡ", "ḯ",
 ]
+
+# Searched with the interface in Bulgarian as well as English.
+HARD_BG = [
+    # Cyrillic: plain, inflected, stressed, capitalised, mixed with punctuation
+    "вода", "водата", "Вода", "пу" + chr(0x301) + "ша", "котки", "котката", "човек", "човекът", "хора", "книга",
+    "добро утро", "японски език", "край", "ъгъл", "чадър!", "море", "дъжд", "пролет", "и", "а",
+    # shlyokavitsa: official, SMS style, and collisions with romaji
+    "voda", "4ovek", "chovek", "zhaba", "riba", "more", "kasa", "kotka", "kniga", "dete", "prozorec",
+    "prozorets", "dobro utro", "yaponski ezik", "6apka", "shtastie", "wastie", "dyzhd", "d1zhd", "sam",
+    # ordinary queries, to see Bulgarian mode leaves them alone
+    "water", "taberu", "食べる", "日本", "nihongo", "x-ray", "12", "!!",
+]
+
+LATIN = dict(zip("абвгдежзийклмнопрстуфхцчшщъьюя",
+                 ["a", "b", "v", "g", "d", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s",
+                  "t", "u", "f", "h", "ts", "ch", "sh", "sht", "a", "y", "yu", "ya"]))
+SMS = {"ч": "4", "ш": "6", "щ": "6t", "я": "q", "ъ": "u", "ц": "c"}
+
+
+def latinize(text: str, rng: random.Random) -> str:
+    """Bulgarian as someone might type it in Latin letters, officially or not."""
+    sms = rng.random() < 0.5
+    return "".join((SMS.get(c) if sms and c in SMS else None) or LATIN.get(c, c) for c in text.lower())
+
+
+def sample_bg(n: int, rng: random.Random) -> list[str]:
+    """Words and phrases from the Bulgarian glosses, as typed and in Latin."""
+    glosses = [r["gloss"] for r in query("SELECT gloss FROM sense_bg ORDER BY word_id, ord")]
+    glosses += [m for r in query("SELECT meanings FROM kanji_bg ORDER BY char") for m in json.loads(r["meanings"])]
+    out: list[str] = []
+    for _ in range(n if glosses else 0):
+        words = glosses[rng.randrange(len(glosses))].replace(";", " ").split()
+        if not words:
+            continue
+        start = rng.randrange(len(words))
+        phrase = " ".join(words[start : start + rng.randint(1, 2)])
+        kind = rng.randrange(3)
+        out.append(phrase if kind == 0 else latinize(phrase, rng) if kind == 1 else phrase[: rng.randint(1, len(phrase))])
+    return [q for q in out if q.strip()]
 
 
 def sample(n: int, rng: random.Random) -> list[str]:
@@ -121,10 +165,22 @@ def main() -> int:
     pack_dir = offline.OUT / m["version"]
 
     queries = list(dict.fromkeys(HARD + sample(300 if quick else 2500, rng)))
-    print(f"asking the server {len(queries)} searches")
-    golden: dict = {"search": [], "draw": [], "radicals": [], "wordsFor": []}
-    for q in queries:
-        golden["search"].append({"q": q[:64], "out": search(q=q[:64], limit=30)})
+    bg_queries = list(dict.fromkeys(HARD + HARD_BG + sample_bg(150 if quick else 1000, rng) + queries[: 200 if quick else 800]))
+    asked = [(q, "en") for q in dict.fromkeys(queries + HARD_BG)] + [(q, "bg") for q in bg_queries]
+    print(f"asking the server {len(asked)} searches")
+    golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": []}
+    for q, lang in asked:
+        golden["search"].append({"q": q[:64], "lang": lang, "out": search(q=q[:64], limit=30, lang=lang)})
+
+    texts = list(dict.fromkeys(HARD_BG + [w for q in bg_queries for w in q.split()]))
+    for t in texts:
+        golden["bulgarian"].append({
+            "text": t,
+            "normalized": bulgarian.normalize(t),
+            "terms": bulgarian.terms(t),
+            "spelling": bulgarian.spelling(t),
+            "candidates": bulgarian.shlyokavitsa(t)[:64],
+        })
 
     recognize.index()
     common = [r["char"] for r in query("SELECT char FROM kanji WHERE freq IS NOT NULL ORDER BY freq")]

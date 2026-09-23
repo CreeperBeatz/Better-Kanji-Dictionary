@@ -492,7 +492,7 @@ def path_endpoints(d: str) -> Line:
 # --- the reference index -------------------------------------------------
 
 _index: dict[int, list[tuple[str, Glyph]]] | None = None
-_meta: dict[str, tuple[int | None, list[str]]] = {}
+_meta: dict[str, tuple[int | None, list[str], list[str] | None]] = {}
 _lock = threading.Lock()
 
 # KanjiVG also draws kana and Latin letters. They only ever arrive here as
@@ -531,8 +531,12 @@ def index() -> dict[int, list[tuple[str, Glyph]]]:
 
         table()  # the similarity table, built once alongside
 
-        for row in query("SELECT char, freq, meanings FROM kanji"):
-            _meta[row["char"]] = (row["freq"], json.loads(row["meanings"] or "[]"))
+        for row in query(
+            "SELECT k.char, k.freq, k.meanings, kb.meanings AS meanings_bg "
+            "FROM kanji k LEFT JOIN kanji_bg kb ON kb.char = k.char"
+        ):
+            bg = json.loads(row["meanings_bg"]) if row["meanings_bg"] else None
+            _meta[row["char"]] = (row["freq"], json.loads(row["meanings"] or "[]"), bg)
 
         buckets: dict[int, list[tuple[str, Glyph]]] = {}
         for row in query("SELECT char, paths FROM stroke"):
@@ -613,7 +617,7 @@ def recognise(
 
     out = []
     for score, size, char in final[:limit]:
-        freq, meanings = _meta.get(char, (None, []))
+        freq, meanings, meanings_bg = _meta.get(char, (None, [], None))
         out.append(
             {
                 "char": char,
@@ -621,6 +625,7 @@ def recognise(
                 "strokes": size,
                 "freq": freq,
                 "meanings": meanings[:3],
+                "meaningsBg": meanings_bg[:3] if meanings_bg else None,
             }
         )
     return out

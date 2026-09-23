@@ -1,4 +1,10 @@
 import { api, type Author } from '../api'
+import { getLang, strings } from '../i18n'
+
+const S = strings(
+  { cannotResize: 'this browser cannot resize images', unreadable: 'could not read that image' },
+  { cannotResize: 'този браузър не може да преоразмерява картинки', unreadable: 'картинката не може да бъде прочетена' },
+)
 
 /**
  * A profile picture, or the stand-in for one.
@@ -46,10 +52,10 @@ export async function squareAvatar(file: File, px = 256): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = px
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('this browser cannot resize images')
+  if (!ctx) throw new Error(S(getLang())('cannotResize'))
   ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, px, px)
   bitmap.close()
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('could not read that image'))), 'image/webp', 0.88),
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(S(getLang())('unreadable')))), 'image/webp', 0.88),
   )
 }

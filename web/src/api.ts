@@ -21,6 +21,8 @@ export interface KanjiNode {
   joyo: boolean
   inKanjidic: boolean
   meanings: string[]
+  /** Bulgarian meanings, when translated. */
+  meaningsBg: string[] | null
   onYomi: string[]
   kunYomi: string[]
   fanout: number | null
@@ -54,6 +56,8 @@ export interface MapResponse {
   fanout: number[]
   strokes: (number | null)[]
   meaning: string[]
+  /** The first Bulgarian meaning, or "" when there is none. */
+  meaningBg: string[]
   /** 1 = in the scope in its own right, 0 = pulled in only as a part */
   target: (0 | 1)[]
   /** flat parent,child index pairs */
@@ -85,6 +89,8 @@ export interface Sense {
   pos: string[]
   misc: string[]
   gloss: string
+  /** The Bulgarian glosses, "; "-joined like `gloss`, or null when not yet translated. */
+  glossBg: string | null
 }
 
 export interface Word {
@@ -102,6 +108,7 @@ export interface Word {
 export interface KanjiHit {
   char: string
   meanings: string[]
+  meaningsBg: string[] | null
   curated: string | null
   freq: number | null
   jlpt: number | null
@@ -112,7 +119,13 @@ export interface KanjiHit {
 
 export interface SearchResponse {
   query: string
+  /**
+   * How the query was read: romaji (with its kana `reading`), english, or
+   * bulgarian (with `reading` when it was typed in Latin letters).
+   */
   interpretation: { kind: string; reading?: string } | null
+  /** Another reading that would also have found words: tapping it searches `query`. */
+  alternatives: { kind: string; query: string }[]
   kanji: KanjiHit[]
   words: Word[]
   total: number
@@ -216,15 +229,33 @@ export interface DrawCandidate {
   strokes: number
   freq: number | null
   meanings: string[]
+  meaningsBg: string[] | null
 }
 
+/**
+ * A request the server refused. `message` is its English `detail`; `code`, when
+ * the server sends one, is what web/src/i18n/errors.ts translates, with
+ * `params` filling in the numbers.
+ */
 class ApiError extends Error {
   status: number
+  code?: string
+  params?: Record<string, string | number>
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string, params?: Record<string, string | number>) {
     super(message)
     this.status = status
+    this.code = code
+    this.params = params
   }
+}
+
+/** The ApiError a failed response describes; `fallback` names it when the body says nothing. */
+async function refusal(res: Response, fallback?: { message: string; code: string }): Promise<ApiError> {
+  const body = await res.json().catch(() => ({}))
+  if (body.detail) return new ApiError(res.status, body.detail, body.code, body.params)
+  if (fallback) return new ApiError(res.status, fallback.message, fallback.code)
+  return new ApiError(res.status, body.error ?? res.statusText)
 }
 
 function authHeaders(): Record<string, string> {
@@ -236,10 +267,7 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
   const url = new URL(BASE + path, window.location.origin)
   for (const [k, v] of params ?? []) url.searchParams.append(k, v)
   const res = await fetch(url, { headers: authHeaders() })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, body.detail ?? body.error ?? res.statusText)
-  }
+  if (!res.ok) throw await refusal(res)
   return res.json()
 }
 
@@ -254,10 +282,7 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
     headers: body === undefined ? authHeaders() : { ...authHeaders(), 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  if (!res.ok) {
-    const detail = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, detail.detail ?? res.statusText)
-  }
+  if (!res.ok) throw await refusal(res)
   return res.json()
 }
 
@@ -278,7 +303,8 @@ export const api = {
   radicals: () =>
     localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
 
-  search: (q: string) => localFirst(local.search(q), () => get<SearchResponse>('/api/search', [['q', q]])),
+  search: (q: string, lang: string) =>
+    localFirst(local.search(q, lang), () => get<SearchResponse>('/api/search', [['q', q], ['lang', lang]])),
 
   wordsFor: (char: string) =>
     localFirst(local.wordsFor(char), () =>
@@ -308,7 +334,7 @@ export const api = {
     const form = new FormData()
     form.append('file', file, filename)
     const res = await fetch(BASE + '/api/assoc/image', { method: 'POST', body: form, headers: authHeaders() })
-    if (!res.ok) throw new ApiError(res.status, 'upload failed')
+    if (!res.ok) throw await refusal(res, { message: 'upload failed', code: 'upload_failed' })
     return (await res.json()) as { name: string; url: string }
   },
 
@@ -317,14 +343,15 @@ export const api = {
     form.append('png', png, 'drawing.png')
     form.append('scene', new Blob([scene], { type: 'application/json' }), 'drawing.excalidraw')
     const res = await fetch(BASE + '/api/assoc/drawing', { method: 'POST', body: form, headers: authHeaders() })
-    if (!res.ok) throw new ApiError(res.status, 'saving the drawing failed')
+    if (!res.ok) throw await refusal(res, { message: 'saving the drawing failed', code: 'drawing_failed' })
     return (await res.json()) as { name: string; url: string }
   },
 
   scene: (name: string) => get<Record<string, unknown>>(`/api/assoc/scene/${encodeURIComponent(name)}`),
 
-  requestLogin: (email: string) =>
-    send<{ sent: boolean; devLink: string | null }>('/api/auth/request', 'POST', { email }),
+  /** `lang` picks the language of the email. */
+  requestLogin: (email: string, lang: string) =>
+    send<{ sent: boolean; devLink: string | null }>('/api/auth/request', 'POST', { email, lang }),
 
   verifyLogin: (token: string) =>
     send<{ session: string; user: User }>('/api/auth/verify', 'POST', { token }),
@@ -343,10 +370,7 @@ export const api = {
     const form = new FormData()
     form.append('file', file, filename)
     const res = await fetch(BASE + '/api/auth/avatar', { method: 'POST', body: form, headers: authHeaders() })
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}))
-      throw new ApiError(res.status, body.detail ?? 'uploading the picture failed')
-    }
+    if (!res.ok) throw await refusal(res, { message: 'uploading the picture failed', code: 'avatar_failed' })
     return (await res.json()) as { user: User }
   },
 

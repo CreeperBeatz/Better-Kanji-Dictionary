@@ -6,8 +6,44 @@
 
 import { useEffect, useState } from 'react'
 import { api, type Word, type WordEntry } from '../api'
+import { strings, useLang, type Lang } from '../i18n'
+import { glossOf, meaningsOf } from '../i18n/content'
+import { tagLabel } from '../i18n/grammar'
 import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
+
+const S = strings(
+  {
+    amongFrequent: 'among the {n} most frequent words',
+    common: 'common word',
+    failed: 'This entry could not be loaded.',
+    looking: 'looking',
+    entryFor: 'Dictionary entry for {word}',
+    open: 'Open {char}',
+    notTranslated: 'not yet translated',
+    machine: 'Bulgarian glosses are machine-translated',
+    alsoWritten: 'also written',
+    writtenWith: 'Written with',
+    inSentence: 'In a sentence',
+    needsConnection: 'Example sentences need a connection.',
+    restFailed: 'The rest of this entry could not be loaded.',
+  },
+  {
+    amongFrequent: 'сред {n}-те най-чести думи',
+    common: 'честа дума',
+    failed: 'Тази статия не можа да се зареди.',
+    looking: 'зареждане',
+    entryFor: 'Речникова статия за {word}',
+    open: 'Отворете {char}',
+    notTranslated: 'още не е преведено',
+    machine: 'Българските значения са машинен превод',
+    alsoWritten: 'пише се и',
+    writtenWith: 'Пише се с',
+    inSentence: 'В изречение',
+    needsConnection: 'Примерните изречения изискват връзка с интернет.',
+    restFailed: 'Останалата част от статията не можа да се зареди.',
+  },
+)
 
 interface Props {
   id: number
@@ -21,9 +57,17 @@ interface Props {
 const KANJI = /[㐀-䶿一-鿿]/
 
 /** JMdict nf buckets are 500 words wide. */
-function rankOf(w: Word): string | null {
-  if (w.nf) return `among the ${(w.nf * 500).toLocaleString()} most frequent words`
-  return w.common ? 'common word' : null
+function rankOf(w: Word, lang: Lang): string | null {
+  const t = S(lang)
+  if (w.nf) return t('amongFrequent', { n: (w.nf * 500).toLocaleString(lang) })
+  return w.common ? t('common') : null
+}
+
+/** A kanji's meaning in one line: Bulgarian when there is one, else the curated English. */
+function kanjiMeaning(k: WordEntry['kanji'][number], lang: Lang): string {
+  const m = meaningsOf(k, lang)
+  if (!m.fallback && lang === 'bg') return m.value.slice(0, 3).join(', ')
+  return k.curated ?? k.meanings.slice(0, 3).join(', ').toLowerCase()
 }
 
 /** Mark the word where it occurs in an example, so the eye lands on it. */
@@ -39,6 +83,8 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
 }
 
 export function WordPanel({ id, word, from, onPick }: Props) {
+  const lang = useLang()
+  const t = S(lang)
   const [entry, setEntry] = useState<WordEntry | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -65,20 +111,22 @@ export function WordPanel({ id, word, from, onPick }: Props) {
   if (!w) {
     return (
       <section className="rail-section word-panel">
-        <p className="hint">{failed ? 'This entry could not be loaded.' : 'looking'}</p>
+        <p className="hint">{failed ? t('failed') : t('looking')}</p>
       </section>
     )
   }
-  const rank = rankOf(w)
+  const rank = rankOf(w, lang)
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
+  const glosses = w.senses.map((s) => glossOf(s, lang))
+  const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
 
   return (
-    <section className="rail-section word-panel" aria-label={`Dictionary entry for ${w.headword}`}>
+    <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
 
       <h2 className="entry-head">
         {[...w.headword].map((ch, i) =>
           KANJI.test(ch) ? (
-            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={`Open ${ch}`}>
+            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
               {ch}
             </button>
           ) : (
@@ -97,16 +145,34 @@ export function WordPanel({ id, word, from, onPick }: Props) {
             {/* Part of speech only where it changes, as a printed dictionary does. */}
             {(s.pos.length > 0 || s.misc.length > 0) &&
               (i === 0 || s.pos.join() !== w.senses[i - 1].pos.join() || s.misc.length > 0) && (
-                <p className="entry-pos">{[...s.pos, ...s.misc].join(' · ')}</p>
+                <p className="entry-pos">
+                  {[...s.pos, ...s.misc].map((code, j) => {
+                    const tag = tagLabel(code, lang)
+                    return (
+                      <span key={j}>
+                        {j > 0 && ' · '}
+                        <abbr title={tag.full}>{tag.short}</abbr>
+                      </span>
+                    )
+                  })}
+                </p>
               )}
-            <p className="entry-gloss">{s.gloss.split(';').join('; ')}</p>
+            <p className="entry-gloss">
+              {glosses[i].value.split(';').join('; ')}
+              {glosses[i].fallback && (
+                <span className="entry-fallback" title={t('notTranslated')}>
+                  EN
+                </span>
+              )}
+            </p>
           </li>
         ))}
       </ol>
+      {machine && <p className="entry-machine">{t('machine')}</p>}
 
       {others.length > 0 && (
         <p className="entry-forms">
-          <span>also written</span>{' '}
+          <span>{t('alsoWritten')}</span>{' '}
           {others.map((f, i) => (
             <span key={i} className="entry-form" data-rare={f.rare || undefined}>
               {f.text}
@@ -117,7 +183,7 @@ export function WordPanel({ id, word, from, onPick }: Props) {
 
       {entry && entry.kanji.length > 0 && (
         <div className="entry-kanji">
-          <h3>Written with</h3>
+          <h3>{t('writtenWith')}</h3>
           <ul>
             {entry.kanji.map((k) => (
               <li key={k.char}>
@@ -125,13 +191,13 @@ export function WordPanel({ id, word, from, onPick }: Props) {
                   className="entry-kanji-glyph"
                   data-current={k.char === from || undefined}
                   onClick={() => onPick(k.char)}
-                  title={`Open ${k.char}`}
+                  title={t('open', { char: k.char })}
                 >
                   {k.char}
                 </button>
                 <div>
                   <p className="entry-kanji-meaning">
-                    {k.curated ?? k.meanings.slice(0, 3).join(', ').toLowerCase()}
+                    {kanjiMeaning(k, lang)}
                     {k.jlpt && <span className="entry-kanji-level">N{k.jlpt}</span>}
                   </p>
                   <p className="entry-kanji-yomi">
@@ -146,7 +212,7 @@ export function WordPanel({ id, word, from, onPick }: Props) {
 
       {entry && entry.examples.length > 0 && (
         <div className="entry-examples">
-          <h3>In a sentence</h3>
+          <h3>{t('inSentence')}</h3>
           <ul>
             {entry.examples.map((ex, i) => (
               <li key={i}>
@@ -159,7 +225,7 @@ export function WordPanel({ id, word, from, onPick }: Props) {
 
       {failed && (
         <p className="hint">
-          {entry ? 'Example sentences need a connection.' : 'The rest of this entry could not be loaded.'}
+          {entry ? t('needsConnection') : t('restFailed')}
         </p>
       )}
     </section>

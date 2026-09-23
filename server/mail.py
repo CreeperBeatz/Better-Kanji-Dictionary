@@ -23,19 +23,29 @@ def is_dev() -> bool:
     return not os.environ.get("RESEND_API_KEY")
 
 
-def send_magic_link(email: str, link: str) -> None:
+LANGS = ("en", "bg")
+
+
+def send_magic_link(email: str, link: str, lang: str = "en") -> None:
+    """The sign-in email, in the language the interface was in when it was asked for."""
     if is_dev():
         print(f"[mail] sign-in link for {email}: {link}", flush=True)
         return
-    _send_resend(
-        to=email,
-        subject="Sign in to Better Kanji Dictionary",
-        text=(
+    if lang == "bg":
+        subject = "Вход в Better Kanji Dictionary"
+        text = (
+            "Отворете тази връзка, за да влезете в Better Kanji Dictionary:\n\n"
+            f"{link}\n\n"
+            "Връзката работи веднъж и изтича след 15 минути. Ако не сте я поискали, не обръщайте внимание на този имейл."
+        )
+    else:
+        subject = "Sign in to Better Kanji Dictionary"
+        text = (
             "Open this link to sign in to Better Kanji Dictionary:\n\n"
             f"{link}\n\n"
             "It works once and expires in 15 minutes. If you did not ask for it, ignore this email."
-        ),
-    )
+        )
+    _send_resend(to=email, subject=subject, text=text)
 
 
 def _send_resend(to: str, subject: str, text: str) -> None:

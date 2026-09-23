@@ -8,6 +8,7 @@ paged, since a common character could gather many of each.
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from .. import store
+from ..errors import AppError
 from .assoc import subject_or_400
 from .auth import optional_user, require_user
 
@@ -39,9 +40,9 @@ def like(assoc_id: str, payload: dict = Body(...), user: dict = Depends(require_
     try:
         return store.set_like(assoc_id, user["id"], bool(payload.get("liked", True)))
     except store.NotFound:
-        raise HTTPException(404, "no such public note")
+        raise AppError(404, "note_not_found", "no such public note")
     except store.Forbidden:
-        raise HTTPException(403, "you cannot like your own note")
+        raise AppError(403, "own_like", "you cannot like your own note")
 
 
 @router.get("/replies/{assoc_id}")
@@ -54,20 +55,20 @@ def replies(
     try:
         return store.replies(assoc_id, _viewer(user), offset, limit)
     except store.NotFound:
-        raise HTTPException(404, "no such public note")
+        raise AppError(404, "note_not_found", "no such public note")
 
 
 @router.post("/replies/{assoc_id}")
 def reply(assoc_id: str, payload: dict = Body(...), user: dict = Depends(require_user)) -> dict:
     text = (payload.get("text") or "").strip()
     if not text:
-        raise HTTPException(400, "a reply cannot be empty")
+        raise AppError(400, "reply_empty", "a reply cannot be empty")
     if len(text) > MAX_REPLY:
-        raise HTTPException(400, f"a reply is at most {MAX_REPLY} characters")
+        raise AppError(400, "reply_too_long", f"a reply is at most {MAX_REPLY} characters", max=MAX_REPLY)
     try:
         return store.add_reply(assoc_id, user["id"], text)
     except store.NotFound:
-        raise HTTPException(404, "no such public note")
+        raise AppError(404, "note_not_found", "no such public note")
 
 
 @router.delete("/reply/{reply_id}")
@@ -75,7 +76,7 @@ def delete_reply(reply_id: str, user: dict = Depends(require_user)) -> dict:
     try:
         store.delete_reply(reply_id, user["id"])
     except store.NotFound:
-        raise HTTPException(404, "no such reply")
+        raise AppError(404, "reply_not_found", "no such reply")
     except store.Forbidden:
-        raise HTTPException(403, "that reply is not yours")
+        raise AppError(403, "reply_not_yours", "that reply is not yours")
     return {"id": reply_id, "deleted": True}

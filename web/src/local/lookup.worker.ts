@@ -34,6 +34,8 @@ function setStatus(patch: Partial<OfflineStatus>): void {
   ctx.postMessage({ type: 'status', status })
 }
 
+// OfflineSetting translates these by their exact wording, and the two
+// download failures below by their shape: change them there too.
 function message(e: unknown): string {
   if (e instanceof DOMException && e.name === 'QuotaExceededError') return 'there is not enough storage on this device'
   if (e instanceof TypeError) return 'the connection dropped'
@@ -247,7 +249,7 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
   if (!e) throw new Error('offline lookup is not ready')
   switch (method) {
     case 'search':
-      return e.search(args[0] as string)
+      return e.search(args[0] as string, 30, (args[1] as string) ?? 'en')
     case 'recognize':
       return { candidates: e.recognize(args[0] as number[][][]), strokes: (args[0] as unknown[]).length }
     case 'recognizerReady': {

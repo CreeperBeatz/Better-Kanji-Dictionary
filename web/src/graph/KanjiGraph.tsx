@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode } from '../api'
+import { strings, useLang, type Translate } from '../i18n'
+import { meaningsOf } from '../i18n/content'
 import { HoldCard } from './HoldCard'
 import { computeLayout, placePeek, type PeekItem, type PositionedNode } from './layout'
 
@@ -15,11 +17,51 @@ interface Props {
   legend: boolean
 }
 
+const S = strings(
+  {
+    joyo: 'jōyō',
+    part: 'part',
+    rare: 'rare',
+    zoom: 'Zoom',
+    recentre: 'Recentre on {c}',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    whole: 'Show the whole graph',
+    legendAbove: 'above, characters that contain it, nearest first by frequency',
+    legendBelow: 'below, what it is made of, down to atoms',
+    legendHover: 'hover one above to see what contains it in turn',
+    more: '+{n} more',
+    hidden: '{n} hidden by level',
+  },
+  {
+    joyo: 'джойо',
+    part: 'част',
+    rare: 'рядък',
+    zoom: 'Мащаб',
+    recentre: 'Центрирайте върху {c}',
+    zoomIn: 'Приближете',
+    zoomOut: 'Отдалечете',
+    whole: 'Покажете целия граф',
+    legendAbove: 'отгоре — йероглифите, които го съдържат, най-честите най-близо',
+    legendBelow: 'отдолу — от какво е съставен, чак до най-простите части',
+    legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
+    more: '+{n} още',
+    hidden: '{n} скрити заради нивото',
+  },
+)
+type T = Translate<Parameters<ReturnType<typeof S>>[0]>
+
 /** What to call a character's level, including the things that have none. */
-function levelOf(n: { jlpt: number | null; joyo: boolean; fanout: number | null }): string {
+function levelOf(n: { jlpt: number | null; joyo: boolean; fanout: number | null }, t: T): string {
   if (n.jlpt) return `N${n.jlpt}`
-  if (n.joyo) return 'jōyō'
-  return (n.fanout ?? 0) > 0 ? 'part' : 'rare'
+  if (n.joyo) return t('joyo')
+  return (n.fanout ?? 0) > 0 ? t('part') : t('rare')
+}
+
+/** "水 — water, liquid" as a node's tooltip names it. */
+function titleMeanings(n: { meanings: string[]; meaningsBg?: string[] | null }, t: T): string {
+  const m = meaningsOf(n, t.lang).value
+  return m.length > 0 ? ` — ${m.slice(0, 3).join(', ')}` : ''
 }
 
 /** JLPT runs N5 (easiest) to N1, so "up to N3" means jlpt >= 3. */
@@ -87,6 +129,7 @@ interface Peek {
 }
 
 export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
+  const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
   const shown = useMemo(() => data.containers.filter(keeps(filter)), [data.containers, filter])
@@ -384,9 +427,9 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
       >
         <title>
           {n.char}
-          {n.meanings.length > 0 && ` — ${n.meanings.slice(0, 3).join(', ')}`}
+          {titleMeanings(n, t)}
           {`
-${levelOf(n)}`}
+${levelOf(n, t)}`}
         </title>
 
         <circle className="plate" r={n.radius} strokeWidth={n.kind === 'focus' ? 1 : 0.75} />
@@ -409,7 +452,7 @@ ${levelOf(n)}`}
             thing you want to know when deciding whether to learn it. */}
         {over === n.char ? (
           <text className="node-level" y={n.radius + 14}>
-            {levelOf(n)}
+            {levelOf(n, t)}
           </text>
         ) : (
           n.kind === 'component' &&
@@ -475,17 +518,21 @@ ${levelOf(n)}`}
       </svg>
 
       {/* The same corner and buttons as the map's. */}
-      <div className="map-zoom" role="group" aria-label="Zoom">
-        <button onClick={recentre} aria-label={`Recentre on ${data.focus.char}`} title={`Recentre on ${data.focus.char}`}>
+      <div className="map-zoom" role="group" aria-label={t('zoom')}>
+        <button
+          onClick={recentre}
+          aria-label={t('recentre', { c: data.focus.char })}
+          title={t('recentre', { c: data.focus.char })}
+        >
           ◎
         </button>
-        <button onClick={() => zoomAt(1.6, ...middle())} aria-label="Zoom in" title="Zoom in">
+        <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
           +
         </button>
-        <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label="Zoom out" title="Zoom out">
+        <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
           −
         </button>
-        <button onClick={fit} aria-label="Show the whole graph" title="Show the whole graph">
+        <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
           ⤢
         </button>
       </div>
@@ -501,11 +548,11 @@ ${levelOf(n)}`}
 
       {legend && (
         <p className="legend" id="stage-legend">
-          above, characters that contain it, nearest first by frequency
+          {t('legendAbove')}
           <br />
-          below, what it is made of, down to atoms
+          {t('legendBelow')}
           <br />
-          hover one above to see what contains it in turn
+          {t('legendHover')}
         </p>
       )}
     </>
@@ -538,6 +585,7 @@ function PeekLayer({
   onLeave: () => void
   onPick: (char: string) => void
 }) {
+  const t = S(useLang())
   const { host: h, items } = peek
   const reach = items.reduce((m, it) => Math.max(m, Math.hypot(it.x - h.x, it.y - h.y) + it.radius), 0) + 26
   const more = peek.total - items.length - peek.hidden
@@ -595,16 +643,16 @@ function PeekLayer({
         >
           <title>
             {it.char}
-            {it.node.meanings.length > 0 && ` — ${it.node.meanings.slice(0, 3).join(', ')}`}
+            {titleMeanings(it.node, t)}
             {`
-${levelOf(it.node)}`}
+${levelOf(it.node, t)}`}
           </title>
           <circle className="plate" r={it.radius} />
           <text className="glyph" fontSize={it.radius * 1.28}>
             {it.char}
           </text>
           <text className="peek-meaning" y={it.radius + 10}>
-            {(it.node.meanings[0] ?? '').toLowerCase().slice(0, 14)}
+            {(meaningsOf(it.node, t.lang).value[0] ?? '').toLowerCase().slice(0, 14)}
           </text>
         </g>
       ))}
@@ -615,9 +663,9 @@ ${levelOf(it.node)}`}
           x={h.x + Math.cos(out) * (reach - 8)}
           y={h.y + Math.sin(out) * (reach - 8)}
         >
-          {more > 0 && `+${more} more`}
+          {more > 0 && t('more', { n: more })}
           {more > 0 && peek.hidden > 0 && ' · '}
-          {peek.hidden > 0 && `${peek.hidden} hidden by level`}
+          {peek.hidden > 0 && t('hidden', { n: peek.hidden })}
         </text>
       )}
     </g>

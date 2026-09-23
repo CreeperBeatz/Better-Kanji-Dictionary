@@ -26,7 +26,9 @@ MAX_PICTURE_BYTES = 1024 * 1024
 
 
 class InvalidCredential(Exception):
-    pass
+    def __init__(self, message: str, code: str) -> None:
+        super().__init__(message)
+        self.code = code  # what the interface translates; see server/errors.py
 
 
 def client_id() -> str | None:
@@ -37,14 +39,14 @@ def verify(credential: str) -> dict:
     """The token's claims: `sub`, `email`, `name`, `picture`. Raises InvalidCredential."""
     cid = client_id()
     if not cid:
-        raise InvalidCredential("Google sign-in is not set up on this server")
+        raise InvalidCredential("Google sign-in is not set up on this server", "google_not_configured")
     try:
         claims = id_token.verify_oauth2_token(credential, _transport, cid)
     except ValueError as e:
-        raise InvalidCredential(f"Google did not vouch for that sign-in ({e})") from e
+        raise InvalidCredential(f"Google did not vouch for that sign-in ({e})", "google_rejected") from e
     # An unverified address could be anyone's; linking it would hand them that account.
     if not claims.get("email") or not claims.get("email_verified"):
-        raise InvalidCredential("that Google account has no verified email address")
+        raise InvalidCredential("that Google account has no verified email address", "google_unverified")
     return claims
 
 

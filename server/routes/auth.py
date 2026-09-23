@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, File, Header, HTTPException, Request, Uploa
 from fastapi.responses import FileResponse
 
 from .. import auth, google, mail, store
+from ..errors import AppError
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -30,7 +31,7 @@ def optional_user(authorization: str | None = Header(None)) -> dict | None:
 def require_user(authorization: str | None = Header(None)) -> dict:
     user = optional_user(authorization)
     if user is None:
-        raise HTTPException(401, "sign in to save associations")
+        raise AppError(401, "sign_in_required", "sign in to save associations")
     return user
 
 
@@ -64,13 +65,14 @@ def _app_url(request: Request) -> str:
 def request_link(request: Request, payload: dict = Body(...)) -> dict:
     email = auth.normalise_email(payload.get("email", ""))
     if not email:
-        raise HTTPException(400, "that does not look like an email address")
+        raise AppError(400, "bad_email", "that does not look like an email address")
     try:
         token = auth.request_link(email)
     except auth.TooSoon:
-        raise HTTPException(429, "a link was just sent; give it a moment")
+        raise AppError(429, "too_soon", "a link was just sent; give it a moment")
     link = f"{_app_url(request)}/?login={token}"
-    mail.send_magic_link(email, link)
+    lang = payload.get("lang")
+    mail.send_magic_link(email, link, lang if lang in mail.LANGS else "en")
     # With no mail configured, the link comes back so sign-in still works.
     return {"sent": True, "devLink": link if mail.is_dev() else None}
 
@@ -79,7 +81,7 @@ def request_link(request: Request, payload: dict = Body(...)) -> dict:
 def verify(payload: dict = Body(...)) -> dict:
     result = auth.redeem_link(payload.get("token", ""))
     if result is None:
-        raise HTTPException(400, "this link has expired or was already used")
+        raise AppError(400, "link_expired", "this link has expired or was already used")
     session, user, _ = result
     store.ensure_author(user)
     store.claim_legacy(user["id"], user["email"])
@@ -97,10 +99,10 @@ def google_sign_in(payload: dict = Body(...)) -> dict:
     try:
         claims = google.verify(payload.get("credential", ""))
     except google.InvalidCredential as e:
-        raise HTTPException(400, str(e))
+        raise AppError(400, e.code, str(e))
     email = auth.normalise_email(claims["email"])
     if not email:
-        raise HTTPException(400, "that Google account's address is not one we can use")
+        raise AppError(400, "google_email_unusable", "that Google account's address is not one we can use")
     session, user, created = auth.sign_in_google(claims["sub"], email, claims.get("name"))
     # A new account starts with its Google picture; an existing one keeps its own.
     if created and not user.get("avatar"):
@@ -125,15 +127,15 @@ def update_me(payload: dict = Body(...), authorization: str | None = Header(None
     if "name" in payload:
         name = (payload.get("name") or "").strip()[:40]
         if not name:
-            raise HTTPException(400, "a name cannot be empty")
+            raise AppError(400, "name_empty", "a name cannot be empty")
     if "username" in payload:
         username = auth.normalise_username(payload.get("username") or "")
         if not username:
-            raise HTTPException(400, "a username is 3 to 24 of a-z, 0-9, _ and -")
+            raise AppError(400, "username_invalid", "a username is 3 to 24 of a-z, 0-9, _ and -")
     try:
         user = auth.update_profile(user["id"], name=name, username=username)
     except auth.UsernameTaken:
-        raise HTTPException(409, "that username is taken")
+        raise AppError(409, "username_taken", "that username is taken")
     store.ensure_author(user)
     return {"user": _public(user)}
 
@@ -143,12 +145,12 @@ async def upload_avatar(file: UploadFile = File(...), authorization: str | None 
     user = require_user(authorization)
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in AVATAR_TYPES:
-        raise HTTPException(400, "a profile picture must be PNG, JPEG or WebP")
+        raise AppError(400, "avatar_type", "a profile picture must be PNG, JPEG or WebP")
     raw = await file.read()
     if len(raw) > MAX_AVATAR_BYTES:
-        raise HTTPException(413, "profile picture larger than 1MB")
+        raise AppError(413, "avatar_too_big", "profile picture larger than 1MB")
     if not raw.startswith(AVATAR_MAGIC[suffix]):
-        raise HTTPException(400, "that file is not the image it says it is")
+        raise AppError(400, "avatar_mismatch", "that file is not the image it says it is")
     user = auth.set_avatar(user["id"], raw, suffix)
     store.ensure_author(user)
     return {"user": _public(user)}
@@ -165,7 +167,7 @@ def remove_avatar(authorization: str | None = Header(None)) -> dict:
 def get_avatar(name: str):
     path = auth.AVATARS / Path(name).name
     if not path.is_file():
-        raise HTTPException(404, "no such picture")
+        raise AppError(404, "picture_not_found", "no such picture")
     # Every upload gets a new name, so a picture never changes under its name.
     return FileResponse(
         path,

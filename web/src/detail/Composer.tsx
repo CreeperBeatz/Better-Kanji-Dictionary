@@ -1,8 +1,63 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { api, type Author, type Visibility } from '../api'
 import { Avatar } from '../account/Avatar'
+import { getLang, strings, useLang } from '../i18n'
+import { errorText } from '../i18n/errors'
 import { getImage, isLocalImage, putImage } from '../localNotes'
 import { NoteImage } from './NoteContent'
+
+const S = strings(
+  {
+    postFailed: 'could not post that',
+    yourAssociation: 'Your association',
+    askKanji: 'What does {label} look like to you?',
+    edit: 'edit',
+    remove: 'remove',
+    attachTitle: 'Attach a picture (or paste or drop one)',
+    picture: 'picture',
+    drawTitle: 'Draw it in Excalidraw',
+    draw: 'draw',
+    whoSees: 'Who can see this',
+    private: 'private',
+    public: 'public',
+    privateTitle: 'Only you see it',
+    publicTitle: 'Everyone sees it, under your name',
+    localTitle: 'Kept in this browser until you log in; log in to share it',
+    inBrowser: 'in this browser',
+    logIn: 'log in',
+    cancel: 'cancel',
+    discard: 'discard',
+    saving: 'saving',
+    posting: 'posting',
+    save: 'save',
+    post: 'post',
+  },
+  {
+    postFailed: 'не успяхме да го публикуваме',
+    yourAssociation: 'Вашата асоциация',
+    askKanji: 'На какво ви прилича {label}?',
+    edit: 'редактирайте',
+    remove: 'махнете',
+    attachTitle: 'Прикачете картинка (или я поставете, или я пуснете тук)',
+    picture: 'картинка',
+    drawTitle: 'Нарисувайте го в Excalidraw',
+    draw: 'рисуване',
+    whoSees: 'Кой може да вижда това',
+    private: 'лична',
+    public: 'публична',
+    privateTitle: 'Само вие я виждате',
+    publicTitle: 'Всички я виждат, под вашето име',
+    localTitle: 'Пази се в този браузър, докато не влезете; влезте, за да я споделите',
+    inBrowser: 'в този браузър',
+    logIn: 'влезте',
+    cancel: 'откажете',
+    discard: 'изхвърлете',
+    saving: 'запазване',
+    posting: 'публикуване',
+    save: 'запазете',
+    post: 'публикувайте',
+  },
+)
 
 const SketchEditor = lazy(() => import('../draw/SketchEditor'))
 
@@ -59,6 +114,7 @@ function release(a: Attachment) {
 const EMPTY: Draft = { text: '', attachments: [], visibility: 'private' }
 
 export function Composer({ label, placeholder, author, initial, draftKey, onSubmit, onCancel, onSignIn }: Props) {
+  const t = S(useLang())
   const signedIn = author !== null
   const start = initial ?? (draftKey ? drafts.get(draftKey) : undefined) ?? EMPTY
   const [text, setText] = useState(start.text)
@@ -66,6 +122,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   const [visibility, setVisibility] = useState<Visibility>(start.visibility)
   const [focused, setFocused] = useState(Boolean(initial))
   const [sending, setSending] = useState(false)
+  // null: none; '' : ours ("could not post that"), shown in the language of the moment; else the server's words
   const [problem, setProblem] = useState<string | null>(null)
   // Which picture the drawing editor is open on: a new drawing, or one to replace.
   const [sketching, setSketching] = useState<{ replace: string | null; scene?: Record<string, unknown> } | null>(null)
@@ -157,7 +214,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
         setFocused(false)
       }
     } catch (err) {
-      setProblem(err instanceof Error ? err.message : 'could not post that')
+      setProblem(err instanceof Error ? errorText(err, getLang()) : '')
     } finally {
       setSending(false)
     }
@@ -184,7 +241,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
         <textarea
           className="composer-text"
           value={text}
-          placeholder={initial ? 'Your association' : (placeholder ?? `What does ${label} look like to you?`)}
+          placeholder={initial ? t('yourAssociation') : (placeholder ?? t('askKanji', { label }))}
           autoFocus={Boolean(initial)}
           rows={open ? Math.min(14, Math.max(3, text.split('\n').length + 1)) : 1}
           onChange={(e) => setText(e.target.value)}
@@ -211,11 +268,11 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
                 <figcaption>
                   {drawing && (
                     <button type="button" className="clear" onClick={() => editDrawing(a)}>
-                      edit
+                      {t('edit')}
                     </button>
                   )}
                   <button type="button" className="clear" onClick={() => remove(a.key)}>
-                    remove
+                    {t('remove')}
                   </button>
                 </figcaption>
               </figure>
@@ -232,19 +289,19 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             type="button"
             className="composer-tool"
             onClick={() => picker.current?.click()}
-            title="Attach a picture (or paste or drop one)"
+            title={t('attachTitle')}
           >
             <PictureIcon />
-            <span>picture</span>
+            <span>{t('picture')}</span>
           </button>
           <button
             type="button"
             className="composer-tool"
             onClick={() => setSketching({ replace: null })}
-            title="Draw it in Excalidraw"
+            title={t('drawTitle')}
           >
             <PenIcon />
-            <span>draw</span>
+            <span>{t('draw')}</span>
           </button>
           <input
             ref={picker}
@@ -260,7 +317,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
 
           <span className="composer-send">
             {signedIn ? (
-              <span className="assoc-visibility" role="radiogroup" aria-label="Who can see this">
+              <span className="assoc-visibility" role="radiogroup" aria-label={t('whoSees')}>
                 {(['private', 'public'] as const).map((v) => (
                   <button
                     key={v}
@@ -269,39 +326,39 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
                     aria-checked={visibility === v}
                     data-on={visibility === v || undefined}
                     onClick={() => setVisibility(v)}
-                    title={v === 'private' ? 'Only you see it' : 'Everyone sees it, under your name'}
+                    title={t(v === 'private' ? 'privateTitle' : 'publicTitle')}
                   >
-                    {v}
+                    {t(v)}
                   </button>
                 ))}
               </span>
             ) : (
-              <span className="composer-local" title="Kept in this browser until you log in; log in to share it">
-                in this browser ·{' '}
+              <span className="composer-local" title={t('localTitle')}>
+                {t('inBrowser')} ·{' '}
                 <button type="button" className="clear" onClick={onSignIn}>
-                  log in
+                  {t('logIn')}
                 </button>
               </span>
             )}
 
             {onCancel ? (
               <button type="button" className="clear" onClick={onCancel}>
-                cancel
+                {t('cancel')}
               </button>
             ) : (
               !empty && (
                 <button type="button" className="clear" onClick={discard}>
-                  discard
+                  {t('discard')}
                 </button>
               )
             )}
             <button className="composer-post" disabled={empty || sending}>
-              {sending ? (initial ? 'saving' : 'posting') : initial ? 'save' : 'post'}
+              {t(sending ? (initial ? 'saving' : 'posting') : initial ? 'save' : 'post')}
             </button>
           </span>
         </div>
       )}
-      {problem && <p className="account-problem">{problem}</p>}
+      {problem !== null && <p className="account-problem">{problem || t('postFailed')}</p>}
 
       {sketching && (
         <Suspense fallback={<div className="sketch-overlay" />}>

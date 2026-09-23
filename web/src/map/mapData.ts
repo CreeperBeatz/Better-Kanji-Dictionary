@@ -22,6 +22,8 @@ export interface MapData {
   chars: string[]
   index: Map<string, number>
   meaning: string[]
+  /** The first Bulgarian meaning, or "" where there is none yet. */
+  meaningBg: string[]
   freq: (number | null)[]
   jlpt: (number | null)[]
   joyo: Uint8Array
@@ -87,6 +89,7 @@ function prepare(r: MapResponse): MapData {
     chars: r.chars,
     index: new Map(r.chars.map((c, i) => [c, i])),
     meaning: r.meaning,
+    meaningBg: r.meaningBg ?? [],
     freq: r.freq,
     jlpt: r.jlpt,
     joyo: Uint8Array.from(r.joyo),

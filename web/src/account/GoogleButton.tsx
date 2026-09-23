@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
+import { strings, useLang } from '../i18n'
+import { errorText } from '../i18n/errors'
 import { signInWithGoogle } from './auth'
 
 /**
@@ -44,13 +46,24 @@ function loadGoogle(): Promise<string | null> {
   return ready
 }
 
+const S = strings(
+  { failed: 'signing in with Google failed', or: 'or by email' },
+  { failed: 'входът с Google не успя', or: 'или по имейл' },
+)
+
 // Google draws its button at a fixed pixel width, within these bounds.
 const MIN_WIDTH = 200
 const MAX_WIDTH = 400
 
 export function GoogleButton({ onError }: { onError: (message: string | null) => void }) {
+  const lang = useLang()
+  const t = S(lang)
   const slot = useRef<HTMLDivElement>(null)
   const [shown, setShown] = useState(false)
+  // Read when the button is drawn, and a change redraws it, so the button
+  // speaks the interface's language without starting Google over.
+  const langRef = useRef(lang)
+  const redraw = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -65,28 +78,30 @@ export function GoogleButton({ onError }: { onError: (message: string | null) =>
         callback: ({ credential }) => {
           onError(null)
           signInWithGoogle(credential).catch((e) =>
-            onError(e instanceof Error ? e.message : 'signing in with Google failed'),
+            onError(e instanceof Error ? errorText(e, langRef.current) : S(langRef.current)('failed')),
           )
         },
       })
       // The button does not stretch, so it is redrawn at the slot's width
       // whenever that changes: a phone rotating, a window being resized.
-      let drawn = 0
+      let drawn = ''
       const draw = () => {
         const width = Math.round(Math.max(MIN_WIDTH, Math.min(el.clientWidth, MAX_WIDTH)))
-        if (width === drawn) return
-        drawn = width
+        const locale = langRef.current
+        if (`${width} ${locale}` === drawn) return
+        drawn = `${width} ${locale}`
         gid.renderButton(el, {
           theme: 'filled_black',
           size: 'large',
           text: 'continue_with',
           shape: 'rectangular',
           logo_alignment: 'center',
-          // The rest of the app is English; Google would otherwise follow the browser's language.
-          locale: 'en',
+          // The interface's language; Google would otherwise follow the browser's.
+          locale,
           width,
         })
       }
+      redraw.current = draw
       draw()
       observer = new ResizeObserver(draw)
       observer.observe(el)
@@ -95,14 +110,20 @@ export function GoogleButton({ onError }: { onError: (message: string | null) =>
     return () => {
       cancelled = true
       observer?.disconnect()
+      redraw.current = null
     }
   }, [onError])
+
+  useEffect(() => {
+    langRef.current = lang
+    redraw.current?.()
+  }, [lang])
 
   return (
     <>
       {/* Laid out even before the button arrives, so its width can be measured. */}
       <div ref={slot} className="google-slot" data-shown={shown || undefined} />
-      {shown && <p className="account-or">or by email</p>}
+      {shown && <p className="account-or">{t('or')}</p>}
     </>
   )
 }
