@@ -1000,11 +1000,19 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 2px 9px 2px 10px;
   font: inherit;
   font-size: 11.5px;
-  color: var(--ai);
-  background: var(--ai-wash);
-  border: 1px solid var(--ai-deep);
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--rule);
   border-radius: 999px;
   cursor: pointer;
+}
+
+/* Quiet like the filter beside it: it always has a value, so a lit pill
+   would be lit all the time. It brightens only while in use. */
+.sort-pill-button:hover,
+.sort-pill-button[aria-expanded='true'] {
+  color: var(--paper-dim);
+  border-color: var(--rule-bright);
 }
 
 .sort-pill-caret {
