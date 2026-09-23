@@ -3,15 +3,13 @@
  * found, a whole JLPT level, and -- with nothing typed -- the way in to both.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '../account/auth'
 import {
   api,
   ApiError,
   type KanjiNode,
-  type SearchOrder,
   type SearchResponse,
-  type SearchSort,
   type SemanticEvent,
   type SemanticResponse,
   type Word,
@@ -31,15 +29,6 @@ const S = strings(
     uncommon: 'uncommon',
     commonOnly: 'Common words only',
     commonOnlyTitle: 'Leave out words JMdict does not mark as common',
-    sortBy: 'Sort by',
-    sortNews: 'Newspaper rank',
-    sortNewsTitle: 'Sort by how often newspapers use the word',
-    sortJlpt: 'JLPT',
-    sortJlptTitle: 'Sort by JLPT level',
-    newsAsc: 'Most frequent first',
-    newsDesc: 'Least frequent first',
-    jlptAsc: 'N5 first',
-    jlptDesc: 'N1 first',
     jlpt: 'On the JLPT N{n} vocabulary list (Jonathan Waller, a community reconstruction)',
     news: 'top {n}',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
@@ -74,15 +63,6 @@ const S = strings(
     uncommon: 'рядка',
     commonOnly: 'Само чести думи',
     commonOnlyTitle: 'Без думите, които JMdict не отбелязва като чести',
-    sortBy: 'Подреждане по',
-    sortNews: 'Вестници',
-    sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
-    sortJlpt: 'JLPT',
-    sortJlptTitle: 'Подреждане по ниво от JLPT',
-    newsAsc: 'Първо най-честите',
-    newsDesc: 'Първо най-редките',
-    jlptAsc: 'Първо N5',
-    jlptDesc: 'Първо N1',
     jlpt: 'В списъка с думи за JLPT N{n} (Джонатан Уолър, реконструкция на общността)',
     news: 'топ {n}',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
@@ -118,107 +98,11 @@ const S = strings(
 const found = new Map<string, SearchResponse>()
 const levels = new Map<Level, { kanji: KanjiNode[]; components: KanjiNode[] }>()
 
-const keyOf = (lang: Lang, common: boolean, sort: string, q: string) =>
-  `${lang}${common ? ' common' : ''} ${sort} ${q}`
+const keyOf = (lang: Lang, common: boolean, q: string) => `${lang}${common ? ' common' : ''} ${q}`
 
-// The sort, as "news:asc": what to order equally good matches by, and which way.
-const SORT_KEY = 'betterrtk:searchSort'
-
-const ORDER_LABEL = {
-  news: { asc: 'newsAsc', desc: 'newsDesc' },
-  jlpt: { asc: 'jlptAsc', desc: 'jlptDesc' },
-} as const
-
-function savedSort(): [SearchSort, SearchOrder] {
-  const [sort, order] = (localStorage.getItem(SORT_KEY) ?? '').split(':')
-  return [sort === 'jlpt' ? 'jlpt' : 'news', order === 'desc' ? 'desc' : 'asc']
-}
-
-const SORTS = [
-  { value: 'news', label: 'sortNews', title: 'sortNewsTitle' },
-  { value: 'jlpt', label: 'sortJlpt', title: 'sortJlptTitle' },
-] as const
-
-/**
- * The sort as one pill naming what it is ordered by; pressing it drops down
- * the choices and the way round. Picking one puts the menu away; turning the
- * order round leaves it open, so the arrow can be seen to change.
- */
-function SortPill({
-  sort,
-  order,
-  onPick,
-  t,
-}: {
-  sort: SearchSort
-  order: SearchOrder
-  onPick: (sort: SearchSort, order: SearchOrder) => void
-  t: ReturnType<typeof S>
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function onDown(e: PointerEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false)
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('pointerdown', onDown, true)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onDown, true)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  const arrow = order === 'asc' ? '↑' : '↓'
-  const current = SORTS.find((s) => s.value === sort)!
-  return (
-    <div className="sort-pill" ref={ref}>
-      <button
-        className="sort-pill-button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        title={`${t('sortBy')}: ${t(current.label)}, ${t(ORDER_LABEL[sort][order])}`}
-      >
-        {t(current.label)} <span aria-hidden>{arrow}</span>
-        <span className="sort-pill-caret" aria-hidden>
-          ▾
-        </span>
-      </button>
-      {open && (
-        <div className="sort-menu" role="menu" aria-label={t('sortBy')}>
-          {SORTS.map((s) => (
-            <button
-              key={s.value}
-              role="menuitemradio"
-              aria-checked={sort === s.value}
-              data-on={sort === s.value || undefined}
-              onClick={() => {
-                onPick(s.value, order)
-                setOpen(false)
-              }}
-              title={t(s.title)}
-            >
-              {t(s.label)}
-            </button>
-          ))}
-          <button
-            role="menuitem"
-            className="sort-menu-order"
-            onClick={() => onPick(sort, order === 'asc' ? 'desc' : 'asc')}
-          >
-            <span aria-hidden>{arrow}</span> {t(ORDER_LABEL[sort][order])}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
+// Equally good matches are ordered by newspaper rank, the most frequent
+// first. The engine can also sort by JLPT level; nothing offers it for now.
+const SORT = { sort: 'news', order: 'asc' } as const
 
 // Common words only is the default, so what is stored is the choice to see them all.
 const ALL_WORDS_KEY = 'betterrtk:allWords'
@@ -334,8 +218,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
   const t = S(lang)
   const term = q.trim()
   const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
-  const [[sort, order], setSort] = useState(savedSort)
-  const key = keyOf(lang, common, `${sort}:${order}`, term)
+  const key = keyOf(lang, common, term)
   const [result, setResult] = useState<SearchResponse | null>(() => found.get(key) ?? null)
   const [busy, setBusy] = useState(false)
 
@@ -354,7 +237,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
     let stale = false
     setBusy(true)
     const timer = setTimeout(() => {
-      api.search(term, lang, { common, sort, order }).then(
+      api.search(term, lang, { common, ...SORT }).then(
         (d) => {
           remember(key, d)
           if (!stale) (setResult(d), setBusy(false))
@@ -366,12 +249,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key])
-
-  function pickSort(next: SearchSort, nextOrder: SearchOrder) {
-    localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
-    setSort([next, nextOrder])
-  }
+  }, [term, lang, common, key])
 
   function toggleCommon() {
     setCommon((on) => {
@@ -397,9 +275,8 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
   return (
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
       {/* How the query was read on the left, the filter on the right, one line. */}
-      {/* How to order what was found, and whether to show only common words. */}
+      {/* Whether to show only common words. */}
       <div className="search-tools">
-        <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
         <button
           className="search-filter"
           aria-pressed={common}
