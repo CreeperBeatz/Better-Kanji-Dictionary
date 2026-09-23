@@ -3,7 +3,7 @@
  * found, a whole JLPT level, and -- with nothing typed -- the way in to both.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '../account/auth'
 import {
   api,
@@ -293,6 +293,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   // one being typed, so the model is only asked once the dictionary has had its
   // say, and its answer stays up while the next query is on its way.
   const unmatched = result && result.words.length === 0 && result.kanji.length === 0 ? result.query : null
+  const nothing = <p className="hint">{t('nothing', { q: term })}</p>
   const alternatives = result?.alternatives ?? []
 
   // The last answer stays up while the next one is on its way, so the list
@@ -365,8 +366,13 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
           ))}
         </ol>
       )}
-      {empty && <p className="hint">{t('nothing', { q: term })}</p>}
-      {unmatched && isSentence(unmatched) && <Semantic q={unmatched} onKanji={onKanji} onWord={onWord} />}
+      {/* When semantic search takes over, it says what it found instead; it
+          hands the line back when it will not run (signed out, offline, off). */}
+      {unmatched && isSentence(unmatched) ? (
+        <Semantic q={unmatched} onKanji={onKanji} onWord={onWord} nothing={empty ? nothing : null} />
+      ) : (
+        empty && nothing
+      )}
       {!result && busy && <p className="hint">{t('looking')}</p>}
     </section>
   )
@@ -394,7 +400,18 @@ type SemanticState =
  * What a language model takes a query to mean, for when the dictionary found
  * nothing: signed-in users only, and online only -- the device has no model.
  */
-function Semantic({ q, onKanji, onWord }: { q: string; onKanji: (c: string) => void; onWord: (w: Word) => void }) {
+function Semantic({
+  q,
+  onKanji,
+  onWord,
+  nothing,
+}: {
+  q: string
+  onKanji: (c: string) => void
+  onWord: (w: Word) => void
+  /** The dictionary's "nothing matched", shown only when semantic search will not run. */
+  nothing: ReactNode
+}) {
   const lang = useLang()
   const t = S(lang)
   const { user, ready } = useAuth()
@@ -433,9 +450,15 @@ function Semantic({ q, onKanji, onWord }: { q: string; onKanji: (c: string) => v
     }
   }, [key, q, lang, user])
 
-  if (!ready || state.kind === 'off') return null
-  if (!user) return <p className="hint semantic-invite">{t('semanticSignIn')}</p>
-  if (state.kind === 'waiting' && !navigator.onLine) return null
+  if (!ready || state.kind === 'off') return nothing
+  if (!user)
+    return (
+      <>
+        {nothing}
+        <p className="hint semantic-invite">{t('semanticSignIn')}</p>
+      </>
+    )
+  if (state.kind === 'waiting' && !navigator.onLine) return nothing
 
   const answer = state.kind === 'done' ? state.answer : null
   const explained = answer?.kanji.some((k) => k.why)
