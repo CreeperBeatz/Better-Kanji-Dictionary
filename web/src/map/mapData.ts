@@ -101,7 +101,7 @@ function prepare(r: MapResponse): MapData {
     partsIdx,
     usersAt,
     usersIdx,
-    key: `betterrtk:map:v1:${r.scope}:${n}:${m}:${hash(r.chars.join('') + r.edges.join(','))}`,
+    key: `betterrtk:map:v2:${r.scope}:${n}:${m}:${hash(r.chars.join('') + r.edges.join(','))}`,
   }
 }
 
@@ -142,11 +142,13 @@ export function storeLayout(data: MapData, positions: Float32Array) {
     for (let i = 0; i < bytes.length; i += 0x8000) {
       bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
     }
-    // Drop older layouts of the same scope; they can never be read again.
-    const prefix = data.key.split(':').slice(0, 4).join(':') + ':'
+    // Drop older layouts of the same scope, from any layout version; they can
+    // never be read again.
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i)
-      if (k && k.startsWith(prefix) && k !== data.key) localStorage.removeItem(k)
+      if (k && k.startsWith('betterrtk:map:') && k.split(':')[3] === data.scope && k !== data.key) {
+        localStorage.removeItem(k)
+      }
     }
     localStorage.setItem(data.key, btoa(bin))
   } catch {
