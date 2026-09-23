@@ -63,6 +63,16 @@ ALIASES = {
     "⻭": "歯",
 }
 
+# Decompositions the rules above cannot reach, set by hand. 食 is a radical of
+# its own in KRADFILE, so its override (人 + 良) is refused along with 門 -> 彐月;
+# 坐's override line is truncated to 人 alone. 37105 is cjk-decomp's anonymous
+# 丶+艮 -- the 良 in 朗, 郎 and 飠 -- so naming it links them (and 飲 館 飯) to 良.
+CURATED = {
+    "食": ["人", "良"],
+    "坐": ["人", "土"],
+    "37105": ["良"],
+}
+
 # 卄 is overloaded: the grass top of 草/花 and the two-hands shape of 弁/戒/弄.
 # KRADFILE marks grass with the placeholder 艾, so that decides which one a
 # given character holds.
@@ -143,6 +153,8 @@ class Decomposition:
                     ch, typ, args = m.group(1), m.group(2), m.group(3)
                     raw[ch] = (typ, [p for p in args.split(",") if p])
 
+        if not as_build_py:
+            raw.update({ch: ("curated", parts) for ch, parts in CURATED.items()})
         grass, compound = (frozenset(), frozenset()) if as_build_py else _krad_sets()
         d = cls(raw, grass, as_build_py, compound)
         if user_overrides and USER_OVERRIDES.exists():

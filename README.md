@@ -16,7 +16,7 @@ and `pipeline/verify.py` asserts on every run that the two still agree.
 
     python pipeline/fetch_sources.py      # ~35 MB, skips what already exists
     python pipeline/build_db.py           # assembles data/betterrtk.sqlite (~165 MB)
-    python pipeline/verify.py             # 50 correctness checks
+    python pipeline/verify.py             # 51 correctness checks
 
     .venv/Scripts/python -m uvicorn server.app:app --port 8000 --host 0.0.0.0
     cd web && npm install && npm run dev
