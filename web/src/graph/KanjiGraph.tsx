@@ -409,7 +409,8 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
       return
     }
     if (pinched.current) return
-    if (node.kind === 'focus') return
+    // The one in the middle too: after a search has taken the rail, clicking
+    // it brings its page back. When its page is already up, nothing changes.
     onDrill(node.char)
   }
 
