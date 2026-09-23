@@ -11,12 +11,12 @@ import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import { Engine, type EntryStore, type KanjiPack, type RawWord } from '../src/local/engine'
-import { normalize, shlyokavitsa, terms } from '../src/local/bulgarian'
+import { normalize, shlyokavitsa, spelling, terms } from '../src/local/bulgarian'
 import type { SearchResponse } from '../src/api'
 
 interface Golden {
   search: { q: string; lang: string; out: SearchResponse }[]
-  bulgarian: { text: string; normalized: string; terms: string[]; candidates: string[] }[]
+  bulgarian: { text: string; normalized: string; terms: string[]; spelling: number; candidates: string[] }[]
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
   wordsFor: { char: string; out: number[] }[]
@@ -83,6 +83,7 @@ for (const b of golden.bulgarian) {
     text: b.text,
     normalized: normalize(b.text),
     terms: terms(b.text),
+    spelling: spelling(b.text),
     candidates: shlyokavitsa(b.text).slice(0, b.candidates.length),
   }
   if (same(b, got)) bgOk++

@@ -78,12 +78,10 @@ const FILTERS: { value: ContainerFilter; label: Key | string; focus: Key; map: K
 export function LevelFilter({
   filter,
   view,
-  note,
   onFilter,
 }: {
   filter: ContainerFilter
   view: StageView
-  note?: string
   onFilter: (f: ContainerFilter) => void
 }) {
   const t = S(useLang())
@@ -99,7 +97,6 @@ export function LevelFilter({
           {typeof f.value === 'number' ? f.label : t(f.label as Key)}
         </button>
       ))}
-      {note && <span className="filter-count">{note}</span>}
     </div>
   )
 }

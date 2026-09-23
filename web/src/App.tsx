@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from './api'
-import { KanjiGraph, keeps, type ContainerFilter } from './graph/KanjiGraph'
+import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { KanjiMap } from './map/KanjiMap'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
-import { LangSwitch } from './i18n/LangSwitch'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, type DetailData } from './detail/DetailPanel'
@@ -45,8 +44,6 @@ const S = strings(
     howMap: 'How to read the map',
     howGraph: 'How to read the graph',
     legend: 'Legend',
-    above: '{n} above',
-    aboveHidden: '{n} above, {h} hidden',
   },
   {
     offline: 'Графът има нужда от връзка.',
@@ -68,8 +65,6 @@ const S = strings(
     howMap: 'Как се чете картата',
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
-    above: '{n} отгоре',
-    aboveHidden: '{n} отгоре, {h} скрити',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -426,7 +421,12 @@ export function App() {
         )
       case 'kanji':
         return detail && detail.focus.char === p.char ? (
-          <DetailPanel data={detail} hovered={hoveredNode} onWord={openWord} />
+          <DetailPanel
+            data={detail}
+            hovered={hoveredNode}
+            onWord={openWord}
+            onComponents={mobile || view !== 'focus' ? () => setView('focus') : undefined}
+          />
         ) : (
           <section className="rail-section">
             <div className="detail-head">
@@ -494,7 +494,6 @@ export function App() {
                 {t('recent')}
               </button>
             </div>
-            {mobile && <LangSwitch />}
             {mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
@@ -586,21 +585,19 @@ export function App() {
             </div>
           )}
 
-          {/* On a phone the tabs above do this. */}
-          {!error && !mobile && <ViewSwitch view={view} onView={setView} />}
+          {/* One row along the top, so the view switch gives way to the corner
+              rather than sliding under it when the labels run long. */}
+          <div className="stage-top">
+            {/* On a phone the tabs above do this. */}
+            {!error && !mobile && <ViewSwitch view={view} onView={setView} />}
 
-          <div className="stage-corner">
-            {!error && (
-              <LevelFilter
-                filter={filter}
-                view={view}
-                onFilter={setFilter}
-                note={view === 'focus' && data && selected ? containerNote(data, filter, t) : undefined}
-              />
-            )}
-            {/* On a phone they sit beside the tabs instead, where they are always on screen. */}
-            {!mobile && <LangSwitch />}
-            {!mobile && <ProfileButton onOpen={signIn} />}
+            <div className="stage-corner">
+              {!error && (
+                <LevelFilter filter={filter} view={view} onFilter={setFilter} />
+              )}
+              {/* On a phone it sits beside the tabs instead, where it is always on screen. */}
+              {!mobile && <ProfileButton onOpen={signIn} />}
+            </div>
           </div>
 
           <button
@@ -619,10 +616,4 @@ export function App() {
       {accountShown && <AccountDialog onClose={closeAccount} />}
     </div>
   )
-}
-
-function containerNote(data: GraphResponse, filter: ContainerFilter, t: T): string {
-  const shown = data.containers.filter(keeps(filter)).length
-  const hidden = data.containers.length - shown
-  return hidden > 0 ? t('aboveHidden', { n: shown, h: hidden }) : t('above', { n: shown })
 }

@@ -11,6 +11,8 @@ const S = strings(
     bound: 'bound form, not a standalone character',
     outside: 'outside the jōyō list',
     noMeaning: 'no recorded meaning',
+    seeComponents: 'Components',
+    seeComponentsTitle: 'Show what {char} is built from, and what it is part of',
     on: 'On',
     kun: 'Kun',
     strokes: 'Strokes',
@@ -32,6 +34,8 @@ const S = strings(
     bound: 'свързана форма, не е самостоятелен йероглиф',
     outside: 'извън списъка джойо',
     noMeaning: 'няма записано значение',
+    seeComponents: 'Компоненти',
+    seeComponentsTitle: 'Покажете от какво е изграден {char} и в какво участва',
     on: 'Он',
     kun: 'Кун',
     strokes: 'Черти',
@@ -60,6 +64,8 @@ interface Props {
   data: DetailData
   hovered: KanjiNode | null
   onWord: (word: Word) => void
+  /** Shows the focus graph, from the map or on a phone; left out when it is already on screen. */
+  onComponents?: () => void
 }
 
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
@@ -71,7 +77,7 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
-export function DetailPanel({ data, hovered, onWord }: Props) {
+export function DetailPanel({ data, hovered, onWord, onComponents }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -110,6 +116,12 @@ export function DetailPanel({ data, hovered, onWord }: Props) {
           </p>
         </div>
       </div>
+
+      {onComponents && !isPreview && (
+        <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>
+          {t('seeComponents')}
+        </button>
+      )}
 
       <dl className="facts">
         {n.onYomi.length > 0 && (

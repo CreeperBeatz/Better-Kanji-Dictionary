@@ -72,7 +72,7 @@ text every frame.
 | Area | Notes |
 |---|---|
 | **Search** | One box takes English, Bulgarian, Japanese, or romaji, and in the Bulgarian interface also Bulgarian typed in Latin letters (shlyokavitsa: `4ovek`, `voda`). Returns characters *and* words. Full deinflection, so 食べたくなかった finds 食べる and shows the chain. |
-| **Two languages** | The EN · БГ switch beside the profile picture turns the interface and the dictionary's glosses Bulgarian. See [Bulgarian](#bulgarian). |
+| **Two languages** | The EN · БГ switch in the profile dialog turns the interface and the dictionary's glosses Bulgarian; a browser set to Bulgarian starts there. See [Bulgarian](#bulgarian). |
 | **Dictionary** | JMdict with real `nf01`–`nf48` frequency ranks, pitch accent contours, and Tatoeba examples linked by lemma rather than substring. Clicking a word opens its entry in the side panel: senses, other spellings, examples, and each kanji it is written with, any of which moves the graph there. |
 | **Draw** | Stroke matching against KanjiVG, server-side. One score, from shape plus a bonus for stroke order — writing it properly sharpens the answer, writing it any other way costs nothing, and the stroke count need not be exact. Picking a result opens it in the graph. |
 | **Radical picker** | KRADFILE's 253 radicals. After each pick, radicals present in no remaining candidate grey out, so you cannot build an empty result. |

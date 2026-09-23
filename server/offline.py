@@ -400,8 +400,16 @@ def build(force: bool = False) -> dict:
 
     # --- Bulgarian: the same two indexes, over stems (see server/bulgarian.py)
     bg_rowids = _fts(conn, "bg_gloss_fts", sec, "bggloss")
-    bg_word = dict(conn.execute("SELECT rowid, word_id FROM bg_gloss_fts"))
-    sec.add("bggloss.docword", "u32", [index_of.get(bg_word[r], 0) for r in bg_rowids])
+    bg_doc = {
+        r: (w, n, p, h) for r, w, n, p, h in conn.execute("SELECT rowid, word_id, n, place, spelled FROM bg_gloss_fts")
+    }
+    sec.add("bggloss.docword", "u32", [index_of.get(bg_doc[r][0], 0) for r in bg_rowids])
+    # A gloss item's length outside brackets, where it stands in its entry and
+    # a hash of its spelling: what tells an exact match from a mention
+    # (build_db `_bg_items`).
+    sec.add("bggloss.docn", "u8", [bg_doc[r][1] for r in bg_rowids])
+    sec.add("bggloss.docplace", "u8", [bg_doc[r][2] for r in bg_rowids])
+    sec.add("bggloss.docspelled", "u32", [bg_doc[r][3] for r in bg_rowids])
     bgk_rowids = _fts(conn, "bg_kanji_fts", sec, "bgkfts")
     bgk_char = dict(conn.execute("SELECT rowid, char FROM bg_kanji_fts"))
     sec.add("bgkfts.docchar", "u32", [kanji_at.get(bgk_char[r], 0xFFFFFFFF) for r in bgk_rowids])

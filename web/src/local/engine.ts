@@ -19,7 +19,7 @@ import type {
   Word,
   WordEntry,
 } from '../api'
-import { bestReading, hasCyrillic, isLatinQuery, terms as bgTerms } from './bulgarian'
+import { bestReading, hasCyrillic, isLatinQuery, spelling, terms as bgTerms } from './bulgarian'
 import { FtsIndex, phrasesOf, type Phrase } from './fts'
 import { deinflect, hasJapanese, posMatches, pySplit, pyStrip, romajiToKana, type Candidate } from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
@@ -105,6 +105,18 @@ function isCjk(c: string): boolean {
   return c >= '一' && c <= '鿿'
 }
 
+/**
+ * How well a gloss item matched, lower first. 0-7 an item that is the query
+ * exactly as written, by where it stands (the entry's first item, another in
+ * the first sense, a later sense; bare before qualified); 8-15 the same for an
+ * item that only shares the query's stems (водя for вода); 16 and 17 an item
+ * that merely mentions them, in the first sense or later.
+ */
+function bgTier(exact: boolean, sameSpelling: boolean, place: number): number {
+  if (!exact) return 16 + (place >= 4 ? 1 : 0)
+  return place + (sameSpelling ? 0 : 8)
+}
+
 /** The server's Bulgarian query: every stem a quoted phrase of its own. */
 function bgPhrases(stems: string[]): Phrase[] {
   return phrasesOf(stems)
@@ -138,6 +150,9 @@ export class Engine {
   // Bulgarian glosses and kanji meanings, indexed by stem
   private readonly bgGloss: FtsIndex
   private readonly bgGlossWord: Uint32Array
+  private readonly bgGlossN: Uint8Array
+  private readonly bgGlossPlace: Uint8Array
+  private readonly bgGlossSpelled: Uint32Array
   private readonly bgKfts: FtsIndex
   private readonly bgKftsChar: Uint32Array
 
@@ -175,6 +190,9 @@ export class Engine {
       s.u32('bggloss.pstart'), s.u32('bggloss.doc'), s.u8('bggloss.tf'), s.u8('bggloss.pos'), s.u16('bggloss.doclen'),
     )
     this.bgGlossWord = s.u32('bggloss.docword')
+    this.bgGlossN = s.u8('bggloss.docn')
+    this.bgGlossPlace = s.u8('bggloss.docplace')
+    this.bgGlossSpelled = s.u32('bggloss.docspelled')
     this.bgKfts = new FtsIndex(
       new SortedStrings(s.text('bgkfts.term'), starts(s.u8('bgkfts.tlen'))),
       s.u32('bgkfts.pstart'), s.u32('bgkfts.doc'), s.u8('bgkfts.tf'), s.u8('bgkfts.pos'), s.u16('bgkfts.doclen'),
@@ -268,10 +286,22 @@ export class Engine {
     return readings.join(' ') || null
   }
 
-  /** Words whose Bulgarian glosses hold every stem, best match first. */
-  private bulgarianWords(stems: string[], limit: number): number[] {
-    if (!stems.length) return []
-    return distinct(this.bgGloss.search(bgPhrases(stems), limit * 8).map((d) => this.bgGlossWord[d]))
+  /**
+   * Words whose Bulgarian glosses hold every stem of `text`, best match
+   * first, and how well each matched (lower is better, see `bgTier`).
+   */
+  private bulgarianWords(text: string, limit: number): [number[], Map<number, number>] {
+    const stems = bgTerms(text)
+    if (!stems.length) return [[], new Map()]
+    const docs = this.bgGloss.search(bgPhrases(stems), limit * 8)
+    const spelled = spelling(text)
+    const tiers = new Map<number, number>()
+    for (const d of docs) {
+      const w = this.bgGlossWord[d]
+      const tier = bgTier(this.bgGlossN[d] === stems.length, this.bgGlossSpelled[d] === spelled, this.bgGlossPlace[d])
+      tiers.set(w, Math.min(tier, tiers.get(w) ?? tier))
+    }
+    return [distinct(docs.map((d) => this.bgGlossWord[d])), tiers]
   }
 
   async search(input: string, limit = 30, lang = 'en'): Promise<SearchResponse> {
@@ -283,6 +313,7 @@ export class Engine {
     const alternatives: SearchResponse['alternatives'] = []
     const inflections = new Map<number, string[]>()
     let bgStems: string[] | null = null // set when the words were found in Bulgarian
+    let bgTiers = new Map<number, number>() // and how well each one matched
 
     const japanese = hasJapanese(q)
     const cyrillic = !japanese && hasCyrillic(q)
@@ -291,7 +322,9 @@ export class Engine {
 
     if (cyrillic) {
       bgStems = bgTerms(q)
-      wordIdx = this.bulgarianWords(bgStems, limit)
+      const [found, tiers] = this.bulgarianWords(q, limit)
+      wordIdx = found
+      bgTiers = tiers
       interpretation = { kind: 'bulgarian' }
     }
 
@@ -334,12 +367,13 @@ export class Engine {
       wordIdx = checked
       if (latinBg) {
         const reading = this.shlyokavitsa(q)
-        const found = reading ? this.bulgarianWords(bgTerms(reading), limit) : []
+        const [found, tiers] = reading ? this.bulgarianWords(reading, limit) : [[], new Map()]
         if (wordIdx.length && found.length) {
           // Romaji won, but the Bulgarian reading is one tap away.
           alternatives.push({ kind: 'bulgarian', query: reading! })
         } else if (found.length) {
           wordIdx = found
+          bgTiers = tiers
           bgStems = bgTerms(reading!)
           interpretation = { kind: 'bulgarian', reading: reading! }
           kanaGuess = ''
@@ -375,9 +409,10 @@ export class Engine {
     } else if (latinBg) {
       // Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.
       const reading = this.shlyokavitsa(q)
-      const found = reading ? this.bulgarianWords(bgTerms(reading), limit) : []
+      const [found, tiers] = reading ? this.bulgarianWords(reading, limit) : [[], new Map()]
       if (found.length) {
         wordIdx = found
+        bgTiers = tiers
         bgStems = bgTerms(reading!)
         interpretation = { kind: 'bulgarian', reading: reading! }
       }
@@ -399,11 +434,11 @@ export class Engine {
     }
 
     // The server fetches these by id -- so they come back in id order -- and
-    // then sorts by rank, stably.
+    // then sorts by rank, stably -- a Bulgarian search by how well each matched first.
     const pool = [...new Set(wordIdx.slice(0, limit * 4))].sort((a, b) => a - b)
     const ranked = pool
-      .map((i) => [i, ...this.rankKey(i)])
-      .sort((a, b) => a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || a[0] - b[0])
+      .map((i) => [i, bgTiers.get(i) ?? 0, ...this.rankKey(i)])
+      .sort((a, b) => a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || a[4] - b[4] || a[0] - b[0])
       .slice(0, limit)
       .map((r) => r[0])
 

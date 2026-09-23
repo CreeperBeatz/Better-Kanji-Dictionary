@@ -165,6 +165,8 @@ Every character in the input must appear once, with 1 to 8 meanings.
   sense.
 - If two English glosses come out as the same Bulgarian word, write it once.
 - You may add one close Bulgarian synonym when it helps a learner.
+- Put the most usual Bulgarian word first in each sense: search ranks an
+  entry higher when its first gloss is exactly what was typed.
 
 **Citation forms** (as Bulgarian dictionaries print them):
 - **Nouns:** singular, indefinite (`вода`, not `водата`). Use the plural only

@@ -178,6 +178,7 @@ def main() -> int:
             "text": t,
             "normalized": bulgarian.normalize(t),
             "terms": bulgarian.terms(t),
+            "spelling": bulgarian.spelling(t),
             "candidates": bulgarian.shlyokavitsa(t)[:64],
         })
 

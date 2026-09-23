@@ -14,6 +14,7 @@ Windows note: set PYTHONIOENCODING=utf-8 or the console encoder dies on the firs
 import argparse
 import io
 import json
+import re
 import sqlite3
 import sys
 import zipfile
@@ -495,6 +496,53 @@ def build_examples(db: sqlite3.Connection) -> None:
 BG_OUT = ROOT / "pipeline" / "translate" / "out"
 
 
+_BRACKETED = re.compile(r"\([^)]*\)?")
+
+
+def _bg_items(glosses: list[str], terms, spelling) -> list[tuple[str, int, int, int]]:
+    """A sense's Bulgarian glosses as search rows: (stems, n, place, spelled).
+
+    A gloss splits further at commas outside brackets when every part is one
+    word, since "правя, направя" is two headwords but "човек, работещ зад
+    кулисите" is one description. An item is a row of the stems outside its brackets, with
+    n their count, so a query of n stems that matches it is exactly that item.
+    An item with a bracketed qualifier gets a second row with the qualifier in
+    too, which keeps it searchable but is never exact (n=255): книга must not
+    count as exact for "произведение (филм, книга)".
+
+    place orders exact matches: 0 the sense's first item, 2 a later item, and 1
+    or 3 the same with a qualifier. The stage adds 4 for any sense but the first.
+    spelled hashes the item as written, so an exact spelling beats a shared stem.
+    """
+    out = []
+    first = True
+    for g in glosses:
+        parts, depth, cur = [], 0, ""
+        for ch in g:
+            depth += (ch == "(") - (ch == ")")
+            if ch == "," and depth <= 0:
+                parts.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        parts.append(cur)
+        if len(parts) > 1 and any(len(terms(_BRACKETED.sub(" ", p))) > 1 for p in parts):
+            parts = [g]
+        for p in parts:
+            core = terms(_BRACKETED.sub(" ", p))
+            extra = terms(" ".join(re.findall(r"\(([^)]*)", p)))
+            if not core and not extra:
+                continue
+            place = (0 if first else 2) + (1 if extra else 0)
+            spelled = spelling(_BRACKETED.sub(" ", p))
+            if core:
+                out.append((" ".join(core), min(len(core), 254), place, spelled))
+            if extra:
+                out.append((" ".join(core + extra), 255, place, spelled))
+            first = False
+    return out
+
+
 @stage("bg", "translate/out/*.json -> Bulgarian glosses, kanji meanings and their search indexes")
 def build_bulgarian(db: sqlite3.Connection) -> None:
     """Load whatever the translating agents have handed back (see translate/TASK.md).
@@ -503,7 +551,7 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
     check.py is where the language gets checked. The search indexes hold
     stems (server/bulgarian.py `terms`), so a query for водата finds вода.
     """
-    from server.bulgarian import terms
+    from server.bulgarian import spelling, terms
 
     db.executescript("""
         DROP TABLE IF EXISTS sense_bg;
@@ -522,8 +570,13 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
             meanings TEXT NOT NULL,    -- JSON array
             source   TEXT NOT NULL
         );
+        -- One row per gloss item ("вода", "правя", "направя"), so a search can
+        -- tell an item that is exactly the query (n = its word count outside
+        -- brackets) from one that merely mentions it; place says where in the
+        -- entry the item stands, and spelled hashes it as written (see _bg_items).
         CREATE VIRTUAL TABLE bg_gloss_fts USING fts5(
-            terms, word_id UNINDEXED, tokenize = 'unicode61 remove_diacritics 2'
+            terms, word_id UNINDEXED, n UNINDEXED, place UNINDEXED, spelled UNINDEXED,
+            tokenize = 'unicode61 remove_diacritics 2'
         );
         CREATE VIRTUAL TABLE bg_kanji_fts USING fts5(
             terms, char UNINDEXED, tokenize = 'unicode61 remove_diacritics 2'
@@ -539,7 +592,7 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
         out = [g.strip() for g in bg if isinstance(g, str) and g.strip()]
         return out or None
 
-    senses: dict[tuple[int, int], tuple[str, str]] = {}
+    senses: dict[tuple[int, int], tuple[list[str], str]] = {}
     kanji: dict[str, tuple[list[str], str]] = {}
     files = sorted(BG_OUT.glob("*.json")) if BG_OUT.exists() else []
     skipped = 0
@@ -558,7 +611,7 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
                 if g is None:
                     skipped += 1
                     continue
-                senses[key] = ("; ".join(g), source)
+                senses[key] = (g, source)
         for k in data.get("kanji") or []:
             char = k.get("char") if isinstance(k, dict) else None
             g = glosses(k.get("bg")) if char in known_kanji else None
@@ -568,10 +621,16 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
             kanji[char] = (g, source)
 
     rows = sorted(senses.items())
-    db.executemany("INSERT INTO sense_bg VALUES (?,?,?,?)", [(w, o, g, src) for (w, o), (g, src) in rows])
     db.executemany(
-        "INSERT INTO bg_gloss_fts (terms, word_id) VALUES (?, ?)",
-        [(" ".join(terms(g)), w) for (w, _), (g, _) in rows],
+        "INSERT INTO sense_bg VALUES (?,?,?,?)", [(w, o, "; ".join(g), src) for (w, o), (g, src) in rows]
+    )
+    db.executemany(
+        "INSERT INTO bg_gloss_fts (terms, word_id, n, place, spelled) VALUES (?, ?, ?, ?, ?)",
+        [
+            (t, w, n, place + (4 if o else 0), spelled)
+            for (w, o), (g, _) in rows
+            for t, n, place, spelled in _bg_items(g, terms, spelling)
+        ],
     )
     krows = sorted(kanji.items())
     db.executemany(

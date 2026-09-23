@@ -2,8 +2,8 @@
 
 Written by check.py; do not edit by hand.
 
-- **words**: 0 of 2188 chunks done
-- **kanji**: 0 of 104 chunks done
+- **words**: 302 of 2188 chunks done
+- **kanji**: 104 of 104 chunks done
 
 ## Invalid
 
@@ -11,8 +11,8 @@ none
 
 ## Done
 
-none
+kanji-001..104, words-0001..0302
 
 ## To do
 
-kanji-001..104, words-0001..2188
+words-0303..2188

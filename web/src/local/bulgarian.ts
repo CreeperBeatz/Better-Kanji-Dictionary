@@ -90,6 +90,18 @@ export function terms(text: string): string[] {
   return words(normalize(text)).map(stem)
 }
 
+const utf8 = new TextEncoder()
+
+/**
+ * A 32-bit FNV-1a hash of the text's words as written, unstemmed: what lets
+ * a search put вода before водя, which share the stem вод.
+ */
+export function spelling(text: string): number {
+  let h = 0x811c9dc5
+  for (const b of utf8.encode(words(normalize(text)).join(' '))) h = Math.imul(h ^ b, 0x01000193) >>> 0
+  return h
+}
+
 // ------------------------------------------------------------ shlyokavitsa
 
 /** Latin spellings, longest first, each with what it can stand for, likeliest first. */

@@ -118,6 +118,15 @@ def terms(text: str) -> list[str]:
     return [stem(w) for w in words(normalize(text))]
 
 
+def spelling(text: str) -> int:
+    """A 32-bit FNV-1a hash of the text's words as written, unstemmed: what lets
+    a search put вода before водя, which share the stem вод."""
+    h = 0x811C9DC5
+    for b in " ".join(words(normalize(text))).encode("utf-8"):
+        h = ((h ^ b) * 0x01000193) & 0xFFFFFFFF
+    return h
+
+
 # ------------------------------------------------------------ shlyokavitsa
 
 # Latin spellings, longest first, each with the Cyrillic it can stand for in

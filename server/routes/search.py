@@ -128,15 +128,33 @@ def _shlyokavitsa(q: str) -> str | None:
     return " ".join(readings) or None
 
 
-def _bulgarian_words(terms: list[str], limit: int) -> list[int]:
-    """Words whose Bulgarian glosses hold every stem, best match first."""
+def _bulgarian_words(text: str, limit: int) -> tuple[list[int], dict[int, int]]:
+    """Words whose Bulgarian glosses hold every stem of `text`, best match
+    first, and how well each matched (lower is better, see `_bg_tier`)."""
+    terms = bg.terms(text)
     if not terms:
-        return []
+        return [], {}
     rows = query(
-        "SELECT word_id FROM bg_gloss_fts WHERE bg_gloss_fts MATCH ? ORDER BY rank LIMIT ?",
+        "SELECT word_id, n, place, spelled FROM bg_gloss_fts WHERE bg_gloss_fts MATCH ? ORDER BY rank LIMIT ?",
         (" ".join(f'"{t}"' for t in terms), limit * 8),
     )
-    return list(dict.fromkeys(r["word_id"] for r in rows))
+    spelled = bg.spelling(text)
+    tiers: dict[int, int] = {}
+    for r in rows:
+        tier = _bg_tier(r["n"] == len(terms), r["spelled"] == spelled, r["place"])
+        tiers[r["word_id"]] = min(tier, tiers.get(r["word_id"], tier))
+    return list(dict.fromkeys(r["word_id"] for r in rows)), tiers
+
+
+def _bg_tier(exact: bool, same_spelling: bool, place: int) -> int:
+    """How well a gloss item matched, lower first. 0-7 an item that is the query
+    exactly as written, by where it stands (the entry's first item, another in
+    the first sense, a later sense; bare before qualified); 8-15 the same for an
+    item that only shares the query's stems (водя for вода); 16 and 17 an item
+    that merely mentions them, in the first sense or later."""
+    if not exact:
+        return 16 + (place >= 4)
+    return place + (0 if same_spelling else 8)
 
 
 @router.get("")
@@ -154,6 +172,7 @@ def search(
     alternatives: list[dict] = []
     inflections: dict[int, list[str]] = {}
     bg_terms: list[str] | None = None  # set when the words were found in Bulgarian
+    bg_tiers: dict[int, int] = {}  # and how well each one matched
 
     japanese = has_japanese(q)
     cyrillic = not japanese and bg.has_cyrillic(q)
@@ -162,7 +181,7 @@ def search(
 
     if cyrillic:
         bg_terms = bg.terms(q)
-        word_ids = _bulgarian_words(bg_terms, limit)
+        word_ids, bg_tiers = _bulgarian_words(q, limit)
         interpretation = {"kind": "bulgarian"}
 
     if japanese or kana_guess:
@@ -204,12 +223,12 @@ def search(
         word_ids = checked
         if latin_bg:
             reading = _shlyokavitsa(q)
-            found = _bulgarian_words(bg.terms(reading), limit) if reading else []
+            found, tiers = _bulgarian_words(reading, limit) if reading else ([], {})
             if word_ids and found:
                 # Romaji won, but the Bulgarian reading is one tap away.
                 alternatives.append({"kind": "bulgarian", "query": reading})
             elif found:
-                word_ids, bg_terms = found, bg.terms(reading)
+                word_ids, bg_terms, bg_tiers = found, bg.terms(reading), tiers
                 interpretation = {"kind": "bulgarian", "reading": reading}
                 kana_guess = ""
         if not japanese and not word_ids:
@@ -230,9 +249,9 @@ def search(
     elif latin_bg:
         # Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.
         reading = _shlyokavitsa(q)
-        found = _bulgarian_words(bg.terms(reading), limit) if reading else []
+        found, tiers = _bulgarian_words(reading, limit) if reading else ([], {})
         if found:
-            word_ids, bg_terms = found, bg.terms(reading)
+            word_ids, bg_terms, bg_tiers = found, bg.terms(reading), tiers
             interpretation = {"kind": "bulgarian", "reading": reading}
 
     if not word_ids and not japanese and bg_terms is None:
@@ -257,7 +276,9 @@ def search(
     for wid, reasons in inflections.items():
         if wid in words and reasons:
             words[wid]["inflection"] = reasons
-    ordered = sorted(words.values(), key=_rank)[:limit]
+    # A Bulgarian search puts the words that mean exactly the query first: вода
+    # finds 水 before 水道, ябълка finds 林檎 before 目玉 (очна ябълка).
+    ordered = sorted(words.values(), key=lambda w: (bg_tiers.get(w["id"], 0), *_rank(w)))[:limit]
     return {
         "query": q,
         "interpretation": interpretation,
