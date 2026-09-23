@@ -1,23 +1,26 @@
 /**
- * Proof of concept: one drawing pad, every handwriting recogniser we could use,
- * side by side. Not part of the app -- open /draw-poc.html on the dev server.
+ * Proof of concept: one drawing pad, every handwriting recogniser we tried,
+ * side by side. Not part of the app or its build -- open /poc/draw.html on the
+ * dev server.
  *
  *  - ours:        server/recognize.py over the API (stroke endpoints, KanjiVG)
- *  - DaKanji v2:  6,507-class int8 CNN, wants light ink on black
+ *  - DaKanji v2:  the app's own src/draw/classifier.ts
+ *  - merged:      what the app's draw pad shows, DaKanji leading
  *  - LT8:         3,082-class fp16 ResNet, does its own crop and polarity
  *  - KanjiCanvas: stroke-correspondence matcher in plain JS
  *
- * DaKanji is run twice, on the whole pad and cropped to the ink, because it
- * has no crop of its own and it was trained on centred ETL scans.
+ * DaKanji cropped to the ink won the trial (2026-09-23) and went into the app;
+ * the whole-pad variant it beat is gone from here.
  *
- * web/public/models/ is gitignored. It needs:
- *   char_classifier.onnx, char_classifier_labels.txt
- *     -- github.com/CaptainDario/DaKanji-Single-Kanji-Recognition, release v2.0
+ * web/poc/models/ is gitignored. It needs:
  *   lt8/model.fp16.onnx, lt8/labels.json
  *     -- huggingface.co/LT8/japanese-handwriting-onnx (not the int8 build: its
  *        own demo notes it misranks confusables like 十/ナ on drawn input)
  *   kanji-canvas.js, kanjicanvas-refpatterns.js -- github.com/asdfjkl/kanjicanvas
  */
+
+import type { RecognizeResponse } from '../src/api'
+import { classify, merge, warmClassifier } from '../src/draw/classifier'
 
 declare const ort: any
 declare const KanjiCanvas: any
@@ -193,28 +196,31 @@ async function session(url: string) {
   return ort.InferenceSession.create(url, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' })
 }
 
-const dakanji = (async () => {
-  const labels = [...(await (await fetch('/models/char_classifier_labels.txt')).text()).trim()]
-  return { labels, s: await session('/models/char_classifier.onnx') }
-})()
-
 const lt8 = (async () => {
-  const labels = ((await (await fetch('/models/lt8/labels.json')).json()) as { char: string }[]).map((e) => e.char)
-  return { labels, s: await session('/models/lt8/model.fp16.onnx') }
+  const labels = ((await (await fetch('/poc/models/lt8/labels.json')).json()) as { char: string }[]).map((e) => e.char)
+  return { labels, s: await session('/poc/models/lt8/model.fp16.onnx') }
 })()
-
-async function runDaKanji(img: [HTMLCanvasElement, CanvasRenderingContext2D], invert: boolean): Promise<Result> {
-  const { labels, s } = await dakanji
-  const t0 = performance.now()
-  const data = gray(img[1], 128, invert)
-  const out = await s.run({ image: new ort.Tensor('float32', data, [1, 1, 128, 128]) })
-  const r = ranked(out.probs.data, labels)
-  return { list: r.list, ms: performance.now() - t0, rankOf: r.rankOf, note: noteFor(r.has) }
-}
 
 function noteFor(has: (ch: string) => boolean) {
   const t = target.value.trim()
   return t && !has(t) ? `${t} is not in this model's labels` : undefined
+}
+
+function listRank(list: { char: string }[]) {
+  return (ch: string) => {
+    const i = list.findIndex((c) => c.char === ch)
+    return i < 0 ? null : i + 1
+  }
+}
+
+async function matcher(also: string[] = [], limit = 60): Promise<RecognizeResponse> {
+  const thinned = strokes.map((s) => (s.length > 2 ? [s[0], s[s.length - 1]] : s))
+  const res = await fetch(API + '/api/recognize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strokes: thinned, limit, also }),
+  })
+  return (await res.json()) as RecognizeResponse
 }
 
 const models: Model[] = [
@@ -224,35 +230,44 @@ const models: Model[] = [
     ready: fetch(API + '/api/recognize/ready'),
     run: async () => {
       const t0 = performance.now()
-      const thinned = strokes.map((s) => (s.length > 2 ? [s[0], s[s.length - 1]] : s))
-      const res = await fetch(API + '/api/recognize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strokes: thinned, limit: 60 }),
-      })
-      const body = (await res.json()) as { candidates: { char: string; score: number }[] }
-      const all = body.candidates
+      const all = (await matcher()).candidates
       return {
         list: all.slice(0, SHOW).map((c) => ({ char: c.char, score: c.score.toFixed(1) })),
         ms: performance.now() - t0,
-        rankOf: (ch) => {
-          const i = all.findIndex((c) => c.char === ch)
-          return i < 0 ? null : i + 1
-        },
+        rankOf: listRank(all),
       }
     },
   },
   {
     name: 'DaKanji v2 — cropped to ink',
-    detail: '6,507 classes · int8 · 2.2 MB',
-    ready: dakanji,
-    run: () => runDaKanji(croppedImage(), false),
+    detail: 'src/draw/classifier.ts · kana dropped',
+    ready: warmClassifier(),
+    run: async () => {
+      const t0 = performance.now()
+      const all = await classify(strokes, PAD)
+      return {
+        list: all.slice(0, SHOW).map((g) => ({ char: g.char, score: (g.p * 100).toFixed(1) + '%' })),
+        ms: performance.now() - t0,
+        rankOf: listRank(all),
+      }
+    },
   },
   {
-    name: 'DaKanji v2 — whole pad',
-    detail: 'same model, pad inverted, no crop',
-    ready: dakanji,
-    run: () => runDaKanji(padImage(), true),
+    name: 'Merged — what the app shows',
+    detail: 'DaKanji leads, matcher fills in (merge())',
+    ready: warmClassifier(),
+    run: async () => {
+      const t0 = performance.now()
+      const guesses = await classify(strokes, PAD)
+      const res = await matcher(guesses.map((g) => g.char), 12)
+      const list = merge(guesses, res.candidates, [...res.candidates, ...res.also])
+      const from = new Set(guesses.filter((g, i) => i === 0 || g.p >= 0.02).map((g) => g.char))
+      return {
+        list: list.map((c) => ({ char: c.char, score: from.has(c.char) ? 'DaKanji' : 'matcher' })),
+        ms: performance.now() - t0,
+        rankOf: listRank(list),
+      }
+    },
   },
   {
     name: 'LT8 japanese-handwriting',
@@ -277,15 +292,8 @@ const models: Model[] = [
       KanjiCanvas.recordedPattern_kc = strokes.map((s) => s.map(([x, y]) => [x * k, y * k]))
       const text: string = KanjiCanvas.recognize('kc') ?? ''
       const list = text.split(/\s+/).filter(Boolean).map((char) => ({ char }))
-      return {
-        list,
-        ms: performance.now() - t0,
-        // It only ever reports its top ten.
-        rankOf: (ch) => {
-          const i = list.findIndex((c) => c.char === ch)
-          return i < 0 ? null : i + 1
-        },
-      }
+      // It only ever reports its top ten.
+      return { list, ms: performance.now() - t0, rankOf: listRank(list) }
     },
   },
 ]
@@ -346,7 +354,7 @@ async function run() {
   }
   showPreviews([
     ['DaKanji crop', croppedImage()[0]],
-    ['LT8 / DaKanji pad', padImage()[0]],
+    ['LT8 input', padImage()[0]],
   ])
   // Sequentially, so the timings are each model's own and not a race for the CPU.
   const results: (Result | Error | null)[] = models.map(() => null)

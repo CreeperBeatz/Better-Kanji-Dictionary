@@ -201,6 +201,11 @@ def main() -> int:
             out = recognize.recognise(ink)
             golden["draw"].append({"char": char, "strokes": ink, "out": out})
 
+    # What the image classifier's picks are annotated with: its whole label set,
+    # components and characters the dictionary lacks mixed in.
+    also = rng.sample(common, 40) + list("氵亻扌艹辶填頬塡頰") + ["x", "あ", "𠮟"]
+    golden["describe"] = {"chars": also, "out": recognize.describe(also)}
+
     kr: dict[str, list[str]] = {}
     for r in query("SELECT kanji, radical FROM kanji_radical"):
         kr.setdefault(r["kanji"], []).append(r["radical"])

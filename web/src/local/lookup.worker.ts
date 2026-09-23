@@ -254,7 +254,12 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
       return e.search(args[0] as string, 30, (args[1] as string) ?? 'en', !!o.common, o.sort, o.order)
     }
     case 'recognize':
-      return { candidates: e.recognize(args[0] as number[][][]), strokes: (args[0] as unknown[]).length }
+      return {
+        candidates: e.recognize(args[0] as number[][][]),
+        strokes: (args[0] as unknown[]).length,
+        // Capped as the server route caps it.
+        also: e.describe(((args[1] as string[] | undefined) ?? []).slice(0, 30)),
+      }
     case 'recognizerReady': {
       const r = e.recognition()
       return { chars: r.count, buckets: r.bucketCount }

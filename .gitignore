@@ -7,7 +7,7 @@ pipeline/data/
 data/betterrtk.sqlite*
 *.part
 web/public/ort/
-web/public/models/
+web/poc/models/
 data/associations/
 data/auth/
 data/offline/

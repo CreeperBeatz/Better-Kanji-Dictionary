@@ -14,12 +14,16 @@ router = APIRouter(prefix="/api/recognize", tags=["recognize"])
 
 MAX_STROKES = engine.MAX_STROKES
 MAX_POINTS = 400  # per stroke; only the first and last are used
+MAX_ALSO = 30
 
 
 class Ink(BaseModel):
     strokes: list[list[tuple[float, float]]] = Field(default_factory=list)
     window: int = engine.STROKE_WINDOW
     limit: int = engine.MAX_RESULTS
+    # Characters the device's image classifier proposed, returned with the same
+    # metadata as the matcher's own picks; they do not change the ranking.
+    also: list[str] = Field(default_factory=list)
 
 
 @router.post("")
@@ -27,15 +31,16 @@ def recognise(ink: Ink) -> dict:
     if len(ink.strokes) > MAX_STROKES:
         raise HTTPException(400, f"at most {MAX_STROKES} strokes")
     strokes = [[list(p) for p in s[:MAX_POINTS]] for s in ink.strokes if s]
+    also = engine.describe(ink.also[:MAX_ALSO])
     if not strokes:
-        return {"candidates": [], "strokes": 0}
+        return {"candidates": [], "strokes": 0, "also": also}
 
     candidates = engine.recognise(
         strokes,
         window=max(0, min(6, ink.window)),
         limit=max(1, min(60, ink.limit)),
     )
-    return {"candidates": candidates, "strokes": len(strokes)}
+    return {"candidates": candidates, "strokes": len(strokes), "also": also}
 
 
 @router.get("/ready")

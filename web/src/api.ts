@@ -246,6 +246,12 @@ export interface DrawCandidate {
   meaningsBg: string[] | null
 }
 
+export interface RecognizeResponse {
+  candidates: DrawCandidate[]
+  strokes: number
+  also: DrawCandidate[]
+}
+
 /**
  * A request the server refused. `message` is its English `detail`; `code`, when
  * the server sends one, is what web/src/i18n/errors.ts translates, with
@@ -445,9 +451,10 @@ export const api = {
   clearDecomposition: (char: string) =>
     send<{ char: string; cleared: boolean }>(`/api/decomp/${encodeURIComponent(char)}`, 'DELETE'),
 
-  recognize: (strokes: [number, number][][]) =>
-    localFirst(local.recognize(strokes), () =>
-      send<{ candidates: DrawCandidate[]; strokes: number }>('/api/recognize', 'POST', { strokes }),
+  /** `also`: other recognisers' picks, returned with the same metadata; they do not change the ranking. */
+  recognize: (strokes: [number, number][][], also: string[] = []) =>
+    localFirst(local.recognize(strokes, also), () =>
+      send<RecognizeResponse>('/api/recognize', 'POST', { strokes, also }),
     ),
 
   /** Builds the reference index ahead of time, so the first stroke is not slow. */

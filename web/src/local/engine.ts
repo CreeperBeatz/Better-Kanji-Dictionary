@@ -661,6 +661,10 @@ export class Engine {
     return this.recognition().recognise(strokes, Math.max(0, Math.min(6, window)), Math.max(1, Math.min(60, limit)))
   }
 
+  describe(chars: string[]): DrawCandidate[] {
+    return this.recognition().describe(chars)
+  }
+
   recognition(): Recognizer {
     if (!this.recognizer) {
       this.recognizer = new Recognizer(

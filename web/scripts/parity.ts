@@ -20,6 +20,7 @@ interface Golden {
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
   wordsFor: { char: string; out: number[] }[]
+  describe: { chars: string[]; out: unknown[] }
 }
 
 const [dir, goldenPath] = process.argv.slice(2)
@@ -109,6 +110,13 @@ console.log(
   `draw: ${drawOk}/${golden.draw.length} identical lists, ${drawTop} same first pick, ` +
     `${(drawMs / golden.draw.length).toFixed(1)} ms per drawing`,
 )
+
+{
+  const { chars, out } = golden.describe
+  const got = engine.describe(chars)
+  if (!same(out, got)) note('describe', chars.join(''), out, got)
+  console.log(`describe: ${same(out, got) ? 'identical' : 'DIFFERENT'} (${out.length} of ${chars.length} described)`)
+}
 
 let radOk = 0
 for (const { r, out } of golden.radicals) {

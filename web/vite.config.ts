@@ -1,6 +1,7 @@
 import react from '@vitejs/plugin-react'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import type { OutputBundle, OutputChunk } from 'rolldown'
 
@@ -43,4 +44,14 @@ function serviceWorker(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), serviceWorker()],
+  resolve: {
+    alias: {
+      // onnxruntime-web's exports map hides the runtime files the draw pad has
+      // to hand it by URL (src/draw/classifier.ts), so they are reached by path.
+      'ort-dist': fileURLToPath(new URL('./node_modules/onnxruntime-web/dist', import.meta.url)),
+    },
+  },
+  // Pre-bundling would inline the runtime's glue module where a URL to it is
+  // wanted, and the runtime would then try to import its source text.
+  optimizeDeps: { exclude: ['onnxruntime-web', 'ort-dist'] },
 })
