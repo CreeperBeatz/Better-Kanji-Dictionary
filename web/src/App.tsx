@@ -437,6 +437,7 @@ export function App() {
             data={detail}
             hovered={hoveredNode}
             onWord={openWord}
+            onKanji={openKanji}
             onComponents={mobile || view !== 'focus' ? () => setView('focus') : undefined}
           />
         ) : (

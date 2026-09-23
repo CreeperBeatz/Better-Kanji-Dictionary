@@ -19,6 +19,16 @@
  *      toward the rarer ones -- 河 sits by 可, not lost in the 氵 crowd, and
  *      beside 何 and 歌 -- then relax collisions with the skeleton pinned.
  *
+ * Lookalikes among the components are linked too (`similar`): sharing parts
+ * already puts 待 by 持, but not 人 by 入, whose likeness is in the strokes.
+ * It only goes so far, on purpose. Measured over Yencken's lookalike pairs
+ * (data/similar-eval/, not in git), the link roughly halves how far apart a
+ * lookalike sits -- median 634th-nearest to 306th at N1 -- and leaves every
+ * leaf beside its rarest part. Pulling the leaves themselves toward their
+ * lookalikes was tried and does the opposite: a character whose parts are in
+ * one place and whose lookalike is in another lands in neither, and the map
+ * stops meaning "these combine" (rarest part 2nd-nearest -> 90th-280th).
+ *
  * Characters with no connection to the rest (no parts, used in nothing, or a
  * small island of their own) have nowhere meaningful to be, so they are not
  * simulated; they are shelved in rows under the map.
@@ -47,6 +57,8 @@ export interface LayoutRequest {
   size: Float32Array
   /** starting positions, NaN where unknown */
   seed: Float32Array
+  /** a,b index pairs of lookalikes */
+  similar?: Uint32Array
 }
 
 export type LayoutMessage =
@@ -66,6 +78,9 @@ interface Link extends SimulationLinkDatum<Node> {
  * (1 + characters hanging off it) ^ -RARITY.
  */
 const RARITY = 3
+
+/** A lookalike link between two parts, against 3 for part-of and 1 per shared user. */
+const LOOK_LINK = 8
 
 // The simulation loops synchronously, so a newer request cannot interrupt it
 // from in here; the client terminates the worker instead.
@@ -123,7 +138,7 @@ function layout(req: LayoutRequest) {
     return p
   }
 
-  simulate(id, nodes, main, edges, size, snapshot)
+  simulate(id, nodes, main, edges, size, snapshot, req.similar ?? new Uint32Array(0))
 }
 
 /** Run a simulation to completion, streaming a snapshot every ~60 ms. */
@@ -196,6 +211,7 @@ function simulate(
   edges: Uint32Array,
   size: Float32Array,
   snapshot: () => Float32Array,
+  similar: Uint32Array,
 ) {
   const n = nodes.length
   const inMain = new Uint8Array(n)
@@ -227,6 +243,13 @@ function simulate(
   for (const l of leaves) {
     const ps = parts[l.i]
     for (let a = 0; a < ps.length; a++) for (let b = a + 1; b < ps.length; b++) bump(ps[a], ps[b], 1)
+  }
+
+  // Lookalike components, both in the main piece.
+  for (let k = 0; k < similar.length; k += 2) {
+    const a = similar[k]
+    const b = similar[k + 1]
+    if (inMain[a] && inMain[b] && isPart[a] && isPart[b]) bump(a, b, LOOK_LINK)
   }
   const links: Link[] = []
   const weight = new Float32Array(n)

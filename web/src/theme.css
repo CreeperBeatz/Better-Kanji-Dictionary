@@ -3782,6 +3782,19 @@ html {
   }
 }
 
+/* Six tabs on a narrow phone: closer together, so they mostly fit unscrolled. */
+@media (max-width: 440px) {
+  .rail-tabs button {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .rail-tabs button[aria-selected='true']::after {
+    left: 6px;
+    right: 6px;
+  }
+}
+
 /* ---------------------------------------------------------------- press and hold (touch) */
 
 /* A long press shows a card, not the browser's selection or callout. */
@@ -3870,4 +3883,80 @@ html {
   .hold-card {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------- similar */
+
+/* On the kanji page. */
+.similar-rows {
+  margin-top: 18px;
+}
+
+.similar-rows h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.similar-rows ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.similar-glyphs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.similar-glyph {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--paper);
+  font-family: var(--mincho);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.similar-glyph:hover {
+  border-color: var(--rule-bright);
+  background: var(--sumi-lift);
+}
+
+.similar-glyph.small {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  margin-left: 4px;
+  font-size: 17px;
+  vertical-align: middle;
+}
+
+.similar-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.similar-why {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.similar-why:lang(ja) {
+  font-family: var(--mincho);
+  font-size: 12.5px;
+}
+
+.similar-forms {
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
 }

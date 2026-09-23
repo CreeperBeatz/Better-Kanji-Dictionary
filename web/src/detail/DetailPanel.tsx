@@ -3,6 +3,8 @@ import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { StrokeOrder } from './StrokeOrder'
+import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
+import { isCommon } from '../similar/why'
 
 const S = strings(
   {
@@ -64,6 +66,8 @@ interface Props {
   data: DetailData
   hovered: KanjiNode | null
   onWord: (word: Word) => void
+  /** Opens a near-synonym, lookalike or same-reading kanji from the page. */
+  onKanji: (char: string) => void
   /** Shows the focus graph, from the map or on a phone; left out when it is already on screen. */
   onComponents?: () => void
 }
@@ -77,10 +81,11 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
-export function DetailPanel({ data, hovered, onWord, onComponents }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
+  const similar = useSimilar(data.focus.char, isCommon(data.focus))
 
   // Vocabulary follows the focus, not the hover -- otherwise it would thrash
   // as the cursor crosses the graph.
@@ -179,6 +184,17 @@ export function DetailPanel({ data, hovered, onWord, onComponents }: Props) {
             ))}
           </ul>
         </div>
+      )}
+
+      {/* After the words: what it is confused with -- meaning first, then
+          shape, then reading, which is the rarest question to have. */}
+      {!isPreview && similar && (
+        <>
+          <Related kind="mean" items={similar.mean} onKanji={onKanji} />
+          <LooksLike items={similar.look} onKanji={onKanji} />
+          <Related kind="read" items={similar.read} onKanji={onKanji} />
+          <OtherForms items={similar.variant} onKanji={onKanji} />
+        </>
       )}
 
       {!isPreview && counts && (

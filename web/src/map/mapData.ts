@@ -2,9 +2,10 @@
  * Map scopes: fetching, sizing, adjacency, and the layout cache.
  *
  * A layout is expensive (seconds, at the widest scope) and entirely determined
- * by the node list and edges, so a finished one is kept in localStorage under
- * a key that changes whenever either does -- a decomposition fix lays that
- * scope out again rather than drawing stale positions.
+ * by the node list, edges and lookalike pairs, so a finished one is kept in
+ * localStorage under a key that changes whenever any of them does -- a
+ * decomposition fix lays that scope out again rather than drawing stale
+ * positions.
  */
 
 import { api, type MapResponse } from '../api'
@@ -30,6 +31,8 @@ export interface MapData {
   target: Uint8Array
   fanout: Uint16Array
   edges: Uint32Array
+  /** a,b index pairs of lookalikes, for the layout */
+  similar: Uint32Array
   /** world-space radius, drives collision, drawing and label level-of-detail */
   size: Float32Array
   /** CSR adjacency: parts of i are partsIdx[partsAt[i] .. partsAt[i+1]] */
@@ -96,12 +99,14 @@ function prepare(r: MapResponse): MapData {
     target: Uint8Array.from(r.target),
     fanout: Uint16Array.from(r.fanout, (f) => f ?? 0),
     edges,
+    similar: Uint32Array.from(r.similar ?? []),
     size,
     partsAt,
     partsIdx,
     usersAt,
     usersIdx,
-    key: `betterrtk:map:v2:${r.scope}:${n}:${m}:${hash(r.chars.join('') + r.edges.join(','))}`,
+    // v3: lookalikes pull on the layout, so a v2 layout is stale.
+    key: `betterrtk:map:v3:${r.scope}:${n}:${m}:${hash(r.chars.join('') + r.edges.join(',') + ';' + (r.similar ?? []).join(','))}`,
   }
 }
 

@@ -23,6 +23,8 @@ from ..db import query
 router = APIRouter(prefix="/api/map", tags=["map"])
 
 SCOPES = {"5", "4", "3", "2", "1", "common", "all"}
+# How many of each character's closest lookalikes pull on the map.
+LOOKALIKES = 3
 
 # Keyed on the override set, so fixing a decomposition invalidates it.
 _cache: dict[tuple[str, str], dict] = {}
@@ -101,6 +103,15 @@ def _build(scope: str) -> dict:
         b = json.loads(rows[c]["meanings_bg"] or "[]") if c in rows else []
         meanings_bg.append(b[0] if b else "")
 
+    # Lookalikes pull on the layout too, so 人 and 入 end up in sight of each
+    # other; see layout.worker.ts. Each character's closest few, both in scope.
+    look: set[tuple[int, int]] = set()
+    for r in query("SELECT char, other FROM similar WHERE kind = 'look' AND rank < ?", (LOOKALIKES,)):
+        a, b = index.get(r["char"]), index.get(r["other"])
+        if a is not None and b is not None and a != b:
+            look.add((a, b) if a < b else (b, a))
+    similar = [i for pair in sorted(look) for i in pair]
+
     return {
         "scope": scope,
         "chars": chars,
@@ -114,6 +125,8 @@ def _build(scope: str) -> dict:
         # 1 = in the scope in its own right, 0 = pulled in only as a part
         "target": [1 if c in targets else 0 for c in chars],
         "edges": edges,
+        # flat a,b index pairs of lookalikes, each pair once
+        "similar": similar,
         "counts": {"nodes": len(chars), "targets": len(targets), "edges": len(edges) // 2},
     }
 

@@ -186,6 +186,33 @@ def by_level(level: int) -> dict:
     }
 
 
+@router.get("/{char}/similar")
+def similar_to(char: str) -> dict:
+    """What looks like `char`, what shares a reading with it, what means much
+    the same, and its other forms.
+
+    Built offline by pipeline/similar.py. Every stored neighbour comes back,
+    closest first; the client filters by level, as it does containers.
+    """
+    if len(char) != 1:
+        raise HTTPException(400, "expected a single character")
+    rows = query(
+        "SELECT other, kind, score, note FROM similar WHERE char = ? ORDER BY kind, rank",
+        (char,),
+    )
+    nodes = _fetch(list(dict.fromkeys(r["other"] for r in rows)))
+    out: dict[str, list] = {"look": [], "read": [], "mean": [], "variant": []}
+    for r in rows:
+        n = nodes.get(r["other"])
+        if n is None:
+            continue
+        item = {**n, "score": r["score"]}
+        if r["kind"] in ("read", "mean"):
+            item["why"] = json.loads(r["note"]) if r["note"] else None
+        out[r["kind"]].append(item)
+    return {"char": char, **out}
+
+
 @router.get("/{char}")
 def get_kanji(char: str) -> dict:
     if len(char) != 1:

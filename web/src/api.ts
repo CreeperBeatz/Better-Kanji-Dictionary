@@ -46,6 +46,26 @@ export interface GraphResponse {
   }
 }
 
+/**
+ * Why two kanji are listed together, as the data says it: words written with
+ * either (早い・速い) or a kun reading in common, for a shared reading; English
+ * meanings in common, for a near-synonym.
+ */
+export type SimilarWhy = { words: string[] } | { kun: string } | { gloss: string[] }
+
+/**
+ * What looks like a character, what competes with it for a reading, what
+ * means much the same, and its other forms; closest first. A pair is under
+ * `read` or `mean`, never both.
+ */
+export interface SimilarResponse {
+  char: string
+  look: (KanjiNode & { score: number })[]
+  read: (KanjiNode & { score: number; why: SimilarWhy | null })[]
+  mean: (KanjiNode & { score: number; why: SimilarWhy | null })[]
+  variant: (KanjiNode & { score: number })[]
+}
+
 /** One map scope, column-wise: index i across every array is one character. */
 export interface MapResponse {
   scope: string
@@ -62,6 +82,8 @@ export interface MapResponse {
   target: (0 | 1)[]
   /** flat parent,child index pairs */
   edges: number[]
+  /** flat a,b index pairs of lookalikes, each pair once; they pull on the layout */
+  similar: number[]
   counts: { nodes: number; targets: number; edges: number }
 }
 
@@ -327,6 +349,8 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
   return res.json()
 }
 
+const similarCache = new Map<string, Promise<SimilarResponse>>()
+
 export const api = {
   kanji: (char: string) => get<GraphResponse>(`/api/kanji/${encodeURIComponent(char)}`),
 
@@ -338,6 +362,17 @@ export const api = {
     ),
 
   map: (scope: string) => get<MapResponse>(`/api/map/${encodeURIComponent(scope)}`),
+
+  /** Kept for the session: a character's page is opened again and again. */
+  similar: (char: string): Promise<SimilarResponse> => {
+    let p = similarCache.get(char)
+    if (!p) {
+      p = get<SimilarResponse>(`/api/kanji/${encodeURIComponent(char)}/similar`)
+      p.catch(() => similarCache.delete(char))
+      similarCache.set(char, p)
+    }
+    return p
+  },
 
   word: (id: number) => get<WordEntry>(`/api/search/word/${id}`),
 

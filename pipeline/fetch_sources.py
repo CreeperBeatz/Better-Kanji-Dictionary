@@ -99,6 +99,45 @@ SOURCES = {
         "https://raw.githubusercontent.com/omwn/omw-data/main/wns/jpn/wn-data-jpn.tab",
         "Japanese WordNet (NICT licence)",
     ),
+    # --- similar kanji: the glyphs are drawn in two open fonts as well as from
+    # KanjiVG's strokes, and Unihan tells variant forms from near-synonyms
+    "noto-sans-jp": (
+        "NotoSansJP.ttf",
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/NotoSansJP%5Bwght%5D.ttf",
+        "Noto Sans JP, OFL -- lookalikes in print",
+    ),
+    "noto-serif-jp": (
+        "NotoSerifJP.ttf",
+        "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifjp/NotoSerifJP%5Bwght%5D.ttf",
+        "Noto Serif JP, OFL -- lookalikes in mincho",
+    ),
+    "unihan": (
+        "Unihan.zip",
+        "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip",
+        "variant forms (Unicode licence)",
+    ),
+    # Human lists: shipped as a boost (the pairs people named always show), and
+    # the benchmark for tests/similar_eval.py
+    "yencken-flashcards": (
+        "similar/yencken/flashcards.csv",
+        "https://lars.yencken.org/datasets/kanji-confusion/flashcards.csv",
+        "lookalikes listed as flashcard distractors, CC BY 3.0",
+    ),
+    "yencken-pool": (
+        "similar/yencken/poolexp_judgements.yaml.gz",
+        "https://lars.yencken.org/datasets/kanji-confusion/poolexp_judgements.yaml.gz",
+        "lookalikes native speakers picked from a pool, CC BY 3.0",
+    ),
+    "kanjium-lookalikes": (
+        "similar/kanjium/lookalikes.txt",
+        "https://raw.githubusercontent.com/mifunetoshiro/kanjium/master/data/source_files/lookalikes.txt",
+        "lookalikes, CC BY-SA 4.0",
+    ),
+    "kanjium-synonyms": (
+        "similar/kanjium/synonyms.txt",
+        "https://raw.githubusercontent.com/mifunetoshiro/kanjium/master/data/source_files/synonyms.txt",
+        "near-synonym kanji, CC BY-SA 4.0",
+    ),
 }
 
 # Big, slow, and only needed once for the etymology extract.
@@ -137,6 +176,7 @@ def resolve(url: str) -> str:
 def fetch(name: str, force: bool = False) -> Path:
     filename, url_spec, note = SOURCES[name]
     dest = DATA / filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and not force:
         print(f"  skip  {filename:<32} ({dest.stat().st_size:,} bytes, already present)")
         return dest
