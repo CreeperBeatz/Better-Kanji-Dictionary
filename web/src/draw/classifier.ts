@@ -31,7 +31,8 @@ export interface Guess {
 
 // --- input -------------------------------------------------------------------
 //
-// The variant Dani rated best in the side-by-side trial (web/poc/draw.html):
+// The variant Dani rated best in a side-by-side trial against LT8, KanjiCanvas
+// and the stroke matcher (the PoC page is in git history, commit 3436ae4):
 // the ink redrawn centred in its own square, light on black. The model has no
 // crop of its own and was trained on centred scans, and it reads dark-on-white
 // as noise -- 十 came back as む.
