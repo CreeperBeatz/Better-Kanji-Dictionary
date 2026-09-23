@@ -125,6 +125,7 @@ const S = strings(
     whole: 'Show the whole map',
     counts: '{n} characters, {e} links',
     legendSize: 'larger is more frequent, or a part more characters share',
+    legendNear: 'nearby characters share a part; ones that share none sit in rows below',
     legendClick: 'click to select and see its links, click again to open,',
     legendEmpty: 'click empty space to deselect',
   },
@@ -152,6 +153,7 @@ const S = strings(
     whole: 'Покажете цялата карта',
     counts: '{n} йероглифа, {e} връзки',
     legendSize: 'по-големият е по-чест или е част, споделена от повече йероглифи',
+    legendNear: 'близките йероглифи имат обща част; тези без общи части са на редове отдолу',
     legendClick: 'кликнете, за да изберете и видите връзките, кликнете пак, за да отворите,',
     legendEmpty: 'кликнете в празно, за да отмените избора',
   },
@@ -992,6 +994,8 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
           {counts && t('counts', { n: num(counts.nodes), e: num(counts.edges) })}
           <br />
           {t('legendSize')}
+          <br />
+          {t('legendNear')}
           <br />
           {t('legendClick')}
           <br />

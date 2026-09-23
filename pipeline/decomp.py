@@ -4,12 +4,23 @@ The parsing semantics here are lifted verbatim from build.py so the app and the
 research pipeline agree on what "contains" means:
 
   * `char:type(arg,arg)` lines; overrides loaded last and win
-  * types fix/lock/ba/built mean atomic -- no components
+  * the args are the components, whatever the type; `0` alone means atomic,
+    and so does a list that is nothing but strokes
   * purely numeric args are anonymous intermediate nodes, expanded recursively
   * CJK stroke codepoints (U+31C0-31EF) are dropped, not treated as components
 
-One deliberate departure: variant codepoints of the same component are folded
-together (see ALIASES), so meaning and usage land on one node.
+Two deliberate departures, both switched off by `as_build_py`:
+
+  * variant codepoints of the same component are folded together (see
+    ALIASES), so meaning and usage land on one node
+  * build.py read the types fix/lock/ba/built as atomic and dropped their args.
+    That is not what they mean: topokanji, which wrote the override file,
+    ignores the type altogether, and every override is `fix` -- so 記:fix(言,己)
+    came out with no parts at all, as did 別, 込, 印, 声 and ~80 other jōyō.
+    Those lines are now read, but only for kanji KRADFILE splits into several
+    radicals, and never adding bare strokes (see `_curb`), because topokanji
+    wrote them to fix a learning order, not to describe shapes: it breaks even
+    口 into 丨一 and 門 into 丨彐月 so everything bottoms out in a few strokes.
 
 build.py is left untouched -- it is the frozen research artifact that produced
 order-n2.tsv, and re-running it must keep giving the same answer. New work reads
@@ -31,7 +42,8 @@ DATA = Path(__file__).parent / "data"
 USER_OVERRIDES = Path(__file__).parent.parent / "data" / "decomp_overrides.json"
 
 LINE = re.compile(r"^(.+?):([a-z0-9/]+)\((.*)\)\s*$")
-ATOMIC_TYPES = {"fix", "lock", "ba", "built"}
+# Only build.py's reading; see the module docstring.
+BUILD_PY_ATOMIC_TYPES = {"fix", "lock", "ba", "built"}
 MAX_DEPTH = 25
 
 
@@ -51,6 +63,25 @@ ALIASES = {
     "⻭": "歯",
 }
 
+# Decompositions the rules above cannot reach, set by hand. 食 is a radical of
+# its own in KRADFILE, so its override (人 + 良) is refused along with 門 -> 彐月;
+# 坐's override line is truncated to 人 alone.
+CURATED = {
+    "食": ["人", "良"],
+    "坐": ["人", "土"],
+    # cjk-decomp's anonymous nodes that are a kanji in all but name. Naming them
+    # links their users to it: 37105 is the 良 in 朗 郎 飠 (and so 飲 館 飯).
+    "37105": ["良"],
+    "37198": ["徴"],  # 懲
+    "37728": ["放"],  # 倣
+    "37293": ["直"],  # 値 悳
+    "37444": ["呂"],  # 侶 宮
+    # Radicals too, but ones whose parts a learner reads straight off the shape.
+    "里": ["田", "土"],
+    "戸": ["一", "尸"],
+    "骨": ["冎", "月"],
+}
+
 # 卄 is overloaded: the grass top of 草/花 and the two-hands shape of 弁/戒/弄.
 # KRADFILE marks grass with the placeholder 艾, so that decides which one a
 # given character holds.
@@ -63,13 +94,38 @@ def is_stroke(c: str) -> bool:
     return len(c) == 1 and 0x31C0 <= ord(c) <= 0x31EF
 
 
-def _krad_grass() -> frozenset[str]:
+# Single strokes that are also ideographs. As a part they say nothing a learner
+# can use, so the lines build.py ignored may not add them (旦 = 日 + 一 from
+# cjk-decomp itself is left alone).
+BARE_STROKES = frozenset("一丨丶丿亅乙乚ノ")
+
+# KRADFILE files some radicals under a stand-in character (辶 under 込, 阝 under
+# 邦 ...), so those list themselves without being primitives.
+KRAD_PLACEHOLDERS = frozenset("化个并刈込尚忙扎汁犯艾邦阡老杰礼疔禹初買滴乞")
+
+
+def _krad() -> dict[str, list[str]]:
     path = DATA / "kradfile.json.zip"
     if not path.exists():
-        return frozenset()
+        return {}
     with zipfile.ZipFile(path) as z, z.open(z.namelist()[0]) as f:
-        krad = json.load(io.TextIOWrapper(f, encoding="utf-8"))["kanji"]
-    return frozenset(k for k, comps in krad.items() if KRAD_GRASS in comps)
+        return json.load(io.TextIOWrapper(f, encoding="utf-8"))["kanji"]
+
+
+def _krad_sets() -> tuple[frozenset[str], frozenset[str]]:
+    """(characters carrying the grass radical, characters to keep whole).
+
+    Whole means KRADFILE treats it as one radical: it lists itself (口, 門), or
+    a single radical, which for 氵 阝 辶 彐 is its own stand-in (汁 阡 込 ヨ).
+    A form KRADFILE has no entry for at all (卄 艹 糹 亻) is a bound form, and
+    is kept whole too.
+    """
+    krad = _krad()
+    grass = frozenset(k for k, comps in krad.items() if KRAD_GRASS in comps)
+    compound = frozenset(
+        k for k, comps in krad.items() if k not in comps and len(comps) > 1
+    ) | KRAD_PLACEHOLDERS
+    return grass, compound
 
 
 class Decomposition:
@@ -77,18 +133,20 @@ class Decomposition:
         self,
         raw: dict[str, tuple[str, list[str]]],
         grass: frozenset[str] = frozenset(),
-        fold_variants: bool = True,
+        as_build_py: bool = False,
+        compound: frozenset[str] = frozenset(),
     ):
         self.raw = raw
         self.grass = grass  # characters KRADFILE says carry the grass radical
-        self.fold_variants = fold_variants
+        self.compound = compound  # characters KRADFILE breaks into several radicals
+        self.as_build_py = as_build_py
         self._direct_cache: dict[str, list[str]] = {}
 
     # ---------------------------------------------------------------- loading
 
     @classmethod
-    def load(cls, *, user_overrides: bool = True, fold_variants: bool = True) -> "Decomposition":
-        """`fold_variants=False` reproduces build.py exactly, for the regression check."""
+    def load(cls, *, user_overrides: bool = True, as_build_py: bool = False) -> "Decomposition":
+        """`as_build_py=True` reproduces build.py exactly, for the regression check."""
         raw: dict[str, tuple[str, list[str]]] = {}
         for path in (DATA / "cjk-decomp.txt", DATA / "cjk-override.txt"):
             if not path.exists():
@@ -104,7 +162,10 @@ class Decomposition:
                     ch, typ, args = m.group(1), m.group(2), m.group(3)
                     raw[ch] = (typ, [p for p in args.split(",") if p])
 
-        d = cls(raw, _krad_grass() if fold_variants else frozenset(), fold_variants)
+        if not as_build_py:
+            raw.update({ch: ("curated", parts) for ch, parts in CURATED.items()})
+        grass, compound = (frozenset(), frozenset()) if as_build_py else _krad_sets()
+        d = cls(raw, grass, as_build_py, compound)
         if user_overrides and USER_OVERRIDES.exists():
             d.apply_user_overrides(json.loads(USER_OVERRIDES.read_text(encoding="utf-8")))
         return d
@@ -112,7 +173,7 @@ class Decomposition:
     def apply_user_overrides(self, overrides: dict) -> None:
         """Overrides are {char: [component, ...]}; an empty list means atomic."""
         for ch, comps in overrides.items():
-            self.raw[ch] = ("fix", list(comps))
+            self.raw[ch] = ("user", list(comps))
         self._direct_cache.clear()
 
     # ---------------------------------------------------------------- queries
@@ -136,20 +197,31 @@ class Decomposition:
         if ch in self._direct_cache:
             return self._direct_cache[ch]
         entry = self.raw.get(ch)
-        if not entry or entry[0] in ATOMIC_TYPES:
+        if not entry or (self.as_build_py and entry[0] in BUILD_PY_ATOMIC_TYPES):
             self._direct_cache[ch] = []
             return []
         out: set[str] = set()
         for p in entry[1]:
             out |= self._expand(p, 0, frozenset({ch}))
-        if self.fold_variants:
+        if not self.as_build_py:
             out = {ALIASES.get(c, c) for c in out}
         if GRASS_SOURCE in out and ch in self.grass:
             out = (out - {GRASS_SOURCE}) | {GRASS}
         out.discard(ch)
+        if entry[0] in BUILD_PY_ATOMIC_TYPES and not self.as_build_py:
+            out = self._curb(ch, out)
         result = sorted(c for c in out if not is_stroke(c))
         self._direct_cache[ch] = result
         return result
+
+    def _curb(self, ch: str, parts: set[str]) -> set[str]:
+        """Guard the lines build.py ignored. topokanji splits radicals and bound
+        forms to shorten its learning order -- 氵 into 冫, 辶 into 廴, 卄 into 廾,
+        which would make every grass kanji hold two hands -- so only characters
+        KRADFILE breaks into several radicals take them, and bare strokes are not parts."""
+        if ch not in self.compound:
+            return set()
+        return parts - BARE_STROKES
 
     def closure(self, roots) -> dict[str, list[str]]:
         """Every character reachable downward from `roots`, mapped to its components."""

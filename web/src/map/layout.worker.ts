@@ -1,18 +1,27 @@
 /**
  * Force layout for the map, off the main thread.
  *
- * A plain force simulation over the widest scope (13k nodes) takes ~40 s here:
- * many-body repulsion is the cost, and it scales with every node. But most
- * nodes are leaves -- characters that are nobody's component -- and a leaf's
- * position is already implied by its parts. So large graphs go in two phases:
+ * Closeness on the map means "these combine": a character sits by the parts it
+ * is built from, and characters that share a distinctive part end up side by
+ * side -- which is also most of what makes two kanji look alike. Nothing pulls
+ * toward the centre; what lands in the middle is simply what the most
+ * characters are built from.
  *
- *   A  simulate only the skeleton: components, plus anything unconnected.
- *      Two components are linked by how many characters use them together,
- *      so 氵 settles near the phonetics it combines with. Components that many
- *      leaves hang off repel harder, which leaves room for their neighbourhood.
- *   B  drop each leaf at a weighted centroid of its parts -- rarer parts pull
- *      harder, so 河 sits by 可 rather than lost in the 氵 crowd -- then relax
- *      collisions with the skeleton pinned.
+ * Most nodes are leaves -- characters that are nobody's component -- and a
+ * leaf's position is implied by its parts, so the layout goes in two phases
+ * (which also keeps the widest scope, 13k nodes, to seconds):
+ *
+ *   A  simulate only the skeleton: the components. Two components are linked
+ *      by how many characters use them together, so 氵 settles near the
+ *      phonetics it combines with. Components that many leaves hang off repel
+ *      harder, which leaves room for their neighbourhood.
+ *   B  drop each leaf at a weighted centroid of its parts, weighted steeply
+ *      toward the rarer ones -- 河 sits by 可, not lost in the 氵 crowd, and
+ *      beside 何 and 歌 -- then relax collisions with the skeleton pinned.
+ *
+ * Characters with no connection to the rest (no parts, used in nothing, or a
+ * small island of their own) have nowhere meaningful to be, so they are not
+ * simulated; they are shelved in rows under the map.
  *
  * Positions stream back while it runs, so the map visibly forms rather than
  * sitting blank.
@@ -52,8 +61,11 @@ interface Link extends SimulationLinkDatum<Node> {
   w: number
 }
 
-/** Below this, simulate everything; the two-phase split only pays on big graphs. */
-const DIRECT_LIMIT = 1600
+/**
+ * How steeply a leaf favours its rarer parts: a part's pull is
+ * (1 + characters hanging off it) ^ -RARITY.
+ */
+const RARITY = 3
 
 // The simulation loops synchronously, so a newer request cannot interrupt it
 // from in here; the client terminates the worker instead.
@@ -70,6 +82,18 @@ function jitter(i: number, spread: number): [number, number] {
   return [Math.cos(a) * r, Math.sin(a) * r]
 }
 
+/** Connected-component label per node, ignoring edge direction. */
+function components(n: number, edges: Uint32Array): Uint32Array {
+  const root = Uint32Array.from({ length: n }, (_, i) => i)
+  const find = (x: number) => {
+    while (root[x] !== x) x = root[x] = root[root[x]]
+    return x
+  }
+  for (let k = 0; k < edges.length; k += 2) root[find(edges[k])] = find(edges[k + 1])
+  for (let i = 0; i < n; i++) root[i] = find(i)
+  return root
+}
+
 function layout(req: LayoutRequest) {
   const { id, n, edges, size, seed } = req
   const nodes: Node[] = Array.from({ length: n }, (_, i) => {
@@ -81,17 +105,25 @@ function layout(req: LayoutRequest) {
     return node
   })
 
+  // Only the largest connected piece is laid out by force; the rest is shelved.
+  const label = components(n, edges)
+  const count = new Uint32Array(n)
+  for (let i = 0; i < n; i++) count[label[i]]++
+  let biggest = 0
+  for (let i = 0; i < n; i++) if (count[i] > count[biggest]) biggest = i
+  const main = nodes.filter((d) => label[d.i] === biggest)
+
   const snapshot = () => {
     const p = new Float32Array(2 * n)
-    for (const nd of nodes) {
+    for (const nd of main) {
       p[2 * nd.i] = nd.x ?? 0
       p[2 * nd.i + 1] = nd.y ?? 0
     }
+    shelve(p, main, label, biggest, size)
     return p
   }
 
-  if (n <= DIRECT_LIMIT) direct(id, nodes, edges, size, snapshot)
-  else twoPhase(id, nodes, edges, size, snapshot)
+  simulate(id, nodes, main, edges, size, snapshot)
 }
 
 /** Run a simulation to completion, streaming a snapshot every ~60 ms. */
@@ -107,65 +139,78 @@ function run(sim: ReturnType<typeof forceSimulation<Node>>, ticks: number, onFra
   }
 }
 
-function direct(
-  id: number,
-  nodes: Node[],
-  edges: Uint32Array,
-  size: Float32Array,
-  snapshot: () => Float32Array,
-) {
-  const seeded = nodes.filter((d) => d.x !== undefined).length
-  // A seed from a neighbouring scope is mostly right already; start cool.
-  const alpha = seeded > nodes.length * 0.5 ? 0.35 : 1
+/**
+ * Lay out every node outside the main piece in rows under it, one island
+ * after another, parts before the characters built from them.
+ */
+function shelve(p: Float32Array, main: Node[], label: Uint32Array, biggest: number, size: Float32Array) {
+  let minX = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const d of main) {
+    const r = size[d.i]
+    minX = Math.min(minX, (d.x ?? 0) - r)
+    maxX = Math.max(maxX, (d.x ?? 0) + r)
+    maxY = Math.max(maxY, (d.y ?? 0) + r)
+  }
+  if (!main.length) minX = maxX = maxY = 0
 
-  for (const d of nodes) {
-    if (d.x === undefined) {
-      const [x, y] = jitter(d.i, 40 * Math.sqrt(nodes.length))
-      d.x = x
-      d.y = y
-    }
+  const islands = new Map<number, number[]>()
+  for (let i = 0; i < label.length; i++) {
+    if (label[i] === biggest) continue
+    const members = islands.get(label[i])
+    if (members) members.push(i)
+    else islands.set(label[i], [i])
   }
 
-  const links: Link[] = []
-  for (let k = 0; k < edges.length; k += 2) links.push({ source: edges[k], target: edges[k + 1], w: 1 })
-
-  const sim = forceSimulation(nodes)
-    .alpha(alpha)
-    .force(
-      'link',
-      forceLink<Node, Link>(links)
-        .id((d) => d.i)
-        .distance((l) => 14 + size[(l.source as Node).i] + size[(l.target as Node).i]),
-    )
-    .force('charge', forceManyBody<Node>().strength((d) => -18 - size[d.i] * 3).theta(1).distanceMax(600))
-    .force('collide', forceCollide<Node>((d) => size[d.i] + 2).iterations(1))
-    .force('x', forceX(0).strength(0.035))
-    .force('y', forceY(0).strength(0.035))
-    .stop()
-
-  const ticks = Math.ceil(Math.log(sim.alphaMin() / alpha) / Math.log(1 - sim.alphaDecay()))
-  run(sim, ticks, () => post({ id, kind: 'progress', positions: snapshot(), done: 0 }))
-  post({ id, kind: 'done', positions: snapshot() })
+  const gap = 10
+  const width = Math.max(maxX - minX, 400)
+  let x = minX
+  let y = maxY + 80
+  let row = 0
+  for (const members of islands.values()) {
+    // Nodes arrive most-frequent-last; components sort last too, so reverse
+    // puts each island's part first and reads left to right into its user.
+    members.reverse()
+    const span = members.reduce((s, i) => s + 2 * size[i] + gap, -gap)
+    if (x > minX && x + span > minX + width) {
+      x = minX
+      y += 2 * row + gap
+      row = 0
+    }
+    for (const i of members) {
+      const r = size[i]
+      p[2 * i] = x + r
+      p[2 * i + 1] = y + r
+      x += 2 * r + gap
+      row = Math.max(row, r)
+    }
+    x += 3 * gap
+  }
 }
 
-function twoPhase(
+function simulate(
   id: number,
   nodes: Node[],
+  main: Node[],
   edges: Uint32Array,
   size: Float32Array,
   snapshot: () => Float32Array,
 ) {
   const n = nodes.length
+  const inMain = new Uint8Array(n)
+  for (const d of main) inMain[d.i] = 1
+
   const parts: number[][] = Array.from({ length: n }, () => [])
   const isPart = new Uint8Array(n)
   for (let k = 0; k < edges.length; k += 2) {
+    if (!inMain[edges[k]]) continue
     parts[edges[k]].push(edges[k + 1])
     isPart[edges[k + 1]] = 1
   }
 
-  // Skeleton: every component, and anything with no parts to anchor it.
-  const skeleton = nodes.filter((d) => isPart[d.i] || parts[d.i].length === 0)
-  const leaves = nodes.filter((d) => !isPart[d.i] && parts[d.i].length > 0)
+  const skeleton = main.filter((d) => isPart[d.i])
+  const leaves = main.filter((d) => !isPart[d.i])
 
   // How many leaves hang directly off each component.
   const load = new Float32Array(n)
@@ -210,7 +255,7 @@ function twoPhase(
       let y = 0
       let wsum = 0
       for (const p of parts[l.i]) {
-        const w = 1 / Math.sqrt(1 + load[p])
+        const w = Math.pow(1 + load[p], -RARITY)
         x += (nodes[p].x ?? 0) * w
         y += (nodes[p].y ?? 0) * w
         wsum += w
@@ -223,13 +268,12 @@ function twoPhase(
   // Leaves ride their anchors during phase A, so the whole map forms at once.
   const frameA = () => {
     placeLeaves()
-    const p = snapshot()
     for (const l of leaves) {
       const [jx, jy] = jitter(l.i, 18)
-      p[2 * l.i] = anchor[2 * l.i] + jx
-      p[2 * l.i + 1] = anchor[2 * l.i + 1] + jy
+      l.x = anchor[2 * l.i] + jx
+      l.y = anchor[2 * l.i + 1] + jy
     }
-    post({ id, kind: 'progress', positions: p, done: 0 })
+    post({ id, kind: 'progress', positions: snapshot(), done: 0 })
   }
 
   const simA = forceSimulation(skeleton)
@@ -244,13 +288,11 @@ function twoPhase(
     .force(
       'charge',
       forceManyBody<Node>()
-        .strength((d) => -30 - size[d.i] * 2 - 26 * Math.sqrt(load[d.i]))
+        .strength((d) => -30 - size[d.i] * 2 - 45 * Math.sqrt(load[d.i]))
         .theta(1.1)
         .distanceMax(1400),
     )
     .force('collide', forceCollide<Node>((d) => size[d.i] + 4).iterations(1))
-    .force('x', forceX(0).strength(0.02))
-    .force('y', forceY(0).strength(0.02))
     .stop()
 
   const ticksA = Math.ceil(Math.log(simA.alphaMin() / alpha) / Math.log(1 - simA.alphaDecay()))
@@ -268,7 +310,7 @@ function twoPhase(
     l.y = anchor[2 * l.i + 1] + jy
   }
 
-  const simB = forceSimulation(nodes)
+  const simB = forceSimulation(main)
     .alphaDecay(0.06)
     .velocityDecay(0.45)
     .force('collide', forceCollide<Node>((d) => size[d.i] + 1.5).iterations(1))
