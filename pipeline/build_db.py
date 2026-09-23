@@ -245,6 +245,9 @@ def build_dict(db: sqlite3.Connection) -> None:
             rare    INTEGER NOT NULL        -- iK/rK/oK/sK -- keep, but rank last
         );
         CREATE INDEX idx_form_text ON word_form(text);
+        -- Every search reads its words' spellings back by id; without this
+        -- that was a scan of all 500k forms, most of a search's time.
+        CREATE INDEX idx_form_word ON word_form(word_id);
         CREATE TABLE sense (
             word_id INTEGER NOT NULL,
             ord     INTEGER NOT NULL,
