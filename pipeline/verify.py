@@ -183,6 +183,16 @@ def main() -> int:
           f"{proper[0]['score']} vs {scrambled[0]['score']}")
     check("言 found either way", proper[0]["char"] == "言" and scrambled[0]["char"] == "言")
 
+    print("\nsimilar kanji")
+    near = lambda c, kind, n: [r[0] for r in db.execute(  # noqa: E731
+        "SELECT other FROM similar WHERE char = ? AND kind = ? ORDER BY rank LIMIT ?", (c, kind, n))]
+    check("未 looks like 末 (top 3)", "末" in near("未", "look", 3), "".join(near("未", "look", 3)))
+    check("問 looks like 間 and 門 (top 5)", {"間", "門"} <= set(near("問", "look", 5)), "".join(near("問", "look", 5)))
+    check("早 means like 速 (top 3)", "速" in near("早", "mean", 3), "".join(near("早", "mean", 3)))
+    check("温 means like 暖 (first)", near("温", "mean", 1) == ["暖"], "".join(near("温", "mean", 3)))
+    check("龍 is a variant of 竜, not a synonym", "竜" in near("龍", "variant", 6) and "竜" not in near("龍", "mean", 30))
+    check("nothing is similar to itself", one("SELECT COUNT(*) FROM similar WHERE char = other") == 0)
+
     print("\nregression against the research pipeline")
     old_graph = json.loads((Path(__file__).parent / "graph.json").read_text(encoding="utf-8"))
     target = {k for k, v in K.items() if v.get("jlpt_new") in (5, 4, 3, 2)}
