@@ -184,14 +184,16 @@ def containers_of(c: list[str] = Query(default=[], max_length=64)) -> dict:
             out[char] = {"total": 0, "containers": []}
             continue
         ph = ",".join("?" * len(parents))
+        # Only the first PEEK_LIMIT are shaped: 口 or 人 have over a thousand
+        # containers, and building every one to send 48 was most of the time.
         rows = query(
             f"SELECT {KANJI_COLS} FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
             f"WHERE k.char IN ({ph}) "
-            f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
+            f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char LIMIT {PEEK_LIMIT}",
             tuple(parents),
         )
-        nodes = _with_reach([_node(r) for r in rows])
-        out[char] = {"total": len(nodes), "containers": nodes[:PEEK_LIMIT]}
+        total = query_one(f"SELECT COUNT(*) AS n FROM kanji WHERE char IN ({ph})", tuple(parents))["n"]
+        out[char] = {"total": total, "containers": _with_reach([_node(r) for r in rows])}
     return out
 
 
