@@ -12,7 +12,6 @@ const S = strings(
     waking: 'waking the recogniser',
     strokes_one: '{n} stroke',
     strokes_other: '{n} strokes',
-    didYouMean: 'Did you mean',
     noEntry: 'no dictionary entry',
     candidate: '{m} - {n} strokes',
   },
@@ -23,7 +22,6 @@ const S = strings(
     waking: 'разпознаването се зарежда',
     strokes_one: '{n} черта',
     strokes_other: '{n} черти',
-    didYouMean: 'Може би',
     noEntry: 'няма речникова статия',
     candidate: '{m} - {n} черти',
   },
@@ -206,28 +204,25 @@ export function DrawPad({ onPick }: Props) {
           the next one starts on a clean pad. */}
       <div className="drawpad-right">
         {candidates.length > 0 && (
-          <>
-            <h3 className="draw-group">{t('didYouMean')}</h3>
-            <div className="results">
-              {candidates.map((c) => (
-                <button
-                  key={c.char}
-                  className="result"
-                  onClick={() => {
-                    onPick(c.char)
-                    clear()
-                  }}
-                  title={
-                    c.strokes
-                      ? t('candidate', { m: meaningsOf(c, lang).value[0] ?? t('noEntry'), n: c.strokes })
-                      : (meaningsOf(c, lang).value[0] ?? t('noEntry'))
-                  }
-                >
-                  {c.char}
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="results">
+            {candidates.map((c) => (
+              <button
+                key={c.char}
+                className="result"
+                onClick={() => {
+                  onPick(c.char)
+                  clear()
+                }}
+                title={
+                  c.strokes
+                    ? t('candidate', { m: meaningsOf(c, lang).value[0] ?? t('noEntry'), n: c.strokes })
+                    : (meaningsOf(c, lang).value[0] ?? t('noEntry'))
+                }
+              >
+                {c.char}
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
