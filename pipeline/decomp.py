@@ -65,12 +65,21 @@ ALIASES = {
 
 # Decompositions the rules above cannot reach, set by hand. 食 is a radical of
 # its own in KRADFILE, so its override (人 + 良) is refused along with 門 -> 彐月;
-# 坐's override line is truncated to 人 alone. 37105 is cjk-decomp's anonymous
-# 丶+艮 -- the 良 in 朗, 郎 and 飠 -- so naming it links them (and 飲 館 飯) to 良.
+# 坐's override line is truncated to 人 alone.
 CURATED = {
     "食": ["人", "良"],
     "坐": ["人", "土"],
+    # cjk-decomp's anonymous nodes that are a kanji in all but name. Naming them
+    # links their users to it: 37105 is the 良 in 朗 郎 飠 (and so 飲 館 飯).
     "37105": ["良"],
+    "37198": ["徴"],  # 懲
+    "37728": ["放"],  # 倣
+    "37293": ["直"],  # 値 悳
+    "37444": ["呂"],  # 侶 宮
+    # Radicals too, but ones whose parts a learner reads straight off the shape.
+    "里": ["田", "土"],
+    "戸": ["一", "尸"],
+    "骨": ["冎", "月"],
 }
 
 # 卄 is overloaded: the grass top of 草/花 and the two-hands shape of 弁/戒/弄.
