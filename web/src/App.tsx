@@ -494,6 +494,9 @@ export function App() {
                 {t('recent')}
               </button>
             </div>
+            {/* On a desktop the stage's views sit at the end of the tabs,
+                apart from them; on a phone they are tabs themselves. */}
+            {!mobile && !error && <ViewSwitch view={view} onView={setView} />}
             {mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
@@ -585,12 +588,7 @@ export function App() {
             </div>
           )}
 
-          {/* One row along the top, so the view switch gives way to the corner
-              rather than sliding under it when the labels run long. */}
           <div className="stage-top">
-            {/* On a phone the tabs above do this. */}
-            {!error && !mobile && <ViewSwitch view={view} onView={setView} />}
-
             <div className="stage-corner">
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
