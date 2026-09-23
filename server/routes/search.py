@@ -80,19 +80,23 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
     return words
 
 
-def _rank(w: dict) -> tuple:
-    """Common words with a good nf bucket first; unranked entries last."""
-    return (0 if w["common"] else 1, w["nf"] if w["nf"] is not None else 99, len(w["headword"]))
+def _order(w: dict, sort: str, desc: bool) -> tuple:
+    """Where a word goes among words that matched equally well.
 
-
-def _rank_by_level(w: dict) -> tuple:
-    """For a search by meaning: the easier JLPT level first, then as `_rank`.
-
-    Newspapers alone put 睡眠 before 寝る for "sleep" -- papers write about
-    sleep more than anyone going to bed -- and the JLPT lists are the
-    closest free thing to how basic a word is.
+    By newspaper rank (JMdict nf) or by JLPT level, ascending meaning the
+    basic end first -- the top of the newspaper list, N5 -- and descending
+    the other end. Words without the rank or level go last either way; the
+    other measure, then commonness and length, break ties.
     """
-    return (0 if w["common"] else 1, 5 - (w["jlpt"] or 0), w["nf"] if w["nf"] is not None else 99, len(w["headword"]))
+    nf, lv = w["nf"], w["jlpt"]
+    news = (nf is None, nf or 0)  # ascending: top 500 first
+    level = (lv is None, -(lv or 0))  # ascending: N5 first
+    common = 0 if w["common"] else 1
+    if sort == "jlpt":
+        first = (level[0], -level[1] if desc else level[1])
+        return (*first, *news, common, len(w["headword"]))
+    first = (news[0], -news[1] if desc else news[1])
+    return (*first, *level, common, len(w["headword"]))
 
 
 def _en_length(text: str) -> int:
@@ -235,6 +239,8 @@ def search(
     limit: int = Query(30, ge=1, le=100),
     lang: str = Query("en", pattern="^(en|bg)$"),
     common: bool = Query(False, description="only words JMdict marks as common"),
+    sort: str = Query("news", pattern="^(news|jlpt)$", description="newspaper rank or JLPT level"),
+    order: str = Query("asc", pattern="^(asc|desc)$", description="asc: the basic end first"),
 ) -> dict:
     q = q.strip()
     if not q:
@@ -360,11 +366,10 @@ def search(
             words[wid]["inflection"] = reasons
     # A Bulgarian search puts the words that mean exactly the query first: вода
     # finds 水 before 水道, ябълка finds 林檎 before 目玉 (очна ябълка).
-    # An English one likewise, and among equal matches the more basic word first.
-    if en_tiers is not None:
-        ordered = sorted(words.values(), key=lambda w: (en_tiers.get(w["id"], 0), *_rank_by_level(w)))[:limit]
-    else:
-        ordered = sorted(words.values(), key=lambda w: (bg_tiers.get(w["id"], 0), *_rank(w)))[:limit]
+    # An English one likewise; among equal matches, the order asked for.
+    tiers = en_tiers if en_tiers is not None else bg_tiers
+    desc = order == "desc"
+    ordered = sorted(words.values(), key=lambda w: (tiers.get(w["id"], 0), *_order(w, sort, desc)))[:limit]
     return {
         "query": q,
         "interpretation": interpretation,

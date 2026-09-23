@@ -14,6 +14,7 @@ import type {
   KanjiNode,
   RadicalGroup,
   RadicalSearchResponse,
+  SearchOptions,
   SearchResponse,
   Word,
   WordEntry,
@@ -191,7 +192,7 @@ function send<T>(method: Method, args: unknown[]): Promise<T> {
 
 /** Each lookup on the device, or null when it has to be the server's. */
 export const local = {
-  search: (q: string, lang: string, common: boolean) => call<SearchResponse>('search', q, lang, common),
+  search: (q: string, lang: string, o: SearchOptions) => call<SearchResponse>('search', q, lang, o),
   recognize: (strokes: [number, number][][]) =>
     call<{ candidates: DrawCandidate[]; strokes: number }>('recognize', strokes),
   recognizerReady: () => call<{ chars: number; buckets: number }>('recognizerReady'),

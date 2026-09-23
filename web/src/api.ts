@@ -119,6 +119,18 @@ export interface KanjiHit {
   fanout: number
 }
 
+/** What equally good matches are ordered by: newspaper rank or JLPT level. */
+export type SearchSort = 'news' | 'jlpt'
+/** asc: the basic end first -- the top of the newspaper list, N5. */
+export type SearchOrder = 'asc' | 'desc'
+
+export interface SearchOptions {
+  /** Only the words JMdict marks as common. */
+  common: boolean
+  sort: SearchSort
+  order: SearchOrder
+}
+
 export interface SearchResponse {
   query: string
   /**
@@ -305,10 +317,15 @@ export const api = {
   radicals: () =>
     localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
 
-  /** `common`: only the words JMdict marks as common. */
-  search: (q: string, lang: string, common = false) =>
-    localFirst(local.search(q, lang, common), () =>
-      get<SearchResponse>('/api/search', [['q', q], ['lang', lang], ...(common ? [['common', '1'] as [string, string]] : [])]),
+  search: (q: string, lang: string, o: SearchOptions) =>
+    localFirst(local.search(q, lang, o), () =>
+      get<SearchResponse>('/api/search', [
+        ['q', q],
+        ['lang', lang],
+        ['common', o.common ? '1' : '0'],
+        ['sort', o.sort],
+        ['order', o.order],
+      ]),
     ),
 
   wordsFor: (char: string) =>

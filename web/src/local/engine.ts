@@ -10,6 +10,8 @@
  */
 
 import type {
+  SearchOrder,
+  SearchSort,
   DrawCandidate,
   KanjiHit,
   KanjiNode,
@@ -295,13 +297,20 @@ export class Engine {
     return rows.map((r) => r[0])
   }
 
-  private rankKey(i: number): [number, number, number] {
-    return [this.common[i] ? 0 : 1, this.nf[i] || 99, this.hwlen[i]]
-  }
-
-  /** For a search by meaning: the easier JLPT level first, then as `rankKey`. */
-  private levelRankKey(i: number): [number, number, number, number] {
-    return [this.common[i] ? 0 : 1, 5 - this.jlpt[i], this.nf[i] || 99, this.hwlen[i]]
+  /**
+   * Where a word goes among words that matched equally well: by newspaper
+   * rank or JLPT level, ascending the basic end first (top 500, N5). Words
+   * without one go last either way; the other measure, commonness and length
+   * break ties. The server's `_order`.
+   */
+  private orderKey(i: number, sort: SearchSort, desc: boolean): number[] {
+    const nf = this.nf[i]
+    const lv = this.jlpt[i]
+    const news = [nf ? 0 : 1, nf]
+    const level = [lv ? 0 : 1, -lv]
+    const common = this.common[i] ? 0 : 1
+    if (sort === 'jlpt') return [level[0], desc ? -level[1] : level[1], ...news, common, this.hwlen[i]]
+    return [news[0], desc ? -news[1] : news[1], ...level, common, this.hwlen[i]]
   }
 
   /** How many Bulgarian glosses and kanji hold a stem: the server's fts5vocab sum. */
@@ -336,7 +345,9 @@ export class Engine {
     return [distinct(docs.map((d) => this.bgGlossWord[d])), tiers]
   }
 
-  async search(input: string, limit = 30, lang = 'en', common = false): Promise<SearchResponse> {
+  async search(
+    input: string, limit = 30, lang = 'en', common = false, sort: SearchSort = 'news', order: SearchOrder = 'asc',
+  ): Promise<SearchResponse> {
     const q = pyStrip(input)
     if (!q) return { query: q, interpretation: null, alternatives: [], kanji: [], words: [], total: 0 }
 
@@ -476,10 +487,10 @@ export class Engine {
     // The server fetches these by id -- so they come back in id order -- and
     // then sorts by rank, stably -- a Bulgarian search by how well each matched first.
     const pool = [...new Set(wordIdx.slice(0, limit * 4))].sort((a, b) => a - b)
-    // An English one likewise, and among equal matches the more basic word first.
+    // An English one likewise; among equal matches, the order asked for.
     const tiers = enTiers ?? bgTiers
     const ranked = pool
-      .map((i) => [i, tiers.get(i) ?? 0, ...(enTiers ? this.levelRankKey(i) : this.rankKey(i))])
+      .map((i) => [i, tiers.get(i) ?? 0, ...this.orderKey(i, sort, order === 'desc')])
       .sort((a, b) => {
         for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
         return a[0] - b[0]

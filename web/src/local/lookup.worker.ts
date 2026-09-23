@@ -4,6 +4,7 @@
  * a 20 MB download nor a search over 250,000 glosses can stutter the page.
  */
 
+import type { SearchOptions } from '../api'
 import { Engine, type KanjiPack } from './engine'
 import { Db, type InstalledPack, type Progress } from './idb'
 import { INITIAL, type FromWorker, type Method, type OfflineStatus, type ToWorker } from './protocol'
@@ -248,8 +249,10 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
   const e = engine
   if (!e) throw new Error('offline lookup is not ready')
   switch (method) {
-    case 'search':
-      return e.search(args[0] as string, 30, (args[1] as string) ?? 'en', !!args[2])
+    case 'search': {
+      const o = (args[2] ?? {}) as Partial<SearchOptions>
+      return e.search(args[0] as string, 30, (args[1] as string) ?? 'en', !!o.common, o.sort, o.order)
+    }
     case 'recognize':
       return { candidates: e.recognize(args[0] as number[][][]), strokes: (args[0] as unknown[]).length }
     case 'recognizerReady': {

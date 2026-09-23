@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { api, type KanjiNode, type SearchResponse, type Word } from '../api'
+import { api, type KanjiNode, type SearchOrder, type SearchResponse, type SearchSort, type Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
@@ -20,6 +20,15 @@ const S = strings(
     uncommon: 'uncommon',
     commonOnly: 'Common words only',
     commonOnlyTitle: 'Leave out words JMdict does not mark as common',
+    sortBy: 'Sort by',
+    sortNews: 'Newspaper rank',
+    sortNewsTitle: 'Sort by how often newspapers use the word',
+    sortJlpt: 'JLPT',
+    sortJlptTitle: 'Sort by JLPT level',
+    newsAsc: 'Ascending: the most frequent first',
+    newsDesc: 'Descending: the least frequent first',
+    jlptAsc: 'Ascending: N5 first',
+    jlptDesc: 'Descending: N1 first',
     jlpt: 'On the JLPT N{n} vocabulary list (Jonathan Waller, a community reconstruction)',
     news: 'top {n}',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
@@ -46,6 +55,15 @@ const S = strings(
     uncommon: 'рядка',
     commonOnly: 'Само чести думи',
     commonOnlyTitle: 'Без думите, които JMdict не отбелязва като чести',
+    sortBy: 'Подреждане по',
+    sortNews: 'Вестници',
+    sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
+    sortJlpt: 'JLPT',
+    sortJlptTitle: 'Подреждане по ниво от JLPT',
+    newsAsc: 'Възходящо: първо най-честите',
+    newsDesc: 'Низходящо: първо най-редките',
+    jlptAsc: 'Възходящо: първо N5',
+    jlptDesc: 'Низходящо: първо N1',
     jlpt: 'В списъка с думи за JLPT N{n} (Джонатан Уолър, реконструкция на общността)',
     news: 'топ {n}',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
@@ -73,7 +91,21 @@ const S = strings(
 const found = new Map<string, SearchResponse>()
 const levels = new Map<Level, { kanji: KanjiNode[]; components: KanjiNode[] }>()
 
-const keyOf = (lang: Lang, common: boolean, q: string) => `${lang}${common ? ' common' : ''} ${q}`
+const keyOf = (lang: Lang, common: boolean, sort: string, q: string) =>
+  `${lang}${common ? ' common' : ''} ${sort} ${q}`
+
+// The sort, as "news:asc": what to order equally good matches by, and which way.
+const SORT_KEY = 'betterrtk:searchSort'
+
+const ORDER_LABEL = {
+  news: { asc: 'newsAsc', desc: 'newsDesc' },
+  jlpt: { asc: 'jlptAsc', desc: 'jlptDesc' },
+} as const
+
+function savedSort(): [SearchSort, SearchOrder] {
+  const [sort, order] = (localStorage.getItem(SORT_KEY) ?? '').split(':')
+  return [sort === 'jlpt' ? 'jlpt' : 'news', order === 'desc' ? 'desc' : 'asc']
+}
 
 // Common words only is the default, so what is stored is the choice to see them all.
 const ALL_WORDS_KEY = 'betterrtk:allWords'
@@ -185,7 +217,8 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   const t = S(lang)
   const term = q.trim()
   const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
-  const key = keyOf(lang, common, term)
+  const [[sort, order], setSort] = useState(savedSort)
+  const key = keyOf(lang, common, `${sort}:${order}`, term)
   const [result, setResult] = useState<SearchResponse | null>(() => found.get(key) ?? null)
   const [busy, setBusy] = useState(false)
 
@@ -204,7 +237,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
     let stale = false
     setBusy(true)
     const timer = setTimeout(() => {
-      api.search(term, lang, common).then(
+      api.search(term, lang, { common, sort, order }).then(
         (d) => {
           remember(key, d)
           if (!stale) (setResult(d), setBusy(false))
@@ -216,7 +249,12 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, key])
+  }, [term, lang, common, sort, order, key])
+
+  function pickSort(next: SearchSort, nextOrder: SearchOrder) {
+    localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
+    setSort([next, nextOrder])
+  }
 
   function toggleCommon() {
     setCommon((on) => {
@@ -236,7 +274,45 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   return (
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
       {/* How the query was read on the left, the filter on the right, one line. */}
+      {/* How to order what was found, and whether to show only common words. */}
       <div className="search-tools">
+        <div className="search-sort" role="group" aria-label={t('sortBy')}>
+          <button
+            aria-pressed={sort === 'news'}
+            data-on={sort === 'news' || undefined}
+            onClick={() => pickSort('news', order)}
+            title={t('sortNewsTitle')}
+          >
+            {t('sortNews')}
+          </button>
+          <button
+            aria-pressed={sort === 'jlpt'}
+            data-on={sort === 'jlpt' || undefined}
+            onClick={() => pickSort('jlpt', order)}
+            title={t('sortJlptTitle')}
+          >
+            {t('sortJlpt')}
+          </button>
+          <button
+            className="search-sort-order"
+            onClick={() => pickSort(sort, order === 'asc' ? 'desc' : 'asc')}
+            title={t(ORDER_LABEL[sort][order])}
+            aria-label={t(ORDER_LABEL[sort][order])}
+          >
+            {order === 'asc' ? '↑' : '↓'}
+          </button>
+        </div>
+        <button
+          className="search-filter"
+          aria-pressed={common}
+          data-on={common || undefined}
+          onClick={toggleCommon}
+          title={t('commonOnlyTitle')}
+        >
+          {t('commonOnly')}
+        </button>
+      </div>
+      {(reading || alternatives.length > 0) && (
         <p className="hint reading-note">
           {reading && t('readAs', { r: reading })}
           {alternatives.map((a) => (
@@ -248,16 +324,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
             </span>
           ))}
         </p>
-        <button
-          className="search-filter"
-          aria-pressed={common}
-          data-on={common || undefined}
-          onClick={toggleCommon}
-          title={t('commonOnlyTitle')}
-        >
-          {t('commonOnly')}
-        </button>
-      </div>
+      )}
       {result && result.kanji.length > 0 && (
         <div className="kanji-hits">
           {result.kanji.map((k) => (

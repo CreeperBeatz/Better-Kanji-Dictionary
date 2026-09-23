@@ -168,15 +168,20 @@ def main() -> int:
 
     queries = list(dict.fromkeys(HARD + sample(300 if quick else 2500, rng)))
     bg_queries = list(dict.fromkeys(HARD + HARD_BG + sample_bg(150 if quick else 1000, rng) + queries[: 200 if quick else 800]))
-    asked = [(q, "en", False) for q in dict.fromkeys(queries + HARD_BG)] + [(q, "bg", False) for q in bg_queries]
-    # Common words only, over a slice of both.
-    asked += [(q, "en", True) for q in HARD + queries[: 100 if quick else 600]]
-    asked += [(q, "bg", True) for q in HARD_BG]
+    plain = ("news", "asc")
+    asked = [(q, "en", False, plain) for q in dict.fromkeys(queries + HARD_BG)]
+    asked += [(q, "bg", False, plain) for q in bg_queries]
+    # Common words only, and every other order, over a slice of both.
+    asked += [(q, "en", True, plain) for q in HARD + queries[: 100 if quick else 600]]
+    asked += [(q, "bg", True, plain) for q in HARD_BG]
+    for how in (("news", "desc"), ("jlpt", "asc"), ("jlpt", "desc")):
+        asked += [(q, "en", True, how) for q in HARD + queries[: 50 if quick else 300]]
+        asked += [(q, "bg", False, how) for q in HARD_BG]
     print(f"asking the server {len(asked)} searches")
     golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": []}
-    for q, lang, common in asked:
-        out = search(q=q[:64], limit=30, lang=lang, common=common)
-        golden["search"].append({"q": q[:64], "lang": lang, "common": common, "out": out})
+    for q, lang, common, (sort, order) in asked:
+        out = search(q=q[:64], limit=30, lang=lang, common=common, sort=sort, order=order)
+        golden["search"].append({"q": q[:64], "lang": lang, "common": common, "sort": sort, "order": order, "out": out})
 
     texts = list(dict.fromkeys(HARD_BG + [w for q in bg_queries for w in q.split()]))
     for t in texts:
