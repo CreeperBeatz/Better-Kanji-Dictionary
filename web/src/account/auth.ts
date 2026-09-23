@@ -47,7 +47,7 @@ export async function startAuth() {
   if (token) {
     // The token is single-use; keep it out of history and bookmarks either way.
     url.searchParams.delete('login')
-    window.history.replaceState(null, '', url)
+    window.history.replaceState(window.history.state, '', url)
     try {
       await finishSignIn(await api.verifyLogin(token))
       return

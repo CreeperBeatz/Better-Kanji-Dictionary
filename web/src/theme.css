@@ -90,11 +90,57 @@ body {
   pointer-events: none;
 }
 
+/* The search and the tabs stay put; the pages scroll beneath them. */
 .rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-right: 1px solid var(--rule);
   background: var(--sumi-sunk);
+  overflow: hidden;
+}
+
+.rail-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Above every page: the way back on the left, what you are looking at on
+   the right -- the same on the dictionary and associations tabs. */
+.rail-crumb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 22px 0 16px;
+  margin-bottom: -8px;
+}
+
+.back-link.rail-back {
+  flex: none;
+  margin: 0;
+}
+
+.rail-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mincho);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--paper);
 }
 
 /* A wide invisible grip over the rail's border; the border itself lights up. */
@@ -516,65 +562,59 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* ---------------------------------------------------------------- narrow */
 
 @media (max-width: 900px) {
-  /* The grid moved to .shell-grid when the overlay was added; .shell is just
-     the positioning context now. */
+  /* Sized to what is visible, so the keyboard pushes the search up instead of
+     covering it (App.tsx sets these on iOS; elsewhere they are the window). */
+  .shell {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--app-top, 0px);
+    height: var(--app-h, 100%);
+  }
+
+  /* The rail's parts join the page's grid: tabs along the top, the search
+     along the bottom where the thumb is, and between them one pane at a time --
+     the rail's pages or the stage. The hidden one keeps its size, so the graph
+     and the map keep their framing and the pages their scroll. */
   .shell-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'head' 'main' 'bar';
   }
 
   .rail {
-    border-right: 0;
-    min-height: 0;
+    display: contents;
   }
 
   .rail-resizer {
     display: none;
   }
 
-  /* One pane fills the phone at a time; the rail's tabs switch between them.
-     Reading: the rail is the whole screen, and the stage is laid out behind it,
-     hidden but still full size, so the graph and map keep their framing. */
-  .shell-grid[data-pane='rail'] {
-    grid-template-rows: 1fr;
+  .rail-head {
+    grid-area: head;
+    padding: 0 12px 0 8px;
+    background: var(--sumi-sunk);
   }
 
-  .shell-grid[data-pane='rail'] .stage {
-    position: absolute;
-    inset: 0;
+  .rail-body {
+    grid-area: main;
+    background: var(--sumi-sunk);
+  }
+
+  .stage {
+    grid-area: main;
+    min-height: 0;
+  }
+
+  .searchbar {
+    grid-area: bar;
+  }
+
+  .shell-grid[data-pane='rail'] .stage,
+  .shell-grid[data-pane='stage'] .rail-body {
     visibility: hidden;
     pointer-events: none;
   }
-
-  /* Looking: only the rail's header stays, above the stage. */
-  .shell-grid[data-pane='stage'] .rail {
-    overflow: hidden;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .shell-grid[data-pane='stage'] .rail > :not(.rail-top) {
-    display: none;
-  }
-
-  .shell-grid[data-pane='stage'] .rail-top {
-    border-bottom: 0;
-  }
-
-  .rail-section.rail-top {
-    padding: 12px 16px 16px;
-  }
-}
-
-/* The search and, on a phone, your profile beside it. */
-.rail-search-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.rail-search-row .search-trigger {
-  flex: 1;
-  min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1471,39 +1511,70 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-/* ---------------------------------------------------------------- search trigger */
+/* ---------------------------------------------------------------- search bar */
 
-.rail-top {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+.searchbar {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 14px 22px;
   background: var(--sumi-sunk);
 }
 
-.search-trigger {
-  width: 100%;
+.searchbar-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--sumi);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
+  gap: 6px;
+}
+
+.searchbar-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.searchbar .search-input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 9px 34px 9px 12px;
+  font-size: 15px;
+}
+
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  display: none;
+}
+
+.searchbar-clear,
+.searchbar-kbd {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+}
+
+.searchbar-clear {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
   color: var(--muted);
-  font-family: var(--gothic);
-  font-size: 13.5px;
-  text-align: left;
+  font-size: 18px;
+  line-height: 1;
   cursor: pointer;
-  transition: border-color 120ms var(--ease), color 120ms var(--ease);
 }
 
-.search-trigger:hover {
-  border-color: var(--ai-deep);
+.searchbar-clear:hover {
   color: var(--paper);
+  background: var(--sumi-lift);
 }
 
-.search-trigger kbd {
+.searchbar-kbd {
+  right: 10px;
   font-family: var(--gothic);
   font-size: 11px;
   color: var(--faint);
@@ -1511,6 +1582,172 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   padding: 0 5px;
   line-height: 1.5;
+  pointer-events: none;
+}
+
+.searchbar-tool {
+  position: relative;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--sumi);
+  color: var(--paper-dim);
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
+}
+
+.searchbar-tool:hover {
+  color: var(--paper);
+  border-color: var(--rule-bright);
+}
+
+.searchbar-tool[data-on] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.searchbar-tool svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+.searchbar-tool-glyph {
+  font-family: var(--mincho);
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* The labels are for screen readers; the buttons show their icons. */
+.searchbar-tool > span:not(.searchbar-tool-glyph) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.searchtools {
+  margin-top: 12px;
+  max-height: 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.searchtools-close {
+  display: block;
+  margin: 10px 0 0 auto;
+}
+
+/* In the rail the draw pad stacks: what it guessed above, the box below. */
+.searchtools .drawpad-wrap {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.searchtools .drawpad {
+  max-width: 300px;
+}
+
+.searchtools .draw-group {
+  display: none;
+}
+
+.searchtools .drawpad-right {
+  min-height: 38px;
+}
+
+.searchtools .results {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  margin-top: 0;
+  scrollbar-width: none;
+}
+
+.searchtools .result {
+  flex: none;
+}
+
+.search-page > :first-child {
+  margin-top: 0;
+}
+
+.level-links {
+  display: flex;
+  gap: 4px;
+}
+
+.level-links button {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.level-links button:hover {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.search-home .overlay-group {
+  margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+  /* Along the bottom: the tools open upward, above the box. */
+  .searchbar {
+    flex-direction: column-reverse;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--rule);
+  }
+
+  /* 16px, or iOS zooms the page when the box is focused. */
+  .searchbar .search-input {
+    font-size: 16px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .searchbar-tool {
+    width: 42px;
+    height: 42px;
+  }
+
+  .searchtools {
+    margin: 0 0 10px;
+    max-height: 52vh;
+  }
+
+  .searchtools .drawpad {
+    max-width: min(100%, 30vh);
+    margin: 0 auto;
+  }
+
+  .searchtools .drawpad-actions {
+    justify-content: center;
+  }
+
+  .searchtools .drawpad-left .hint {
+    text-align: center;
+  }
+
 }
 
 /* ---------------------------------------------------------------- graph filter */
@@ -2884,10 +3121,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .rail-tabs {
   display: flex;
+  flex: 1;
+  min-width: 0;
   gap: 4px;
-  margin: 14px -22px -20px;
-  padding: 0 22px;
-  border-top: 1px solid var(--rule);
 }
 
 .rail-tabs button {
@@ -2907,13 +3143,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .rail-tabs button:first-child {
   margin-left: -10px;
-  font-family: var(--mincho);
-  font-size: 15px;
-}
-
-.rail-tabs button:first-child span {
-  font-family: var(--gothic);
-  font-size: 13px;
 }
 
 .rail-tabs button:hover {
@@ -3132,13 +3361,13 @@ html {
   scrollbar-color: var(--rule-bright) transparent;
 }
 
-.rail {
+.rail-body {
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
 
-.rail:hover,
-.rail:focus-within {
+.rail-body:hover,
+.rail-body:focus-within {
   scrollbar-color: var(--rule-bright) transparent;
 }
 
@@ -3166,13 +3395,11 @@ html {
 /* After the tab styles above, so these win on a phone. */
 @media (max-width: 900px) {
   /* Phone scrollbars float over the content; nothing to reserve room for. */
-  .rail {
+  .rail-body {
     scrollbar-gutter: auto;
   }
 
   .rail-tabs {
-    margin: 10px -16px -16px;
-    padding: 0 8px;
     gap: 0;
     overflow-x: auto;
     scrollbar-width: none;

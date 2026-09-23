@@ -3,7 +3,8 @@ import { api, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, keeps, type ContainerFilter } from './graph/KanjiGraph'
 import { KanjiMap } from './map/KanjiMap'
 import { scopeOf } from './map/mapData'
-import { SearchOverlay } from './search/SearchOverlay'
+import { SearchBar } from './search/SearchBar'
+import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
@@ -13,6 +14,7 @@ import { WordPanel } from './detail/WordPanel'
 import { RailResizer, useRailWidth } from './RailResizer'
 import { LevelFilter, RecentGrid, ViewSwitch, type StageView } from './StageControls'
 import { useRecent } from './recent'
+import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
 
 const START = '言'
 
@@ -34,44 +36,54 @@ function useMediaQuery(query: string): boolean {
   )
 }
 
+/**
+ * On a phone the search sits along the bottom, and the keyboard must push it
+ * up rather than cover it. Android resizes the page for the keyboard (see the
+ * viewport tag); iOS does not, so the app is sized to what is still visible.
+ */
+function useVisibleHeight(enabled: boolean) {
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!enabled || !vv) return
+    const root = document.documentElement
+    function fit() {
+      // A pinch zoom shrinks the visible area too; that is not the keyboard.
+      if (!vv || Math.abs(vv.scale - 1) > 0.01) return
+      root.style.setProperty('--app-h', `${vv.height}px`)
+      root.style.setProperty('--app-top', `${vv.offsetTop}px`)
+    }
+    fit()
+    vv.addEventListener('resize', fit)
+    vv.addEventListener('scroll', fit)
+    return () => {
+      vv.removeEventListener('resize', fit)
+      vv.removeEventListener('scroll', fit)
+      root.style.removeProperty('--app-h')
+      root.style.removeProperty('--app-top')
+    }
+  }, [enabled])
+}
+
 const RAIL_TAB_KEY = 'betterrtk:railTab'
-type RailTab = 'kanji' | 'associations' | 'recent'
+type RailTab = 'dictionary' | 'associations' | 'recent'
 
 function initialRailTab(): RailTab {
   try {
     const saved = localStorage.getItem(RAIL_TAB_KEY)
-    return saved === 'associations' || saved === 'recent' ? saved : 'kanji'
+    return saved === 'associations' || saved === 'recent' ? saved : 'dictionary'
   } catch {
-    return 'kanji'
+    return 'dictionary'
   }
 }
 
-// The selected character lives in the URL, so it can be linked to and the
-// browser's back button walks between characters.
-const KANJI_PATH = /^\/kanji\/([^/]+)\/?$/
 const TITLE = document.title
 
-function kanjiInUrl(): string | null {
-  const m = window.location.pathname.match(KANJI_PATH)
-  if (!m) return null
-  try {
-    const c = decodeURIComponent(m[1])
-    return [...c].length === 1 ? c : null
-  } catch {
-    return null
-  }
-}
-
-function urlFor(char: string | null): string {
-  return char ? `/kanji/${encodeURIComponent(char)}` : '/'
-}
-
-// The URL alone decides what is selected, so a refresh keeps what was on
-// screen: `/` opens with nothing picked, a link to a character opens on it in
-// the focus view. Otherwise a desktop opens on the whole common map, to wander
-// in, and a phone on the view it was left on.
+// A link to a character opens on it in the focus view. Otherwise a desktop
+// opens on the whole common map, to wander in, and a phone on the view it was
+// left on.
 const openedOnPhone = window.matchMedia(MOBILE).matches
-const linked = kanjiInUrl()
+const linkedPage = pageInUrl()
+const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
 function initialView(): StageView {
   if (linked) return 'focus'
@@ -83,18 +95,67 @@ function initialView(): StageView {
   }
 }
 
+/** The character nearest the top of the stack: the one the graph shows. */
+function kanjiIn(stack: Stack): string | null {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const p = stack[i]
+    if (p.kind === 'kanji') return p.char
+  }
+  return null
+}
+
+/** How a page is named in "back to ...". */
+function nameOf(p: Page) {
+  if (p.kind === 'kanji') return <span className="back-glyph">{p.char}</span>
+  if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? 'the word'}</span>
+  if (p.kind === 'level') return <>N{p.level}</>
+  return p.q ? <>“{p.q}”</> : <>search</>
+}
+
+function titleOf(p: Page): string {
+  if (p.kind === 'kanji') return `${p.char} · ${TITLE}`
+  if (p.kind === 'word' && p.word) return `${p.word.headword} · ${TITLE}`
+  if (p.kind === 'level') return `N${p.level} · ${TITLE}`
+  if (p.kind === 'search' && p.q) return `${p.q} · ${TITLE}`
+  return TITLE
+}
+
 export function App() {
+  const scroller = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const { stack, push, reset, replaceTop, pop } = useNav(scroller)
+  const top = stack[stack.length - 1]
+  const root = stack[0]
+  const under = stack.length > 1 ? stack[stack.length - 2] : null
+
   // Every character you have opened, listed in the Recent tab.
-  const { recent, focus, visit, back, clear: clearRecent } = useRecent(START, linked)
-  // Clicking empty map clears the selection; the recent list is kept, so it
-  // or any pick brings a character back.
-  const [selected, setSelected] = useState(linked !== null)
+  const { recent, visit, clear: clearRecent } = useRecent(START, linked)
+
+  // The character the graph and map show. It follows the stack's nearest
+  // character, and stays put while the stack has none (a search, a word
+  // opened from it). Clicking empty map clears it.
+  const stackKanji = kanjiIn(stack)
+  const [focus, setFocus] = useState<string | null>(stackKanji)
+  useEffect(() => {
+    if (stackKanji) setFocus(stackKanji)
+  }, [stackKanji])
+  useEffect(() => {
+    if (focus) visit(focus)
+  }, [focus, visit])
+  const selected = focus !== null
+
+  // The search box's text. It is the bottom page's query while that is a
+  // search, and is left as it was when a pick on the graph starts a new stack.
+  const [q, setQ] = useState(root.kind === 'search' ? root.q : '')
+  useEffect(() => {
+    if (root.kind === 'search') setQ(root.q)
+  }, [root])
+
   const [data, setData] = useState<GraphResponse | null>(null)
   // The character's own details from the offline pack, which arrive before the graph.
   const [onDevice, setOnDevice] = useState<DetailData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
   // How to read the graph or map, behind the (i) rather than always on screen.
   const [legendOpen, setLegendOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -106,8 +167,6 @@ export function App() {
   // The map is expensive to lay out, so once opened it stays mounted and keeps
   // its camera while the focus view is showing.
   const [mapOpened, setMapOpened] = useState(view === 'map')
-  // A word open in the rail, and the kanji it was opened from.
-  const [word, setWord] = useState<{ word: Word; from: string } | null>(null)
   const [railWidth, setRailWidth] = useRailWidth()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
@@ -117,6 +176,7 @@ export function App() {
   const mobile = useMediaQuery(MOBILE)
   const [pane, setPane] = useState<'rail' | 'stage'>('rail')
   const onStage = mobile && pane === 'stage'
+  useVisibleHeight(mobile)
 
   const chooseRailTab = useCallback((t: RailTab) => {
     setRailTab(t)
@@ -126,6 +186,11 @@ export function App() {
     } catch {
       // not remembered, which is fine
     }
+  }, [])
+
+  const toDictionary = useCallback(() => {
+    setRailTab('dictionary')
+    setPane('rail')
   }, [])
 
   const setView = useCallback((v: StageView) => {
@@ -139,39 +204,9 @@ export function App() {
     }
   }, [])
 
-
-  // Opening a character is a new history entry; the first one only records
-  // where the app opened, so Back still leaves it.
-  const urlSynced = useRef(false)
   useEffect(() => {
-    const path = urlFor(selected ? focus : null)
-    document.title = selected ? `${focus} · ${TITLE}` : TITLE
-    if (window.location.pathname === path) {
-      urlSynced.current = true
-      return
-    }
-    const url = path + window.location.search + window.location.hash
-    if (urlSynced.current) window.history.pushState(null, '', url)
-    else window.history.replaceState(null, '', url)
-    urlSynced.current = true
-  }, [focus, selected])
-
-  // Back and forward: whatever the URL now names is what is selected.
-  useEffect(() => {
-    function onPop() {
-      const c = kanjiInUrl()
-      setHovered(null)
-      setWord(null)
-      if (c) {
-        visit(c)
-        setSelected(true)
-      } else {
-        setSelected(false)
-      }
-    }
-    window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
-  }, [visit])
+    document.title = titleOf(top)
+  }, [top])
 
   // Picks up a sign-in link in the URL, or a session saved from last time.
   useEffect(() => {
@@ -179,6 +214,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    if (!focus) return
     let stale = false
     local.kanji(focus)?.then(
       (d) => !stale && setOnDevice(d),
@@ -201,45 +237,79 @@ export function App() {
   // The rail shows the graph's data once it is for this character, and the
   // device's until then -- or instead, when there is no connection.
   const detail: DetailData | null =
-    data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : data
+    data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : null
 
+  // A pick on the graph or map starts the stack again from that character.
   // `via` is the container a peek skipped through (言 -> 語 -> X), which counts
   // as visited too.
   const drill = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
-      setWord(null)
-      setSelected(true)
       if (via && via !== char) visit(via, char)
-      else visit(char)
+      setFocus(char)
+      reset({ kind: 'kanji', char })
     },
-    [visit],
+    [visit, reset],
   )
 
   const openRecent = useCallback(
     (char: string) => {
       drill(char)
-      // From the Recent tab, the character is what you came for.
-      setRailTab((t) => (t === 'recent' ? 'kanji' : t))
+      setRailTab('dictionary')
     },
     [drill],
   )
 
-  const deselect = useCallback(() => {
-    setHovered(null)
-    setWord(null)
-    setSelected(false)
-  }, [])
+  // Opening a character from a page puts it on top -- unless it is the page
+  // just below, as when a word's kanji is the one it was opened from. The tab
+  // stays, so a part opened from the associations shows its associations.
+  const openKanji = useCallback(
+    (char: string) => {
+      setHovered(null)
+      setPane('rail')
+      if (under?.kind === 'kanji' && under.char === char) pop()
+      else push({ kind: 'kanji', char })
+    },
+    [under, push, pop],
+  )
 
-  // A word shows where the kanji's details do.
   const openWord = useCallback(
     (w: Word) => {
-      setWord({ word: w, from: focus })
-      setRailTab('kanji')
-      setPane('rail')
+      toDictionary()
+      push({ kind: 'word', id: w.id, word: w })
     },
-    [focus],
+    [push, toDictionary],
   )
+
+  const openLevel = useCallback((level: Level) => push({ kind: 'level', level }), [push])
+
+  const deselect = useCallback(() => {
+    setHovered(null)
+    setFocus(null)
+    if (top.kind === 'kanji') reset({ kind: 'search', q })
+  }, [top, q, reset])
+
+  // Typing is a search: the first key starts a new stack, the rest change it.
+  const type = useCallback(
+    (text: string) => {
+      setQ(text)
+      toDictionary()
+      const page: Page = { kind: 'search', q: text }
+      if (stack.length === 1 && stack[0].kind === 'search') replaceTop(page)
+      else reset(page)
+    },
+    [stack, replaceTop, reset, toDictionary],
+  )
+
+  // Going into the box goes to the search it holds, back down the stack if
+  // that is where it is.
+  const focusSearch = useCallback(() => {
+    toDictionary()
+    if (top.kind === 'search') return false
+    if (root.kind === 'search' && root.q === q) pop(stack.length - 1)
+    else reset({ kind: 'search', q })
+    return true
+  }, [top, root, q, stack.length, pop, reset, toDictionary])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -249,7 +319,7 @@ export function App() {
       // Slash and ctrl/cmd-K are what people already reach for.
       if (!typing && (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'))) {
         e.preventDefault()
-        setSearchOpen(true)
+        inputRef.current?.focus()
         return
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return
@@ -257,28 +327,21 @@ export function App() {
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
       if (e.key === 'f' || e.key === 'F') setView('focus')
-      // Backspace walks back -- first out of an open word, then to the
-      // character before this one in the recent list. Escape is left to
-      // whichever overlay is open.
+      // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
         e.preventDefault()
-        setWord((w) => {
-          if (!w) {
-            setSelected(true)
-            back()
-          }
-          return null
-        })
+        pop()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setView, back])
+  }, [setView, pop])
 
   const closeAccount = useCallback(() => {
     setAccountOpen(false)
     clearAuthError()
   }, [])
+  const signIn = useCallback(() => setAccountOpen(true), [])
 
   const hoveredNode: KanjiNode | null = useMemo(() => {
     if (!data || !hovered) return null
@@ -290,44 +353,77 @@ export function App() {
     )
   }, [data, hovered])
 
-  const dimmed = searchOpen || accountShown
+  function page(p: Page) {
+    switch (p.kind) {
+      case 'search':
+        return <SearchPage q={p.q} onKanji={openKanji} onWord={openWord} onLevel={openLevel} />
+      case 'level':
+        return <LevelPage level={p.level} onKanji={openKanji} />
+      case 'word':
+        return (
+          <WordPanel
+            key={p.id}
+            id={p.id}
+            word={p.word}
+            from={under?.kind === 'kanji' ? under.char : undefined}
+            onPick={openKanji}
+          />
+        )
+      case 'kanji':
+        return detail && detail.focus.char === p.char ? (
+          <DetailPanel data={detail} hovered={hoveredNode} onWord={openWord} />
+        ) : (
+          <section className="rail-section">
+            <div className="detail-head">
+              <span className="detail-glyph">{p.char}</span>
+            </div>
+          </section>
+        )
+    }
+  }
+
+  // Kanji and words carry associations; searches and levels do not, so
+  // there the tab steps aside and the page shows.
+  const subject =
+    top.kind === 'kanji'
+      ? { key: top.char, label: top.char }
+      : top.kind === 'word'
+        ? { key: `word:${top.id}`, label: top.word?.headword ?? 'this word' }
+        : null
+  const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
+  const inDictionary = !onStage && tab === 'dictionary'
+  // What the page on top is, as written, named above every tab it has.
+  const current = top.kind === 'kanji' ? top.char : top.kind === 'word' ? top.word?.headword : undefined
 
   return (
     <div className="shell">
       <div
         className="shell-grid"
-        data-dimmed={dimmed || undefined}
+        data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
         style={{ '--rail': `${railWidth}px` } as React.CSSProperties}
       >
         <aside className="rail">
-          <div className="rail-section rail-top">
-            <div className="rail-search-row">
-              <button className="search-trigger" onClick={() => setSearchOpen(true)}>
-                <span>Search, or browse a level</span>
-                <kbd>/</kbd>
-              </button>
-              {mobile && <ProfileButton onOpen={() => setAccountOpen(true)} />}
-            </div>
+          <SearchBar
+            q={q}
+            onType={type}
+            onFocus={focusSearch}
+            inputRef={inputRef}
+          />
+          <div className="rail-head">
             <div className="rail-tabs" role="tablist" aria-label="Side panel">
-              {selected && detail && (
-                <>
-                  <button
-                    role="tab"
-                    aria-selected={!onStage && railTab === 'kanji'}
-                    onClick={() => chooseRailTab('kanji')}
-                  >
-                    {detail.focus.char} <span>kanji</span>
-                  </button>
-                  <button
-                    role="tab"
-                    aria-selected={!onStage && railTab === 'associations'}
-                    onClick={() => chooseRailTab('associations')}
-                  >
-                    Associations
-                    {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                  </button>
-                </>
+              <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
+                Dictionary
+              </button>
+              {subject && (
+                <button
+                  role="tab"
+                  aria-selected={!onStage && tab === 'associations'}
+                  onClick={() => chooseRailTab('associations')}
+                >
+                  Associations
+                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                </button>
               )}
               {mobile && (
                 <>
@@ -339,45 +435,52 @@ export function App() {
                   </button>
                 </>
               )}
-              <button role="tab" aria-selected={!onStage && railTab === 'recent'} onClick={() => chooseRailTab('recent')}>
+              <button role="tab" aria-selected={!onStage && tab === 'recent'} onClick={() => chooseRailTab('recent')}>
                 Recent
               </button>
             </div>
+            {mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
-          {railTab === 'recent' ? (
-            <RecentGrid recent={recent} current={selected ? focus : null} onPick={openRecent} onClear={clearRecent} />
-          ) : !selected ? (
-            <section className="rail-section">
-              <p className="hint">Select a kanji</p>
-            </section>
-          ) : (
-            <>
-              {/* Kept mounted while hidden, so an unsent association and the
-                  count on its tab survive switching tabs. */}
-              {detail && (
-                <div hidden={railTab !== 'associations'}>
-                  <Associations
-                    char={detail.focus.char}
-                    onPick={drill}
-                    onSignIn={() => setAccountOpen(true)}
-                    onCount={setAssocCount}
-                  />
-                </div>
-              )}
-              {railTab === 'kanji' &&
-                (word ? (
-                  <WordPanel
-                    word={word.word}
-                    from={word.from}
-                    onBack={() => setWord(null)}
-                    onPick={(c) => (c === focus ? setWord(null) : drill(c))}
-                  />
-                ) : (
-                  detail && <DetailPanel data={detail} hovered={hoveredNode} onWord={openWord} />
-                ))}
-            </>
-          )}
+          <div className="rail-body" ref={scroller}>
+            {tab === 'recent' ? (
+              <RecentGrid recent={recent} current={focus} onPick={openRecent} onClear={clearRecent} />
+            ) : (
+              <>
+                {(under || current) && (
+                  <div className="rail-crumb">
+                    {under ? (
+                      <button className="back-link rail-back" onClick={() => pop()} title="Back (Backspace)">
+                        <span aria-hidden>←</span> back to {nameOf(under)}
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    {current && (
+                      <span className="rail-current" lang="ja">
+                        {current}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {tab === 'dictionary' && page(top)}
+              </>
+            )}
+            {/* Kept mounted while hidden, so the count on its tab is there
+                before the tab is opened. */}
+            {subject && (
+              <div hidden={tab !== 'associations'}>
+                <Associations
+                  key={subject.key}
+                  subject={subject.key}
+                  label={subject.label}
+                  onPick={openKanji}
+                  onSignIn={signIn}
+                  onCount={setAssocCount}
+                />
+              </div>
+            )}
+          </div>
           {/* "Its parts" -- the decomposition editor and review queue -- is
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
@@ -385,7 +488,7 @@ export function App() {
         <RailResizer width={railWidth} onWidth={setRailWidth} />
 
         <main className="stage">
-          {error && (
+          {error && selected && (
             <div className="stage-empty">
               <p>
                 {error}
@@ -402,7 +505,7 @@ export function App() {
             </div>
           )}
 
-          {!error && !selected && view === 'focus' && (
+          {!selected && view === 'focus' && (
             <div className="stage-empty">
               <p className="hint">Select a kanji</p>
             </div>
@@ -416,8 +519,8 @@ export function App() {
             <div className="map-host" hidden={view !== 'map'}>
               <KanjiMap
                 scope={scopeOf(filter)}
-                focus={selected ? focus : null}
-                focusNode={selected ? (data?.focus ?? null) : null}
+                focus={focus}
+                focusNode={selected && data?.focus.char === focus ? data.focus : null}
                 onSelect={drill}
                 onDeselect={deselect}
                 onOpen={() => setView('focus')}
@@ -427,12 +530,8 @@ export function App() {
             </div>
           )}
 
-          {!error && (
-            <>
-              {/* On a phone the tabs above do this. */}
-              {!mobile && <ViewSwitch view={view} onView={setView} />}
-            </>
-          )}
+          {/* On a phone the tabs above do this. */}
+          {!error && !mobile && <ViewSwitch view={view} onView={setView} />}
 
           <div className="stage-corner">
             {!error && (
@@ -443,8 +542,8 @@ export function App() {
                 note={view === 'focus' && data && selected ? containerNote(data, filter) : undefined}
               />
             )}
-            {/* On a phone it sits beside the search instead, where it is always on screen. */}
-            {!mobile && <ProfileButton onOpen={() => setAccountOpen(true)} />}
+            {/* On a phone it sits beside the tabs instead, where it is always on screen. */}
+            {!mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
           <button
@@ -460,12 +559,6 @@ export function App() {
         </main>
       </div>
 
-      <SearchOverlay
-        open={searchOpen}
-        onClose={() => setSearchOpen(false)}
-        onPick={drill}
-        onWord={openWord}
-      />
       {accountShown && <AccountDialog onClose={closeAccount} />}
     </div>
   )

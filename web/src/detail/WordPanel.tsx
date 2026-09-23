@@ -1,7 +1,7 @@
 /**
  * One dictionary entry in the rail, the way a pocket dictionary lays it out:
  * the word, its reading and accent, every sense, and then the kanji it is
- * written with -- each of which is a way back into the graph.
+ * written with -- each of which opens that character.
  */
 
 import { useEffect, useState } from 'react'
@@ -10,11 +10,11 @@ import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
 
 interface Props {
+  id: number
   /** What the list already knew about the word, so the head renders at once. */
-  word: Word
-  /** The kanji the panel was opened from, for the back link. */
-  from: string
-  onBack: () => void
+  word?: Word
+  /** The kanji the word was opened from, if it was, to mark among its kanji. */
+  from?: string
   onPick: (char: string) => void
 }
 
@@ -38,7 +38,7 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
   )
 }
 
-export function WordPanel({ word, from, onBack, onPick }: Props) {
+export function WordPanel({ id, word, from, onPick }: Props) {
   const [entry, setEntry] = useState<WordEntry | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -48,33 +48,37 @@ export function WordPanel({ word, from, onBack, onPick }: Props) {
     setFailed(false)
     // The device has everything but the example sentences, and answers
     // first; the server's full entry replaces it when it comes.
-    local.wordEntry(word.id)?.then(
+    local.wordEntry(id)?.then(
       (d) => !stale && d && setEntry((e) => e ?? d),
       () => {},
     )
-    api.word(word.id).then(
+    api.word(id).then(
       (d) => !stale && setEntry(d),
       () => !stale && setFailed(true),
     )
     return () => {
       stale = true
     }
-  }, [word.id])
+  }, [id])
 
   const w = entry?.word ?? word
+  if (!w) {
+    return (
+      <section className="rail-section word-panel">
+        <p className="hint">{failed ? 'This entry could not be loaded.' : 'looking'}</p>
+      </section>
+    )
+  }
   const rank = rankOf(w)
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
 
   return (
     <section className="rail-section word-panel" aria-label={`Dictionary entry for ${w.headword}`}>
-      <button className="back-link" onClick={onBack}>
-        <span aria-hidden>←</span> back to <span className="back-glyph">{from}</span>
-      </button>
 
       <h2 className="entry-head">
         {[...w.headword].map((ch, i) =>
           KANJI.test(ch) ? (
-            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={`Open ${ch} in the graph`}>
+            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={`Open ${ch}`}>
               {ch}
             </button>
           ) : (
@@ -121,7 +125,7 @@ export function WordPanel({ word, from, onBack, onPick }: Props) {
                   className="entry-kanji-glyph"
                   data-current={k.char === from || undefined}
                   onClick={() => onPick(k.char)}
-                  title={`Open ${k.char} in the graph`}
+                  title={`Open ${k.char}`}
                 >
                   {k.char}
                 </button>

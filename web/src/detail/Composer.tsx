@@ -22,7 +22,10 @@ export interface Draft {
 }
 
 interface Props {
-  char: string
+  /** How the character or word is written, for the drawing's title. */
+  label: string
+  /** What the empty box asks; a new post's only. */
+  placeholder?: string
   /** Who is writing; null when signed out. */
   author: Author | null
   /** An existing note to edit; absent for a new post. */
@@ -55,7 +58,7 @@ function release(a: Attachment) {
 
 const EMPTY: Draft = { text: '', attachments: [], visibility: 'private' }
 
-export function Composer({ char, author, initial, draftKey, onSubmit, onCancel, onSignIn }: Props) {
+export function Composer({ label, placeholder, author, initial, draftKey, onSubmit, onCancel, onSignIn }: Props) {
   const signedIn = author !== null
   const start = initial ?? (draftKey ? drafts.get(draftKey) : undefined) ?? EMPTY
   const [text, setText] = useState(start.text)
@@ -181,7 +184,7 @@ export function Composer({ char, author, initial, draftKey, onSubmit, onCancel, 
         <textarea
           className="composer-text"
           value={text}
-          placeholder={initial ? 'Your association' : `What does ${char} look like to you?`}
+          placeholder={initial ? 'Your association' : (placeholder ?? `What does ${label} look like to you?`)}
           autoFocus={Boolean(initial)}
           rows={open ? Math.min(14, Math.max(3, text.split('\n').length + 1)) : 1}
           onChange={(e) => setText(e.target.value)}
@@ -303,7 +306,7 @@ export function Composer({ char, author, initial, draftKey, onSubmit, onCancel, 
       {sketching && (
         <Suspense fallback={<div className="sketch-overlay" />}>
           <SketchEditor
-            char={char}
+            char={label}
             scene={sketching.scene}
             onSave={saveDrawing}
             onClose={() => setSketching(null)}

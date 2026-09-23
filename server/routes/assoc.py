@@ -1,5 +1,8 @@
 """Associations: notes, sketches and images, layered by author.
 
+A note is on a subject: one character, or a dictionary word as `word:<id>`
+(its JMdict entry number, which stays put across dictionary releases).
+
 Reading works signed out (you see public notes); writing needs an account.
 Signed-out notes live in the browser and never come here until you sign in.
 Image names are unguessable, and fetching one needs no session, because an
@@ -8,13 +11,14 @@ the sense that nobody else is told their names.
 """
 
 import json
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
 from .. import store
-from ..db import query
+from ..db import query, query_one
 from .auth import optional_user, require_user
 
 router = APIRouter(prefix="/api/assoc", tags=["associations"])
@@ -24,6 +28,29 @@ ALLOWED_IMAGE = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 # Scenes embed any pasted images as data URLs, so they can outgrow the PNG.
 MAX_SCENE_BYTES = 32 * 1024 * 1024
+
+
+WORD_SUBJECT = re.compile(r"word:(\d{1,10})")
+
+
+def subject_or_400(subject: str) -> str:
+    """The subject if it is one a note can be on, a 400 otherwise."""
+    if len(subject) == 1:
+        return subject
+    m = WORD_SUBJECT.fullmatch(subject)
+    if m and query_one("SELECT 1 FROM word WHERE id = ?", (int(m[1]),)):
+        return subject
+    raise HTTPException(400, "expected a single character or a word as word:<id>")
+
+
+def _parts(subject: str) -> list[str]:
+    """What a subject is built from: a character's components, a word's kanji."""
+    m = WORD_SUBJECT.fullmatch(subject)
+    if not m:
+        return [r["child"] for r in query("SELECT child FROM edge WHERE parent = ? ORDER BY child", (subject,))]
+    row = query_one("SELECT headword FROM word WHERE id = ?", (int(m[1]),))
+    headword = row["headword"] if row else ""
+    return [c for c in dict.fromkeys(headword) if "一" <= c <= "鿿" or "㐀" <= c <= "䶿"]
 
 
 @router.get("/stats")
@@ -37,23 +64,22 @@ def get_for(
     withComponents: bool = Query(True),
     user: dict | None = Depends(optional_user),
 ) -> dict:
-    """This character's notes, plus your notes on each of its components.
+    """This subject's notes, plus your notes on each of its parts.
 
-    The component notes are what make a mnemonic assemble itself: looking at 語
-    should show whatever you already wrote about 言 and 吾. Every component is
-    listed, noted or not, so a signed-out browser can fill in its own.
+    The part notes are what make a mnemonic assemble itself: looking at 語
+    should show whatever you already wrote about 言 and 吾, and 水道 what you
+    wrote about 水 and 道. Every part is listed, noted or not, so a signed-out
+    browser can fill in its own.
     """
-    if len(char) != 1:
-        raise HTTPException(400, "expected a single character")
+    char = subject_or_400(char)
 
     viewer = user["id"] if user else None
     result: dict = {"char": char, "own": store.for_char(char, viewer), "components": []}
 
     if withComponents:
-        rows = query("SELECT child FROM edge WHERE parent = ? ORDER BY child", (char,))
-        for r in rows:
-            notes = store.for_char(r["child"], viewer, only_mine=True) if viewer else []
-            result["components"].append({"char": r["child"], "notes": notes})
+        for part in _parts(char):
+            notes = store.for_char(part, viewer, only_mine=True) if viewer else []
+            result["components"].append({"char": part, "notes": notes})
 
     return result
 
@@ -83,9 +109,8 @@ def _visibility(payload: dict, default: str | None) -> str | None:
 
 @router.post("/for/{char}")
 def post_for(char: str, payload: dict = Body(...), user: dict = Depends(require_user)) -> dict:
-    """Post a new note on this character; it joins any you already have."""
-    if len(char) != 1:
-        raise HTTPException(400, "expected a single character")
+    """Post a new note on this subject; it joins any you already have."""
+    char = subject_or_400(char)
     text, images = _content(payload)
     return store.create(char, text, images, user["id"], _visibility(payload, "private"))
 

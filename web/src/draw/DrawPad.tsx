@@ -154,9 +154,8 @@ export function DrawPad({ onPick }: Props) {
         </p>
       </div>
 
-      {/* Picking opens the character in the graph straight away. There is no
-          intermediate list of what it is made of or what it appears in -- the
-          graph shows both, and better. */}
+      {/* Picking types the character into the search and clears the box, so
+          the next one starts on a clean pad. */}
       <div className="drawpad-right">
         {candidates.length > 0 && (
           <>
@@ -166,7 +165,10 @@ export function DrawPad({ onPick }: Props) {
                 <button
                   key={c.char}
                   className="result"
-                  onClick={() => onPick(c.char)}
+                  onClick={() => {
+                    onPick(c.char)
+                    clear()
+                  }}
                   title={`${c.meanings[0] ?? 'no dictionary entry'} — ${c.strokes} strokes`}
                 >
                   {c.char}
