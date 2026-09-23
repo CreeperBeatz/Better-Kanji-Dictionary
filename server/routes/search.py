@@ -12,14 +12,21 @@ Latin letters -- before English. When romaji wins but the Bulgarian reading
 would have found words too, that reading comes back in `alternatives`.
 """
 
+import json
 import re
 import threading
+from collections.abc import Iterator
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 
 from .. import bulgarian as bg
+from .. import kanji_parts
+from .. import semantic as sem
 from ..db import get_db, query
+from ..errors import AppError
 from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_to_kana
+from .auth import require_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -235,7 +242,7 @@ def _bg_tier(exact: bool, same_spelling: bool, place: int) -> int:
 
 @router.get("")
 def search(
-    q: str = Query(min_length=1, max_length=64),
+    q: str = Query(min_length=1, max_length=200),
     limit: int = Query(30, ge=1, le=100),
     lang: str = Query("en", pattern="^(en|bg)$"),
     common: bool = Query(False, description="only words JMdict marks as common"),
@@ -380,6 +387,122 @@ def search(
     }
 
 
+@router.get("/semantic")
+def semantic(
+    q: str = Query(min_length=1, max_length=200),
+    lang: str = Query("en", pattern="^(en|bg)$"),
+    user: dict = Depends(require_user),
+):
+    """What a language model takes the query to mean, for when the dictionary
+    found nothing, streamed as server-sent events while the model writes:
+
+        {"type": "thinking"}
+        {"type": "kanji", "kanji": {...a kanji result, "why"}}
+        {"type": "word", "word": {...a word entry, "why"}}
+        {"type": "note", "note": "..."}
+        {"type": "done"}                 or {"type": "error", "code": ...}
+
+    Kanji and words keep the model's order, and only what the database has is
+    sent. A character described by its parts is checked against the
+    decomposition graph as the model names it: those truly built from the parts
+    go out at once, the rest wait for the end, behind at most three jōyō ones
+    the model missed -- the order kanji_parts.rerank gives, without anything on
+    the page moving. An empty answer is an answer (gibberish finds nothing).
+
+    Failing to reach the model at all is a 503 like any other error, so the
+    page can tell "not set up" from "not available now"."""
+    q = q.strip()
+    try:
+        events = sem.open_stream(q, lang)
+    except sem.Off:
+        raise AppError(503, "semantic_off", "semantic search is not set up on this server")
+    except sem.Unavailable as e:
+        print(f"[semantic] {q!r}: {e}", flush=True)
+        raise AppError(503, "semantic_unavailable", "semantic search is not available right now")
+    return StreamingResponse(
+        _semantic_events(q, events),
+        media_type="text/event-stream",
+        # No proxy on the way (the Cloudflare tunnel, nginx) may hold events back.
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
+
+
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _semantic_events(q: str, events) -> Iterator[str]:
+    candidates: list[str] = []  # what the database says holds the parts
+    parts: list[list[str]] = []
+    sent: list[str] = []  # kanji already on the page
+    later: list[tuple[str, str | None]] = []  # the model's kanji that do not hold the parts
+    words_sent: set[int] = set()
+
+    def kanji(char: str, why: str | None) -> str | None:
+        if char in sent or len(sent) >= sem.MAX_KANJI:
+            return None
+        hit = _kanji_hits([char])
+        if not hit:
+            return None
+        sent.append(char)
+        return _sse({"type": "kanji", "kanji": {**hit[0], "why": why}})
+
+    try:
+        for kind, value in events:
+            out = None
+            if kind == "thinking":
+                out = _sse({"type": "thinking"})
+            elif kind == "parts":
+                parts = value
+                candidates = kanji_parts.containing(parts)
+                if not candidates:
+                    parts = []  # nothing holds them: the model's order stands
+            elif kind == "kanji":
+                if not parts or kanji_parts.holds(value["char"], parts):
+                    out = kanji(value["char"], value["why"])
+                else:
+                    later.append((value["char"], value["why"]))
+            elif kind == "word":
+                w = _word_for(value["word"], value["reading"])
+                if w and w["id"] not in words_sent:
+                    words_sent.add(w["id"])
+                    out = _sse({"type": "word", "word": {**w, "why": value["why"]}})
+            elif kind == "note":
+                out = _sse({"type": "note", "note": value})
+            elif kind == "answer" and parts:
+                # The end of the model's kanji: what it missed, then what it
+                # guessed that does not hold the parts -- rerank's order.
+                model = {c for c, _ in later} | set(sent)
+                fill = [(c, None) for c in candidates if c not in model]
+                if sent:
+                    tail = [f for f in fill if kanji_parts.is_joyo(f[0])][:3] + later
+                else:
+                    tail = later[:1] + fill[:3] + later[1:]
+                out = "".join(e for c, why in tail if (e := kanji(c, why)))
+            if out:
+                yield out
+    except sem.Unavailable as e:
+        print(f"[semantic] {q!r}: {e}", flush=True)
+        yield _sse({"type": "error", "code": "semantic_unavailable"})
+        return
+    yield _sse({"type": "done"})
+
+
+def _word_for(text: str, reading: str | None) -> dict | None:
+    """The dictionary entry a suggested word most likely is: one written that
+    way, read the way the model said if one is, common before not."""
+    ids = [r["word_id"] for r in query("SELECT DISTINCT word_id FROM word_form WHERE text = ? LIMIT 20", (text,))]
+    if not ids:
+        return None
+    reading = katakana_to_hiragana(reading) if reading else None
+
+    def rank(w: dict) -> tuple:
+        kana = {katakana_to_hiragana(f["text"]) for f in w["forms"] if f["kana"]} | {katakana_to_hiragana(w["reading"])}
+        return (reading is not None and reading not in kana, w["headword"] != text, not w["common"], w["nf"] is None, w["nf"] or 0)
+
+    return min(_fetch_words(ids).values(), key=rank, default=None)
+
+
 def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] | None = None) -> list[dict]:
     """Characters matching the query, by meaning or directly by character."""
     chars: list[str] = []
@@ -412,6 +535,17 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
             )
             chars = [r["char"] for r in rows]
 
+    out = _kanji_hits(chars)
+    # FTS rank alone puts obscure characters first, because their meaning lists
+    # are short. What you almost always want is the common one: 寺 before 刹.
+    # By reading, kun'yomi come before on'yomi -- among the joyo first, so a
+    # rare character's kun'yomi cannot put it ahead of 水 for すい.
+    out.sort(key=lambda k: (0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999))
+    return out[:12]
+
+
+def _kanji_hits(chars: list[str]) -> list[dict]:
+    """The result row for each of `chars` the database has, in no set order."""
     if not chars:
         return []
 
@@ -427,7 +561,7 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
     )
     import json as _json
 
-    out = [
+    return [
         {
             "char": r["char"],
             "meanings": _json.loads(r["meanings"] or "[]"),
@@ -441,12 +575,6 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
         }
         for r in rows
     ]
-    # FTS rank alone puts obscure characters first, because their meaning lists
-    # are short. What you almost always want is the common one: 寺 before 刹.
-    # By reading, kun'yomi come before on'yomi -- among the joyo first, so a
-    # rare character's kun'yomi cannot put it ahead of 水 for すい.
-    out.sort(key=lambda k: (0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999))
-    return out[:12]
 
 
 @router.get("/words-for/{char}")

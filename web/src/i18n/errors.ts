@@ -14,6 +14,8 @@ import type { Lang } from '.'
 const ERRORS: Record<string, [string, string]> = {
   // signing in and the profile
   sign_in_required: ['sign in to save associations', 'влезте, за да запазвате асоциации'],
+  semantic_off: ['semantic search is not set up on this server', 'семантичното търсене не е настроено на този сървър'],
+  semantic_unavailable: ['semantic search is not available right now', 'семантичното търсене не е достъпно в момента'],
   bad_email: ['that does not look like an email address', 'това не прилича на имейл адрес'],
   too_soon: ['a link was just sent; give it a moment', 'току-що изпратихме връзка; изчакайте малко'],
   link_expired: ['this link has expired or was already used', 'връзката е изтекла или вече е използвана'],

@@ -729,6 +729,117 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------------------------------------------------------------- semantic search */
+
+/* What semantic search suggested when the dictionary found nothing: set apart by
+   a rule and its own label, so it never reads as a dictionary match. */
+.semantic {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ai-deep);
+}
+
+.semantic-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ai);
+}
+
+/* Asking for semantic search: Enter, or this. The key hint is for keyboards;
+   on a phone the keyboard's own search key is the Enter. */
+.semantic-ask {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ai);
+  background: transparent;
+  border: 1px solid var(--ai-deep);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.semantic-ask:hover {
+  background: var(--ai-wash);
+}
+
+.semantic-ask kbd {
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 5px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+}
+
+@media (pointer: coarse) {
+  .semantic-ask kbd {
+    display: none;
+  }
+}
+
+.semantic-mark {
+  font-size: 11px;
+}
+
+.semantic-asking {
+  animation: semantic-pulse 1.6s var(--ease) infinite;
+}
+
+@keyframes semantic-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.semantic-note {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--paper-dim);
+}
+
+.semantic-kanji {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.semantic-kanji li {
+  display: grid;
+  grid-template-columns: minmax(0, 150px) 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.semantic-kanji .kanji-hit-meaning {
+  max-width: 96px;
+}
+
+.semantic-why {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.word .semantic-why {
+  margin-top: 8px;
+  padding: 0 8px;
+}
+
 .words {
   list-style: none;
   margin: 18px 0 0;

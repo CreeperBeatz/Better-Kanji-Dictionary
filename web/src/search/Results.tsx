@@ -3,8 +3,19 @@
  * found, a whole JLPT level, and -- with nothing typed -- the way in to both.
  */
 
-import { useEffect, useState } from 'react'
-import { api, type KanjiNode, type SearchOrder, type SearchResponse, type SearchSort, type Word } from '../api'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useAuth } from '../account/auth'
+import {
+  api,
+  ApiError,
+  type KanjiNode,
+  type SearchOrder,
+  type SearchResponse,
+  type SearchSort,
+  type SemanticEvent,
+  type SemanticResponse,
+  type Word,
+} from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
@@ -48,6 +59,14 @@ const S = strings(
     parts: 'Parts they are built from',
     partsHint: 'These carry no JLPT level of their own, but N{level} cannot be written without them.',
     bound: 'bound form',
+    semantic: 'Semantic search',
+    semanticAsking: 'Searching by meaning…',
+    semanticThinking: 'Thinking…',
+    semanticNothing: 'Semantic search found nothing either.',
+    semanticUnavailable: 'Semantic search is not available right now.',
+    semanticSignIn: 'Sign in to search by meaning.',
+    semanticAsk: 'Search by meaning',
+    semanticAskTitle: 'Ask semantic search what this could mean (Enter)',
   },
   {
     common: 'честа',
@@ -83,6 +102,14 @@ const S = strings(
     parts: 'Части, от които са изградени',
     partsHint: 'Те нямат собствено ниво в JLPT, но без тях N{level} не може да се напише.',
     bound: 'свързана форма',
+    semantic: 'Семантично търсене',
+    semanticAsking: 'Търсене по смисъл…',
+    semanticThinking: 'Обмисляне…',
+    semanticNothing: 'И семантичното търсене не откри нищо.',
+    semanticUnavailable: 'Семантичното търсене не е достъпно в момента.',
+    semanticSignIn: 'Влезте, за да търсите по смисъл.',
+    semanticAsk: 'Търсене по смисъл',
+    semanticAskTitle: 'Попитайте семантичното търсене какво може да означава това (Enter)',
   },
 )
 
@@ -121,7 +148,7 @@ function remember(key: string, r: SearchResponse) {
   if (found.size > 60) found.delete(found.keys().next().value!)
 }
 
-function WordRow({ w, onWord }: { w: Word; onWord: (w: Word) => void }) {
+function WordRow({ w, onWord, why }: { w: Word; onWord: (w: Word) => void; why?: string | null }) {
   const lang = useLang()
   const t = S(lang)
   // The whole card opens the entry; its kanji are one tap further, on the entry's page.
@@ -172,6 +199,7 @@ function WordRow({ w, onWord }: { w: Word; onWord: (w: Word) => void }) {
           )}
         </span>
       </button>
+      {why && <p className="semantic-why">{why}</p>}
     </li>
   )
 }
@@ -210,9 +238,12 @@ interface SearchProps {
   onLevel: (level: Level) => void
   /** Search for something else, as if it had been typed: a suggested reading. */
   onSearch: (q: string) => void
+  /** The query semantic search was asked for (Enter), and how to ask for one. */
+  asked: string | null
+  onAsk: (q: string) => void
 }
 
-export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -267,6 +298,12 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   if (!term) return <HomePage onLevel={onLevel} />
 
   const reading = result?.interpretation?.reading
+  const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
+  // The query the dictionary answered with nothing -- the one on screen, not the
+  // one being typed, so the model is only asked once the dictionary has had its
+  // say, and its answer stays up while the next query is on its way.
+  const unmatched = result && result.words.length === 0 && result.kanji.length === 0 ? result.query : null
+  const nothing = <p className="hint">{t('nothing', { q: term })}</p>
   const alternatives = result?.alternatives ?? []
 
   // The last answer stays up while the next one is on its way, so the list
@@ -339,10 +376,190 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
           ))}
         </ol>
       )}
-      {result && result.words.length === 0 && result.kanji.length === 0 && !busy && (
-        <p className="hint">{t('nothing', { q: term })}</p>
+      {/* When semantic search takes over, it says what it found instead; it
+          hands the line back when it will not run (signed out, offline, off). */}
+      {unmatched ? (
+        <Semantic
+          q={unmatched}
+          asked={asked === unmatched}
+          onAsk={() => onAsk(unmatched)}
+          onKanji={onKanji}
+          onWord={onWord}
+          nothing={empty ? nothing : null}
+        />
+      ) : (
+        empty && nothing
       )}
       {!result && busy && <p className="hint">{t('looking')}</p>}
+    </section>
+  )
+}
+
+// What semantic search said for each query, so going back to one does not ask again.
+const understood = new Map<string, SemanticResponse>()
+
+/**
+ * Where an answer is: idle (not asked for yet), waiting (the request on its way),
+ * thinking (the model has it), streaming (results arriving), done -- or
+ * unavailable, or off when the server has no model set up at all.
+ */
+interface SemanticState {
+  phase: 'idle' | 'waiting' | 'thinking' | 'streaming' | 'done' | 'unavailable' | 'off'
+  answer: SemanticResponse | null
+}
+
+/**
+ * What a language model takes a query to mean, for when the dictionary found
+ * nothing: signed-in users only, online only -- the device has no model -- and
+ * only when asked, with Enter or its button, since each answer costs money and
+ * takes seconds. An answer already given shows again without asking.
+ */
+function Semantic({
+  q,
+  asked,
+  onAsk,
+  onKanji,
+  onWord,
+  nothing,
+}: {
+  q: string
+  asked: boolean
+  onAsk: () => void
+  onKanji: (c: string) => void
+  onWord: (w: Word) => void
+  /** The dictionary's "nothing matched", shown only when semantic search will not run. */
+  nothing: ReactNode
+}) {
+  const lang = useLang()
+  const t = S(lang)
+  const { user, ready } = useAuth()
+  const key = `${lang} ${q}`
+  const [state, setState] = useState<SemanticState>(() => {
+    const known = understood.get(key)
+    return known ? { phase: 'done', answer: known } : { phase: asked ? 'waiting' : 'idle', answer: null }
+  })
+
+  useEffect(() => {
+    const known = understood.get(key)
+    if (known) {
+      setState({ phase: 'done', answer: known })
+      return
+    }
+    if (!asked || !user || !navigator.onLine) {
+      setState({ phase: 'idle', answer: null })
+      return
+    }
+    setState({ phase: 'waiting', answer: null })
+    const abort = new AbortController()
+    let answer: SemanticResponse = { query: q, note: null, kanji: [], words: [] }
+    let done = false
+    const show = (phase: SemanticState['phase']) => {
+      if (!abort.signal.aborted) setState({ phase, answer })
+    }
+
+    function onEvent(e: SemanticEvent) {
+      if (e.type === 'thinking') show('thinking')
+      else if (e.type === 'kanji') {
+        answer = { ...answer, kanji: [...answer.kanji, e.kanji] }
+        show('streaming')
+      } else if (e.type === 'word') {
+        answer = { ...answer, words: [...answer.words, e.word] }
+        show('streaming')
+      } else if (e.type === 'note') {
+        answer = { ...answer, note: e.note }
+        show('streaming')
+      } else if (e.type === 'done') {
+        done = true
+        understood.set(key, answer)
+        if (understood.size > 60) understood.delete(understood.keys().next().value!)
+        show('done')
+      }
+    }
+
+    // What came before a failure stays up; only an answer with nothing in it
+    // says semantic search is not available.
+    const broke = () => show(answer.kanji.length || answer.words.length ? 'done' : 'unavailable')
+
+    api.semantic(q, lang, onEvent, abort.signal).then(
+      () => {
+        if (!done) broke()
+      },
+      (e) => {
+        if (abort.signal.aborted) return
+        // Not set up at all: say nothing. Set up but failing -- the spend cap,
+        // OpenRouter down -- say so, once, and let the search stand as it is.
+        if (e instanceof ApiError && e.code === 'semantic_off') show('off')
+        else broke()
+      },
+    )
+    return () => abort.abort()
+  }, [key, q, lang, user, asked])
+
+  if (!ready || state.phase === 'off') return nothing
+  if (!user)
+    return (
+      <>
+        {nothing}
+        <p className="hint semantic-invite">{t('semanticSignIn')}</p>
+      </>
+    )
+  if (state.phase === 'idle') {
+    if (!navigator.onLine) return nothing
+    return (
+      <>
+        {nothing}
+        <button className="semantic-ask" onClick={onAsk} title={t('semanticAskTitle')}>
+          <span className="semantic-mark" aria-hidden="true">
+            ✦
+          </span>
+          {t('semanticAsk')}
+          <kbd>Enter</kbd>
+        </button>
+      </>
+    )
+  }
+
+  const { phase, answer } = state
+  const explained = answer?.kanji.some((k) => k.why)
+  return (
+    <section className="semantic" aria-busy={phase !== 'done' && phase !== 'unavailable'}>
+      <h3 className="semantic-label">
+        <span className="semantic-mark" aria-hidden="true">
+          ✦
+        </span>
+        {t('semantic')}
+      </h3>
+      {phase === 'waiting' && <p className="hint semantic-asking">{t('semanticAsking')}</p>}
+      {phase === 'thinking' && <p className="hint semantic-asking">{t('semanticThinking')}</p>}
+      {phase === 'unavailable' && <p className="hint">{t('semanticUnavailable')}</p>}
+      {answer?.note && <p className="semantic-note">{answer.note}</p>}
+      {answer && answer.kanji.length > 0 && explained && (
+        <ul className="semantic-kanji">
+          {answer.kanji.map((k) => (
+            <li key={k.char}>
+              <KanjiChip k={k} onKanji={onKanji} />
+              {k.why && <p className="semantic-why">{k.why}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {answer && answer.kanji.length > 0 && !explained && (
+        <div className="kanji-hits">
+          {answer.kanji.map((k) => (
+            <KanjiChip key={k.char} k={k} onKanji={onKanji} />
+          ))}
+        </div>
+      )}
+      {answer && answer.words.length > 0 && (
+        <ol className="words">
+          {answer.words.map((w) => (
+            <WordRow key={w.id} w={w} onWord={onWord} why={w.why} />
+          ))}
+        </ol>
+      )}
+      {phase === 'done' && answer && answer.kanji.length === 0 && answer.words.length === 0 && (
+        <p className="hint">{t('semanticNothing')}</p>
+      )}
     </section>
   )
 }
