@@ -17,7 +17,8 @@ Two deliberate departures, both switched off by `as_build_py`:
     That is not what they mean: topokanji, which wrote the override file,
     ignores the type altogether, and every override is `fix` -- so 記:fix(言,己)
     came out with no parts at all, as did 別, 込, 印, 声 and ~80 other jōyō.
-    Those lines are now read, with two guards (see `_curb`), because topokanji
+    Those lines are now read, but only for kanji KRADFILE splits into several
+    radicals, and never adding bare strokes (see `_curb`), because topokanji
     wrote them to fix a learning order, not to describe shapes: it breaks even
     口 into 丨一 and 門 into 丨彐月 so everything bottoms out in a few strokes.
 
@@ -93,11 +94,19 @@ def _krad() -> dict[str, list[str]]:
 
 
 def _krad_sets() -> tuple[frozenset[str], frozenset[str]]:
-    """(characters carrying the grass radical, characters that are a radical themselves)."""
+    """(characters carrying the grass radical, characters to keep whole).
+
+    Whole means KRADFILE treats it as one radical: it lists itself (口, 門), or
+    a single radical, which for 氵 阝 辶 彐 is its own stand-in (汁 阡 込 ヨ).
+    A form KRADFILE has no entry for at all (卄 艹 糹 亻) is a bound form, and
+    is kept whole too.
+    """
     krad = _krad()
     grass = frozenset(k for k, comps in krad.items() if KRAD_GRASS in comps)
-    primitive = frozenset(k for k, comps in krad.items() if k in comps) - KRAD_PLACEHOLDERS
-    return grass, primitive
+    compound = frozenset(
+        k for k, comps in krad.items() if k not in comps and len(comps) > 1
+    ) | KRAD_PLACEHOLDERS
+    return grass, compound
 
 
 class Decomposition:
@@ -106,11 +115,11 @@ class Decomposition:
         raw: dict[str, tuple[str, list[str]]],
         grass: frozenset[str] = frozenset(),
         as_build_py: bool = False,
-        primitive: frozenset[str] = frozenset(),
+        compound: frozenset[str] = frozenset(),
     ):
         self.raw = raw
         self.grass = grass  # characters KRADFILE says carry the grass radical
-        self.primitive = primitive  # characters KRADFILE counts as a radical in their own right
+        self.compound = compound  # characters KRADFILE breaks into several radicals
         self.as_build_py = as_build_py
         self._direct_cache: dict[str, list[str]] = {}
 
@@ -134,8 +143,8 @@ class Decomposition:
                     ch, typ, args = m.group(1), m.group(2), m.group(3)
                     raw[ch] = (typ, [p for p in args.split(",") if p])
 
-        grass, primitive = (frozenset(), frozenset()) if as_build_py else _krad_sets()
-        d = cls(raw, grass, as_build_py, primitive)
+        grass, compound = (frozenset(), frozenset()) if as_build_py else _krad_sets()
+        d = cls(raw, grass, as_build_py, compound)
         if user_overrides and USER_OVERRIDES.exists():
             d.apply_user_overrides(json.loads(USER_OVERRIDES.read_text(encoding="utf-8")))
         return d
@@ -185,9 +194,11 @@ class Decomposition:
         return result
 
     def _curb(self, ch: str, parts: set[str]) -> set[str]:
-        """Guard the lines build.py ignored: a character KRADFILE treats as a
-        radical of its own (口, 月, 門) stays whole, and bare strokes are not parts."""
-        if ch in self.primitive:
+        """Guard the lines build.py ignored. topokanji splits radicals and bound
+        forms to shorten its learning order -- 氵 into 冫, 辶 into 廴, 卄 into 廾,
+        which would make every grass kanji hold two hands -- so only characters
+        KRADFILE breaks into several radicals take them, and bare strokes are not parts."""
+        if ch not in self.compound:
             return set()
         return parts - BARE_STROKES
 

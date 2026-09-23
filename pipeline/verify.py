@@ -66,8 +66,10 @@ def main() -> int:
     # but it may not break primitives down into strokes.
     kids = [r["child"] for r in db.execute("SELECT child FROM edge WHERE parent = ?", ("記",))]
     check("記 is built from 言 己", sorted(kids) == sorted(["言", "己"]), "".join(kids))
-    whole = [c for c in "口月門心" if one("SELECT COUNT(*) FROM edge WHERE parent = ?", c)]
-    check("口 月 門 心 stay whole", not whole, "".join(whole))
+    whole = [c for c in "口月門心氵辶卄" if one("SELECT COUNT(*) FROM edge WHERE parent = ?", c)]
+    check("口 月 門 心 氵 辶 卄 stay whole", not whole, "".join(whole))
+    hands = one("SELECT joyo_count FROM fanout WHERE char = ?", "廾") or 0
+    check("grass kanji do not hold 廾 (two hands)", hands < 40, str(hands))
     bare = one("SELECT COUNT(*) FROM kanji k WHERE k.freq IS NOT NULL AND NOT EXISTS "
                "(SELECT 1 FROM edge e WHERE e.parent = k.char)")
     check("common characters without parts <= 60", bare <= 60, str(bare))
