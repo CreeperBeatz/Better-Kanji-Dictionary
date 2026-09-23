@@ -146,7 +146,7 @@ export interface SearchResponse {
 }
 
 /**
- * What Claude Sonnet took a query to mean, when the dictionary found nothing:
+ * What a language model took a query to mean, when the dictionary found nothing:
  * the model's order, only what the dictionary has, each with the model's
  * note on why where it gave one, and its note over them all.
  */

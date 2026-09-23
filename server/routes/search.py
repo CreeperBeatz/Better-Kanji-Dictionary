@@ -18,6 +18,7 @@ import threading
 from fastapi import APIRouter, Depends, Query
 
 from .. import bulgarian as bg
+from .. import kanji_parts
 from .. import semantic as sem
 from ..db import get_db, query
 from ..errors import AppError
@@ -389,10 +390,12 @@ def semantic(
     lang: str = Query("en", pattern="^(en|bg)$"),
     user: dict = Depends(require_user),
 ) -> dict:
-    """What Claude Sonnet takes the query to mean, for when the dictionary found
-    nothing: kanji and words in the model's order, each with its note, and the
-    model's note over them all. Only what the database has survives; an empty
-    answer is an answer (gibberish finds nothing)."""
+    """What a language model takes the query to mean, for when the dictionary
+    found nothing: kanji and words in the model's order, each with its note, and
+    the model's note over them all. A character described by its parts is
+    checked against the decomposition graph, which puts those truly built from
+    them first and adds any the model missed. Only what the database has
+    survives; an empty answer is an answer (gibberish finds nothing)."""
     q = q.strip()
     if not q:
         return {"query": q, "note": None, "kanji": [], "words": []}
@@ -404,8 +407,12 @@ def semantic(
         print(f"[semantic] {q!r}: {e}", flush=True)
         raise AppError(503, "semantic_unavailable", "semantic search is not available right now")
 
-    hits = {k["char"]: k for k in _kanji_hits([k["char"] for k in answer["kanji"]])}
-    kanji = [{**hits[k["char"]], "why": k["why"]} for k in answer["kanji"] if k["char"] in hits]
+    why = {k["char"]: k["why"] for k in answer["kanji"]}
+    chars = [k["char"] for k in answer["kanji"]]
+    if answer["parts"]:
+        chars = kanji_parts.rerank(chars, answer["parts"], limit=sem.MAX_KANJI)
+    hits = {k["char"]: k for k in _kanji_hits(chars)}
+    kanji = [{**hits[c], "why": why.get(c)} for c in chars if c in hits]
 
     words, seen = [], set()
     for s in answer["words"]:

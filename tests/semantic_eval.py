@@ -119,17 +119,14 @@ MODELS: dict[str, tuple[str, dict | None]] = {
     "sonnet-5-low": ("anthropic/claude-sonnet-5", LOW),
 }
 
-PARTS_RULE = """
-- "parts": only when the query describes a kanji by how it looks or what it is built from -- list the parts it names, each as a list of the forms that part may take (the standalone kanji first, then radical forms), for example "sun beside moon" -> [["日"], ["月"]], "water on the left" -> [["水", "氵"]]. Name parts as kanji or radicals, never as descriptions. Leave "parts" out otherwise."""
-
-
 def prompt(with_parts: bool) -> str:
+    """The site's prompt, which asks for parts -- or, for the plain runs, the
+    same with that rule and field taken out."""
     base = sem._PROMPT.replace("{language}", "English")
-    if not with_parts:
+    if with_parts:
         return base
-    base = base.replace('"words": [{"word": "表面", "reading": "ひょうめん", "why": "..."}]}',
-                        '"words": [{"word": "表面", "reading": "ひょうめん", "why": "..."}], "parts": [["..."]]}')
-    return base.replace('- Write "why" and "note"', PARTS_RULE.strip() + '\n- Write "why" and "note"')
+    base = base[: base.index('- "parts":')] + base[base.index('- Write "why"') :]
+    return base.replace(', "parts": [["..."]]}', "}")
 
 
 def parts_of(raw: dict) -> list[list[str]]:

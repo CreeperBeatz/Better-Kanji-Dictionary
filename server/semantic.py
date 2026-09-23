@@ -1,11 +1,17 @@
-"""Semantic search: asking Claude Sonnet, through OpenRouter, what a query means.
+"""Semantic search: asking a language model, through OpenRouter, what a query means.
 
 Used only when the dictionary itself found nothing -- a sentence like "the
 feeling of missing the old days" matches no gloss word for word. The model
 answers with kanji and words, most relevant first, each with an optional note
 on why, and optionally one note over them all (which of 面, 側 and 横 is the
 "side" you mean). Nothing it says is shown as is: search.py keeps only the
-kanji and words the database has.
+kanji and words the database has, and when the query describes a character by
+its parts, the model's picks are checked against the decomposition graph
+(kanji_parts.py).
+
+The model is GPT-6 Luna, chosen by tests/semantic_eval.py: as accurate as
+anything tried, Sonnet 5 included, in about four seconds, at a fortieth of
+Sonnet's price.
 
     OPENROUTER_API_KEY   turns it on; unset, the endpoint says it is off
 
@@ -25,13 +31,11 @@ from collections import OrderedDict
 import requests
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
-MODEL = "anthropic/claude-sonnet-5"
+MODEL = "openai/gpt-6-luna"
 TIMEOUT = 60
-# Sonnet 5 decides for itself how long to think, and the thinking counts against
-# max_tokens: left to it with a 1,500 cap, a shape puzzle ("king on top, clothes
-# below") spent all of it thinking and answered nothing. Low effort thinks not at
-# all on the easy queries and a few seconds on the hard ones, and the cap leaves
-# room for the answer after.
+# Thinking counts against max_tokens: Sonnet 5, left to decide for itself with a
+# 1,500 cap, spent all of it on a shape puzzle ("king on top, clothes below") and
+# answered nothing. Low effort, and a cap with room for the answer after.
 REASONING = {"effort": "low"}
 MAX_TOKENS = 4000
 
@@ -61,7 +65,7 @@ nothing for it word for word. Suggest the Japanese kanji and words they are most
 looking for.
 
 Answer with JSON only, no prose around it, in exactly this shape:
-{"note": "...", "kanji": [{"char": "面", "why": "..."}], "words": [{"word": "表面", "reading": "ひょうめん", "why": "..."}]}
+{"note": "...", "kanji": [{"char": "面", "why": "..."}], "words": [{"word": "表面", "reading": "ひょうめん", "why": "..."}], "parts": [["..."]]}
 
 - "kanji": up to 12 single kanji, the most relevant first.
 - "words": up to 10 Japanese words or set expressions as a dictionary would list them \
@@ -72,6 +76,7 @@ neighbours. Leave it out when the meaning is obvious.
 - "note": optional, at most three sentences, for when the choice itself needs explaining \
 -- for example which of several close kanji fits the situation described. Leave it out \
 otherwise.
+- "parts": only when the query describes a kanji by how it looks or what it is built from -- list the parts it names, each as a list of the forms that part may take (the standalone kanji first, then radical forms), for example "sun beside moon" -> [["日"], ["月"]], "water on the left" -> [["水", "氵"]]. Name parts as kanji or radicals, never as descriptions. Leave "parts" out otherwise.
 - Write "why" and "note" in {language}.
 - Kanji a learner would actually meet come before rare ones.
 - If the query is gibberish, or has nothing to do with Japanese words or characters, \
@@ -196,4 +201,16 @@ def _clean(data: dict) -> dict:
                 "reading": reading.strip() if isinstance(reading, str) else None,
                 "why": _text(item.get("why"), MAX_WHY),
             })
-    return {"note": _text(data.get("note"), MAX_NOTE), "kanji": kanji[:MAX_KANJI], "words": words[:MAX_WORDS]}
+    parts = []
+    for p in data.get("parts") or []:
+        p = [p] if isinstance(p, str) else p
+        if isinstance(p, list):
+            part = [f.strip() for f in p if isinstance(f, str) and 0 < len(f.strip()) <= 2]
+            if part:
+                parts.append(part[:6])
+    return {
+        "note": _text(data.get("note"), MAX_NOTE),
+        "kanji": kanji[:MAX_KANJI],
+        "words": words[:MAX_WORDS],
+        "parts": parts[:6],
+    }

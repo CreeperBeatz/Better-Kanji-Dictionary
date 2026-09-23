@@ -112,10 +112,12 @@ def containing(parts: list[list[str]], limit: int = 30) -> list[str]:
 def rerank(model_kanji: list[str], parts: list[list[str]], limit: int = 12, policy: str = "B") -> list[str]:
     """The model's kanji checked against its own reading of the parts.
 
-    Those that really hold the parts come first, in the model's order. If none
-    does, policy "A" puts the database's best three first and policy "B" keeps
-    the model's first guess ahead of them. Then the model's other guesses, then
-    whatever else holds the parts. With no usable parts, the model's list."""
+    Those that really hold the parts come first, in the model's order, then up
+    to three more of the database's that hold them -- jōyō only, since the model
+    found one already and the rest are rarely what was meant. If none of the
+    model's does, policy "A" puts the database's best three first and policy "B"
+    keeps the model's first guess ahead of them. Then the model's other guesses.
+    With no usable parts, the model's list."""
     candidates = containing(parts)
     if not candidates:
         return model_kanji[:limit]
@@ -123,9 +125,9 @@ def rerank(model_kanji: list[str], parts: list[list[str]], limit: int = 12, poli
     others = [k for k in model_kanji if k not in held]
     fill = [k for k in candidates if k not in held]
     if held:
-        order = held + fill[:3] + others + fill[3:]
+        order = held + [k for k in fill if _info.get(k, (False,))[0]][:3] + others
     elif policy == "A":
-        order = fill[:3] + others + fill[3:]
+        order = fill[:3] + others
     else:
-        order = others[:1] + fill[:3] + others[1:] + fill[3:]
+        order = others[:1] + fill[:3] + others[1:]
     return list(dict.fromkeys(order))[:limit]

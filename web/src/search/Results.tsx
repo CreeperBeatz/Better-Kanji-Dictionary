@@ -59,11 +59,10 @@ const S = strings(
     partsHint: 'These carry no JLPT level of their own, but N{level} cannot be written without them.',
     bound: 'bound form',
     semantic: 'Semantic search',
-    semanticBy: 'suggested by Claude Sonnet, and it can be wrong',
-    semanticAsking: 'Asking Claude what you mean…',
-    semanticNothing: 'Claude did not find anything this could mean either.',
+    semanticAsking: 'Searching by meaning…',
+    semanticNothing: 'Semantic search found nothing either.',
     semanticUnavailable: 'Semantic search is not available right now.',
-    semanticSignIn: 'Sign in and Claude will suggest what this could mean.',
+    semanticSignIn: 'Sign in to search by meaning.',
   },
   {
     common: 'честа',
@@ -100,11 +99,10 @@ const S = strings(
     partsHint: 'Те нямат собствено ниво в JLPT, но без тях N{level} не може да се напише.',
     bound: 'свързана форма',
     semantic: 'Семантично търсене',
-    semanticBy: 'предложено от Claude Sonnet, който може и да греши',
-    semanticAsking: 'Питаме Claude какво имате предвид…',
-    semanticNothing: 'И Claude не откри какво може да означава това.',
+    semanticAsking: 'Търсене по смисъл…',
+    semanticNothing: 'И семантичното търсене не откри нищо.',
     semanticUnavailable: 'Семантичното търсене не е достъпно в момента.',
-    semanticSignIn: 'Влезте и Claude ще предложи какво може да означава това.',
+    semanticSignIn: 'Влезте, за да търсите по смисъл.',
   },
 )
 
@@ -379,7 +377,7 @@ function isSentence(q: string): boolean {
   return q.length >= 8 || q.split(/\s+/).length >= 2
 }
 
-// What Claude said for each query, so going back to one does not ask again.
+// What semantic search said for each query, so going back to one does not ask again.
 const understood = new Map<string, SemanticResponse>()
 
 // How long typing must pause before the model is asked. Each call costs money
@@ -393,7 +391,7 @@ type SemanticState =
   | { kind: 'off' }
 
 /**
- * What Claude Sonnet takes a query to mean, for when the dictionary found
+ * What a language model takes a query to mean, for when the dictionary found
  * nothing: signed-in users only, and online only -- the device has no model.
  */
 function Semantic({ q, onKanji, onWord }: { q: string; onKanji: (c: string) => void; onWord: (w: Word) => void }) {
@@ -448,7 +446,6 @@ function Semantic({ q, onKanji, onWord }: { q: string; onKanji: (c: string) => v
           ✦
         </span>
         {t('semantic')}
-        <span className="semantic-by">{t('semanticBy')}</span>
       </h3>
       {state.kind === 'waiting' && <p className="hint semantic-asking">{t('semanticAsking')}</p>}
       {state.kind === 'unavailable' && <p className="hint">{t('semanticUnavailable')}</p>}

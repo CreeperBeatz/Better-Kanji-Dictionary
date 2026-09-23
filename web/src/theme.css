@@ -731,8 +731,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* ---------------------------------------------------------------- semantic search */
 
-/* What Claude suggested when the dictionary found nothing: set apart by a rule
-   and the model's name, so it never reads as a dictionary match. */
+/* What semantic search suggested when the dictionary found nothing: set apart by
+   a rule and its own label, so it never reads as a dictionary match. */
 .semantic {
   margin-top: 18px;
   padding-top: 14px;
@@ -753,12 +753,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .semantic-mark {
   font-size: 11px;
-}
-
-.semantic-by {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--muted);
 }
 
 .semantic-asking {
