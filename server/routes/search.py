@@ -35,11 +35,16 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
             "reading": r["reading"],
             "common": bool(r["common"]),
             "nf": r["nf"],
+            "jlpt": r["jlpt"],
             "senses": [],
             "forms": [],
             "pitch": None,
         }
-        for r in query(f"SELECT * FROM word WHERE id IN ({ph})", tuple(ids))
+        for r in query(
+            f"SELECT w.*, j.level AS jlpt FROM word w LEFT JOIN word_jlpt j ON j.word_id = w.id "
+            f"WHERE w.id IN ({ph})",
+            tuple(ids),
+        )
     }
     for r in query(
         f"SELECT s.word_id, s.ord, s.pos, s.misc, s.gloss, b.gloss AS gloss_bg FROM sense s "
@@ -75,9 +80,35 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
     return words
 
 
-def _rank(w: dict) -> tuple:
-    """Common words with a good nf bucket first; unranked entries last."""
-    return (0 if w["common"] else 1, w["nf"] if w["nf"] is not None else 99, len(w["headword"]))
+def _order(w: dict, sort: str, desc: bool) -> tuple:
+    """Where a word goes among words that matched equally well.
+
+    By newspaper rank (JMdict nf) or by JLPT level, ascending meaning the
+    basic end first -- the top of the newspaper list, N5 -- and descending
+    the other end. Words without the rank or level go last either way; the
+    other measure, then commonness and length, break ties.
+    """
+    nf, lv = w["nf"], w["jlpt"]
+    news = (nf is None, nf or 0)  # ascending: top 500 first
+    level = (lv is None, -(lv or 0))  # ascending: N5 first
+    common = 0 if w["common"] else 1
+    if sort == "jlpt":
+        first = (level[0], -level[1] if desc else level[1])
+        return (*first, *news, common, len(w["headword"]))
+    first = (news[0], -news[1] if desc else news[1])
+    return (*first, *level, common, len(w["headword"]))
+
+
+def _en_length(text: str) -> int:
+    """How many words FTS5 reads in `text`, not counting the "to" of "to
+    sleep" -- what the English index's n counts (build_db `_en_length`)."""
+    conn = get_db()
+    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS temp.en_q USING fts5(x, tokenize = 'unicode61 remove_diacritics 2')")
+    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS temp.en_q_v USING fts5vocab(temp, en_q, 'instance')")
+    conn.execute("DELETE FROM temp.en_q")
+    conn.execute("INSERT INTO temp.en_q (x) VALUES (?)", (text,))
+    terms = [r[0] for r in conn.execute("SELECT term FROM temp.en_q_v ORDER BY offset")]
+    return len(terms) - (1 if len(terms) > 1 and terms[0] == "to" else 0)
 
 
 def _by_form(texts: list[str], limit: int) -> list[int]:
@@ -115,6 +146,51 @@ def _bg_doc_count(stem: str) -> int:
                         counts[term] = counts.get(term, 0) + docs
                 _bg_docs = counts
     return _bg_docs.get(stem, 0)
+
+
+# Every kanji reading, as kana a query can equal: reading -> {char: tier}, the
+# tier being how the character is read that way (see `_reading_tier`).
+_readings: dict[str, dict[str, int]] | None = None
+_readings_lock = threading.Lock()
+
+
+def _kanji_by_reading(kana: str) -> dict[str, int]:
+    """The characters read as `kana`, each with how (lower first): a kun'yomi
+    that is the whole word (みず for 水, たべる for 食), a kun'yomi's stem before
+    its okurigana (た of た.べる), then an on'yomi (すい for 水)."""
+    global _readings
+    if _readings is None:
+        with _readings_lock:
+            if _readings is None:
+                import json as _json
+
+                table: dict[str, dict[str, int]] = {}
+
+                def add(reading: str, char: str, tier: int) -> None:
+                    if reading:
+                        at = table.setdefault(reading, {})
+                        at[char] = min(tier, at.get(char, tier))
+
+                # 一-鿿 only, as for typed kanji: the compatibility block holds
+                # a second 神 that would sit beside the first.
+                for r in query("SELECT char, on_yomi, kun_yomi FROM kanji WHERE char >= '一' AND char <= '鿿'"):
+                    for kun in _json.loads(r["kun_yomi"] or "[]"):
+                        kun = kun.replace("-", "")
+                        add(kun.replace(".", ""), r["char"], 0)
+                        if "." in kun:
+                            add(kun.split(".")[0], r["char"], 1)
+                    for on in _json.loads(r["on_yomi"] or "[]"):
+                        add(katakana_to_hiragana(on.replace("-", "")), r["char"], 2)
+                _readings = table
+    return _readings.get(kana, {})
+
+
+def _only_common(ids: list[int]) -> list[int]:
+    if not ids:
+        return []
+    ph = ",".join("?" * len(ids))
+    common = {r["id"] for r in query(f"SELECT id FROM word WHERE common = 1 AND id IN ({ph})", tuple(ids))}
+    return [i for i in ids if i in common]
 
 
 def _shlyokavitsa(q: str) -> str | None:
@@ -162,6 +238,9 @@ def search(
     q: str = Query(min_length=1, max_length=64),
     limit: int = Query(30, ge=1, le=100),
     lang: str = Query("en", pattern="^(en|bg)$"),
+    common: bool = Query(False, description="only words JMdict marks as common"),
+    sort: str = Query("news", pattern="^(news|jlpt)$", description="newspaper rank or JLPT level"),
+    order: str = Query("asc", pattern="^(asc|desc)$", description="asc: the basic end first"),
 ) -> dict:
     q = q.strip()
     if not q:
@@ -173,6 +252,7 @@ def search(
     inflections: dict[int, list[str]] = {}
     bg_terms: list[str] | None = None  # set when the words were found in Bulgarian
     bg_tiers: dict[int, int] = {}  # and how well each one matched
+    en_tiers: dict[int, int] | None = None  # set, the same way, for an English search
 
     japanese = has_japanese(q)
     cyrillic = not japanese and bg.has_cyrillic(q)
@@ -261,24 +341,35 @@ def search(
         if safe:
             fts_q = " ".join(f'"{t}"' for t in safe.split()[:-1] + [safe.split()[-1] + '*'])
             rows = query(
-                "SELECT word_id, rank FROM gloss_fts WHERE gloss_fts MATCH ? "
+                "SELECT word_id, n, place FROM gloss_fts WHERE gloss_fts MATCH ? "
                 "ORDER BY rank LIMIT ?",
                 (fts_q, limit * 8),
             )
-            seen: set[int] = set()
+            # How each word matched, lower first: a gloss that is the query
+            # (0 in the first sense, 1 a later one), or one that mentions it (2, 3).
+            wanted = _en_length(safe)
+            en_tiers = {}
             for r in rows:
-                if r["word_id"] not in seen:
-                    seen.add(r["word_id"])
+                tier = (0 if r["n"] == wanted else 2) + r["place"]
+                if r["word_id"] not in en_tiers:
                     word_ids.append(r["word_id"])
+                en_tiers[r["word_id"]] = min(tier, en_tiers.get(r["word_id"], tier))
             interpretation = {"kind": "english"}
 
+    if common:
+        # A view over what was found, not a different search: the query is read
+        # the same way, and only the words left out change.
+        word_ids = _only_common(word_ids)
     words = _fetch_words(word_ids[: limit * 4])
     for wid, reasons in inflections.items():
         if wid in words and reasons:
             words[wid]["inflection"] = reasons
     # A Bulgarian search puts the words that mean exactly the query first: вода
     # finds 水 before 水道, ябълка finds 林檎 before 目玉 (очна ябълка).
-    ordered = sorted(words.values(), key=lambda w: (bg_tiers.get(w["id"], 0), *_rank(w)))[:limit]
+    # An English one likewise; among equal matches, the order asked for.
+    tiers = en_tiers if en_tiers is not None else bg_tiers
+    desc = order == "desc"
+    ordered = sorted(words.values(), key=lambda w: (tiers.get(w["id"], 0), *_order(w, sort, desc)))[:limit]
     return {
         "query": q,
         "interpretation": interpretation,
@@ -292,10 +383,17 @@ def search(
 def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] | None = None) -> list[dict]:
     """Characters matching the query, by meaning or directly by character."""
     chars: list[str] = []
+    tiers: dict[str, int] = {}
 
     if japanese:
         # Any kanji typed directly is a result in its own right.
         chars = [c for c in dict.fromkeys(q) if "一" <= c <= "鿿"]
+
+    # Kana, typed or read from romaji, finds the characters read that way.
+    reading = kana_guess or (katakana_to_hiragana(q) if japanese and not chars and is_kana(q) else "")
+    if reading and bg_terms is None:
+        tiers = _kanji_by_reading(reading)
+        chars = list(tiers)
 
     if bg_terms is not None:
         if bg_terms:
@@ -345,7 +443,9 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
     ]
     # FTS rank alone puts obscure characters first, because their meaning lists
     # are short. What you almost always want is the common one: 寺 before 刹.
-    out.sort(key=lambda k: (0 if k["joyo"] else 1, k["freq"] if k["freq"] is not None else 9999))
+    # By reading, kun'yomi come before on'yomi -- among the joyo first, so a
+    # rare character's kun'yomi cannot put it ahead of 水 for すい.
+    out.sort(key=lambda k: (0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999))
     return out[:12]
 
 

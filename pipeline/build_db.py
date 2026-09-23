@@ -230,7 +230,6 @@ def build_dict(db: sqlite3.Connection) -> None:
         DROP TABLE IF EXISTS word_form;
         DROP TABLE IF EXISTS sense;
         DROP TABLE IF EXISTS word_char;
-        DROP TABLE IF EXISTS gloss_fts;
         CREATE TABLE word (
             id       INTEGER PRIMARY KEY,   -- JMdict ent_seq
             headword TEXT NOT NULL,         -- primary written form
@@ -246,6 +245,9 @@ def build_dict(db: sqlite3.Connection) -> None:
             rare    INTEGER NOT NULL        -- iK/rK/oK/sK -- keep, but rank last
         );
         CREATE INDEX idx_form_text ON word_form(text);
+        -- Every search reads its words' spellings back by id; without this
+        -- that was a scan of all 500k forms, most of a search's time.
+        CREATE INDEX idx_form_word ON word_form(word_id);
         CREATE TABLE sense (
             word_id INTEGER NOT NULL,
             ord     INTEGER NOT NULL,
@@ -329,24 +331,85 @@ def build_dict(db: sqlite3.Connection) -> None:
     db.executemany("INSERT INTO sense VALUES (?,?,?,?,?)", senses)
     db.executemany("INSERT INTO word_char VALUES (?,?)", chars)
 
-    # FTS covers English glosses only. SQLite's unicode61 tokeniser treats a run
-    # of CJK as a single token, so it is useless for Japanese -- Japanese lookup
-    # goes through word_form's index instead.
-    db.executescript("""
-        CREATE VIRTUAL TABLE gloss_fts USING fts5(
-            gloss, word_id UNINDEXED, tokenize = 'unicode61 remove_diacritics 2'
-        );
-    """)
-    db.executemany(
-        "INSERT INTO gloss_fts (gloss, word_id) VALUES (?, ?)",
-        [(g, wid) for wid, _, _, _, g in senses],
-    )
-
     ranked = sum(1 for w in words if w[4] is not None)
     print(f"  words         {len(words):>7,} entries ({ranked:,} with an nf rank)")
     print(f"  forms         {len(forms):>7,} written and kana forms")
     print(f"  senses        {len(senses):>7,} senses")
     print(f"  char links    {len(chars):>7,} character-to-word links")
+
+
+def _outside_brackets(g: str) -> str:
+    """A gloss without its bracketed parts, nested ones included: "dog (Canis
+    (lupus) familiaris)" is "dog"."""
+    out, depth = [], 0
+    for ch in g:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(depth - 1, 0)
+        elif depth == 0:
+            out.append(ch)
+    return "".join(out)
+
+
+def _en_length(terms: list[str]) -> int:
+    """How many words a gloss or query has, not counting the "to" of "to sleep"."""
+    return len(terms) - (1 if len(terms) > 1 and terms[0] == "to" else 0)
+
+
+@stage("english", "sense glosses -> the English search index, one row per gloss")
+def build_english(db: sqlite3.Connection) -> None:
+    """One row per gloss rather than per sense, so a search can tell a word
+    whose meaning is the query ("sleep", "to sleep") from one that only
+    mentions it ("lack of sleep").
+
+    A gloss's row holds its words outside brackets, with n their count less a
+    leading "to"; a gloss with a bracketed qualifier gets a second row with the
+    qualifier in, searchable but never exact (n = 255), so "cold" still finds
+    水 through "water (esp. cool or cold)" without counting as its meaning.
+    place is 0 for the entry's first sense and 1 for any later one.
+
+    FTS covers English only. SQLite's unicode61 tokeniser treats a run of CJK
+    as a single token, so it is useless for Japanese -- Japanese lookup goes
+    through word_form's index instead.
+    """
+    rows = []  # (text, word_id, place, exact-able)
+    for wid, ord_, gloss in db.execute("SELECT word_id, ord, gloss FROM sense ORDER BY word_id, ord"):
+        place = 0 if ord_ == 0 else 1
+        for g in gloss.split("; "):
+            core = _outside_brackets(g).strip()
+            if core:
+                rows.append((core, wid, place, True))
+            if "(" in g or ")" in g:
+                rows.append((g, wid, place, False))
+
+    # Count words the way FTS5 does by letting it tokenise, in a scratch table.
+    db.executescript("""
+        DROP TABLE IF EXISTS temp.en_count;
+        CREATE VIRTUAL TABLE temp.en_count USING fts5(x, tokenize = 'unicode61 remove_diacritics 2');
+    """)
+    db.executemany("INSERT INTO temp.en_count (rowid, x) VALUES (?, ?)", [(i, r[0]) for i, r in enumerate(rows)])
+    db.execute("CREATE VIRTUAL TABLE temp.en_count_v USING fts5vocab(temp, en_count, 'instance')")
+    terms: dict[int, list[str]] = {}
+    for doc, term in db.execute("SELECT doc, term FROM temp.en_count_v ORDER BY doc, offset"):
+        terms.setdefault(doc, []).append(term)
+    db.executescript("DROP TABLE temp.en_count_v; DROP TABLE temp.en_count;")
+
+    db.executescript("""
+        DROP TABLE IF EXISTS gloss_fts;
+        CREATE VIRTUAL TABLE gloss_fts USING fts5(
+            gloss, word_id UNINDEXED, n UNINDEXED, place UNINDEXED,
+            tokenize = 'unicode61 remove_diacritics 2'
+        );
+    """)
+    db.executemany(
+        "INSERT INTO gloss_fts (gloss, word_id, n, place) VALUES (?, ?, ?, ?)",
+        [
+            (text, wid, min(_en_length(terms.get(i, [])), 254) if exact else 255, place)
+            for i, (text, wid, place, exact) in enumerate(rows)
+        ],
+    )
+    print(f"  glosses       {len(rows):>7,} rows, {sum(r[3] for r in rows):,} of them a gloss without its brackets")
 
 
 @stage("strokes", "KanjiVG -> stroke paths in writing order")
@@ -412,6 +475,32 @@ def build_accents(db: sqlite3.Connection) -> None:
     dupes = len(rows) - stored
     print(f"  accents       {stored:>7,} word readings"
           + (f" ({dupes} duplicate keys collapsed)" if dupes else ""))
+
+
+@stage("vocab", "Waller's JLPT vocabulary lists -> a level per word")
+def build_vocab(db: sqlite3.Connection) -> None:
+    import csv
+
+    # Its own table rather than a column on `word`, so the dict stage can be
+    # rebuilt without this one: both key on the JMdict id, which is stable.
+    db.executescript("""
+        DROP TABLE IF EXISTS word_jlpt;
+        CREATE TABLE word_jlpt (
+            word_id INTEGER PRIMARY KEY,
+            level   INTEGER NOT NULL   -- 5 = N5; a word on two lists keeps the easier
+        );
+    """)
+    level: dict[int, int] = {}
+    for n in (1, 2, 3, 4, 5):
+        with (DATA / f"jlpt-vocab-n{n}.csv").open(encoding="utf-8", newline="") as f:
+            for r in csv.DictReader(f):
+                if (r.get("jmdict_seq") or "").isdigit():
+                    level[int(r["jmdict_seq"])] = n
+    known = {r[0] for r in db.execute("SELECT id FROM word")}
+    rows = [(w, n) for w, n in level.items() if w in known]
+    db.executemany("INSERT INTO word_jlpt VALUES (?,?)", rows)
+    print(f"  jlpt          {len(rows):>7,} words with a level"
+          + (f" ({len(level) - len(rows)} ids not in JMdict)" if len(level) > len(rows) else ""))
 
 
 @stage("meanings", "Kanji Alive -> curated meaning overlay")

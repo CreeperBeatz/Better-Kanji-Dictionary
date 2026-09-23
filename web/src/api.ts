@@ -99,6 +99,8 @@ export interface Word {
   reading: string
   common: boolean
   nf: number | null
+  /** Jonathan Waller's JLPT list the word is on, 5 = N5; a soft signal, as for kanji. */
+  jlpt: number | null
   pitch: string | null
   senses: Sense[]
   forms: { text: string; kana: boolean; rare: boolean }[]
@@ -115,6 +117,18 @@ export interface KanjiHit {
   joyo: boolean
   strokes: number | null
   fanout: number
+}
+
+/** What equally good matches are ordered by: newspaper rank or JLPT level. */
+export type SearchSort = 'news' | 'jlpt'
+/** asc: the basic end first -- the top of the newspaper list, N5. */
+export type SearchOrder = 'asc' | 'desc'
+
+export interface SearchOptions {
+  /** Only the words JMdict marks as common. */
+  common: boolean
+  sort: SearchSort
+  order: SearchOrder
 }
 
 export interface SearchResponse {
@@ -232,6 +246,12 @@ export interface DrawCandidate {
   meaningsBg: string[] | null
 }
 
+export interface RecognizeResponse {
+  candidates: DrawCandidate[]
+  strokes: number
+  also: DrawCandidate[]
+}
+
 /**
  * A request the server refused. `message` is its English `detail`; `code`, when
  * the server sends one, is what web/src/i18n/errors.ts translates, with
@@ -303,8 +323,16 @@ export const api = {
   radicals: () =>
     localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
 
-  search: (q: string, lang: string) =>
-    localFirst(local.search(q, lang), () => get<SearchResponse>('/api/search', [['q', q], ['lang', lang]])),
+  search: (q: string, lang: string, o: SearchOptions) =>
+    localFirst(local.search(q, lang, o), () =>
+      get<SearchResponse>('/api/search', [
+        ['q', q],
+        ['lang', lang],
+        ['common', o.common ? '1' : '0'],
+        ['sort', o.sort],
+        ['order', o.order],
+      ]),
+    ),
 
   wordsFor: (char: string) =>
     localFirst(local.wordsFor(char), () =>
@@ -423,9 +451,10 @@ export const api = {
   clearDecomposition: (char: string) =>
     send<{ char: string; cleared: boolean }>(`/api/decomp/${encodeURIComponent(char)}`, 'DELETE'),
 
-  recognize: (strokes: [number, number][][]) =>
-    localFirst(local.recognize(strokes), () =>
-      send<{ candidates: DrawCandidate[]; strokes: number }>('/api/recognize', 'POST', { strokes }),
+  /** `also`: other recognisers' picks, returned with the same metadata; they do not change the ranking. */
+  recognize: (strokes: [number, number][][], also: string[] = []) =>
+    localFirst(local.recognize(strokes, also), () =>
+      send<RecognizeResponse>('/api/recognize', 'POST', { strokes, also }),
     ),
 
   /** Builds the reference index ahead of time, so the first stroke is not slow. */

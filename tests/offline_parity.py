@@ -41,6 +41,8 @@ HARD = [
     # romaji, clean and not
     "taberu", "tabemashita", "nihongo", "kanji", "sushi", "tame", "konnichiwa", "gakkou", "kitte",
     "ni", "n", "shi", "tsu", "kya", "xyz", "arigatou", "benkyou", "taberareru",
+    # romaji and kana that find kanji by reading: kun'yomi, a kun'yomi's stem, on'yomi
+    "mizu", "sui", "kami", "ta", "ue", "kou", "shou", "みず", "スイ", "かみ",
     # Japanese, dictionary form and conjugated
     "食べる", "食べた", "食べたくなかった", "行った", "日本", "日本語", "時", "見る", "見ます", "来ない",
     "します", "勉強している", "高くない", "カタカナ", "ひらがな", "言", "語", "々", "読んでいます",
@@ -166,11 +168,20 @@ def main() -> int:
 
     queries = list(dict.fromkeys(HARD + sample(300 if quick else 2500, rng)))
     bg_queries = list(dict.fromkeys(HARD + HARD_BG + sample_bg(150 if quick else 1000, rng) + queries[: 200 if quick else 800]))
-    asked = [(q, "en") for q in dict.fromkeys(queries + HARD_BG)] + [(q, "bg") for q in bg_queries]
+    plain = ("news", "asc")
+    asked = [(q, "en", False, plain) for q in dict.fromkeys(queries + HARD_BG)]
+    asked += [(q, "bg", False, plain) for q in bg_queries]
+    # Common words only, and every other order, over a slice of both.
+    asked += [(q, "en", True, plain) for q in HARD + queries[: 100 if quick else 600]]
+    asked += [(q, "bg", True, plain) for q in HARD_BG]
+    for how in (("news", "desc"), ("jlpt", "asc"), ("jlpt", "desc")):
+        asked += [(q, "en", True, how) for q in HARD + queries[: 50 if quick else 300]]
+        asked += [(q, "bg", False, how) for q in HARD_BG]
     print(f"asking the server {len(asked)} searches")
     golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": []}
-    for q, lang in asked:
-        golden["search"].append({"q": q[:64], "lang": lang, "out": search(q=q[:64], limit=30, lang=lang)})
+    for q, lang, common, (sort, order) in asked:
+        out = search(q=q[:64], limit=30, lang=lang, common=common, sort=sort, order=order)
+        golden["search"].append({"q": q[:64], "lang": lang, "common": common, "sort": sort, "order": order, "out": out})
 
     texts = list(dict.fromkeys(HARD_BG + [w for q in bg_queries for w in q.split()]))
     for t in texts:
@@ -189,6 +200,11 @@ def main() -> int:
         if ink:
             out = recognize.recognise(ink)
             golden["draw"].append({"char": char, "strokes": ink, "out": out})
+
+    # What the image classifier's picks are annotated with: its whole label set,
+    # components and characters the dictionary lacks mixed in.
+    also = rng.sample(common, 40) + list("氵亻扌艹辶填頬塡頰") + ["x", "あ", "𠮟"]
+    golden["describe"] = {"chars": also, "out": recognize.describe(also)}
 
     kr: dict[str, list[str]] = {}
     for r in query("SELECT kanji, radical FROM kanji_radical"):

@@ -69,6 +69,43 @@ def _empty() -> dict:
     }
 
 
+# The last parse, for reads: (mtime_ns, size) of the file it came from, and
+# the data. Every kanji page reads the store several times (overrides, notes,
+# comments), and parsing it each time grew with every note posted.
+_snapshot: tuple[tuple[int, int], dict] | None = None
+
+
+def _read() -> dict:
+    """The store for reading only -- shared, so never mutate what it returns.
+
+    Reparsed when the file changes, so a script editing store.json while the
+    server runs is picked up as before. Writers use load(), which parses a copy
+    of their own: a write that fails halfway must not leave its edits in here.
+    Not for use while holding _lock, which it takes to reparse.
+    """
+    global _snapshot
+    snap = _snapshot
+    if snap is not None and snap[0] == _stat_key():
+        return snap[1]
+    # Under the writers' lock, so a save cannot land between the stat and the
+    # parse and leave older data filed under the newer file's key.
+    with _lock:
+        key = _stat_key()
+        if key is None:
+            return _empty()
+        if _snapshot is None or _snapshot[0] != key:
+            _snapshot = (key, load())
+        return _snapshot[1]
+
+
+def _stat_key() -> tuple[int, int] | None:
+    try:
+        st = STORE.stat()
+    except FileNotFoundError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
 def load() -> dict:
     if not STORE.exists():
         return _empty()
@@ -89,11 +126,15 @@ def load() -> dict:
 
 
 def save(data: dict) -> None:
+    global _snapshot
     ASSOC_DIR.mkdir(parents=True, exist_ok=True)
     IMAGES.mkdir(parents=True, exist_ok=True)
     tmp = STORE.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(STORE)
+    # The stat key would notice too, unless two saves land in one mtime tick
+    # at the same size.
+    _snapshot = None
 
 
 # ---------------------------------------------------------------- associations
@@ -113,7 +154,7 @@ def _visible(rec: dict, viewer: str | None, authors: dict) -> bool:
 
 def for_char(char: str, viewer: str | None, only_mine: bool = False) -> list[dict]:
     """The notes on this character that `viewer` may see, theirs first."""
-    data = load()
+    data = _read()
     rows = [
         dict(a)
         for a in data["associations"].values()
@@ -311,7 +352,7 @@ def notes_for(char: str, viewer: str | None, offset: int, limit: int, sort: str 
     public, newest first within each. `items` is one page of everyone else's
     public notes, most liked or newest first; `total` counts those.
     """
-    data = load()
+    data = _read()
     reply_counts: dict[str, int] = {}
     for r in data["replies"].values():
         reply_counts[r["assoc"]] = reply_counts.get(r["assoc"], 0) + 1
@@ -388,7 +429,7 @@ def _reply_view(data: dict, r: dict, viewer: str | None) -> dict:
 
 def replies(assoc_id: str, viewer: str | None, offset: int, limit: int) -> dict:
     """One page of the replies to a public note, oldest first so they read as a thread."""
-    data = load()
+    data = _read()
     if not _discussable(data["associations"].get(assoc_id)):
         raise NotFound()
     thread = sorted(
@@ -450,7 +491,7 @@ def add_drawing(png: bytes, scene: str) -> str:
 
 
 def counts() -> dict:
-    data = load()
+    data = _read()
     return {
         "associations": len(data["associations"]),
         "characters": len({a["char"] for a in data["associations"].values()}),
@@ -464,7 +505,7 @@ def counts() -> dict:
 
 def export_bundle(author: str) -> dict:
     """Everything of yours, as one portable object. Images travel by name."""
-    data = load()
+    data = _read()
     me = data["authors"].get(author, {"id": author, "name": author})
     return {
         "version": 1,
@@ -526,7 +567,7 @@ def import_bundle(bundle: dict, owner: str, author_name: str | None = None) -> d
 
 
 def decomposition_overrides() -> dict[str, list[str]]:
-    return load()["decomposition"]
+    return _read()["decomposition"]
 
 
 def set_decomposition(char: str, components: list[str]) -> dict:

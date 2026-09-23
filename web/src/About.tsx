@@ -4,7 +4,8 @@
  * They are not optional: EDRDG requires acknowledgement visible wherever its
  * dictionary content is shown, and KanjiVG requires a credit and a link --
  * which it earns twice over, since the handwriting lookup matches against its
- * stroke data. The profile button is on screen in every view, so they stay
+ * stroke data. DaKanji, the handwriting model, asks for a credit in its own
+ * words. The profile button is on screen in every view, so they stay
  * one click away without spending the rail on them.
  */
 
@@ -15,10 +16,12 @@ const S = strings(
     summary: 'About Better Kanji Dictionary · built on',
     edrdg: 'words, character data, radicals',
     kanjivg: 'stroke order, and handwriting lookup',
+    dakanji: 'Character recognition powered by machine learning from Dariyooo (DaAppLab)',
     decomp: 'decomposition',
     kanjium: 'pitch accent',
     tatoeba: 'example sentences',
     kanjialive: 'curated meanings',
+    jlpt: 'JLPT levels of words',
     bulgarian: 'Bulgarian glosses and kanji meanings, machine-translated by Claude from the English',
     wiktionary: 'translation tables, as hints for the Bulgarian',
     btbwn: 'Bulgarian words for shared concepts, as hints',
@@ -29,10 +32,13 @@ const S = strings(
     summary: 'За Better Kanji Dictionary · изграден върху',
     edrdg: 'думи, данни за йероглифите, радикали',
     kanjivg: 'ред на чертите и търсене чрез рисуване',
+    // The wording the model's author asks for; kept in English in both.
+    dakanji: 'Character recognition powered by machine learning from Dariyooo (DaAppLab)',
     decomp: 'разлагане на части',
     kanjium: 'тонално ударение',
     tatoeba: 'примерни изречения',
     kanjialive: 'подбрани значения',
+    jlpt: 'нива от JLPT на думите',
     bulgarian: 'българските значения на думи и йероглифи, машинно преведени от английски от Claude',
     wiktionary: 'таблици с преводи, като подсказки за българския',
     btbwn: 'български думи за общи понятия, като подсказки',
@@ -46,10 +52,22 @@ type What = Parameters<ReturnType<typeof S>>[0]
 const SOURCES: { name: string; what: What; href: string; licence: string }[] = [
   { name: 'JMdict, KANJIDIC, KRADFILE', what: 'edrdg', href: 'https://www.edrdg.org/', licence: 'CC BY-SA 4.0 · EDRDG' },
   { name: 'KanjiVG', what: 'kanjivg', href: 'https://kanjivg.tagaini.net/', licence: 'CC BY-SA 3.0 · Ulrich Apel' },
+  {
+    name: 'DaKanji',
+    what: 'dakanji',
+    href: 'https://github.com/CaptainDario/DaKanji-Single-Kanji-Recognition',
+    licence: 'MIT · trained on the ETL Character Database (AIST) and KanjiVG',
+  },
   { name: 'cjk-decomp', what: 'decomp', href: 'https://github.com/scriptin/topokanji', licence: 'via topokanji' },
   { name: 'kanjium', what: 'kanjium', href: 'https://github.com/mifunetoshiro/kanjium', licence: 'CC BY-SA 4.0' },
   { name: 'Tatoeba', what: 'tatoeba', href: 'https://tatoeba.org/', licence: 'CC BY 2.0 FR' },
   { name: 'Kanji Alive', what: 'kanjialive', href: 'https://github.com/kanjialive/kanji-data-media', licence: 'CC BY 4.0' },
+  {
+    name: 'JLPT vocabulary lists',
+    what: 'jlpt',
+    href: 'http://www.tanos.co.uk/jlpt/',
+    licence: 'CC BY · Jonathan Waller, JMdict ids by stephenmk',
+  },
   {
     name: 'Bulgarian glosses and kanji meanings',
     what: 'bulgarian',

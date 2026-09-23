@@ -9,11 +9,13 @@
  */
 
 import { useSyncExternalStore } from 'react'
+import { cacheClassifier } from '../draw/classifier'
 import type {
-  DrawCandidate,
+  RecognizeResponse,
   KanjiNode,
   RadicalGroup,
   RadicalSearchResponse,
+  SearchOptions,
   SearchResponse,
   Word,
   WordEntry,
@@ -44,7 +46,10 @@ let nextId = 1
 function setStatus(next: OfflineStatus): void {
   status = next
   try {
-    if (next.state === 'ready') localStorage.setItem(INSTALLED_KEY, '1')
+    if (next.state === 'ready') {
+      localStorage.setItem(INSTALLED_KEY, '1')
+      cacheClassifier()
+    }
     else if (next.state === 'off' || next.state === 'unsupported') localStorage.removeItem(INSTALLED_KEY)
   } catch {
     // not remembered: the first lookups after a start go to the server
@@ -191,9 +196,9 @@ function send<T>(method: Method, args: unknown[]): Promise<T> {
 
 /** Each lookup on the device, or null when it has to be the server's. */
 export const local = {
-  search: (q: string, lang: string) => call<SearchResponse>('search', q, lang),
-  recognize: (strokes: [number, number][][]) =>
-    call<{ candidates: DrawCandidate[]; strokes: number }>('recognize', strokes),
+  search: (q: string, lang: string, o: SearchOptions) => call<SearchResponse>('search', q, lang, o),
+  recognize: (strokes: [number, number][][], also: string[]) =>
+    call<RecognizeResponse>('recognize', strokes, also),
   recognizerReady: () => call<{ chars: number; buckets: number }>('recognizerReady'),
   radicals: () => call<{ groups: RadicalGroup[]; total: number }>('radicals'),
   searchByRadicals: (radicals: string[]) => call<RadicalSearchResponse>('searchByRadicals', radicals),

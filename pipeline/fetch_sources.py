@@ -79,6 +79,15 @@ SOURCES = {
         "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz",
         "glyph origin / etymology, and Bulgarian translation hints (2.9 GB, opt in)",
     ),
+    # --- word-level JLPT: Jonathan Waller's lists (CC BY), keyed to JMdict ids by stephenmk
+    **{
+        f"jlpt-n{n}": (
+            f"jlpt-vocab-n{n}.csv",
+            f"https://raw.githubusercontent.com/stephenmk/yomitan-jlpt-vocab/main/original_data/n{n}.csv",
+            f"JLPT N{n} vocabulary with JMdict ids",
+        )
+        for n in (5, 4, 3, 2, 1)
+    },
     # --- Bulgarian translation hints: the two wordnets share Princeton synset ids
     "omw-bul": (
         "wn-data-bul.tab",

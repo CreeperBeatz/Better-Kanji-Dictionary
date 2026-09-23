@@ -10,6 +10,8 @@
  */
 
 import type {
+  SearchOrder,
+  SearchSort,
   DrawCandidate,
   KanjiHit,
   KanjiNode,
@@ -20,8 +22,10 @@ import type {
   WordEntry,
 } from '../api'
 import { bestReading, hasCyrillic, isLatinQuery, spelling, terms as bgTerms } from './bulgarian'
-import { FtsIndex, phrasesOf, type Phrase } from './fts'
-import { deinflect, hasJapanese, posMatches, pySplit, pyStrip, romajiToKana, type Candidate } from './japanese'
+import { FtsIndex, phrasesOf, tokenize, type Phrase } from './fts'
+import {
+  deinflect, hasJapanese, isKana, katakanaToHiragana, posMatches, pySplit, pyStrip, romajiToKana, type Candidate,
+} from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
 import { compareCodePoints, readSections, SortedStrings, starts } from './sections'
 
@@ -50,10 +54,10 @@ export interface KanjiPack {
   wordsFor: Record<string, number[]>
 }
 
-/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare] */
+/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt */
 export type RawWord = [
   number, string, string, number, number | null, string | null,
-  [string | null, string | null, string, (string | null)?][], [string, number, number][],
+  [string | null, string | null, string, (string | null)?][], [string, number, number][], (number | null)?,
 ]
 
 /** Where the entries and stroke paths are kept: IndexedDB in the app, memory in tests. */
@@ -81,6 +85,8 @@ function toWord(r: RawWord): Word {
       glossBg: glossBg ?? null,
     })),
     forms: r[7].map(([text, kana, rare]) => ({ text, kana: !!kana, rare: !!rare })),
+    // Absent from rows stored before words carried a level.
+    jlpt: r[8] ?? null,
   }
 }
 
@@ -135,6 +141,7 @@ export class Engine {
   private readonly ids: Uint32Array
   private readonly common: Uint8Array
   private readonly nf: Uint8Array
+  private readonly jlpt: Uint8Array
   private readonly hwlen: Uint8Array
   private readonly pos: Uint8Array
 
@@ -145,6 +152,8 @@ export class Engine {
 
   private readonly gloss: FtsIndex
   private readonly glossWord: Uint32Array
+  private readonly glossN: Uint8Array
+  private readonly glossPlace: Uint8Array
   private readonly kfts: FtsIndex
   private readonly kftsChar: Uint32Array
   // Bulgarian glosses and kanji meanings, indexed by stem
@@ -157,6 +166,8 @@ export class Engine {
   private readonly bgKftsChar: Uint32Array
 
   private readonly kanjiAt = new Map<string, number>()
+  /** reading -> char -> how it is read that way; see `kanjiByReading`. */
+  private readonly readings = new Map<string, Map<string, number>>()
   private readonly byRadical = new Map<string, Set<string>>()
   private recognizer: Recognizer | null = null
 
@@ -168,6 +179,7 @@ export class Engine {
     this.ids = s.u32('word.id')
     this.common = s.u8('word.common')
     this.nf = s.u8('word.nf')
+    this.jlpt = s.u8('word.jlpt')
     this.hwlen = s.u8('word.len')
     this.pos = s.u8('word.pos')
 
@@ -180,6 +192,8 @@ export class Engine {
       s.u32('gloss.pstart'), s.u32('gloss.doc'), s.u8('gloss.tf'), s.u8('gloss.pos'), s.u16('gloss.doclen'),
     )
     this.glossWord = s.u32('gloss.docword')
+    this.glossN = s.u8('gloss.docn')
+    this.glossPlace = s.u8('gloss.docplace')
     this.kfts = new FtsIndex(
       new SortedStrings(s.text('kfts.term'), starts(s.u8('kfts.tlen'))),
       s.u32('kfts.pstart'), s.u32('kfts.doc'), s.u8('kfts.tf'), s.u8('kfts.pos'), s.u16('kfts.doclen'),
@@ -200,6 +214,21 @@ export class Engine {
     this.bgKftsChar = s.u32('bgkfts.docchar')
 
     pack.kanji.forEach((r, i) => this.kanjiAt.set(r[0], i))
+    const addReading = (reading: string, char: string, tier: number) => {
+      if (!reading) return
+      let at = this.readings.get(reading)
+      if (!at) this.readings.set(reading, (at = new Map()))
+      at.set(char, Math.min(tier, at.get(char) ?? tier))
+    }
+    for (const r of pack.kanji) {
+      if (!(r[0] >= '一' && r[0] <= '鿿')) continue
+      for (const k of r[9]) {
+        const kun = k.replaceAll('-', '')
+        addReading(kun.replaceAll('.', ''), r[0], 0)
+        if (kun.includes('.')) addReading(kun.split('.')[0], r[0], 1)
+      }
+      for (const on of r[8]) addReading(katakanaToHiragana(on.replaceAll('-', '')), r[0], 2)
+    }
     for (const [kanji, radicals] of Object.entries(pack.kanjiRadicals)) {
       for (const r of radicals) {
         let set = this.byRadical.get(r)
@@ -268,8 +297,20 @@ export class Engine {
     return rows.map((r) => r[0])
   }
 
-  private rankKey(i: number): [number, number, number] {
-    return [this.common[i] ? 0 : 1, this.nf[i] || 99, this.hwlen[i]]
+  /**
+   * Where a word goes among words that matched equally well: by newspaper
+   * rank or JLPT level, ascending the basic end first (top 500, N5). Words
+   * without one go last either way; the other measure, commonness and length
+   * break ties. The server's `_order`.
+   */
+  private orderKey(i: number, sort: SearchSort, desc: boolean): number[] {
+    const nf = this.nf[i]
+    const lv = this.jlpt[i]
+    const news = [nf ? 0 : 1, nf]
+    const level = [lv ? 0 : 1, -lv]
+    const common = this.common[i] ? 0 : 1
+    if (sort === 'jlpt') return [level[0], desc ? -level[1] : level[1], ...news, common, this.hwlen[i]]
+    return [news[0], desc ? -news[1] : news[1], ...level, common, this.hwlen[i]]
   }
 
   /** How many Bulgarian glosses and kanji hold a stem: the server's fts5vocab sum. */
@@ -304,7 +345,9 @@ export class Engine {
     return [distinct(docs.map((d) => this.bgGlossWord[d])), tiers]
   }
 
-  async search(input: string, limit = 30, lang = 'en'): Promise<SearchResponse> {
+  async search(
+    input: string, limit = 30, lang = 'en', common = false, sort: SearchSort = 'news', order: SearchOrder = 'asc',
+  ): Promise<SearchResponse> {
     const q = pyStrip(input)
     if (!q) return { query: q, interpretation: null, alternatives: [], kanji: [], words: [], total: 0 }
 
@@ -314,6 +357,7 @@ export class Engine {
     const inflections = new Map<number, string[]>()
     let bgStems: string[] | null = null // set when the words were found in Bulgarian
     let bgTiers = new Map<number, number>() // and how well each one matched
+    let enTiers: Map<number, number> | null = null // set, the same way, for an English search
 
     const japanese = hasJapanese(q)
     const cyrillic = !japanese && hasCyrillic(q)
@@ -421,24 +465,36 @@ export class Engine {
     if (!wordIdx.length && !japanese && bgStems === null) {
       const safe = pyStrip(q.replaceAll('"', ' '))
       if (safe) {
-        const seen = new Set<number>()
+        // How each word matched, lower first: a gloss that is the query (0 in
+        // the first sense, 1 a later one), or one that mentions it (2, 3).
+        const words = tokenize(safe)
+        const wanted = words.length - (words.length > 1 && words[0] === 'to' ? 1 : 0)
+        enTiers = new Map()
         for (const d of this.gloss.search(phrasesOf(pySplit(safe)), limit * 8)) {
           const w = this.glossWord[d]
-          if (!seen.has(w)) {
-            seen.add(w)
-            wordIdx.push(w)
-          }
+          const tier = (this.glossN[d] === wanted ? 0 : 2) + this.glossPlace[d]
+          const had = enTiers.get(w)
+          if (had === undefined) wordIdx.push(w)
+          enTiers.set(w, Math.min(tier, had ?? tier))
         }
         interpretation = { kind: 'english' }
       }
     }
 
+    // A view over what was found: the query is read the same way either way.
+    if (common) wordIdx = wordIdx.filter((i) => this.common[i])
+
     // The server fetches these by id -- so they come back in id order -- and
     // then sorts by rank, stably -- a Bulgarian search by how well each matched first.
     const pool = [...new Set(wordIdx.slice(0, limit * 4))].sort((a, b) => a - b)
+    // An English one likewise; among equal matches, the order asked for.
+    const tiers = enTiers ?? bgTiers
     const ranked = pool
-      .map((i) => [i, bgTiers.get(i) ?? 0, ...this.rankKey(i)])
-      .sort((a, b) => a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || a[4] - b[4] || a[0] - b[0])
+      .map((i) => [i, tiers.get(i) ?? 0, ...this.orderKey(i, sort, order === 'desc')])
+      .sort((a, b) => {
+        for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
+        return a[0] - b[0]
+      })
       .slice(0, limit)
       .map((r) => r[0])
 
@@ -460,7 +516,16 @@ export class Engine {
 
   private searchKanji(q: string, japanese: boolean, kanaGuess: string, bgStems: string[] | null): KanjiHit[] {
     let chars: string[] = []
+    let tiers = new Map<string, number>()
     if (japanese) chars = [...new Set([...q])].filter(isCjk)
+
+    // Kana, typed or read from romaji, finds the characters read that way:
+    // a kun'yomi that is the whole word, a kun'yomi's stem, then an on'yomi.
+    const reading = kanaGuess || (japanese && !chars.length && isKana(q) ? katakanaToHiragana(q) : '')
+    if (reading && bgStems === null) {
+      tiers = this.readings.get(reading) ?? new Map()
+      chars = [...tiers.keys()]
+    }
 
     if (bgStems !== null) {
       if (bgStems.length) {
@@ -486,7 +551,12 @@ export class Engine {
       .map((c) => this.row(c))
       .filter((r): r is KanjiRow => r !== undefined)
       .sort((a, b) => compareCodePoints(a[0], b[0]))
-    rows.sort((a, b) => (a[5] ? 0 : 1) - (b[5] ? 0 : 1) || (a[3] ?? 9999) - (b[3] ?? 9999))
+    rows.sort(
+      (a, b) =>
+        (a[5] ? 0 : 1) - (b[5] ? 0 : 1) ||
+        (tiers.get(a[0]) ?? 0) - (tiers.get(b[0]) ?? 0) ||
+        (a[3] ?? 9999) - (b[3] ?? 9999),
+    )
     return rows.slice(0, 12).map((r) => ({
       char: r[0],
       meanings: r[7],
@@ -589,6 +659,10 @@ export class Engine {
 
   recognize(strokes: number[][][], window = STROKE_WINDOW, limit = MAX_RESULTS): DrawCandidate[] {
     return this.recognition().recognise(strokes, Math.max(0, Math.min(6, window)), Math.max(1, Math.min(60, limit)))
+  }
+
+  describe(chars: string[]): DrawCandidate[] {
+    return this.recognition().describe(chars)
   }
 
   recognition(): Recognizer {

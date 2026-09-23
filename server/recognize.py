@@ -493,6 +493,7 @@ def path_endpoints(d: str) -> Line:
 
 _index: dict[int, list[tuple[str, Glyph]]] | None = None
 _meta: dict[str, tuple[int | None, list[str], list[str] | None]] = {}
+_sizes: dict[str, int] | None = None
 _lock = threading.Lock()
 
 # KanjiVG also draws kana and Latin letters. They only ever arrive here as
@@ -615,20 +616,38 @@ def recognise(
     # always the one that was meant.
     final.sort(key=lambda t: (-t[0], _freq_rank(t[2]), t[2]))
 
-    out = []
-    for score, size, char in final[:limit]:
-        freq, meanings, meanings_bg = _meta.get(char, (None, [], None))
-        out.append(
-            {
-                "char": char,
-                "score": round(score, 1),
-                "strokes": size,
-                "freq": freq,
-                "meanings": meanings[:3],
-                "meaningsBg": meanings_bg[:3] if meanings_bg else None,
-            }
-        )
-    return out
+    return [_entry(char, score, size) for score, size, char in final[:limit]]
+
+
+def describe(chars: list[str]) -> list[dict]:
+    """recognise()'s entry for characters some other recogniser proposed.
+
+    The drawing pad also runs an image classifier on the device, and its picks
+    need the same meaning and stroke count as the matcher's own. Score 0: this
+    says nothing about how well they match. Characters the dictionary does not
+    know are left out.
+    """
+    buckets = index()
+    global _sizes
+    if _sizes is None:
+        _sizes = {char: size for size, refs in buckets.items() for char, _ in refs}
+    return [
+        _entry(char, 0.0, _sizes.get(char, 0))
+        for char in dict.fromkeys(chars)
+        if char in _meta
+    ]
+
+
+def _entry(char: str, score: float, size: int) -> dict:
+    freq, meanings, meanings_bg = _meta.get(char, (None, [], None))
+    return {
+        "char": char,
+        "score": round(score, 1),
+        "strokes": size,
+        "freq": freq,
+        "meanings": meanings[:3],
+        "meaningsBg": meanings_bg[:3] if meanings_bg else None,
+    }
 
 
 def _shape_scores(

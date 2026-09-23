@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrawCandidate } from '../api'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
+import { classify, merge, warmClassifier } from './classifier'
 
 const S = strings(
   {
@@ -47,6 +48,7 @@ export function DrawPad({ onPick }: Props) {
   const [drawn, setDrawn] = useState(0)
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const classifierReady = useRef(false)
 
   // The server builds its reference index on first use; doing it now means the
   // first stroke is not the one that waits for it.
@@ -98,18 +100,41 @@ export function DrawPad({ onPick }: Props) {
     }
     const mine = ++seq.current
     try {
+      // The image classifier leads when it has loaded; until then -- it is
+      // megabytes on first use -- the stroke matcher answers alone, and the
+      // pad asks again once it arrives. Failing is the same as not loaded.
+      const guesses = classifierReady.current ? await classify(ink, SIZE).catch(() => []) : []
       // Only the endpoints are used, so there is no point posting every
       // pointermove sample.
       const thinned = ink.map((s) => (s.length > 2 ? [s[0], s[s.length - 1]] : s))
-      const res = await api.recognize(thinned)
+      // Offline without the offline pack the matcher cannot answer, but the
+      // classifier, cached with the app, still can -- without meanings.
+      const res = await api.recognize(thinned, guesses.map((g) => g.char)).catch((e) => {
+        if (!guesses.length) throw e
+        return { candidates: [], strokes: ink.length, also: [] }
+      })
       if (mine === seq.current) {
-        setCandidates(res.candidates)
+        setCandidates(merge(guesses, res.candidates, [...res.candidates, ...(res.also ?? [])]))
         setError(null)
       }
     } catch (e) {
       if (mine === seq.current) setError(String((e as Error).message ?? e))
     }
   }, [])
+
+  useEffect(() => {
+    let live = true
+    warmClassifier().then(
+      () => {
+        classifierReady.current = true
+        if (live && strokes.current.length) run()
+      },
+      () => {}, // the stroke matcher alone still works
+    )
+    return () => {
+      live = false
+    }
+  }, [run])
 
   function pos(e: React.PointerEvent): [number, number] {
     const r = canvasRef.current!.getBoundingClientRect()
@@ -192,7 +217,11 @@ export function DrawPad({ onPick }: Props) {
                     onPick(c.char)
                     clear()
                   }}
-                  title={t('candidate', { m: meaningsOf(c, lang).value[0] ?? t('noEntry'), n: c.strokes })}
+                  title={
+                    c.strokes
+                      ? t('candidate', { m: meaningsOf(c, lang).value[0] ?? t('noEntry'), n: c.strokes })
+                      : (meaningsOf(c, lang).value[0] ?? t('noEntry'))
+                  }
                 >
                   {c.char}
                 </button>

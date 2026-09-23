@@ -12,14 +12,15 @@ import { gunzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import { Engine, type EntryStore, type KanjiPack, type RawWord } from '../src/local/engine'
 import { normalize, shlyokavitsa, spelling, terms } from '../src/local/bulgarian'
-import type { SearchResponse } from '../src/api'
+import type { SearchOrder, SearchResponse, SearchSort } from '../src/api'
 
 interface Golden {
-  search: { q: string; lang: string; out: SearchResponse }[]
+  search: { q: string; lang: string; common: boolean; sort: SearchSort; order: SearchOrder; out: SearchResponse }[]
   bulgarian: { text: string; normalized: string; terms: string[]; spelling: number; candidates: string[] }[]
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
   wordsFor: { char: string; out: number[] }[]
+  describe: { chars: string[]; out: unknown[] }
 }
 
 const [dir, goldenPath] = process.argv.slice(2)
@@ -59,9 +60,9 @@ function note(kind: string, what: string, want: unknown, got: unknown) {
 
 let searchMs = 0
 let exact = 0
-for (const { q, lang, out } of golden.search) {
+for (const { q, lang, common, sort, order, out } of golden.search) {
   const s = performance.now()
-  const got = await engine.search(q, 30, lang)
+  const got = await engine.search(q, 30, lang, common, sort, order)
   searchMs += performance.now() - s
   const shape = (r: SearchResponse) => ({
     interpretation: r.interpretation,
@@ -71,8 +72,9 @@ for (const { q, lang, out } of golden.search) {
     inflection: r.words.map((w) => w.inflection ?? null),
     total: r.total,
   })
-  if (!same(shape(out), shape(got))) note('search', `${JSON.stringify(q)} (${lang})`, shape(out), shape(got))
-  else if (!same(out, got)) note('search entry', `${JSON.stringify(q)} (${lang})`, out, got)
+  const what = `${JSON.stringify(q)} (${lang}${common ? ', common' : ''}, ${sort} ${order})`
+  if (!same(shape(out), shape(got))) note('search', what, shape(out), shape(got))
+  else if (!same(out, got)) note('search entry', what, out, got)
   else exact++
 }
 console.log(`search: ${exact}/${golden.search.length} identical, ${(searchMs / golden.search.length).toFixed(1)} ms per query`)
@@ -108,6 +110,13 @@ console.log(
   `draw: ${drawOk}/${golden.draw.length} identical lists, ${drawTop} same first pick, ` +
     `${(drawMs / golden.draw.length).toFixed(1)} ms per drawing`,
 )
+
+{
+  const { chars, out } = golden.describe
+  const got = engine.describe(chars)
+  if (!same(out, got)) note('describe', chars.join(''), out, got)
+  console.log(`describe: ${same(out, got) ? 'identical' : 'DIFFERENT'} (${out.length} of ${chars.length} described)`)
+}
 
 let radOk = 0
 for (const { r, out } of golden.radicals) {

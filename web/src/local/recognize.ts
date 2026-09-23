@@ -324,6 +324,7 @@ export interface KanjiMeta {
 
 export class Recognizer {
   private readonly buckets = new Map<number, [string, Glyph][]>()
+  private readonly sizes = new Map<string, number>()
   private readonly meta: (char: string) => KanjiMeta | undefined
 
   /** `glyphs` as the pack ships them: [char, stroke codes, moves, seams]. */
@@ -339,6 +340,7 @@ export class Recognizer {
       const entry: [string, Glyph] = [char, Glyph.packed(codes, moves, seams)]
       if (list) list.push(entry)
       else this.buckets.set(codes.length, [entry])
+      this.sizes.set(char, codes.length)
     }
     table()
   }
@@ -373,17 +375,26 @@ export class Recognizer {
     const freqRank = (c: string) => this.meta(c)?.freq ?? Infinity
     final.sort((a, b) => b[0] - a[0] || freqRank(a[2]) - freqRank(b[2]) || compareCodePoints(a[2], b[2]))
 
-    return final.slice(0, limit).map(([score, size, char]) => {
-      const m = this.meta(char)
-      return {
-        char,
-        score: Math.round(score * 10) / 10,
-        strokes: size,
-        freq: m?.freq ?? null,
-        meanings: (m?.meanings ?? []).slice(0, 3),
-        meaningsBg: m?.meaningsBg ? m.meaningsBg.slice(0, 3) : null,
-      }
-    })
+    return final.slice(0, limit).map(([score, size, char]) => this.entry(char, score, size))
+  }
+
+  /** server/recognize.py describe(): the matcher's entry for another recogniser's picks. */
+  describe(chars: string[]): Candidate[] {
+    return [...new Set(chars)]
+      .filter((c) => this.meta(c) !== undefined)
+      .map((c) => this.entry(c, 0, this.sizes.get(c) ?? 0))
+  }
+
+  private entry(char: string, score: number, size: number): Candidate {
+    const m = this.meta(char)
+    return {
+      char,
+      score: Math.round(score * 10) / 10,
+      strokes: size,
+      freq: m?.freq ?? null,
+      meanings: (m?.meanings ?? []).slice(0, 3),
+      meaningsBg: m?.meaningsBg ? m.meaningsBg.slice(0, 3) : null,
+    }
   }
 
   private withOrderBonus(drawn: Glyph, leaders: [string, number, number, Glyph][]): [number, number, string][] {
