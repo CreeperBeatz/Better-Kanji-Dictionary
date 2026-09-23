@@ -60,6 +60,74 @@ def parents_of(char: str) -> list[str]:
     return sorted(base)
 
 
+# --- what lies above a character, however far up.
+#
+# The level filter keeps a container only if it is at the level itself, so a
+# part between the focus and the kanji that use it -- 关 between 丷 and 送 --
+# was dropped, and the way up with it. Knowing what is above each container
+# lets the client keep the ones that lead somewhere at the level.
+
+_reach_cache: tuple[object, dict[str, tuple[bool, int | None]]] | None = None
+
+
+def reach() -> dict[str, tuple[bool, int | None]]:
+    """For every character: is anything above it newspaper-ranked, and the
+    easiest JLPT level above it (5 is easiest). Only what is strictly above;
+    the character's own rank is on its node.
+
+    Built from the whole edge table once, then again whenever the overrides
+    change -- the store hands back the same dict until they do.
+    """
+    global _reach_cache
+    ov = store.decomposition_overrides()
+    cached = _reach_cache
+    if cached is not None and cached[0] is ov:
+        return cached[1]
+
+    parents: dict[str, set[str]] = {}
+    for r in query("SELECT parent, child FROM edge"):
+        if r["parent"] not in ov:
+            parents.setdefault(r["child"], set()).add(r["parent"])
+    for p, comps in ov.items():
+        for c in comps:
+            parents.setdefault(c, set()).add(p)
+    rank = {r["char"]: (r["freq"] is not None, r["jlpt"]) for r in query("SELECT char, freq, jlpt FROM kanji")}
+
+    out: dict[str, tuple[bool, int | None]] = {}
+    visiting: set[str] = set()
+
+    def up(c: str) -> tuple[bool, int | None]:
+        if c in out:
+            return out[c]
+        if c in visiting:  # a cycle in a hand-made override; stop there
+            return (False, None)
+        visiting.add(c)
+        freq, jlpt = False, None
+        for p in parents.get(c, ()):
+            p_freq, p_jlpt = rank.get(p, (False, None))
+            a_freq, a_jlpt = up(p)
+            freq = freq or p_freq or a_freq
+            for j in (p_jlpt, a_jlpt):
+                if j is not None and (jlpt is None or j > jlpt):
+                    jlpt = j
+        visiting.discard(c)
+        out[c] = (freq, jlpt)
+        return out[c]
+
+    for c in parents:
+        up(c)
+    _reach_cache = (ov, out)
+    return out
+
+
+def _with_reach(nodes: list[dict]) -> list[dict]:
+    """Say on each container what is above it, for the level filter."""
+    r = reach()
+    for n in nodes:
+        n["upFreq"], n["upJlpt"] = r.get(n["char"], (False, None))
+    return nodes
+
+
 def _node(row) -> dict:
     """Shape one character row for the client."""
     return {
@@ -122,7 +190,7 @@ def containers_of(c: list[str] = Query(default=[], max_length=64)) -> dict:
             f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
             tuple(parents),
         )
-        nodes = [_node(r) for r in rows]
+        nodes = _with_reach([_node(r) for r in rows])
         out[char] = {"total": len(nodes), "containers": nodes[:PEEK_LIMIT]}
     return out
 
@@ -237,7 +305,7 @@ def get_kanji(char: str) -> dict:
             f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
             tuple(parent_chars),
         )
-        containers = [_node(r) for r in container_rows]
+        containers = _with_reach([_node(r) for r in container_rows])
 
     # --- components: full descent to atoms, depth = longest path from focus
     depth: dict[str, int] = {char: 0}

@@ -195,12 +195,16 @@ CC BY-**NC**-SA unlike the rest of that file and are stripped during the build.
 | davidluzgouveia/kanji-data | JLPT, frequency, grade, strokes | KANJIDIC-derived |
 | JMdict_e, KRADFILE (EDRDG) | words, character data, radicals | CC BY-SA 4.0 |
 | KanjiVG | stroke order, and the handwriting reference | CC BY-SA 3.0 |
-| kanjium | pitch accent | CC BY-SA 4.0 |
+| kanjium | pitch accent; lookalike and near-synonym kanji | CC BY-SA 4.0 |
 | Tatoeba | example sentences | CC BY 2.0 FR |
 | Kanji Alive | curated meanings | CC BY 4.0 |
 | Bulgarian glosses (machine-translated from JMdict/KANJIDIC) | Bulgarian meanings | CC BY-SA 4.0 |
 | English Wiktionary translation tables | hints for the Bulgarian | CC BY-SA 4.0 |
-| BulTreeBank Wordnet, Japanese WordNet | hints for the Bulgarian | CC BY 3.0; NICT licence |
+| BulTreeBank Wordnet, Japanese WordNet | hints for the Bulgarian; kanji of similar meaning | CC BY 3.0; NICT licence |
+| Unihan | variant forms | Unicode licence |
+| Noto Sans JP, Noto Serif JP | glyphs rendered to find lookalikes | OFL 1.1 |
+| Yencken's kanji confusion data | lookalikes people confuse | CC BY 3.0 |
+| 文化庁「異字同訓」の漢字の使い分け例 | kanji sharing a reading | Agency for Cultural Affairs |
 
 Deliberately excluded: WaniKani mnemonics, Heisig keywords, and jpdb data — all
 closed, and any of them would end the option of open-sourcing this.

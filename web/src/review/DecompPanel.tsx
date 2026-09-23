@@ -127,7 +127,7 @@ export function DecompPanel({ data, onPick, onChanged }: Props) {
                 {it.char}
               </button>
               <span className="review-why">{it.reasons.join(', ')}</span>
-              <span className="review-freq">{it.freq ?? '—'}</span>
+              <span className="review-freq">{it.freq ?? '-'}</span>
             </li>
           ))}
         </ol>

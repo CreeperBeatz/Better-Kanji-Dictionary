@@ -27,6 +27,10 @@ export interface KanjiNode {
   kunYomi: string[]
   fanout: number | null
   depth?: number
+  /** On containers: whether anything above, however far up, is newspaper-ranked. */
+  upFreq?: boolean
+  /** On containers: the easiest JLPT level above, however far up (5 is easiest). */
+  upJlpt?: number | null
 }
 
 export interface GraphResponse {

@@ -3,7 +3,7 @@
  * found, a whole JLPT level, and -- with nothing typed -- the way in to both.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuth } from '../account/auth'
 import {
   api,
@@ -36,10 +36,10 @@ const S = strings(
     sortNewsTitle: 'Sort by how often newspapers use the word',
     sortJlpt: 'JLPT',
     sortJlptTitle: 'Sort by JLPT level',
-    newsAsc: 'Ascending: the most frequent first',
-    newsDesc: 'Descending: the least frequent first',
-    jlptAsc: 'Ascending: N5 first',
-    jlptDesc: 'Descending: N1 first',
+    newsAsc: 'Most frequent first',
+    newsDesc: 'Least frequent first',
+    jlptAsc: 'N5 first',
+    jlptDesc: 'N1 first',
     jlpt: 'On the JLPT N{n} vocabulary list (Jonathan Waller, a community reconstruction)',
     news: 'top {n}',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
@@ -79,10 +79,10 @@ const S = strings(
     sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
     sortJlpt: 'JLPT',
     sortJlptTitle: 'Подреждане по ниво от JLPT',
-    newsAsc: 'Възходящо: първо най-честите',
-    newsDesc: 'Низходящо: първо най-редките',
-    jlptAsc: 'Възходящо: първо N5',
-    jlptDesc: 'Низходящо: първо N1',
+    newsAsc: 'Първо най-честите',
+    newsDesc: 'Първо най-редките',
+    jlptAsc: 'Първо N5',
+    jlptDesc: 'Първо N1',
     jlpt: 'В списъка с думи за JLPT N{n} (Джонатан Уолър, реконструкция на общността)',
     news: 'топ {n}',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
@@ -132,6 +132,92 @@ const ORDER_LABEL = {
 function savedSort(): [SearchSort, SearchOrder] {
   const [sort, order] = (localStorage.getItem(SORT_KEY) ?? '').split(':')
   return [sort === 'jlpt' ? 'jlpt' : 'news', order === 'desc' ? 'desc' : 'asc']
+}
+
+const SORTS = [
+  { value: 'news', label: 'sortNews', title: 'sortNewsTitle' },
+  { value: 'jlpt', label: 'sortJlpt', title: 'sortJlptTitle' },
+] as const
+
+/**
+ * The sort as one pill naming what it is ordered by; pressing it drops down
+ * the choices and the way round. Picking one puts the menu away; turning the
+ * order round leaves it open, so the arrow can be seen to change.
+ */
+function SortPill({
+  sort,
+  order,
+  onPick,
+  t,
+}: {
+  sort: SearchSort
+  order: SearchOrder
+  onPick: (sort: SearchSort, order: SearchOrder) => void
+  t: ReturnType<typeof S>
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: PointerEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown, true)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const arrow = order === 'asc' ? '↑' : '↓'
+  const current = SORTS.find((s) => s.value === sort)!
+  return (
+    <div className="sort-pill" ref={ref}>
+      <button
+        className="sort-pill-button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        title={`${t('sortBy')}: ${t(current.label)}, ${t(ORDER_LABEL[sort][order])}`}
+      >
+        {t(current.label)} <span aria-hidden>{arrow}</span>
+        <span className="sort-pill-caret" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div className="sort-menu" role="menu" aria-label={t('sortBy')}>
+          {SORTS.map((s) => (
+            <button
+              key={s.value}
+              role="menuitemradio"
+              aria-checked={sort === s.value}
+              data-on={sort === s.value || undefined}
+              onClick={() => {
+                onPick(s.value, order)
+                setOpen(false)
+              }}
+              title={t(s.title)}
+            >
+              {t(s.label)}
+            </button>
+          ))}
+          <button
+            role="menuitem"
+            className="sort-menu-order"
+            onClick={() => onPick(sort, order === 'asc' ? 'desc' : 'asc')}
+          >
+            <span aria-hidden>{arrow}</span> {t(ORDER_LABEL[sort][order])}
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Common words only is the default, so what is stored is the choice to see them all.
@@ -313,32 +399,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
       {/* How the query was read on the left, the filter on the right, one line. */}
       {/* How to order what was found, and whether to show only common words. */}
       <div className="search-tools">
-        <div className="search-sort" role="group" aria-label={t('sortBy')}>
-          <button
-            aria-pressed={sort === 'news'}
-            data-on={sort === 'news' || undefined}
-            onClick={() => pickSort('news', order)}
-            title={t('sortNewsTitle')}
-          >
-            {t('sortNews')}
-          </button>
-          <button
-            aria-pressed={sort === 'jlpt'}
-            data-on={sort === 'jlpt' || undefined}
-            onClick={() => pickSort('jlpt', order)}
-            title={t('sortJlptTitle')}
-          >
-            {t('sortJlpt')}
-          </button>
-          <button
-            className="search-sort-order"
-            onClick={() => pickSort(sort, order === 'asc' ? 'desc' : 'asc')}
-            title={t(ORDER_LABEL[sort][order])}
-            aria-label={t(ORDER_LABEL[sort][order])}
-          >
-            {order === 'asc' ? '↑' : '↓'}
-          </button>
-        </div>
+        <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
         <button
           className="search-filter"
           aria-pressed={common}

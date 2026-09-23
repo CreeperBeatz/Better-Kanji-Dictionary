@@ -35,6 +35,8 @@ export interface PositionedNode {
   ring?: number
   /** 1 at the innermost container ring, 0 at the rim. Drives opacity. */
   weight?: number
+  /** A container shown not for itself but for what it leads up to at the level. */
+  via?: boolean
 }
 
 export interface PositionedEdge {
@@ -42,6 +44,7 @@ export interface PositionedEdge {
   from: { x: number; y: number }
   to: { x: number; y: number }
   dim: boolean
+  via?: boolean
 }
 
 export interface Layout {
@@ -83,7 +86,7 @@ function ringCount(n: number): number {
   return Math.max(ring, 1)
 }
 
-function placeContainers(containers: KanjiNode[]): PositionedNode[] {
+function placeContainers(containers: KanjiNode[], via: Set<string>): PositionedNode[] {
   const out: PositionedNode[] = []
   const rings = ringCount(containers.length)
   let i = 0
@@ -126,6 +129,7 @@ function placeContainers(containers: KanjiNode[]): PositionedNode[] {
         onYomi: node.onYomi,
         ring,
         weight,
+        via: via.has(node.char),
       })
     })
 
@@ -168,7 +172,8 @@ function placeComponents(components: KanjiNode[]): PositionedNode[] {
   return out
 }
 
-export function computeLayout(data: GraphResponse): Layout {
+/** `via`: containers kept only for what is above them, drawn apart. */
+export function computeLayout(data: GraphResponse, via: Set<string> = new Set()): Layout {
   const focus: PositionedNode = {
     char: data.focus.char,
     x: 0,
@@ -186,7 +191,7 @@ export function computeLayout(data: GraphResponse): Layout {
     onYomi: data.focus.onYomi,
   }
 
-  const containers = placeContainers(data.containers)
+  const containers = placeContainers(data.containers, via)
   const components = placeComponents(data.components.nodes)
   const nodes = [focus, ...containers, ...components]
 
@@ -201,6 +206,7 @@ export function computeLayout(data: GraphResponse): Layout {
       from: { x: c.x, y: c.y },
       to: { x: focus.x, y: focus.y },
       dim: c.dim,
+      via: c.via,
     })
   }
 
@@ -245,8 +251,12 @@ const PEEK_RADIUS = 17
 const PEEK_GAP = 8
 const PEEK_FIRST = 30
 const PEEK_ROW = 44
-/** How far round the host the fan may wrap, centred on "away from the focus". */
-const PEEK_SPAN = Math.PI * 1.15
+/**
+ * How wide the fan opens, centred on "away from the focus": a cone, narrow
+ * enough that the characters either side of the host stay outside it and can
+ * still be hovered. It grows outward in rows rather than wrapping round.
+ */
+export const PEEK_SPAN = Math.PI * 0.6
 
 /**
  * Fan `above` out on arcs around `host`, facing away from the focus so the

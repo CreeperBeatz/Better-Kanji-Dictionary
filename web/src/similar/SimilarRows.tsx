@@ -68,7 +68,7 @@ function useTitle() {
   const lang = useLang()
   return (n: KanjiNode) => {
     const m = meaningsOf(n, lang).value.slice(0, 3).join(', ')
-    return m ? `${n.char} — ${m}` : n.char
+    return m ? `${n.char} - ${m}` : n.char
   }
 }
 

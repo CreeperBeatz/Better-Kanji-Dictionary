@@ -32,7 +32,7 @@ const S = strings(
     sidePanel: 'Side panel',
     dictionary: 'Dictionary',
     associations: 'Associations',
-    focus: 'Focus',
+    focus: 'Decompose',
     map: 'Map',
     recent: 'Recent',
     back: 'Back (Backspace)',
@@ -53,7 +53,7 @@ const S = strings(
     sidePanel: 'Страничен панел',
     dictionary: 'Речник',
     associations: 'Асоциации',
-    focus: 'Фокус',
+    focus: 'Разлагане',
     map: 'Карта',
     recent: 'Скорошни',
     back: 'Назад (Backspace)',
@@ -378,7 +378,7 @@ export function App() {
       if (document.querySelector('.overlay')) return
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
-      if (e.key === 'f' || e.key === 'F') setView('focus')
+      if ('dDfF'.includes(e.key)) setView('focus')
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
         e.preventDefault()
