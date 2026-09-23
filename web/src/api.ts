@@ -99,6 +99,8 @@ export interface Word {
   reading: string
   common: boolean
   nf: number | null
+  /** Jonathan Waller's JLPT list the word is on, 5 = N5; a soft signal, as for kanji. */
+  jlpt: number | null
   pitch: string | null
   senses: Sense[]
   forms: { text: string; kana: boolean; rare: boolean }[]
@@ -303,8 +305,11 @@ export const api = {
   radicals: () =>
     localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
 
-  search: (q: string, lang: string) =>
-    localFirst(local.search(q, lang), () => get<SearchResponse>('/api/search', [['q', q], ['lang', lang]])),
+  /** `common`: only the words JMdict marks as common. */
+  search: (q: string, lang: string, common = false) =>
+    localFirst(local.search(q, lang, common), () =>
+      get<SearchResponse>('/api/search', [['q', q], ['lang', lang], ...(common ? [['common', '1'] as [string, string]] : [])]),
+    ),
 
   wordsFor: (char: string) =>
     localFirst(local.wordsFor(char), () =>

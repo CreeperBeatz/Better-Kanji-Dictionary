@@ -249,7 +249,7 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
   if (!e) throw new Error('offline lookup is not ready')
   switch (method) {
     case 'search':
-      return e.search(args[0] as string, 30, (args[1] as string) ?? 'en')
+      return e.search(args[0] as string, 30, (args[1] as string) ?? 'en', !!args[2])
     case 'recognize':
       return { candidates: e.recognize(args[0] as number[][][]), strokes: (args[0] as unknown[]).length }
     case 'recognizerReady': {

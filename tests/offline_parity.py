@@ -41,6 +41,8 @@ HARD = [
     # romaji, clean and not
     "taberu", "tabemashita", "nihongo", "kanji", "sushi", "tame", "konnichiwa", "gakkou", "kitte",
     "ni", "n", "shi", "tsu", "kya", "xyz", "arigatou", "benkyou", "taberareru",
+    # romaji and kana that find kanji by reading: kun'yomi, a kun'yomi's stem, on'yomi
+    "mizu", "sui", "kami", "ta", "ue", "kou", "shou", "みず", "スイ", "かみ",
     # Japanese, dictionary form and conjugated
     "食べる", "食べた", "食べたくなかった", "行った", "日本", "日本語", "時", "見る", "見ます", "来ない",
     "します", "勉強している", "高くない", "カタカナ", "ひらがな", "言", "語", "々", "読んでいます",
@@ -166,11 +168,15 @@ def main() -> int:
 
     queries = list(dict.fromkeys(HARD + sample(300 if quick else 2500, rng)))
     bg_queries = list(dict.fromkeys(HARD + HARD_BG + sample_bg(150 if quick else 1000, rng) + queries[: 200 if quick else 800]))
-    asked = [(q, "en") for q in dict.fromkeys(queries + HARD_BG)] + [(q, "bg") for q in bg_queries]
+    asked = [(q, "en", False) for q in dict.fromkeys(queries + HARD_BG)] + [(q, "bg", False) for q in bg_queries]
+    # Common words only, over a slice of both.
+    asked += [(q, "en", True) for q in HARD + queries[: 100 if quick else 600]]
+    asked += [(q, "bg", True) for q in HARD_BG]
     print(f"asking the server {len(asked)} searches")
     golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": []}
-    for q, lang in asked:
-        golden["search"].append({"q": q[:64], "lang": lang, "out": search(q=q[:64], limit=30, lang=lang)})
+    for q, lang, common in asked:
+        out = search(q=q[:64], limit=30, lang=lang, common=common)
+        golden["search"].append({"q": q[:64], "lang": lang, "common": common, "out": out})
 
     texts = list(dict.fromkeys(HARD_BG + [w for q in bg_queries for w in q.split()]))
     for t in texts:

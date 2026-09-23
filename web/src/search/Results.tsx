@@ -15,7 +15,14 @@ export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
 const S = strings(
   {
-    common: 'common word',
+    common: 'common',
+    commonTitle: 'JMdict marks this as a common word',
+    uncommon: 'uncommon',
+    commonOnly: 'Common words only',
+    commonOnlyTitle: 'Leave out words JMdict does not mark as common',
+    jlpt: 'On the JLPT N{n} vocabulary list (Jonathan Waller, a community reconstruction)',
+    news: 'top {n}',
+    newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
     open: 'Open this entry',
     notTranslated: 'not translated into Bulgarian yet',
     inN: 'in {n}',
@@ -34,7 +41,14 @@ const S = strings(
     bound: 'bound form',
   },
   {
-    common: 'честа дума',
+    common: 'честа',
+    commonTitle: 'JMdict отбелязва думата като честа',
+    uncommon: 'рядка',
+    commonOnly: 'Само чести думи',
+    commonOnlyTitle: 'Без думите, които JMdict не отбелязва като чести',
+    jlpt: 'В списъка с думи за JLPT N{n} (Джонатан Уолър, реконструкция на общността)',
+    news: 'топ {n}',
+    newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
     open: 'Отворете статията',
     notTranslated: 'още не е преведено на български',
     inN: 'в {n}',
@@ -59,53 +73,72 @@ const S = strings(
 const found = new Map<string, SearchResponse>()
 const levels = new Map<Level, { kanji: KanjiNode[]; components: KanjiNode[] }>()
 
-const keyOf = (lang: Lang, q: string) => `${lang} ${q}`
+const keyOf = (lang: Lang, common: boolean, q: string) => `${lang}${common ? ' common' : ''} ${q}`
+
+// Common words only is the default, so what is stored is the choice to see them all.
+const ALL_WORDS_KEY = 'betterrtk:allWords'
+
+/** JMdict nf buckets are 500 words wide: nf12 is the top 6,000. */
+function newsRank(nf: number): string {
+  const n = nf * 500
+  return n < 1000 ? String(n) : `${n / 1000}k`
+}
 
 function remember(key: string, r: SearchResponse) {
   found.set(key, r)
   if (found.size > 60) found.delete(found.keys().next().value!)
 }
 
-function WordRow({ w, onKanji, onWord }: { w: Word; onKanji: (c: string) => void; onWord: (w: Word) => void }) {
+function WordRow({ w, onWord }: { w: Word; onWord: (w: Word) => void }) {
   const lang = useLang()
   const t = S(lang)
+  // The whole card opens the entry; its kanji are one tap further, on the entry's page.
   return (
     <li className="word">
-      <p className="word-head">
-        <span className="word-forms">
-          {[...w.headword].map((ch, i) =>
-            ch >= '一' && ch <= '鿿' ? (
-              <button key={i} className="word-char" onClick={() => onKanji(ch)} title={ch}>
-                {ch}
-              </button>
-            ) : (
-              <span key={i}>{ch}</span>
-            ),
-          )}
+      <button className="word-card" onClick={() => onWord(w)} title={t('open')}>
+        <span className="word-head">
+          <span className="word-forms">{w.headword}</span>
+          {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
+          <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
+            {w.common ? t('common') : t('uncommon')}
+          </span>
         </span>
-        {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
-        {w.common && <span className="word-common" title={t('common')} />}
-      </p>
-      {w.inflection && w.inflection.length > 0 && (
-        <p className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</p>
-      )}
-      {/* The kanji above open the character; the rest of the row opens the entry. */}
-      <button className="word-gloss word-open" onClick={() => onWord(w)} title={t('open')}>
-        {w.senses.slice(0, 3).map((s, i) => {
-          const g = glossOf(s, lang)
-          return (
-            <span key={i} className="sense" data-fallback={g.fallback || undefined}>
-              {w.senses.length > 1 && <b>{i + 1}</b>}
-              {g.value}
-              {g.fallback && (
-                <b className="gloss-fallback" title={t('notTranslated')}>
-                  {' '}
-                  EN
-                </b>
+        {w.inflection && w.inflection.length > 0 && (
+          <span className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</span>
+        )}
+        <span className="word-foot">
+          <span className="word-gloss">
+            {w.senses.slice(0, 3).map((s, i) => {
+              const g = glossOf(s, lang)
+              return (
+                <span key={i} className="sense" data-fallback={g.fallback || undefined}>
+                  {w.senses.length > 1 && <b>{i + 1}</b>}
+                  {g.value}
+                  {g.fallback && (
+                    <b className="gloss-fallback" title={t('notTranslated')}>
+                      {' '}
+                      EN
+                    </b>
+                  )}
+                </span>
+              )
+            })}
+          </span>
+          {(w.jlpt || w.nf) && (
+            <span className="word-meta">
+              {w.nf && (
+                <span className="word-news" title={t('newsTitle', { n: (w.nf * 500).toLocaleString(lang), b: w.nf })}>
+                  {t('news', { n: newsRank(w.nf) })}
+                </span>
+              )}
+              {w.jlpt && (
+                <span className="word-jlpt" data-level={w.jlpt} title={t('jlpt', { n: w.jlpt })}>
+                  N{w.jlpt}
+                </span>
               )}
             </span>
-          )
-        })}
+          )}
+        </span>
       </button>
     </li>
   )
@@ -151,7 +184,8 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
-  const key = keyOf(lang, term)
+  const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
+  const key = keyOf(lang, common, term)
   const [result, setResult] = useState<SearchResponse | null>(() => found.get(key) ?? null)
   const [busy, setBusy] = useState(false)
 
@@ -170,7 +204,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
     let stale = false
     setBusy(true)
     const timer = setTimeout(() => {
-      api.search(term, lang).then(
+      api.search(term, lang, common).then(
         (d) => {
           remember(key, d)
           if (!stale) (setResult(d), setBusy(false))
@@ -182,7 +216,15 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, key])
+  }, [term, lang, common, key])
+
+  function toggleCommon() {
+    setCommon((on) => {
+      if (on) localStorage.setItem(ALL_WORDS_KEY, '1')
+      else localStorage.removeItem(ALL_WORDS_KEY)
+      return !on
+    })
+  }
 
   if (!term) return <HomePage onLevel={onLevel} />
 
@@ -193,7 +235,8 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
   // does not blink on every key.
   return (
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
-      {(reading || alternatives.length > 0) && (
+      {/* How the query was read on the left, the filter on the right, one line. */}
+      <div className="search-tools">
         <p className="hint reading-note">
           {reading && t('readAs', { r: reading })}
           {alternatives.map((a) => (
@@ -205,7 +248,16 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
             </span>
           ))}
         </p>
-      )}
+        <button
+          className="search-filter"
+          aria-pressed={common}
+          data-on={common || undefined}
+          onClick={toggleCommon}
+          title={t('commonOnlyTitle')}
+        >
+          {t('commonOnly')}
+        </button>
+      </div>
       {result && result.kanji.length > 0 && (
         <div className="kanji-hits">
           {result.kanji.map((k) => (
@@ -216,7 +268,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch }: SearchProp
       {result && result.words.length > 0 && (
         <ol className="words">
           {result.words.map((w) => (
-            <WordRow key={w.id} w={w} onKanji={onKanji} onWord={onWord} />
+            <WordRow key={w.id} w={w} onWord={onWord} />
           ))}
         </ol>
       )}

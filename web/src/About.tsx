@@ -19,6 +19,7 @@ const S = strings(
     kanjium: 'pitch accent',
     tatoeba: 'example sentences',
     kanjialive: 'curated meanings',
+    jlpt: 'JLPT levels of words',
     bulgarian: 'Bulgarian glosses and kanji meanings, machine-translated by Claude from the English',
     wiktionary: 'translation tables, as hints for the Bulgarian',
     btbwn: 'Bulgarian words for shared concepts, as hints',
@@ -33,6 +34,7 @@ const S = strings(
     kanjium: 'тонално ударение',
     tatoeba: 'примерни изречения',
     kanjialive: 'подбрани значения',
+    jlpt: 'нива от JLPT на думите',
     bulgarian: 'българските значения на думи и йероглифи, машинно преведени от английски от Claude',
     wiktionary: 'таблици с преводи, като подсказки за българския',
     btbwn: 'български думи за общи понятия, като подсказки',
@@ -50,6 +52,12 @@ const SOURCES: { name: string; what: What; href: string; licence: string }[] = [
   { name: 'kanjium', what: 'kanjium', href: 'https://github.com/mifunetoshiro/kanjium', licence: 'CC BY-SA 4.0' },
   { name: 'Tatoeba', what: 'tatoeba', href: 'https://tatoeba.org/', licence: 'CC BY 2.0 FR' },
   { name: 'Kanji Alive', what: 'kanjialive', href: 'https://github.com/kanjialive/kanji-data-media', licence: 'CC BY 4.0' },
+  {
+    name: 'JLPT vocabulary lists',
+    what: 'jlpt',
+    href: 'http://www.tanos.co.uk/jlpt/',
+    licence: 'CC BY · Jonathan Waller, JMdict ids by stephenmk',
+  },
   {
     name: 'Bulgarian glosses and kanji meanings',
     what: 'bulgarian',

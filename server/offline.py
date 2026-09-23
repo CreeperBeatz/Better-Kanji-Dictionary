@@ -45,7 +45,8 @@ from .db import DB_PATH
 
 # Bump when the pack's layout changes, so every client fetches a new one.
 # 2: Bulgarian glosses, kanji meanings and their indexes.
-FORMAT = 2
+# 3: the English index one row per gloss, with n and place; word levels.
+FORMAT = 3
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -322,7 +323,10 @@ def build(force: bool = False) -> dict:
     files: dict[str, bytes] = {}
 
     # --- words, ordered by id so the client can binary-search an id
-    words = conn.execute("SELECT id, headword, reading, common, nf FROM word ORDER BY id").fetchall()
+    words = conn.execute(
+        "SELECT w.id, w.headword, w.reading, w.common, w.nf, j.level AS jlpt "
+        "FROM word w LEFT JOIN word_jlpt j ON j.word_id = w.id ORDER BY w.id"
+    ).fetchall()
     index_of = {w["id"]: i for i, w in enumerate(words)}
 
     pitch = {(r[0], r[1]): r[2] for r in conn.execute("SELECT word, reading, pitch FROM accent")}
@@ -347,7 +351,7 @@ def build(force: bool = False) -> dict:
             [
                 w["id"], w["headword"], w["reading"], w["common"], w["nf"],
                 pitch.get((w["headword"], w["reading"])),
-                senses.get(w["id"], []), forms.get(w["id"], []),
+                senses.get(w["id"], []), forms.get(w["id"], []), w["jlpt"],
             ]
             for w in words[lo : lo + WORD_CHUNK]
         ]
@@ -358,6 +362,7 @@ def build(force: bool = False) -> dict:
     sec.add("word.id", "d32", [w["id"] for w in words])
     sec.add("word.common", "u8", [1 if w["common"] else 0 for w in words])
     sec.add("word.nf", "u8", [w["nf"] or 0 for w in words])
+    sec.add("word.jlpt", "u8", [w["jlpt"] or 0 for w in words])
     sec.add("word.len", "u8", [min(len(w["headword"]), 255) for w in words])
     sec.add("word.pos", "u8", pos_mask)
 
@@ -387,8 +392,13 @@ def build(force: bool = False) -> dict:
 
     # --- English: glosses, and kanji meanings
     gloss_rowids = _fts(conn, "gloss_fts", sec, "gloss")
-    gloss_word = dict(conn.execute("SELECT rowid, word_id FROM gloss_fts"))
-    sec.add("gloss.docword", "u32", [index_of.get(gloss_word[r], 0) for r in gloss_rowids])
+    gloss_doc = {r: (w, n, p) for r, w, n, p in conn.execute("SELECT rowid, word_id, n, place FROM gloss_fts")}
+    sec.add("gloss.docword", "u32", [index_of.get(gloss_doc[r][0], 0) for r in gloss_rowids])
+    # A gloss's word count outside brackets and whether it is in the first
+    # sense: what tells a word that means the query from one that mentions it
+    # (build_db `build_english`).
+    sec.add("gloss.docn", "u8", [gloss_doc[r][1] for r in gloss_rowids])
+    sec.add("gloss.docplace", "u8", [gloss_doc[r][2] for r in gloss_rowids])
 
     kanji = sorted(_kanji_rows(conn), key=lambda r: _binary(r["char"]))
     kanji_at = {r["char"]: i for i, r in enumerate(kanji)}

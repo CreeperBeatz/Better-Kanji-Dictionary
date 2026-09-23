@@ -15,7 +15,7 @@ import { normalize, shlyokavitsa, spelling, terms } from '../src/local/bulgarian
 import type { SearchResponse } from '../src/api'
 
 interface Golden {
-  search: { q: string; lang: string; out: SearchResponse }[]
+  search: { q: string; lang: string; common: boolean; out: SearchResponse }[]
   bulgarian: { text: string; normalized: string; terms: string[]; spelling: number; candidates: string[] }[]
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
@@ -59,9 +59,9 @@ function note(kind: string, what: string, want: unknown, got: unknown) {
 
 let searchMs = 0
 let exact = 0
-for (const { q, lang, out } of golden.search) {
+for (const { q, lang, common, out } of golden.search) {
   const s = performance.now()
-  const got = await engine.search(q, 30, lang)
+  const got = await engine.search(q, 30, lang, common)
   searchMs += performance.now() - s
   const shape = (r: SearchResponse) => ({
     interpretation: r.interpretation,
@@ -71,8 +71,9 @@ for (const { q, lang, out } of golden.search) {
     inflection: r.words.map((w) => w.inflection ?? null),
     total: r.total,
   })
-  if (!same(shape(out), shape(got))) note('search', `${JSON.stringify(q)} (${lang})`, shape(out), shape(got))
-  else if (!same(out, got)) note('search entry', `${JSON.stringify(q)} (${lang})`, out, got)
+  const what = `${JSON.stringify(q)} (${lang}${common ? ', common' : ''})`
+  if (!same(shape(out), shape(got))) note('search', what, shape(out), shape(got))
+  else if (!same(out, got)) note('search entry', what, out, got)
   else exact++
 }
 console.log(`search: ${exact}/${golden.search.length} identical, ${(searchMs / golden.search.length).toFixed(1)} ms per query`)
