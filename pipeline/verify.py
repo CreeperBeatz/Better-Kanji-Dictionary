@@ -188,8 +188,13 @@ def main() -> int:
         "SELECT other FROM similar WHERE char = ? AND kind = ? ORDER BY rank LIMIT ?", (c, kind, n))]
     check("未 looks like 末 (top 3)", "末" in near("未", "look", 3), "".join(near("未", "look", 3)))
     check("問 looks like 間 and 門 (top 5)", {"間", "門"} <= set(near("問", "look", 5)), "".join(near("問", "look", 5)))
-    check("早 means like 速 (top 3)", "速" in near("早", "mean", 3), "".join(near("早", "mean", 3)))
-    check("温 means like 暖 (first)", near("温", "mean", 1) == ["暖"], "".join(near("温", "mean", 3)))
+    check("早 reads like 速 (first)", near("早", "read", 1) == ["速"], "".join(near("早", "read", 3)))
+    check("温 reads like 暖 (first)", near("温", "read", 1) == ["暖"], "".join(near("温", "read", 3)))
+    check("側 reads like 傍 (top 3)", "傍" in near("側", "read", 3), "".join(near("側", "read", 3)))
+    check("話 means like 語 or 談 (top 3)", {"語", "談"} & set(near("話", "mean", 3)), "".join(near("話", "mean", 3)))
+    check("no pair both reads and means alike", one(
+        "SELECT COUNT(*) FROM similar a JOIN similar b ON a.char = b.char AND a.other = b.other "
+        "WHERE a.kind = 'read' AND b.kind = 'mean'") == 0)
     check("龍 is a variant of 竜, not a synonym", "竜" in near("龍", "variant", 6) and "竜" not in near("龍", "mean", 30))
     check("nothing is similar to itself", one("SELECT COUNT(*) FROM similar WHERE char = other") == 0)
 

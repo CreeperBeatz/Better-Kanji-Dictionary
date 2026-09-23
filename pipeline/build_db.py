@@ -740,7 +740,7 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
         print(f"  skipped       {skipped:>7,} senses or kanji that match nothing in the dictionary")
 
 
-@stage("similar", "DaKanji + JMdict + WordNet + Unihan -> lookalikes, near-synonyms, variants")
+@stage("similar", "DaKanji + JMdict + WordNet + Unihan -> lookalikes, same readings, near-synonyms, variants")
 def build_similar(db: sqlite3.Connection) -> None:
     """See pipeline/similar.py. Needs the strokes, graph, dict and meanings stages,
     and numpy, pillow, onnx and onnxruntime (a minute or two, most of it drawing)."""
@@ -751,10 +751,10 @@ def build_similar(db: sqlite3.Connection) -> None:
         CREATE TABLE similar (
             char  TEXT NOT NULL,
             other TEXT NOT NULL,
-            kind  TEXT NOT NULL,   -- look | mean | variant
+            kind  TEXT NOT NULL,   -- look | read | mean | variant
             rank  INTEGER NOT NULL, -- 0 = closest, within (char, kind)
             score REAL NOT NULL,   -- look: fused rank score, 1 = first by every measure
-            note  TEXT,            -- mean: JSON {"words": [...]} or {"gloss": [...]}
+            note  TEXT,            -- read: JSON {"words": [...]} or {"kun": "..."}; mean: {"gloss": [...]}
             PRIMARY KEY (char, kind, other)
         );
     """)
@@ -764,6 +764,7 @@ def build_similar(db: sqlite3.Connection) -> None:
     db.executemany("INSERT OR IGNORE INTO similar VALUES (?,?,?,?,?,?)", means)
     kinds = Counter(k for _, _, k, *_ in means)
     print(f"  lookalikes    {len(looks):>7,} rows over {len({c for c, *_ in looks}):,} characters")
+    print(f"  same reading  {kinds['read']:>7,} rows over {len({c for c, _, k, *_ in means if k == 'read'}):,} characters")
     print(f"  near-synonyms {kinds['mean']:>7,} rows over {len({c for c, _, k, *_ in means if k == 'mean'}):,} characters")
     print(f"  variants      {kinds['variant']:>7,} rows")
 

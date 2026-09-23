@@ -12,9 +12,10 @@ Looks alike, gold:
                   confusable kanji out of a set (CC BY 3.0)
   kanjium         kanjium lookalikes.txt (CC BY-SA 4.0)
   siikamiika      similar-kanji (MIT, of unclear origin -- scored, never shipped)
+Reads alike, gold:
+  bunka           文化審議会「異字同訓」の漢字の使い分け例 (2014), kanji sharing a kun
 Means alike, gold:
   kanjium         kanjium synonyms.txt
-  bunka           文化審議会「異字同訓」の漢字の使い分け例 (2014), kanji sharing a kun
 Baselines: kanjistat's component-transport distance (looks) and its
 embedding distance (means), both precomputed by its author.
 """
@@ -127,13 +128,17 @@ def main() -> int:
     for gname, gold in gold_look().items():
         for sname, lists in systems.items():
             print(f"  {gname:<14} {sname:<10} {score(lists, gold)}")
+    gm = gold_mean()
+    read, mean = ours("read"), ours("mean")
+    # kanjium's synonyms include pairs that share a reading (側/傍, both そば),
+    # which the app lists under Same reading; so it is scored on the two lists
+    # together, each character's reading list first, as well as on meaning alone.
+    both = {c: read.get(c, []) + mean.get(c, []) for c in set(read) | set(mean)}
+    print("\nREADS ALIKE")
+    print(f"  {'bunka':<14} {'read':<14} {score(read, gm['bunka'])}")
     print("\nMEANS ALIKE")
-    systems = {"ours": ours("mean"), "kanjistat": kanjistat("dembed_top20.tsv")}
-    if "--with-variants" in sys.argv:
-        systems["ours+var"] = {c: ours("variant").get(c, []) + l for c, l in ours("mean").items()}
-    for gname, gold in gold_mean().items():
-        for sname, lists in systems.items():
-            print(f"  {gname:<14} {sname:<10} {score(lists, gold)}")
+    for sname, lists in {"read+mean": both, "mean": mean, "kanjistat": kanjistat("dembed_top20.tsv")}.items():
+        print(f"  {'kanjium':<14} {sname:<14} {score(lists, gm['kanjium'])}")
     return 0
 
 

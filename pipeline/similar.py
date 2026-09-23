@@ -18,21 +18,33 @@ Yencken & Baldwin's flashcard set (COLING 2008): MAP 0.55, a listed lookalike
 in the top 5 for 70% of kanji and in the top 10 for 83%. The model alone gets
 0.51; parts alone, which is what placed characters on the map, 0.23.
 
-MEANS ALIKE
+READ ALIKE, MEAN ALIKE
 
-Three open sources, none of them a language model:
+Two lists, because they are two different confusions: which kanji to write
+for はやい (早 or 速) is not the question of which "side" 側, 面 and 横 mean.
+A pair goes in one or the other, never both.
 
-  spelling   JMdict words written with either of two kanji -- 早い/速い,
-             取り替える/取り換える, 固い/堅い/硬い. The strongest evidence
-             there is that two kanji compete for one meaning, and the words
-             themselves are the note shown to the reader.
-  wordnet    Japanese WordNet senses shared by the two kanji's own words
-             (the kanji alone, or it plus kana: 暖かい, 温かい).
-  glosses    KANJIDIC meanings in common, weighted by rarity, so "warm" counts
-             for much more than "counter".
+  read       kanji that compete for one reading:
+               spelling  JMdict words written with either -- 早い/速い,
+                         取り替える/取り換える, 固い/堅い/硬い; the words
+                         themselves are the note shown to the reader
+               異字同訓  Bunkacho's list of kun readings shared by kanji of
+                         related use (pipeline/ijidokun.tsv)
+               kun       a kun reading in common (温/暖 あたたかい), for
+                         kanji the sources below also call related
+  mean       near-synonyms that do not share a reading (a pair written
+             either way in a word or two, like 己惚れ/自惚れ, lands here too):
+               wordnet   Japanese WordNet senses shared by the two kanji's
+                         own words (the kanji alone, or it plus kana)
+               glosses   KANJIDIC meanings in common, weighted by rarity, so
+                         "warm" counts for much more than "counter"
+               kanjium   its synonyms list (CC BY-SA 4.0)
 
 Unihan's variant tables (竜/龍, 籠/篭, 国/國) are kept apart, as `variant`:
 the same character in another form, not a near-synonym.
+
+Measured by tests/similar_eval.py: `read` against the 異字同訓 list, `mean`
+against kanjium's synonyms; see the numbers there.
 """
 
 import json
@@ -218,8 +230,8 @@ def listed_lookalikes() -> dict[str, set[str]]:
 
 
 def listed_synonyms() -> tuple[dict[str, set[str]], dict[tuple[str, str], str]]:
-    """kanjium's synonyms (CC BY-SA 4.0) and the Bunkacho 異字同訓 groups
-    (pipeline/ijidokun.tsv), the latter with the kun reading they share."""
+    """kanjium's synonyms (CC BY-SA 4.0), and the Bunkacho 異字同訓 groups
+    (pipeline/ijidokun.tsv) as pair -> the kun reading they share."""
     if _computed_only():
         return {}, {}
     pairs = _tab_lists(SIMILAR / "kanjium" / "synonyms.txt")
@@ -232,7 +244,6 @@ def listed_synonyms() -> tuple[dict[str, set[str]], dict[tuple[str, str], str]]:
         for a in ks:
             for b in ks:
                 if a != b:
-                    pairs.append((a, b))
                     kun.setdefault((a, b), reading.split("・")[0])
     return _both_ways(pairs), kun
 
@@ -372,12 +383,20 @@ def spelling_swaps(db: sqlite3.Connection) -> tuple[Counter, dict]:
                 weight[key] += 2 if wid in common else 1
                 # the reader sees these: common, short words first
                 words[key].append((0 if wid in common else 1, nf.get(wid, 99), len(a), f"{a}・{b}" if x == key[0] else f"{b}・{a}"))
-    notes = {k: [w for *_, w in sorted(v)[:3]] for k, v in words.items()}
+    # Two entries can give the same pair of spellings (己・汝 twice); show it once.
+    notes = {k: list(dict.fromkeys(w for *_, w in sorted(v)))[:3] for k, v in words.items()}
     return weight, notes
 
 
-def wordnet_senses() -> dict[str, set[str]]:
-    """Kanji -> WordNet synsets of its own words: itself, or itself plus kana."""
+def wordnet_senses(db: sqlite3.Connection) -> dict[str, set[str]]:
+    """Kanji -> WordNet synsets of its own words: itself, or itself plus kana.
+
+    The kanji alone counts (己, 側), and so does it plus kana when JMdict calls
+    that a common word (暖かい): WordNet also files rare verbs like 側む, "to
+    regret", next to 悔やむ, which would make 側 a synonym of 悔.
+    """
+    common = {t for (t,) in db.execute(
+        "SELECT f.text FROM word_form f JOIN word w ON w.id = f.word_id WHERE w.common = 1 AND f.kana = 0")}
     k2s: dict[str, set[str]] = defaultdict(set)
     for line in (DATA / "wn-data-jpn.tab").open(encoding="utf-8"):
         t = line.rstrip("\n").split("\t")
@@ -386,28 +405,38 @@ def wordnet_senses() -> dict[str, set[str]]:
         lemma = t[2]
         if not lemma or not is_kanji(lemma[0]) or len(lemma) > 5:
             continue
-        if KANA.match(lemma[1:]):
+        if len(lemma) == 1 or (KANA.match(lemma[1:]) and lemma in common):
             k2s[lemma[0]].add(t[0])
     return k2s
 
 
-def _gloss_words(meanings: list[str]) -> set[str]:
-    out = set()
-    for m in meanings:
+# KANJIDIC says "self" for 己 and "oneself" for 自.
+_SELF = {w: "self" for w in ("oneself", "itself", "himself", "herself", "myself", "yourself", "ourselves", "themselves")}
+
+
+def _gloss_words(meanings: list[str]) -> dict[str, float]:
+    """Content words of a kanji's meanings, each weighted by how early it comes:
+    KANJIDIC lists the main senses first and the obscure ones last (側 is
+    "side, lean, oppose, regret"), so a match on the fourth counts for little."""
+    out: dict[str, float] = {}
+    for i, m in enumerate(meanings):
+        weight = 1 / (1 + 0.8 * i)
         m = re.sub(r"\(.*?\)", " ", m.lower())
         for w in re.findall(r"[a-z][a-z'-]+", m):
             if w in _STOP or len(w) < 3:
                 continue
+            w = _SELF.get(w, w)
             for suf in ("ness", "ing", "ed", "th", "ly", "s"):
                 if w.endswith(suf) and len(w) - len(suf) >= 4:
                     w = w[: -len(suf)]
                     break
-            out.add(w)
+            out[w] = max(out.get(w, 0.0), weight)
     return out
 
 
 def meaning_neighbours(db: sqlite3.Connection, keep: int = 16, keep_common: int = 10):
-    """Yield (char, other, kind, rank, score, note) for near-synonyms and variant forms."""
+    """Yield (char, other, kind, rank, score, note): kind is `read` for kanji that
+    compete for one reading, `mean` for near-synonyms, `variant` for other forms."""
     rows = {c: json.loads(m or "[]") for c, m in db.execute("SELECT char, meanings FROM kanji WHERE meanings IS NOT NULL")}
     level = {c: (f, j, jo) for c, f, j, jo in db.execute("SELECT char, freq, jlpt, joyo FROM kanji")}
     var = variants()
@@ -417,14 +446,14 @@ def meaning_neighbours(db: sqlite3.Connection, keep: int = 16, keep_common: int 
     df = Counter(w for ws in gw.values() for w in ws)
     N = len(gw)
     idf = {w: math.log(N / d) for w, d in df.items()}
-    gnorm = {c: math.sqrt(sum(idf[w] ** 2 for w in ws)) for c, ws in gw.items()}
+    gnorm = {c: math.sqrt(sum((idf[w] * x) ** 2 for w, x in ws.items())) for c, ws in gw.items()}
     by_word: dict[str, list[str]] = defaultdict(list)
     for c, ws in gw.items():
         for w in ws:
             if df[w] <= 60:  # a word shared by more than 60 kanji says little
                 by_word[w].append(c)
 
-    senses = wordnet_senses()
+    senses = wordnet_senses(db)
     by_sense: dict[str, list[str]] = defaultdict(list)
     for c, ss in senses.items():
         for s in ss:
@@ -437,7 +466,14 @@ def meaning_neighbours(db: sqlite3.Connection, keep: int = 16, keep_common: int 
         swap_of[b].append((a, w))
 
     listed, kun = listed_synonyms()
-    chars = set(rows) | set(senses) | set(swap_of) | set(listed)
+    # Kun readings as words, okurigana joined on: あたた.かい -> あたたかい.
+    kun_of: dict[str, set[str]] = {}
+    for ch, ks in db.execute("SELECT char, kun_yomi FROM kanji WHERE kun_yomi IS NOT NULL"):
+        kun_of[ch] = {k.replace(".", "").strip("-") for k in json.loads(ks or "[]")} - {""}
+    kun_pairs: dict[str, list[str]] = defaultdict(list)
+    for a, b in kun:
+        kun_pairs[a].append(b)
+    chars = set(rows) | set(senses) | set(swap_of) | set(listed) | set(kun_pairs)
     for c in chars:
         # --- variant forms, apart
         vs = sorted(var.get(c, set()) & level.keys(), key=lambda v: (level[v][0] is None, level[v][0] or 0))
@@ -451,43 +487,60 @@ def meaning_neighbours(db: sqlite3.Connection, keep: int = 16, keep_common: int 
             for o in by_sense[s]:
                 if o != c:
                     cand[o]["wn"] += 1
-        for w in gw.get(c, ()):
+        for w, x in gw.get(c, {}).items():
             for o in by_word.get(w, ()):
                 if o != c:
-                    cand[o]["gloss"] += idf[w] ** 2
+                    cand[o]["gloss"] += (idf[w] * x) * (idf[w] * gw[o][w])
                     cand[o]["shared"].add(w)
         for o in listed.get(c, ()):
             cand[o]["listed"] = True
+        for o in kun_pairs.get(c, ()):
+            cand[o]  # a 異字同訓 pair is a candidate whatever else says
 
-        scored = []
+        scored: dict[str, list] = {"read": [], "mean": []}
         for o, e in cand.items():
             if o in var.get(c, ()) or o not in level:
                 continue
             wn = e["wn"] / math.sqrt(len(senses.get(c, ())) * len(senses.get(o, ()))) if e["wn"] else 0.0
             gl = e["gloss"] / (gnorm.get(c, 1) * gnorm.get(o, 1)) if e["gloss"] else 0.0
+            meaning = 0.8 * min(1.0, wn * 1.5) + 0.7 * gl
+            related = wn > 0 or gl > 0.1 or e.get("listed")
             # A swap in one or two words is often a homophone written by
             # accident or ateji (川/皮 in かわ...); it needs the other sources
             # to agree. Several words make it evidence on its own.
-            spell = 1 - math.exp(-e["spell"] / 3) if e["spell"] >= SWAP_ALONE or wn or gl > 0.1 else 0.0
-            score = 1.0 * spell + 0.8 * min(1.0, wn * 1.5) + 0.7 * gl
-            if e.get("listed"):
-                score += BOOST_MEAN
-            elif spell == 0 and wn < 0.15 and gl < 0.35:
+            spell = 1 - math.exp(-e["spell"] / 3) if e["spell"] >= SWAP_ALONE or related else 0.0
+            ijidokun = kun.get((c, o))
+            shared = sorted(kun_of.get(c, set()) & kun_of.get(o, set()), key=len, reverse=True)
+
+            # Same reading: one word written either way, a 異字同訓 group, or a
+            # kun reading in common between kanji that are related in meaning.
+            # Everything else that is related in meaning is a near-synonym.
+            # A pair is one or the other, never both.
+            # A swap in a word or two between kanji with no reading in common
+            # (己惚れ/自惚れ) is one word's spelling, not a shared reading;
+            # such a pair, related in meaning, is a near-synonym instead.
+            if ijidokun or (shared and (spell or related)) or e["spell"] >= SWAP_ALONE:
+                score = spell + (BOOST_MEAN if ijidokun else 0) + 0.5 * meaning + (0.3 if shared else 0)
+                if spell:
+                    note = {"words": swap_words[(c, o) if c < o else (o, c)][:2]}
+                else:
+                    note = {"kun": ijidokun or shared[0]}
+                scored["read"].append((score, o, note))
+                continue
+            score = meaning + 0.5 * spell + (BOOST_MEAN if e.get("listed") else 0)
+            if not e.get("listed") and not spell and wn < 0.15 and gl < 0.35:
                 continue  # one weak signal alone is noise
-            # What the reader is shown as the reason: words that take either
-            # kanji, else the kun reading they share, else meanings in common.
+            top = sorted(e["shared"], key=lambda w: -idf[w] * gw[c][w] * gw[o][w])
             if spell:
                 note = {"words": swap_words[(c, o) if c < o else (o, c)][:2]}
-            elif (c, o) in kun:
-                note = {"kun": kun[(c, o)]}
-            elif e["shared"]:
-                note = {"gloss": sorted(e["shared"], key=lambda w: -idf[w])[:2]}
             else:
-                note = None
-            scored.append((score, o, note))
-        scored.sort(key=lambda t: -t[0])
-        best = scored[:keep]
-        best += [t for t in scored[keep:] if level[t[1]] != (None, None, 0)][:keep_common]
-        best.sort(key=lambda t: -t[0])
-        for r, (score, o, note) in enumerate(best):
-            yield c, o, "mean", r, round(score, 4), json.dumps(note, ensure_ascii=False) if note else None
+                note = {"gloss": top[:2]} if top else None
+            scored["mean"].append((score, o, note))
+
+        for kind, items in scored.items():
+            items.sort(key=lambda t: -t[0])
+            best = items[:keep]
+            best += [t for t in items[keep:] if level[t[1]] != (None, None, 0)][:keep_common]
+            best.sort(key=lambda t: -t[0])
+            for r, (score, o, note) in enumerate(best):
+                yield c, o, kind, r, round(score, 4), json.dumps(note, ensure_ascii=False) if note else None

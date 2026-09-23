@@ -3,6 +3,8 @@ import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { StrokeOrder } from './StrokeOrder'
+import { SimilarRows } from '../similar/SimilarRows'
+import { isCommon } from '../similar/why'
 
 const S = strings(
   {
@@ -64,6 +66,10 @@ interface Props {
   data: DetailData
   hovered: KanjiNode | null
   onWord: (word: Word) => void
+  /** Opens a lookalike or near-synonym from the page. */
+  onKanji: (char: string) => void
+  /** Shows the Similar view; left out when it is already on screen. */
+  onSimilar?: () => void
   /** Shows the focus graph, from the map or on a phone; left out when it is already on screen. */
   onComponents?: () => void
 }
@@ -77,7 +83,7 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
-export function DetailPanel({ data, hovered, onWord, onComponents }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onSimilar, onComponents }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -163,6 +169,10 @@ export function DetailPanel({ data, hovered, onWord, onComponents }: Props) {
       )}
 
       {!isPreview && <StrokeOrder char={data.focus.char} strokes={data.strokes} />}
+
+      {!isPreview && (
+        <SimilarRows char={data.focus.char} common={isCommon(data.focus)} onKanji={onKanji} onShowAll={onSimilar} />
+      )}
 
       {!isPreview && words.length > 0 && (
         <div className="vocab">
