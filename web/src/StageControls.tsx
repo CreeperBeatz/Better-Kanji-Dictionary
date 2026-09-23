@@ -1,5 +1,6 @@
 /** The controls that sit over the stage in both views: trail, level filter, view switch. */
 
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { ContainerFilter } from './graph/KanjiGraph'
 import { strings, useLang } from './i18n'
 
@@ -160,20 +161,68 @@ function MapIcon() {
   )
 }
 
-/** Labelled when the rail has room, icons alone when it does not; the label
-    stays for screen readers either way. */
+/** Labelled whenever the labels fit beside the rest of the row it sits in,
+    icons alone when they do not; the labels stay for screen readers and the
+    titles on hover either way. */
 export function ViewSwitch({ view, onView }: { view: StageView; onView: (v: StageView) => void }) {
   const t = S(useLang())
-  return (
-    <div className="view-switch" role="tablist" aria-label={t('view')}>
-      <button role="tab" aria-selected={view === 'focus'} onClick={() => onView('focus')} title={t('focusTitle')}>
+  const own = useRef<HTMLDivElement>(null)
+  // An invisible labelled copy, so the width the labels need is known while
+  // they are hidden, and follows the language and the font as they load.
+  const labelled = useRef<HTMLDivElement>(null)
+  const [fits, setFits] = useState(true)
+
+  useLayoutEffect(() => {
+    const el = own.current
+    const row = el?.parentElement
+    const copy = labelled.current
+    if (!el || !row || !copy) return
+    const check = () => {
+      const s = getComputedStyle(row)
+      const gap = parseFloat(s.columnGap) || 0
+      const room = row.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)
+      let used = copy.getBoundingClientRect().width
+      for (const c of row.children) if (c !== el) used += c.getBoundingClientRect().width + gap
+      setFits(used <= room)
+    }
+    const watch = new ResizeObserver(check)
+    watch.observe(row)
+    watch.observe(copy)
+    for (const c of row.children) if (c !== el) watch.observe(c)
+    return () => watch.disconnect()
+  }, [])
+
+  const buttons = (live: boolean) => (
+    <>
+      <button
+        role={live ? 'tab' : undefined}
+        aria-selected={live ? view === 'focus' : undefined}
+        onClick={live ? () => onView('focus') : undefined}
+        title={live ? t('focusTitle') : undefined}
+        tabIndex={live ? undefined : -1}
+      >
         <FocusIcon />
         <span className="view-label">{t('focus')}</span>
       </button>
-      <button role="tab" aria-selected={view === 'map'} onClick={() => onView('map')} title={t('mapTitle')}>
+      <button
+        role={live ? 'tab' : undefined}
+        aria-selected={live ? view === 'map' : undefined}
+        onClick={live ? () => onView('map') : undefined}
+        title={live ? t('mapTitle') : undefined}
+        tabIndex={live ? undefined : -1}
+      >
         <MapIcon />
         <span className="view-label">{t('map')}</span>
       </button>
+    </>
+  )
+
+  return (
+    <div ref={own} className="view-switch" role="tablist" aria-label={t('view')} data-compact={!fits || undefined}>
+      {buttons(true)}
+      <div ref={labelled} className="view-switch view-switch-measure" aria-hidden inert>
+        {buttons(false)}
+      </div>
     </div>
   )
 }

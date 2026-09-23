@@ -19,7 +19,7 @@ const KEY = 'betterrtk:rail'
 export const RAIL_DEFAULT = 384
 // Room for all three tabs (Associations with a count) and the Focus / Map
 // switch in one row, in either language.
-const RAIL_MIN = 360
+const RAIL_MIN = 380
 const RAIL_MAX = 760
 // However wide the rail, the stage keeps at least this much.
 const STAGE_MIN = 360
