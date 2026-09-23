@@ -30,6 +30,8 @@ MAIL_FROM=Better Kanji Dictionary <no-reply@betterkanjidictionary.org>
 BETTERRTK_OWNER_EMAIL=
 # OAuth client id (type "Web application"); empty offers email sign-in only.
 GOOGLE_CLIENT_ID=
+# Semantic search through OpenRouter (Claude Sonnet); empty hides it.
+OPENROUTER_API_KEY=
 ENV
   echo "  wrote .env -- set RESEND_API_KEY and BETTERRTK_OWNER_EMAIL"
 fi

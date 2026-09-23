@@ -15,11 +15,14 @@ would have found words too, that reading comes back in `alternatives`.
 import re
 import threading
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from .. import bulgarian as bg
+from .. import semantic as sem
 from ..db import get_db, query
+from ..errors import AppError
 from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_to_kana
+from .auth import require_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
@@ -235,7 +238,7 @@ def _bg_tier(exact: bool, same_spelling: bool, place: int) -> int:
 
 @router.get("")
 def search(
-    q: str = Query(min_length=1, max_length=64),
+    q: str = Query(min_length=1, max_length=200),
     limit: int = Query(30, ge=1, le=100),
     lang: str = Query("en", pattern="^(en|bg)$"),
     common: bool = Query(False, description="only words JMdict marks as common"),
@@ -380,6 +383,54 @@ def search(
     }
 
 
+@router.get("/semantic")
+def semantic(
+    q: str = Query(min_length=1, max_length=200),
+    lang: str = Query("en", pattern="^(en|bg)$"),
+    user: dict = Depends(require_user),
+) -> dict:
+    """What Claude Sonnet takes the query to mean, for when the dictionary found
+    nothing: kanji and words in the model's order, each with its note, and the
+    model's note over them all. Only what the database has survives; an empty
+    answer is an answer (gibberish finds nothing)."""
+    q = q.strip()
+    if not q:
+        return {"query": q, "note": None, "kanji": [], "words": []}
+    try:
+        answer = sem.ask(q, lang)
+    except sem.Off:
+        raise AppError(503, "semantic_off", "semantic search is not set up on this server")
+    except sem.Unavailable as e:
+        print(f"[semantic] {q!r}: {e}", flush=True)
+        raise AppError(503, "semantic_unavailable", "semantic search is not available right now")
+
+    hits = {k["char"]: k for k in _kanji_hits([k["char"] for k in answer["kanji"]])}
+    kanji = [{**hits[k["char"]], "why": k["why"]} for k in answer["kanji"] if k["char"] in hits]
+
+    words, seen = [], set()
+    for s in answer["words"]:
+        w = _word_for(s["word"], s["reading"])
+        if w and w["id"] not in seen:
+            seen.add(w["id"])
+            words.append({**w, "why": s["why"]})
+    return {"query": q, "note": answer["note"], "kanji": kanji, "words": words}
+
+
+def _word_for(text: str, reading: str | None) -> dict | None:
+    """The dictionary entry a suggested word most likely is: one written that
+    way, read the way the model said if one is, common before not."""
+    ids = [r["word_id"] for r in query("SELECT DISTINCT word_id FROM word_form WHERE text = ? LIMIT 20", (text,))]
+    if not ids:
+        return None
+    reading = katakana_to_hiragana(reading) if reading else None
+
+    def rank(w: dict) -> tuple:
+        kana = {katakana_to_hiragana(f["text"]) for f in w["forms"] if f["kana"]} | {katakana_to_hiragana(w["reading"])}
+        return (reading is not None and reading not in kana, w["headword"] != text, not w["common"], w["nf"] is None, w["nf"] or 0)
+
+    return min(_fetch_words(ids).values(), key=rank, default=None)
+
+
 def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] | None = None) -> list[dict]:
     """Characters matching the query, by meaning or directly by character."""
     chars: list[str] = []
@@ -412,6 +463,17 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
             )
             chars = [r["char"] for r in rows]
 
+    out = _kanji_hits(chars)
+    # FTS rank alone puts obscure characters first, because their meaning lists
+    # are short. What you almost always want is the common one: 寺 before 刹.
+    # By reading, kun'yomi come before on'yomi -- among the joyo first, so a
+    # rare character's kun'yomi cannot put it ahead of 水 for すい.
+    out.sort(key=lambda k: (0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999))
+    return out[:12]
+
+
+def _kanji_hits(chars: list[str]) -> list[dict]:
+    """The result row for each of `chars` the database has, in no set order."""
     if not chars:
         return []
 
@@ -427,7 +489,7 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
     )
     import json as _json
 
-    out = [
+    return [
         {
             "char": r["char"],
             "meanings": _json.loads(r["meanings"] or "[]"),
@@ -441,12 +503,6 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
         }
         for r in rows
     ]
-    # FTS rank alone puts obscure characters first, because their meaning lists
-    # are short. What you almost always want is the common one: 寺 before 刹.
-    # By reading, kun'yomi come before on'yomi -- among the joyo first, so a
-    # rare character's kun'yomi cannot put it ahead of 水 for すい.
-    out.sort(key=lambda k: (0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999))
-    return out[:12]
 
 
 @router.get("/words-for/{char}")

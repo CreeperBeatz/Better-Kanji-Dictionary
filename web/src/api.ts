@@ -145,6 +145,18 @@ export interface SearchResponse {
   total: number
 }
 
+/**
+ * What Claude Sonnet took a query to mean, when the dictionary found nothing:
+ * the model's order, only what the dictionary has, each with the model's
+ * note on why where it gave one, and its note over them all.
+ */
+export interface SemanticResponse {
+  query: string
+  note: string | null
+  kanji: (KanjiHit & { why: string | null })[]
+  words: (Word & { why: string | null })[]
+}
+
 export interface Association {
   id: string
   char: string
@@ -333,6 +345,13 @@ export const api = {
         ['order', o.order],
       ]),
     ),
+
+  /** Always the server's: the device has no model to ask. Needs a signed-in user. */
+  semantic: (q: string, lang: string) =>
+    get<SemanticResponse>('/api/search/semantic', [
+      ['q', q],
+      ['lang', lang],
+    ]),
 
   wordsFor: (char: string) =>
     localFirst(local.wordsFor(char), () =>
