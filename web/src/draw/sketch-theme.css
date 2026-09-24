@@ -1,0 +1,230 @@
+/* Excalidraw in the app's own ink and paper.
+ *
+ * Its menus and dialogs are portalled to <body> as .excalidraw.theme--dark, so
+ * the overrides are global, and :root outranks its stylesheet, which loads
+ * after ours.
+ *
+ * The canvas itself is not styled here: dark mode draws the scene in light
+ * colours and inverts it through a CSS filter, so its colours are chosen
+ * through that filter in SketchEditor.tsx.
+ */
+
+:root .excalidraw.theme--dark {
+  --ui-font: var(--gothic);
+
+  --color-primary: var(--ai);
+  --color-primary-darker: var(--ai);
+  --color-primary-darkest: var(--ai);
+  --color-primary-hover: var(--ai);
+  --color-primary-light: var(--ai-wash);
+  --color-primary-light-darker: var(--ai-wash);
+  --color-brand-hover: var(--ai);
+  --color-brand-active: var(--ai);
+  --color-selection: var(--ai-deep);
+  --color-slider-track: var(--ai-deep);
+  --color-surface-primary-container: var(--ai-wash);
+  --color-on-primary-container: var(--paper);
+
+  --island-bg-color: var(--sumi-lift);
+  --popup-bg-color: var(--sumi-lift);
+  --sidebar-bg-color: var(--sumi-lift);
+  --popup-secondary-bg-color: var(--sumi);
+  --default-bg-color: var(--sumi);
+  --input-bg-color: var(--sumi-sunk);
+  --input-hover-bg-color: var(--sumi);
+  --color-surface-lowest: var(--sumi-sunk);
+  --color-surface-mid: var(--sumi);
+  --color-surface-low: var(--sumi-lift);
+  --color-surface-high: var(--rule);
+  --button-hover-bg: var(--rule);
+  --button-active-bg: var(--rule-bright);
+  --button-gray-1: var(--rule-bright);
+  --button-gray-2: var(--rule);
+  --button-gray-3: var(--sumi-lift);
+
+  --default-border-color: var(--rule-bright);
+  --input-border-color: var(--rule-bright);
+  --dialog-border-color: var(--rule-bright);
+  --sidebar-border-color: var(--rule);
+  --color-border-outline-variant: var(--rule-bright);
+  --color-border-outline: var(--muted);
+
+  --color-on-surface: var(--paper);
+  --text-primary-color: var(--paper);
+  --icon-fill-color: var(--paper);
+  --popup-text-color: var(--paper-dim);
+  --input-label-color: var(--paper);
+  --keybinding-color: var(--muted);
+  --color-muted: var(--muted);
+
+  --focus-highlight-color: var(--ai);
+  --select-highlight-color: var(--ai);
+  --link-color: var(--ai);
+  --color-danger: var(--shu);
+  --color-danger-dark: #5c1d12;
+  --color-danger-text: var(--paper);
+  --button-destructive-bg-color: #5c1d12;
+  --button-destructive-color: var(--paper);
+
+  --scrollbar-thumb: var(--rule-bright);
+  --scrollbar-thumb-hover: var(--muted);
+
+  --border-radius-md: 2px;
+  --border-radius-lg: 4px;
+  --shadow-island: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ------------------------------------------------ selecting part of a picture */
+
+.px-tools {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sumi-lift);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.px-tool {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.px-tool:hover {
+  background: var(--rule);
+}
+
+.px-tool[data-on] {
+  background: var(--ai-wash);
+  color: var(--ai);
+}
+
+.px-tool svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Over Excalidraw's canvases, under its menus -- and out of the filter dark
+   mode puts on every canvas in it. */
+.excalidraw canvas.px-overlay,
+:root .excalidraw.theme--dark canvas.px-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  filter: none;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.px-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  width: max-content;
+  margin-inline: auto;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 6px 8px;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  font-family: var(--gothic);
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.px-seg {
+  display: flex;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.px-seg button,
+.px-act {
+  font: inherit;
+  padding: 4px 10px;
+  background: none;
+  color: var(--paper-dim);
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.px-seg button + button {
+  border-left: 1px solid var(--rule-bright);
+}
+
+.px-seg button[data-on] {
+  background: var(--ai-wash);
+  color: var(--paper);
+}
+
+.px-act {
+  color: var(--paper);
+  border: 1px solid transparent;
+  border-radius: 2px;
+}
+
+.px-seg button:hover:not([data-on]),
+.px-act:hover {
+  background: var(--rule);
+}
+
+.px-tolerance {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--paper-dim);
+}
+
+.px-tolerance input {
+  width: 90px;
+  accent-color: var(--ai);
+}
+
+.px-hint {
+  padding: 0 6px;
+  color: var(--paper-dim);
+}
+
+@media (max-width: 730px) {
+  /* Excalidraw's phone layout keeps its tools along the bottom. */
+  .px-bar {
+    bottom: 72px;
+  }
+}
+
+.px-tools-side {
+  position: absolute;
+  left: 12px;
+  top: 72px;
+  z-index: 5;
+}
+
+.px-tools-side .px-tools {
+  flex-direction: column;
+}
