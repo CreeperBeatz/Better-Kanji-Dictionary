@@ -3650,6 +3650,49 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--shu);
 }
 
+/* A desktop's associations, under the page: a heading that folds them away. */
+.assoc-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 22px 0;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.assoc-fold-head:hover {
+  color: var(--paper);
+}
+
+.assoc-fold-head[aria-expanded='false'] {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.assoc-fold-chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 160ms var(--ease);
+}
+
+.assoc-fold-head[aria-expanded='false'] .assoc-fold-chevron {
+  transform: rotate(-90deg);
+}
+
 .rail-tab-count {
   padding: 0 6px;
   border: 1px solid var(--rule-bright);

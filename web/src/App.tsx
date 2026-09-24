@@ -30,6 +30,9 @@ const S = strings(
     sidePanel: 'Side panel',
     dictionary: 'Dictionary',
     associations: 'Associations',
+    foldAssociations: 'Fold the associations away',
+    unfoldAssociations: 'Show the associations',
+    jumpAssociations: 'Go to the associations',
     focus: 'Components',
     map: 'Map',
     back: 'Back (Backspace)',
@@ -50,6 +53,9 @@ const S = strings(
     sidePanel: 'Страничен панел',
     dictionary: 'Речник',
     associations: 'Асоциации',
+    foldAssociations: 'Скрийте асоциациите',
+    unfoldAssociations: 'Покажете асоциациите',
+    jumpAssociations: 'Към асоциациите',
     focus: 'Компоненти',
     map: 'Карта',
     back: 'Назад (Backspace)',
@@ -109,6 +115,8 @@ function useVisibleHeight(enabled: boolean) {
 }
 
 const RAIL_TAB_KEY = 'betterrtk:railTab'
+// On a desktop the associations sit under the page, folded away if you choose.
+const ASSOC_FOLDED_KEY = 'betterrtk:assocFolded'
 type RailTab = 'dictionary' | 'associations'
 
 function initialRailTab(): RailTab {
@@ -212,6 +220,28 @@ export function App() {
   const [railWidth, setRailWidth] = useRailWidth()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
+  const [assocFolded, setAssocFolded] = useState(() => {
+    try {
+      return localStorage.getItem(ASSOC_FOLDED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const assocRef = useRef<HTMLElement>(null)
+  const foldAssoc = useCallback((folded: boolean) => {
+    setAssocFolded(folded)
+    try {
+      if (folded) localStorage.setItem(ASSOC_FOLDED_KEY, '1')
+      else localStorage.removeItem(ASSOC_FOLDED_KEY)
+    } catch {
+      // not remembered, which is fine
+    }
+  }, [])
+  // The page can be long, so the associations' place in the head goes down to them.
+  const jumpToAssoc = useCallback(() => {
+    foldAssoc(false)
+    requestAnimationFrame(() => assocRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [foldAssoc])
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
@@ -461,15 +491,29 @@ export function App() {
   }
 
   // Kanji and words carry associations; searches and levels do not, so
-  // there the tab steps aside and the page shows.
+  // there the tab steps aside and the page shows. A desktop has room for
+  // both, so there they follow the page instead of taking turns with it.
   const subject =
     top.kind === 'kanji'
       ? { key: top.char, label: top.char }
       : top.kind === 'word'
         ? { key: `word:${top.id}`, label: top.word?.headword ?? t('thisWord') }
         : null
-  const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
+  const tab: RailTab = railTab === 'associations' && (!subject || !mobile) ? 'dictionary' : railTab
   const inDictionary = !onStage && tab === 'dictionary'
+  function associations(s: { key: string; label: string }) {
+    return (
+      <Associations
+        key={s.key}
+        subject={s.key}
+        label={s.label}
+        onPick={openKanji}
+        onSignIn={signIn}
+        onCount={setAssocCount}
+      />
+    )
+  }
+
   // What the page on top is, as written, named above every tab it has.
   const current = top.kind === 'kanji' ? top.char : top.kind === 'word' ? top.word?.headword : undefined
 
@@ -497,12 +541,18 @@ export function App() {
               <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
                 {t('dictionary')}
               </button>
-              {subject && (
+              {subject && mobile && (
                 <button
                   role="tab"
                   aria-selected={!onStage && tab === 'associations'}
                   onClick={() => chooseRailTab('associations')}
                 >
+                  {t('associations')}
+                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                </button>
+              )}
+              {subject && !mobile && (
+                <button onClick={jumpToAssoc} title={t('jumpAssociations')}>
                   {t('associations')}
                   {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
@@ -544,17 +594,23 @@ export function App() {
             {tab === 'dictionary' && page(top)}
             {/* Kept mounted while hidden, so the count on its tab is there
                 before the tab is opened. */}
-            {subject && (
-              <div hidden={tab !== 'associations'}>
-                <Associations
-                  key={subject.key}
-                  subject={subject.key}
-                  label={subject.label}
-                  onPick={openKanji}
-                  onSignIn={signIn}
-                  onCount={setAssocCount}
-                />
-              </div>
+            {subject && mobile && <div hidden={tab !== 'associations'}>{associations(subject)}</div>}
+            {subject && !mobile && (
+              <section className="assoc-fold" ref={assocRef}>
+                <button
+                  className="assoc-fold-head"
+                  aria-expanded={!assocFolded}
+                  onClick={() => foldAssoc(!assocFolded)}
+                  title={t(assocFolded ? 'unfoldAssociations' : 'foldAssociations')}
+                >
+                  {t('associations')}
+                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  <svg className="assoc-fold-chevron" viewBox="0 0 16 16" aria-hidden>
+                    <path d="M4 6l4 4 4-4" />
+                  </svg>
+                </button>
+                <div hidden={assocFolded}>{associations(subject)}</div>
+              </section>
             )}
           </div>
           {/* "Its parts" -- the decomposition editor and review queue -- is
