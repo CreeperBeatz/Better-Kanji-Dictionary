@@ -4308,7 +4308,6 @@ html {
   border: 1px solid var(--rule-bright);
   border-radius: 4px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
   animation: hold-in 120ms var(--ease);
 }
 
@@ -4317,6 +4316,76 @@ html {
     opacity: 0;
     transform: translate(-50%, calc(-100% + 6px));
   }
+}
+
+/* Below the finger, when the peek is opening above it. */
+.hold-card[data-below] {
+  transform: translate(-50%, 0);
+  animation-name: hold-in-below;
+}
+
+@keyframes hold-in-below {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+.hold-card-open {
+  margin-top: 12px;
+}
+
+/* A right click on the graph, or a press and hold: what else a node does. */
+.graph-menu {
+  position: absolute;
+  z-index: 6;
+  padding: 4px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  animation: menu-in 100ms var(--ease);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.graph-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.graph-menu button:hover,
+.graph-menu button:focus-visible {
+  background: var(--ai-wash);
+  outline: none;
+}
+
+.graph-menu button span {
+  color: var(--ai);
+}
+
+/* The character whose page is open, while the graph is centred on another. */
+.open-ring {
+  fill: none;
+  stroke: var(--ai);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 2.5;
+  pointer-events: none;
 }
 
 .hold-card-head {
@@ -4368,7 +4437,8 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hold-card {
+  .hold-card,
+  .graph-menu {
     animation: none;
   }
 }

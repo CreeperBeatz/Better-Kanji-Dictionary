@@ -20,7 +20,11 @@ export type Level = 1 | 2 | 3 | 4 | 5
 export type Page =
   | { kind: 'search'; q: string }
   | { kind: 'level'; level: Level }
-  | { kind: 'kanji'; char: string }
+  /**
+   * `centre` is the character the graph was centred on when this one was
+   * picked there, which it stays centred on while this page is up.
+   */
+  | { kind: 'kanji'; char: string; centre?: string }
   /** `word` is what the list already knew, so the head shows at once. */
   | { kind: 'word'; id: number; word?: Word }
 

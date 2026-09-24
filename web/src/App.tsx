@@ -155,10 +155,14 @@ function initialView(): StageView {
 }
 
 /** The character nearest the top of the stack: the one the graph shows. */
-function kanjiIn(stack: Stack): string | null {
+/**
+ * What the graph centres on for this stack: the nearest character, or the one
+ * the graph was on when that character was picked there.
+ */
+function centreIn(stack: Stack): string | null {
   for (let i = stack.length - 1; i >= 0; i--) {
     const p = stack[i]
-    if (p.kind === 'kanji') return p.char
+    if (p.kind === 'kanji') return p.centre ?? p.char
   }
   return null
 }
@@ -190,13 +194,14 @@ export function App() {
   const under = stack.length > 1 ? stack[stack.length - 2] : null
 
   // The character the graph and map show. It follows the stack's nearest
-  // character, and stays put while the stack has none (a search, a word
-  // opened from it). Clicking empty map clears it.
-  const stackKanji = kanjiIn(stack)
-  const [focus, setFocus] = useState<string | null>(stackKanji)
+  // character -- or the one a character was picked on the graph from -- and
+  // stays put while the stack has none (a search, a word opened from it).
+  // Clicking empty map clears it.
+  const stackCentre = centreIn(stack)
+  const [focus, setFocus] = useState<string | null>(stackCentre)
   useEffect(() => {
-    if (stackKanji) setFocus(stackKanji)
-  }, [stackKanji])
+    if (stackCentre) setFocus(stackCentre)
+  }, [stackCentre])
   const selected = focus !== null
 
   // The search box's text. It is the bottom page's query while that is a
@@ -436,16 +441,31 @@ export function App() {
 
   // A pick on the decomposition graph opens on top of the page, so back goes
   // to the character it was picked from -- or goes back, when it is that one.
-  // `via` is the container a peek skipped through, which counts as visited.
-  const graphDrill = useCallback(
+  // The graph stays centred where it was. `via` is the container a peek
+  // skipped through, which counts as visited.
+  const graphOpen = useCallback(
+    (char: string, via?: string) => {
+      setHovered(null)
+      setPane('rail')
+      if (via && via !== char) rememberKanji(via)
+      if (under?.kind === 'kanji' && under.char === char && (under.centre ?? under.char) === focus) pop()
+      else push(char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus })
+    },
+    [under, push, pop, focus],
+  )
+
+  // Recentring on a character on the graph opens it too, or takes the
+  // centre it was opened with off it when it is open already.
+  const graphRecentre = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
       if (via && via !== char) rememberKanji(via)
       setFocus(char)
-      if (under?.kind === 'kanji' && under.char === char) pop()
+      if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
+      else if (under?.kind === 'kanji' && under.char === char && !under.centre) pop()
       else push({ kind: 'kanji', char })
     },
-    [under, push, pop],
+    [top, under, push, pop, replaceTop],
   )
 
   // From the map's card: the character in the dictionary, and its graph.
@@ -857,7 +877,15 @@ export function App() {
           )}
 
           {!error && data && selected && view === 'focus' && (
-            <KanjiGraph data={data} filter={filter} onDrill={graphDrill} onHover={hoverGraph} legend={legendOpen} />
+            <KanjiGraph
+              data={data}
+              filter={filter}
+              open={shownTop?.kind === 'kanji' ? shownTop.char : null}
+              onOpen={graphOpen}
+              onRecentre={graphRecentre}
+              onHover={hoverGraph}
+              legend={legendOpen}
+            />
           )}
 
           {!error && mapOpened && (
