@@ -227,6 +227,11 @@ export function App() {
   const [searchShare, setSearchShare] = useSearchShare()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
+  // A kanji hovered on the graph previews its page, and on a desktop its
+  // associations under it -- once the pointer rests there, so a sweep across
+  // the graph does not ask for each one it passes.
+  const [assocPreview, setAssocPreview] = useState<string | null>(null)
+  const [previewCount, setPreviewCount] = useState(0)
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
@@ -501,6 +506,19 @@ export function App() {
     )
   }, [data, hovered])
 
+  // What the rail's page previews while a kanji is hovered on the graph.
+  const previewChar =
+    !mobile && shownTop?.kind === 'kanji' && hoveredNode && hoveredNode.char !== shownTop.char ? hoveredNode.char : null
+  useEffect(() => {
+    if (!previewChar) {
+      setAssocPreview(null)
+      return
+    }
+    const timer = setTimeout(() => setAssocPreview(previewChar), 150)
+    return () => clearTimeout(timer)
+  }, [previewChar])
+  const previewing = previewChar !== null && assocPreview === previewChar
+
   function page(p: Page) {
     switch (p.kind) {
       case 'search':
@@ -710,9 +728,23 @@ export function App() {
               <section className="assoc-below">
                 <h2 className="assoc-below-head">
                   {t('associations')}
-                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  {(previewing ? previewCount : assocCount) > 0 && (
+                    <span className="rail-tab-count">{previewing ? previewCount : assocCount}</span>
+                  )}
                 </h2>
-                {associations(subject)}
+                {/* The page's own stay mounted under a preview, so they are
+                    back at once when the pointer moves off. */}
+                <div hidden={previewing}>{associations(subject)}</div>
+                {previewing && assocPreview && (
+                  <Associations
+                    key={`preview ${assocPreview}`}
+                    subject={assocPreview}
+                    label={assocPreview}
+                    onPick={openKanji}
+                    onSignIn={signIn}
+                    onCount={setPreviewCount}
+                  />
+                )}
               </section>
             )}
           </div>
