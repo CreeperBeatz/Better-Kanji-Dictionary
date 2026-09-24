@@ -259,10 +259,10 @@ function WordRow({
         <span className="word-head">
           <span className="word-forms">{w.headword}</span>
           {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
+          <Valency word={w} />
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
           </span>
-          <Valency word={w} />
         </span>
         {w.inflection && w.inflection.length > 0 && (
           <span className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</span>
