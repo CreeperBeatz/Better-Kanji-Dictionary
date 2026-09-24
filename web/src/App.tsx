@@ -33,7 +33,6 @@ const S = strings(
     showSearch: 'Show the search beside the dictionary',
     hideSearch: 'Put the search back above the dictionary',
     pickResult: 'Pick a result and it opens here.',
-    jumpAssociations: 'Go to the associations',
     focus: 'Components',
     map: 'Map',
     back: 'Back (Backspace)',
@@ -57,7 +56,6 @@ const S = strings(
     showSearch: 'Покажете търсенето до речника',
     hideSearch: 'Върнете търсенето над речника',
     pickResult: 'Изберете резултат и той ще се отвори тук.',
-    jumpAssociations: 'Към асоциациите',
     focus: 'Компоненти',
     map: 'Карта',
     back: 'Назад (Backspace)',
@@ -128,10 +126,10 @@ function useVisibleHeight(enabled: boolean) {
 
 const RAIL_TAB_KEY = 'betterrtk:railTab'
 // On a wide enough desktop the search gets a column of its own, left of the
-// dictionary, so its results stay in view while one of them is open.
+// dictionary, so its results stay in view while one of them is open. The two
+// are as wide as each other, and the rail's edge resizes both.
 const SPLIT_KEY = 'betterrtk:searchBeside'
-const SEARCH_W = 360
-const SPLIT_ROOM = SEARCH_W + RAIL_MIN + STAGE_MIN
+const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
 
 function initialRailTab(): RailTab {
@@ -235,11 +233,6 @@ export function App() {
   const [railWidth, setRailWidth] = useRailWidth()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
-  const assocRef = useRef<HTMLElement>(null)
-  // The page can be long, so the associations' place in the head goes down to them.
-  const jumpToAssoc = useCallback(() => {
-    assocRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
@@ -267,8 +260,8 @@ export function App() {
       // not remembered, which is fine
     }
   }, [])
-  // The dictionary gives way before the stage does.
-  const railShown = split ? Math.min(railWidth, windowWidth - STAGE_MIN - SEARCH_W) : railWidth
+  // The columns give way before the stage does.
+  const railShown = split ? Math.round(Math.min(railWidth, (windowWidth - STAGE_MIN) / 2)) : railWidth
 
   // With the search in its own column, the rail shows what is open above it:
   // the stack without the search at its bottom.
@@ -610,7 +603,7 @@ export function App() {
         style={
           {
             '--rail': `${railShown}px`,
-            '--search': split ? `${SEARCH_W}px` : '0px',
+            '--search': split ? `${railShown}px` : '0px',
             '--search-h': `${searchH}px`,
           } as React.CSSProperties
         }
@@ -653,37 +646,31 @@ export function App() {
                 <SplitIcon open={split} />
               </button>
             )}
-            <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
-              <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
-                {t('dictionary')}
-              </button>
-              {subject && mobile && (
-                <button
-                  role="tab"
-                  aria-selected={!onStage && tab === 'associations'}
-                  onClick={() => chooseRailTab('associations')}
-                >
-                  {t('associations')}
-                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+            {/* A phone shows one pane at a time and switches between them here;
+                a desktop has them all on screen at once. */}
+            {mobile && (
+              <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
+                <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
+                  {t('dictionary')}
                 </button>
-              )}
-              {subject && !mobile && (
-                <button onClick={jumpToAssoc} title={t('jumpAssociations')}>
-                  {t('associations')}
-                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                {subject && (
+                  <button
+                    role="tab"
+                    aria-selected={!onStage && tab === 'associations'}
+                    onClick={() => chooseRailTab('associations')}
+                  >
+                    {t('associations')}
+                    {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  </button>
+                )}
+                <button role="tab" aria-selected={onStage && view === 'focus'} onClick={() => setView('focus')}>
+                  {t('focus')}
                 </button>
-              )}
-              {mobile && (
-                <>
-                  <button role="tab" aria-selected={onStage && view === 'focus'} onClick={() => setView('focus')}>
-                    {t('focus')}
-                  </button>
-                  <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
-                    {t('map')}
-                  </button>
-                </>
-              )}
-            </div>
+                <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
+                  {t('map')}
+                </button>
+              </div>
+            )}
             {/* On a desktop the stage's views sit at the end of the tabs,
                 apart from them; on a phone they are tabs themselves. */}
             {!mobile && !error && <ViewSwitch view={view} onView={setView} />}
@@ -717,7 +704,7 @@ export function App() {
                 before the tab is opened. */}
             {subject && mobile && <div hidden={tab !== 'associations'}>{associations(subject)}</div>}
             {subject && !mobile && (
-              <section className="assoc-below" ref={assocRef}>
+              <section className="assoc-below">
                 <h2 className="assoc-below-head">
                   {t('associations')}
                   {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
@@ -730,7 +717,7 @@ export function App() {
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
         </aside>
-        <RailResizer width={railShown} onWidth={setRailWidth} />
+        <RailResizer width={railShown} onWidth={setRailWidth} columns={split ? 2 : 1} />
 
         <main className="stage">
           {error && selected && (

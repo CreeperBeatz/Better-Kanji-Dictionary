@@ -65,7 +65,19 @@ export function useRailWidth() {
   return [width, set] as const
 }
 
-export function RailResizer({ width, onWidth }: { width: number; onWidth: (px: number, persist: boolean) => void }) {
+/**
+ * `columns` is how many rail-wide columns the edge closes: two when the search
+ * has its own, which then share each move, so each takes half of it.
+ */
+export function RailResizer({
+  width,
+  onWidth,
+  columns = 1,
+}: {
+  width: number
+  onWidth: (px: number, persist: boolean) => void
+  columns?: number
+}) {
   const drag = useRef<{ startX: number; startW: number; last: number } | null>(null)
   const [dragging, setDragging] = useState(false)
   const t = S(useLang())
@@ -98,7 +110,7 @@ export function RailResizer({ width, onWidth }: { width: number; onWidth: (px: n
       onPointerMove={(e) => {
         const d = drag.current
         if (!d) return
-        d.last = d.startW + e.clientX - d.startX
+        d.last = d.startW + (e.clientX - d.startX) / columns
         onWidth(d.last, false)
       }}
       onPointerUp={(e) => {
@@ -115,7 +127,7 @@ export function RailResizer({ width, onWidth }: { width: number; onWidth: (px: n
       }}
       onDoubleClick={() => onWidth(RAIL_DEFAULT, true)}
       onKeyDown={(e) => {
-        const step = e.shiftKey ? 64 : 16
+        const step = (e.shiftKey ? 64 : 16) / columns
         if (e.key === 'ArrowLeft') onWidth(width - step, true)
         else if (e.key === 'ArrowRight') onWidth(width + step, true)
         else if (e.key === 'Home') onWidth(RAIL_MIN, true)
