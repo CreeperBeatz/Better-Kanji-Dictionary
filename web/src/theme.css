@@ -1367,6 +1367,51 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 10px;
 }
 
+/* A posted note's image: larger on a click (ImageZoom). */
+.assoc-image-zoom {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: zoom-in;
+}
+
+.assoc-image-zoom:hover img {
+  border-color: var(--ai-deep);
+}
+
+.overlay.image-zoom {
+  align-items: center;
+  padding: 48px;
+  background: rgba(8, 7, 6, 0.86);
+  cursor: zoom-out;
+}
+
+.image-zoom img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+
+.image-zoom-x {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  color: var(--paper-dim);
+  font-size: 28px;
+}
+
+.image-zoom-x:hover {
+  background: var(--sumi-lift);
+  color: var(--paper);
+}
+
 .assoc-drawing {
   display: block;
   width: 100%;
