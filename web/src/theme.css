@@ -2547,14 +2547,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   width: min(540px, 100%);
 }
 
-.help-panel h2 {
-  margin: 0 0 12px;
-  padding-right: 28px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--paper-dim);
-}
-
 .help-body {
   min-height: 0;
   overflow-y: auto;
@@ -2563,10 +2555,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   line-height: 1.55;
 }
 
-.help-lead {
-  margin: 0 0 14px;
-  color: var(--paper);
-  font-size: 14px;
+/* Clear of the X in the corner, now that there is no title above it. */
+.help-feature:first-child h3 {
+  padding-right: 32px;
 }
 
 .help-feature {
@@ -2607,6 +2598,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--ai-wash);
   border-color: var(--ai-deep);
   color: var(--paper);
+}
+
+.help-bg {
+  margin: 16px 0 0;
 }
 
 .help-how {

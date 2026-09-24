@@ -15,14 +15,17 @@ const S = strings(
   {
     learn: 'Learn what our search can do',
     title: 'What the search can do',
-    lead: 'It looks up English, kana, kanji and romaji like any dictionary. It can also think along with you.',
     describeTitle: 'Describe what you mean',
     describe: 'A feeling, a situation, something you half remember: it finds the words for it.',
     describeEx1: 'the feeling of missing the old days',
     describeEx2: 'a gift you bring back from a trip',
     apartTitle: 'Tell close kanji apart',
     apart: 'Ask which one fits, and a short note explains the difference.',
-    apartEx: 'atsui: 暑い, 熱い or 厚い?',
+    apartEx: 'atsui for weather or for tea?',
+    explainTitle: 'Ask for explanations',
+    explain: 'Wonder why a word is written with the kanji it is? Ask, and it explains what they bring to it.',
+    explainEx1: 'why is tegami written with hand and paper?',
+    explainEx2: 'why is Monday the day of the moon?',
     partsTitle: 'Describe a kanji by its parts',
     parts:
       "Can't type it or draw it? Say what it is made of and where the parts sit. Every answer is checked against how the kanji is really built.",
@@ -33,21 +36,24 @@ const S = strings(
     alsoTitle: 'And the smaller things',
     alsoDraw: 'Draw a kanji (✎) or pick it by its parts (部). Both type into the box, so you can build a word one kanji at a time.',
     alsoInflect: 'Conjugations are undone: 食べたくなかった finds 食べる, and says what the ending did.',
-    alsoBg: 'Switch the interface to Bulgarian to search in Bulgarian too, even typed in Latin letters.',
+    alsoBg: 'With the interface in Bulgarian, Bulgarian typed in Latin letters works too.',
     alsoKey: 'Press / from anywhere to jump to the search.',
     close: 'Close',
   },
   {
     learn: 'Вижте какво може търсачката',
     title: 'Какво може търсачката',
-    lead: 'Търси на английски, български, кана, канджи и ромаджи като всеки речник. Може и да мисли заедно с вас.',
     describeTitle: 'Опишете какво имате предвид',
     describe: 'Чувство, ситуация, нещо полузабравено: тя намира думите за него.',
     describeEx1: 'чувството, че ти липсват старите дни',
     describeEx2: 'подарък, който носиш от пътуване',
     apartTitle: 'Различете близки йероглифи',
     apart: 'Попитайте кой пасва и кратка бележка обяснява разликата.',
-    apartEx: 'атсуи: 暑い, 熱い или 厚い?',
+    apartEx: 'атсуи за времето или за чая?',
+    explainTitle: 'Питайте за обяснения',
+    explain: 'Чудите се защо една дума се пише с точно тези йероглифи? Попитайте и тя ще обясни какво носи всеки от тях.',
+    explainEx1: 'защо тегами се пише с ръка и хартия?',
+    explainEx2: 'защо понеделник е денят на луната?',
     partsTitle: 'Опишете йероглиф по частите му',
     parts:
       'Не можете да го напишете или нарисувате? Кажете от какво е съставен и къде стоят частите. Всеки отговор се проверява спрямо истинския строеж на йероглифа.',
@@ -65,6 +71,11 @@ const S = strings(
 )
 
 type T = ReturnType<typeof S>
+
+// For Bulgarian speakers whatever the interface language, so said in
+// Bulgarian either way: Cyrillic is searched as Bulgarian in both.
+const IN_BULGARIAN = 'Ако не си спомняш за думата на Английски, може да я потърсиш и на Български'
+const IN_BULGARIAN_EX = 'пеперуда'
 
 /** The link on the empty search, and the popup it opens. */
 export function SearchHelp({ onTry }: { onTry: (q: string) => void }) {
@@ -128,15 +139,20 @@ function HelpPopup({ t, onClose, onTry }: { t: T; onClose: () => void; onTry: (q
         <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
           ×
         </button>
-        <h2>{t('title')}</h2>
         <div className="help-body">
-          <p className="help-lead">{t('lead')}</p>
           {feature(t('describeTitle'), t('describe'), [t('describeEx1'), t('describeEx2')])}
           {feature(t('apartTitle'), t('apart'), [t('apartEx')])}
+          {feature(t('explainTitle'), t('explain'), [t('explainEx1'), t('explainEx2')])}
           {feature(t('partsTitle'), t('parts'), [t('partsEx1'), t('partsEx2')])}
           <p className="help-how">
             {t('how')} {t('tryIt')}
           </p>
+          <section className="help-feature help-bg" lang="bg">
+            <p>{IN_BULGARIAN}</p>
+            <div className="help-examples">
+              <button onClick={() => onTry(IN_BULGARIAN_EX)}>{IN_BULGARIAN_EX}</button>
+            </div>
+          </section>
           <h3 className="help-also-title">{t('alsoTitle')}</h3>
           <ul className="help-also">
             <li>{t('alsoDraw')}</li>
