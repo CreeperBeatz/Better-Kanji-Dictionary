@@ -137,6 +137,7 @@ body {
 }
 
 /* The result open beside the list. */
+.level-cell[aria-current='true'],
 .kanji-hit[aria-current='true'],
 .word-card[aria-current='true'] {
   background: var(--ai-wash);

@@ -294,7 +294,11 @@ export function App() {
 
   // With the search in its own column, the rail shows what is open above it:
   // the stack without the search at its bottom.
-  const entries = split && root.kind === 'search' ? stack.slice(1) : stack
+  // What the search column lists: the search at the bottom of the stack, or a
+  // JLPT level picked there -- or, when the stack began on the graph or map,
+  // the search in the box.
+  const listed: Page = root.kind === 'search' || root.kind === 'level' ? root : { kind: 'search', q }
+  const entries = split && (root.kind === 'search' || root.kind === 'level') ? stack.slice(1) : stack
   const shownTop: Page | null = entries.length > 0 ? entries[entries.length - 1] : null
   const shownUnder = entries.length > 1 ? entries[entries.length - 2] : null
   const picked = entries[0]
@@ -437,7 +441,6 @@ export function App() {
   const openLevel = useCallback(
     (level: Level) => {
       keepSearch()
-      setFilter(level)
       push({ kind: 'level', level })
     },
     [push, keepSearch],
@@ -482,25 +485,21 @@ export function App() {
       setHovered(null)
       setViewState('focus')
       rememberSearch(q)
-      openOver({ kind: 'search', q }, { kind: 'kanji', char })
+      openOver(listed, { kind: 'kanji', char })
     },
-    [q, openOver],
+    [q, listed, openOver],
   )
   const listWord = useCallback(
     (w: Word) => {
       rememberSearch(q)
-      openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
+      openOver(listed, { kind: 'word', id: w.id, word: w })
     },
-    [q, openOver],
+    [q, listed, openOver],
   )
-  const listLevel = useCallback(
-    (level: Level) => {
-      rememberSearch(q)
-      setFilter(level)
-      openOver({ kind: 'search', q }, { kind: 'level', level })
-    },
-    [q, openOver],
-  )
+  // A level is a list of kanji to search through, so it takes the search
+  // column's place, and the entry beside it stays.
+  const listLevel = useCallback((level: Level) => rebase({ kind: 'level', level }), [rebase])
+  const unlistLevel = useCallback(() => rebase({ kind: 'search', q }), [q, rebase])
 
   const deselect = useCallback(() => {
     setHovered(null)
@@ -739,23 +738,38 @@ export function App() {
         {split && (
           <aside className="search-column">
             <div className="search-column-body">
-              <SearchPage
-                q={q}
-                onKanji={listKanji}
-                onWord={listWord}
-                onLevel={listLevel}
-                onSearch={type}
-                asked={asked}
-                onAsk={setAsked}
-                onMap={browseMap}
-                open={
-                  picked?.kind === 'kanji'
-                    ? { kanji: picked.char }
-                    : picked?.kind === 'word'
-                      ? { word: picked.id }
-                      : undefined
-                }
-              />
+              {listed.kind === 'level' ? (
+                <>
+                  <div className="rail-crumb">
+                    <button className="back-link rail-back" onClick={unlistLevel} title={t('back')}>
+                      <span aria-hidden>←</span> {t.node('backTo', { page: nameOf({ kind: 'search', q }, t) })}
+                    </button>
+                  </div>
+                  <LevelPage
+                    level={listed.level}
+                    onKanji={listKanji}
+                    open={picked?.kind === 'kanji' ? picked.char : undefined}
+                  />
+                </>
+              ) : (
+                <SearchPage
+                  q={q}
+                  onKanji={listKanji}
+                  onWord={listWord}
+                  onLevel={listLevel}
+                  onSearch={type}
+                  asked={asked}
+                  onAsk={setAsked}
+                  onMap={browseMap}
+                  open={
+                    picked?.kind === 'kanji'
+                      ? { kanji: picked.char }
+                      : picked?.kind === 'word'
+                        ? { word: picked.id }
+                        : undefined
+                  }
+                />
+              )}
             </div>
           </aside>
         )}

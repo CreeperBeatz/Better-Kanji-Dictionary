@@ -222,12 +222,13 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
   )
 
   /**
-   * Put a search under the pages open now, or change the one there, in place:
-   * typing in the search column, which leaves the entry beside it alone.
+   * Put a list -- a search, or a JLPT level -- under the pages open now, or
+   * change the one there, in place: typing in the search column, or picking a
+   * level in it, which leaves the entry beside it alone.
    */
   const rebase = useCallback((p: Page) => {
     const { stack } = current.current
-    const above = stack[0].kind === 'search' ? stack.slice(1) : stack
+    const above = stack[0].kind === 'search' || stack[0].kind === 'level' ? stack.slice(1) : stack
     const next = { stack: [p, ...above].slice(-MAX), depth: 0 }
     current.current = next
     setEntry(next)

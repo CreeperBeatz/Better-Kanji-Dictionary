@@ -751,7 +751,16 @@ function HomePage({
   )
 }
 
-export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: string) => void }) {
+export function LevelPage({
+  level,
+  onKanji,
+  open,
+}: {
+  level: Level
+  onKanji: (char: string) => void
+  /** The kanji open beside the grid, when it has the search column. */
+  open?: string
+}) {
   const lang = useLang()
   const t = S(lang)
   const [data, setData] = useState(() => levels.get(level) ?? null)
@@ -788,7 +797,13 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
       {data && (
         <div className="level-grid">
           {data.kanji.map((k) => (
-            <button key={k.char} className="level-cell" onClick={() => onKanji(k.char)} title={meanings(k)}>
+            <button
+              key={k.char}
+              className="level-cell"
+              onClick={() => onKanji(k.char)}
+              title={meanings(k)}
+              aria-current={open === k.char || undefined}
+            >
               {k.char}
             </button>
           ))}
