@@ -13,11 +13,9 @@ import { DetailPanel, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
 import { RailResizer, useRailWidth } from './RailResizer'
-import { LevelFilter, RecentGrid, ViewSwitch, type StageView } from './StageControls'
-import { useRecent } from './recent'
+import { LevelFilter, ViewSwitch, type StageView } from './StageControls'
+import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
-
-const START = '言'
 
 // What a failed graph fetch says when the network, not the server, is why:
 // a marker, shown in the interface language.
@@ -34,7 +32,6 @@ const S = strings(
     associations: 'Associations',
     focus: 'Decompose',
     map: 'Map',
-    recent: 'Recent',
     back: 'Back (Backspace)',
     backTo: 'back to {page}',
     theWord: 'the word',
@@ -55,7 +52,6 @@ const S = strings(
     associations: 'Асоциации',
     focus: 'Разлагане',
     map: 'Карта',
-    recent: 'Скорошни',
     back: 'Назад (Backspace)',
     backTo: 'назад към {page}',
     theWord: 'думата',
@@ -113,12 +109,12 @@ function useVisibleHeight(enabled: boolean) {
 }
 
 const RAIL_TAB_KEY = 'betterrtk:railTab'
-type RailTab = 'dictionary' | 'associations' | 'recent'
+type RailTab = 'dictionary' | 'associations'
 
 function initialRailTab(): RailTab {
   try {
     const saved = localStorage.getItem(RAIL_TAB_KEY)
-    return saved === 'associations' || saved === 'recent' ? saved : 'dictionary'
+    return saved === 'associations' ? saved : 'dictionary'
   } catch {
     return 'dictionary'
   }
@@ -178,9 +174,6 @@ export function App() {
   const root = stack[0]
   const under = stack.length > 1 ? stack[stack.length - 2] : null
 
-  // Every character you have opened, listed in the Recent tab.
-  const { recent, visit, clear: clearRecent } = useRecent(START, linked)
-
   // The character the graph and map show. It follows the stack's nearest
   // character, and stays put while the stack has none (a search, a word
   // opened from it). Clicking empty map clears it.
@@ -189,9 +182,6 @@ export function App() {
   useEffect(() => {
     if (stackKanji) setFocus(stackKanji)
   }, [stackKanji])
-  useEffect(() => {
-    if (focus) visit(focus)
-  }, [focus, visit])
   const selected = focus !== null
 
   // The search box's text. It is the bottom page's query while that is a
@@ -297,20 +287,27 @@ export function App() {
   const drill = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
-      if (via && via !== char) visit(via, char)
+      if (via && via !== char) rememberKanji(via)
       setFocus(char)
       reset({ kind: 'kanji', char })
     },
-    [visit, reset],
+    [reset],
   )
 
-  const openRecent = useCallback(
-    (char: string) => {
-      drill(char)
-      setRailTab('dictionary')
-    },
-    [drill],
-  )
+  // What is on top goes into the history the empty search lists. A search
+  // counts once it has been left to stand a moment, or something was opened
+  // from it, so the letters on the way to a word do not.
+  useEffect(() => {
+    if (top.kind === 'kanji') rememberKanji(top.char)
+    else if (top.kind === 'word' && top.word) rememberWord(top.word)
+    else if (top.kind === 'search' && top.q.trim()) {
+      const timer = setTimeout(() => rememberSearch(top.q), 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [top])
+  const keepSearch = useCallback(() => {
+    if (top.kind === 'search') rememberSearch(top.q)
+  }, [top])
 
   // Opening a character from a page puts it on top -- unless it is the page
   // just below, as when a word's kanji is the one it was opened from. The tab
@@ -319,21 +316,29 @@ export function App() {
     (char: string) => {
       setHovered(null)
       setPane('rail')
+      keepSearch()
       if (under?.kind === 'kanji' && under.char === char) pop()
       else push({ kind: 'kanji', char })
     },
-    [under, push, pop],
+    [under, push, pop, keepSearch],
   )
 
   const openWord = useCallback(
     (w: Word) => {
       toDictionary()
+      keepSearch()
       push({ kind: 'word', id: w.id, word: w })
     },
-    [push, toDictionary],
+    [push, toDictionary, keepSearch],
   )
 
-  const openLevel = useCallback((level: Level) => push({ kind: 'level', level }), [push])
+  const openLevel = useCallback(
+    (level: Level) => {
+      keepSearch()
+      push({ kind: 'level', level })
+    },
+    [push, keepSearch],
+  )
 
   const deselect = useCallback(() => {
     setHovered(null)
@@ -476,7 +481,10 @@ export function App() {
             q={q}
             onType={type}
             onFocus={focusSearch}
-            onSubmit={() => setAsked(q.trim())}
+            onSubmit={() => {
+              setAsked(q.trim())
+              rememberSearch(q)
+            }}
             inputRef={inputRef}
           />
           <div className="rail-head">
@@ -504,9 +512,6 @@ export function App() {
                   </button>
                 </>
               )}
-              <button role="tab" aria-selected={!onStage && tab === 'recent'} onClick={() => chooseRailTab('recent')}>
-                {t('recent')}
-              </button>
             </div>
             {/* On a desktop the stage's views sit at the end of the tabs,
                 apart from them; on a phone they are tabs themselves. */}
@@ -515,29 +520,23 @@ export function App() {
           </div>
 
           <div className="rail-body" ref={scroller}>
-            {tab === 'recent' ? (
-              <RecentGrid recent={recent} current={focus} onPick={openRecent} onClear={clearRecent} />
-            ) : (
-              <>
-                {(under || current) && (
-                  <div className="rail-crumb">
-                    {under ? (
-                      <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
-                        <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(under, t) })}
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                    {current && (
-                      <span className="rail-current" lang="ja">
-                        {current}
-                      </span>
-                    )}
-                  </div>
+            {(under || current) && (
+              <div className="rail-crumb">
+                {under ? (
+                  <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
+                    <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(under, t) })}
+                  </button>
+                ) : (
+                  <span />
                 )}
-                {tab === 'dictionary' && page(top)}
-              </>
+                {current && (
+                  <span className="rail-current" lang="ja">
+                    {current}
+                  </span>
+                )}
+              </div>
             )}
+            {tab === 'dictionary' && page(top)}
             {/* Kept mounted while hidden, so the count on its tab is there
                 before the tab is opened. */}
             {subject && (

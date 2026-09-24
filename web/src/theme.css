@@ -532,7 +532,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke-dasharray: 3 4;
 }
 
-/* ---------------------------------------------------------------- recent tab */
+/* ---------------------------------------------------------------- recents (the empty search) */
 
 .recent-grid {
   display: grid;
@@ -560,8 +560,77 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--ai-wash);
 }
 
-.recent-glyph[aria-current='page'] {
-  border-color: var(--shu);
+.recent-searches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.recent-searches button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 13px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.recent-words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.recent-words button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  text-align: left;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.recent-searches button:hover,
+.recent-words button:hover,
+.recent-words button:active {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.recent-word-head {
+  flex: none;
+  font-family: var(--mincho);
+  font-size: 17px;
+}
+
+.recent-word-reading {
+  flex: none;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.recent-word-gloss {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--paper-dim);
+  font-size: 13px;
 }
 
 .legend {

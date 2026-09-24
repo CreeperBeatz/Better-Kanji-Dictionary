@@ -16,6 +16,7 @@ import {
   type SemanticResponse,
   type Word,
 } from '../api'
+import { clearHistory, useHistory } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
@@ -52,9 +53,10 @@ const S = strings(
     alternativeTitle: 'Search for {q} in Bulgarian',
     nothing: 'Nothing matched {q}.',
     looking: 'looking',
-    home:
-      'Search by meaning, reading or character. Draw it if you cannot type it, or pick it apart by ' +
-      'radical; either one types into the search, so you can build a word a character at a time.',
+    recentSearches: 'Recent searches',
+    recentKanji: 'Recent kanji',
+    recentWords: 'Recent words',
+    clearHistory: 'clear the history',
     browse: 'Browse a JLPT level',
     parts: 'Parts they are built from',
     partsHint: 'These carry no JLPT level of their own, but N{level} cannot be written without them.',
@@ -95,9 +97,10 @@ const S = strings(
     alternativeTitle: 'Търсете {q} на български',
     nothing: 'Нищо не отговаря на {q}.',
     looking: 'търсене',
-    home:
-      'Търсете по значение, четене или йероглиф. Нарисувайте го, ако не можете да го напишете, или го ' +
-      'разглобете по радикали; и двете пишат в търсачката, така че можете да съставите дума йероглиф по йероглиф.',
+    recentSearches: 'Скорошни търсения',
+    recentKanji: 'Скорошни йероглифи',
+    recentWords: 'Скорошни думи',
+    clearHistory: 'изчистете историята',
     browse: 'Разгледайте ниво от JLPT',
     parts: 'Части, от които са изградени',
     partsHint: 'Те нямат собствено ниво в JLPT, но без тях N{level} не може да се напише.',
@@ -381,7 +384,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
     })
   }
 
-  if (!term) return <HomePage onLevel={onLevel} />
+  if (!term) return <HomePage onLevel={onLevel} onKanji={onKanji} onWord={onWord} onSearch={onSearch} />
 
   const reading = result?.interpretation?.reading
   const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
@@ -625,11 +628,26 @@ function Semantic({
   )
 }
 
-function HomePage({ onLevel }: { onLevel: (level: Level) => void }) {
-  const t = S(useLang())
+// How many of each the empty search lists; the history keeps more.
+const SHOWN = { searches: 8, kanji: 24, words: 8 }
+
+/** With nothing typed: the JLPT levels, then what you looked up lately. */
+function HomePage({
+  onLevel,
+  onKanji,
+  onWord,
+  onSearch,
+}: {
+  onLevel: (level: Level) => void
+  onKanji: (char: string) => void
+  onWord: (word: Word) => void
+  onSearch: (q: string) => void
+}) {
+  const lang = useLang()
+  const t = S(lang)
+  const { searches, kanji, words } = useHistory()
   return (
     <section className="rail-section search-home">
-      <p className="hint">{t('home')}</p>
       <h3 className="overlay-group">{t('browse')}</h3>
       <div className="level-links">
         {LEVELS.map((n) => (
@@ -638,6 +656,59 @@ function HomePage({ onLevel }: { onLevel: (level: Level) => void }) {
           </button>
         ))}
       </div>
+      {searches.length > 0 && (
+        <>
+          <h3 className="overlay-group">{t('recentSearches')}</h3>
+          <div className="recent-searches">
+            {searches.slice(0, SHOWN.searches).map((s) => (
+              <button key={s.q} onClick={() => onSearch(s.q)}>
+                {s.q}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {kanji.length > 0 && (
+        <>
+          <h3 className="overlay-group">{t('recentKanji')}</h3>
+          <div className="recent-grid">
+            {kanji.slice(0, SHOWN.kanji).map((c) => (
+              <button key={c} className="recent-glyph" onClick={() => onKanji(c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {words.length > 0 && (
+        <>
+          <h3 className="overlay-group">{t('recentWords')}</h3>
+          <ul className="recent-words">
+            {words.slice(0, SHOWN.words).map((w) => (
+              <li key={w.id}>
+                <button onClick={() => onWord(w)}>
+                  <span className="recent-word-head" lang="ja">
+                    {w.headword}
+                  </span>
+                  {w.reading !== w.headword && (
+                    <span className="recent-word-reading" lang="ja">
+                      {w.reading}
+                    </span>
+                  )}
+                  {w.senses[0] && <span className="recent-word-gloss">{glossOf(w.senses[0], lang).value}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {(searches.length > 0 || kanji.length > 0 || words.length > 0) && (
+        <p className="assoc-actions">
+          <button className="clear" onClick={clearHistory}>
+            {t('clearHistory')}
+          </button>
+        </p>
+      )}
     </section>
   )
 }

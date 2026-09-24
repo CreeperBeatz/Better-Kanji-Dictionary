@@ -26,8 +26,6 @@ const S = strings(
     n5Map: 'N5 and the parts it is built from',
     filterMap: 'Which characters the map shows',
     filterFocus: 'Which containing characters to show',
-    recent: 'Recently opened',
-    clearList: 'clear the list',
     view: 'View',
     focus: 'Decompose',
     focusTitle: 'One character, what it is made of and what it builds (D)',
@@ -53,8 +51,6 @@ const S = strings(
     n5Map: 'N5 и частите, от които е изграден',
     filterMap: 'Кои йероглифи показва картата',
     filterFocus: 'Кои съдържащи йероглифи да се показват',
-    recent: 'Последно отваряни',
-    clearList: 'изчистете списъка',
     view: 'Изглед',
     focus: 'Разлагане',
     focusTitle: 'Един йероглиф - от какво е съставен и какво изгражда (D)',
@@ -99,43 +95,6 @@ export function LevelFilter({
         </button>
       ))}
     </div>
-  )
-}
-
-interface RecentProps {
-  recent: string[]
-  /** The character open now, if any. */
-  current: string | null
-  onPick: (char: string) => void
-}
-
-/** The Recent tab: everything opened, newest first. Opening one leaves the list as it is. */
-export function RecentGrid({ recent, current, onPick, onClear }: RecentProps & { onClear: () => void }) {
-  const t = S(useLang())
-  const newest = [...recent].reverse()
-  return (
-    <section className="rail-section">
-      <h2>{t('recent')}</h2>
-      <div className="recent-grid">
-        {newest.map((c) => (
-          <button
-            key={c}
-            className="recent-glyph"
-            onClick={() => onPick(c)}
-            aria-current={c === current ? 'page' : undefined}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-      {recent.length > 1 && (
-        <p className="assoc-actions">
-          <button className="clear" onClick={onClear}>
-            {t('clearList')}
-          </button>
-        </p>
-      )}
-    </section>
   )
 }
 
