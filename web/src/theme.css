@@ -1069,7 +1069,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--ai);
 }
 
-/* Before it, が or を for a verb, +する before those for a noun that takes it.
+/* Before it, が or を for a verb, する before those for a noun that takes it.
    Every row keeps room for both particles, verb or not, and the marks sit
    right against "common", so it stays put down the list. */
 .valency {
