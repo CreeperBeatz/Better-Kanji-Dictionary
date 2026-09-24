@@ -2524,19 +2524,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-bottom: 4px;
 }
 
-/* For whoever is still wandering around: there, but quiet. */
-.search-help {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
+/* For whoever is still wandering around: there, but quiet, at the row's end. */
 .search-help-link {
+  margin-left: auto;
   padding: 0;
   background: none;
   border: 0;
   color: var(--muted);
-  font: inherit;
+  font-family: var(--gothic);
+  font-size: 12px;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   cursor: pointer;

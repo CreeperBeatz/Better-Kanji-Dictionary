@@ -13,7 +13,6 @@ import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    newHere: 'New here?',
     learn: 'Learn what our search can do',
     title: 'What the search can do',
     lead: 'It looks up English, kana, kanji and romaji like any dictionary. It can also think along with you.',
@@ -39,7 +38,6 @@ const S = strings(
     close: 'Close',
   },
   {
-    newHere: 'Нови сте тук?',
     learn: 'Вижте какво може търсачката',
     title: 'Какво може търсачката',
     lead: 'Търси на английски, български, кана, канджи и ромаджи като всеки речник. Може и да мисли заедно с вас.',
@@ -74,12 +72,9 @@ export function SearchHelp({ onTry }: { onTry: (q: string) => void }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <p className="search-help">
-        {t('newHere')}{' '}
-        <button className="search-help-link" onClick={() => setOpen(true)}>
-          {t('learn')}
-        </button>
-      </p>
+      <button className="search-help-link" onClick={() => setOpen(true)}>
+        {t('learn')}
+      </button>
       {open && (
         <HelpPopup
           t={t}
