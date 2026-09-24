@@ -305,6 +305,11 @@ export function App() {
       return () => clearTimeout(timer)
     }
   }, [top])
+  // Its meanings join it once they are here, for the list to show.
+  const shown = top.kind === 'kanji' && detail?.focus.char === top.char ? detail.focus : null
+  useEffect(() => {
+    if (shown) rememberKanji(shown.char, shown)
+  }, [shown])
   const keepSearch = useCallback(() => {
     if (top.kind === 'search') rememberSearch(top.q)
   }, [top])

@@ -534,54 +534,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* ---------------------------------------------------------------- recents (the empty search) */
 
-.recent-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
-  gap: 6px;
-}
-
-.recent-glyph {
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  background: var(--sumi);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  color: var(--paper);
-  font-family: var(--mincho);
-  font-size: 26px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.recent-glyph:active,
-.recent-glyph:hover {
-  border-color: var(--ai-deep);
-  background: var(--ai-wash);
-}
-
-.recent-searches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.recent-searches button {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  color: var(--paper-dim);
-  font-family: var(--gothic);
-  font-size: 13px;
-  padding: 5px 12px;
-  cursor: pointer;
-}
-
-.recent-words {
+.recent-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -589,7 +542,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 2px;
 }
 
-.recent-words button {
+.recent-list button {
   width: 100%;
   display: flex;
   align-items: baseline;
@@ -604,27 +557,53 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: pointer;
 }
 
-.recent-searches button:hover,
-.recent-words button:hover,
-.recent-words button:active {
+.recent-list button:active {
   background: var(--ai-wash);
   border-color: var(--ai-deep);
-  color: var(--paper);
 }
 
-.recent-word-head {
+/* A phone keeps :hover on whatever was last tapped, which is the row under your finger. */
+@media (hover: hover) {
+  .recent-list button:hover {
+    background: var(--ai-wash);
+    border-color: var(--ai-deep);
+  }
+}
+
+/* Wide enough for one character, so kanji, words and queries start in line. */
+.recent-head,
+.recent-query-icon {
   flex: none;
+  min-width: 1.1em;
   font-family: var(--mincho);
   font-size: 17px;
 }
 
-.recent-word-reading {
+.recent-query-icon {
+  align-self: center;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.recent-query {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.recent-reading {
   flex: none;
   color: var(--muted);
   font-size: 12.5px;
 }
 
-.recent-word-gloss {
+.recent-gloss {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

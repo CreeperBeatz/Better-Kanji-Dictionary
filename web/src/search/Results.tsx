@@ -16,7 +16,7 @@ import {
   type SemanticResponse,
   type Word,
 } from '../api'
-import { clearHistory, useHistory } from '../history'
+import { clearHistory, useHistory, type Visit } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
@@ -54,8 +54,6 @@ const S = strings(
     nothing: 'Nothing matched {q}.',
     looking: 'looking',
     recentSearches: 'Recent searches',
-    recentKanji: 'Recent kanji',
-    recentWords: 'Recent words',
     clearHistory: 'clear the history',
     browse: 'Browse a JLPT level',
     parts: 'Parts they are built from',
@@ -98,8 +96,6 @@ const S = strings(
     nothing: 'Нищо не отговаря на {q}.',
     looking: 'търсене',
     recentSearches: 'Скорошни търсения',
-    recentKanji: 'Скорошни йероглифи',
-    recentWords: 'Скорошни думи',
     clearHistory: 'изчистете историята',
     browse: 'Разгледайте ниво от JLPT',
     parts: 'Части, от които са изградени',
@@ -628,10 +624,24 @@ function Semantic({
   )
 }
 
-// How many of each the empty search lists; the history keeps more.
-const SHOWN = { searches: 8, kanji: 24, words: 8 }
+// How many the empty search lists; the history keeps more.
+const SHOWN = 20
 
-/** With nothing typed: the JLPT levels, then what you looked up lately. */
+/** A magnifying glass, marking a query among the characters and words. */
+function QueryIcon() {
+  return (
+    <svg className="recent-query-icon" viewBox="0 0 16 16" aria-hidden>
+      <circle cx="6.8" cy="6.8" r="4.3" />
+      <path d="M10 10l3.6 3.6" />
+    </svg>
+  )
+}
+
+/**
+ * With nothing typed: the JLPT levels, then what you looked up lately -- one
+ * list, newest first, whether it was typed, opened from a result or picked
+ * on the graph.
+ */
 function HomePage({
   onLevel,
   onKanji,
@@ -645,7 +655,49 @@ function HomePage({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const { searches, kanji, words } = useHistory()
+  const history = useHistory()
+
+  function row(v: Visit) {
+    switch (v.kind) {
+      case 'search':
+        return (
+          <button onClick={() => onSearch(v.q)}>
+            <QueryIcon />
+            <span className="recent-query">{v.q}</span>
+          </button>
+        )
+      case 'kanji': {
+        const m = v.meanings ? meaningsOf({ meanings: v.meanings, meaningsBg: v.meaningsBg }, lang).value : []
+        return (
+          <button onClick={() => onKanji(v.char)}>
+            <span className="recent-head" lang="ja">
+              {v.char}
+            </span>
+            <span className="recent-gloss">{m.slice(0, 3).join(', ')}</span>
+          </button>
+        )
+      }
+      case 'word': {
+        const w = v.word
+        return (
+          <button onClick={() => onWord(w)}>
+            <span className="recent-head" lang="ja">
+              {w.headword}
+            </span>
+            {w.reading !== w.headword && (
+              <span className="recent-reading" lang="ja">
+                {w.reading}
+              </span>
+            )}
+            {w.senses[0] && <span className="recent-gloss">{glossOf(w.senses[0], lang).value}</span>}
+          </button>
+        )
+      }
+    }
+  }
+
+  const key = (v: Visit) => (v.kind === 'search' ? `s ${v.q}` : v.kind === 'kanji' ? `k ${v.char}` : `w ${v.word.id}`)
+
   return (
     <section className="rail-section search-home">
       <h3 className="overlay-group">{t('browse')}</h3>
@@ -656,58 +708,20 @@ function HomePage({
           </button>
         ))}
       </div>
-      {searches.length > 0 && (
+      {history.length > 0 && (
         <>
           <h3 className="overlay-group">{t('recentSearches')}</h3>
-          <div className="recent-searches">
-            {searches.slice(0, SHOWN.searches).map((s) => (
-              <button key={s.q} onClick={() => onSearch(s.q)}>
-                {s.q}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {kanji.length > 0 && (
-        <>
-          <h3 className="overlay-group">{t('recentKanji')}</h3>
-          <div className="recent-grid">
-            {kanji.slice(0, SHOWN.kanji).map((c) => (
-              <button key={c} className="recent-glyph" onClick={() => onKanji(c)}>
-                {c}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {words.length > 0 && (
-        <>
-          <h3 className="overlay-group">{t('recentWords')}</h3>
-          <ul className="recent-words">
-            {words.slice(0, SHOWN.words).map((w) => (
-              <li key={w.id}>
-                <button onClick={() => onWord(w)}>
-                  <span className="recent-word-head" lang="ja">
-                    {w.headword}
-                  </span>
-                  {w.reading !== w.headword && (
-                    <span className="recent-word-reading" lang="ja">
-                      {w.reading}
-                    </span>
-                  )}
-                  {w.senses[0] && <span className="recent-word-gloss">{glossOf(w.senses[0], lang).value}</span>}
-                </button>
-              </li>
+          <ul className="recent-list">
+            {history.slice(0, SHOWN).map((v) => (
+              <li key={key(v)}>{row(v)}</li>
             ))}
           </ul>
+          <p className="assoc-actions">
+            <button className="clear" onClick={clearHistory}>
+              {t('clearHistory')}
+            </button>
+          </p>
         </>
-      )}
-      {(searches.length > 0 || kanji.length > 0 || words.length > 0) && (
-        <p className="assoc-actions">
-          <button className="clear" onClick={clearHistory}>
-            {t('clearHistory')}
-          </button>
-        </p>
       )}
     </section>
   )
