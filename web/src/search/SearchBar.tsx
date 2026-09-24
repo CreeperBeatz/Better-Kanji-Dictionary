@@ -1,6 +1,6 @@
 /**
- * The search box: at the top of the rail on a desktop, along the bottom edge
- * of a phone where the thumb is. It is a real input rather than a button that
+ * The search box: at the top of the rail on a desktop, and along the top of
+ * a phone, with the profile at its end. It is a real input rather than a button that
  * opens one, because a phone only raises its keyboard for a tap that lands on
  * an input.
  *

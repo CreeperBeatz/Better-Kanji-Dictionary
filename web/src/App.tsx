@@ -37,7 +37,6 @@ const S = strings(
     hideSearch: 'Put the search back above the dictionary',
     pickResult: 'Pick a result and it opens here.',
     focus: 'Components',
-    map: 'Map',
     back: 'Back (Backspace)',
     backTo: 'back to {page}',
     theWord: 'the word',
@@ -60,7 +59,6 @@ const S = strings(
     hideSearch: 'Върнете търсенето над речника',
     pickResult: 'Изберете резултат и той ще се отвори тук.',
     focus: 'Компоненти',
-    map: 'Карта',
     back: 'Назад (Backspace)',
     backTo: 'назад към {page}',
     theWord: 'думата',
@@ -99,8 +97,8 @@ function useMediaQuery(query: string): boolean {
 }
 
 /**
- * On a phone the search sits along the bottom, and the keyboard must push it
- * up rather than cover it. Android resizes the page for the keyboard (see the
+ * On a phone a page's tabs sit along the bottom, and the keyboard must push
+ * them up rather than cover what is being typed over. Android resizes the page for the keyboard (see the
  * viewport tag); iOS does not, so the app is sized to what is still visible.
  */
 function useVisibleHeight(enabled: boolean) {
@@ -244,14 +242,11 @@ export function App() {
   const under = stack.length > 1 ? stack[stack.length - 2] : null
 
   // The character the graph and map show. It follows the stack's nearest
-  // character -- or the one a character was picked on the graph from -- and
-  // stays put while the stack has none (a search, a word opened from it).
+  // character -- or the one a character was picked on the graph from, or a
+  // word's kanji (below) -- and stays put while the stack has none (a search).
   // Clicking empty map clears it.
   const stackCentre = centreIn(stack)
   const [focus, setFocus] = useState<string | null>(stackCentre)
-  useEffect(() => {
-    if (stackCentre) setFocus(stackCentre)
-  }, [stackCentre])
   const selected = focus !== null
 
   // The search box's text. It is the bottom page's query while that is a
@@ -300,7 +295,8 @@ export function App() {
   const [assocCount, setAssocCount] = useState(0)
 
   // On a phone the rail and the stage cannot both have room, so one fills the
-  // screen at a time and Focus and Map join the rail's tabs.
+  // screen at a time: the graph is a page's Components tab, the map is gone to
+  // from the search.
   const mobile = useMediaQuery(MOBILE)
   // Which one is a step in history, so back from the graph is the page again.
   const pane = mobile && stage ? 'stage' : 'rail'
@@ -478,20 +474,26 @@ export function App() {
 
   // A word's graph is of one of its kanji at a time: the one picked over the
   // graph, else the one the graph is on already -- 強 stays on going to 勉強 --
-  // else its first.
+  // else the one whose page it was opened from, else its first.
   const topWord = top.kind === 'word' ? (top.word ?? (pageWord?.id === top.id ? pageWord : undefined)) : undefined
   const wordKanji = topWord ? [...new Set([...topWord.headword].filter((c) => HAN.test(c)))] : []
+  const inWord = (c: string | null | undefined): c is string => !!c && wordKanji.includes(c)
   const wordCentre =
     top.kind === 'word' && wordKanji.length > 0
-      ? top.centre && wordKanji.includes(top.centre)
+      ? inWord(top.centre)
         ? top.centre
-        : focus && wordKanji.includes(focus)
+        : inWord(focus)
           ? focus
-          : wordKanji[0]
+          : under?.kind === 'kanji' && inWord(under.char)
+            ? under.char
+            : wordKanji[0]
       : null
+  // One effect for both, so going back from a word to the page under it puts
+  // the graph back on that page's character.
+  const centre = wordCentre ?? stackCentre
   useEffect(() => {
-    if (wordCentre) setFocus(wordCentre)
-  }, [wordCentre])
+    if (centre) setFocus(centre)
+  }, [centre])
   // A word without kanji, linked to, has no graph: the map, on a desktop.
   const kanaOnly = topWord !== undefined && wordKanji.length === 0
   useEffect(() => {
@@ -519,13 +521,10 @@ export function App() {
           ? pageOnDevice
           : null
 
-  // A pick on the graph or map starts the stack again from that character.
-  // `via` is the container a peek skipped through (言 -> 語 -> X), which counts
-  // as visited too.
+  // A character seen in the dictionary from the map starts the stack again from it.
   const drill = useCallback(
-    (char: string, via?: string) => {
+    (char: string) => {
       setHovered(null)
-      if (via && via !== char) rememberKanji(via)
       setFocus(char)
       reset({ kind: 'kanji', char })
     },
@@ -825,7 +824,7 @@ export function App() {
     if (shownTop?.kind === 'kanji') {
       const node = detailOf(shownTop.char)?.focus
       return (
-        <section className="rail-section rail-page-head">
+        <section className="rail-section">
           {node ? (
             <KanjiHead node={node} />
           ) : (
@@ -839,7 +838,7 @@ export function App() {
     if (shownTop?.kind === 'word') {
       const w = shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)
       return (
-        <section className="rail-section rail-page-head word-panel">
+        <section className="rail-section word-panel">
           <h2 className="entry-head">{w?.headword ?? subject?.label}</h2>
           {w && (
             <p className="entry-reading">
@@ -1223,7 +1222,7 @@ export function App() {
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
               )}
-              {/* On a phone it sits beside the tabs instead, where it is always on screen. */}
+              {/* On a phone it sits at the end of the search bar instead, always on screen. */}
               {!mobile && <ProfileButton onOpen={signIn} />}
             </div>
           </div>

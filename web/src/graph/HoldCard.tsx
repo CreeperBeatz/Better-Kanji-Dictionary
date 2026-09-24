@@ -16,7 +16,7 @@ interface Props {
   x: number
   y: number
   width: number
-  /** Below the finger rather than above, when above is where the peek opens. */
+  /** Below the finger rather than above: tapped near the top, where above has no room. */
   below: boolean
   openLabel: string
   onOpen: () => void

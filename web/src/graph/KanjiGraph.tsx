@@ -540,7 +540,6 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
         data-kind={n.kind}
         data-dim={n.dim}
         data-via={n.via || undefined}
-        data-open={(n.kind !== 'focus' && n.char === open) || undefined}
         style={{
           transform: `translate(${n.x}px, ${n.y}px)`,
           opacity: extra ? 1 : n.weight === undefined ? 1 : 0.42 + n.weight * 0.58,
@@ -789,7 +788,6 @@ function PeekLayer({
           className="peek-node"
           data-dim={!it.node.joyo}
           data-via={peek.via.has(it.char) || undefined}
-          data-open={it.char === open || undefined}
           style={
             {
               '--from': `translate(${h.x}px, ${h.y}px) scale(0.35)`,

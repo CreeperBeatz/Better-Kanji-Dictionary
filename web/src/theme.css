@@ -4441,7 +4441,7 @@ html {
   }
 }
 
-/* Below the finger, when the peek is opening above it. */
+/* Below the finger, when a tap near the top leaves no room above it. */
 .hold-card[data-below] {
   transform: translate(-50%, 0);
   animation-name: hold-in-below;

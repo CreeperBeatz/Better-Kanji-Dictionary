@@ -644,17 +644,30 @@ def reading_words(char: str) -> dict:
     readings = [(r, True) for r in json.loads(row[0]["on_yomi"] or "[]")]
     readings += [(r, False) for r in json.loads(row[0]["kun_yomi"] or "[]")]
 
+    shapes = {reading: reading_forms(char, reading, on) for reading, on in readings}
+    pairs = {pair for forms in shapes.values() for pair in forms}
+    if not pairs:
+        return {"char": char, "words": {}}
+    # Every word written one of these ways and read one of those, in one go;
+    # which (written, kana) pair each row is sorts out below.
+    written = sorted({w for w, _ in pairs})
+    kana = sorted({k for _, k in pairs})
+    by_pair: dict[tuple[str, str], list] = {}
+    for r in query(
+        f"SELECT DISTINCT w.id, w.headword, w.common, w.nf, a.text AS written, b.text AS kana "
+        f"FROM word_form a JOIN word_form b ON b.word_id = a.word_id JOIN word w ON w.id = a.word_id "
+        f"WHERE a.text IN ({','.join('?' * len(written))}) AND b.text IN ({','.join('?' * len(kana))})",
+        (*written, *kana),
+    ):
+        by_pair.setdefault((r["written"], r["kana"]), []).append(r)
+
     best: dict[str, int] = {}
-    for reading, on in readings:
-        found = []
-        for rank, (written, kana) in enumerate(reading_forms(char, reading, on)):
-            for r in query(
-                "SELECT w.id, w.headword, w.common, w.nf FROM word_form a JOIN word_form b ON b.word_id = a.word_id "
-                "JOIN word w ON w.id = a.word_id WHERE a.text = ? AND b.text = ?",
-                (written, kana),
-            ):
-                key = (not r["common"], r["headword"] != written, r["nf"] is None, r["nf"] or 0, rank, r["id"])
-                found.append(key)
+    for reading, forms in shapes.items():
+        found = [
+            (not r["common"], r["headword"] != w, r["nf"] is None, r["nf"] or 0, rank, r["id"])
+            for rank, (w, k) in enumerate(forms)
+            for r in by_pair.get((w, k), [])
+        ]
         if found:
             best[reading] = min(found)[-1]
 

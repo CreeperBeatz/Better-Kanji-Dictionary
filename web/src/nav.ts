@@ -37,8 +37,8 @@ export type Stack = Page[]
 /**
  * What each history entry holds. `depth` counts the entries straight behind
  * this one that are this stack with fewer pages on top, so back can be the
- * browser's own back -- or, where there are none (the stack came from storage),
- * a replacement.
+ * browser's own back -- or, where there are none (a link, a result opened in
+ * place of another), a replacement.
  */
 interface Entry {
   stack: Stack
@@ -53,8 +53,9 @@ interface Entry {
   stage?: StageView
   /** Stepped to from this same stack on the rail, which is right behind it. */
   twin?: boolean
+  /** Where it stands in this tab's history, to tell the entry right behind a twin. */
+  n?: number
 }
-
 
 const MAX = 40
 const HOME: Page = { kind: 'search', q: '' }
@@ -134,10 +135,11 @@ function opening(fresh?: StageView): Entry {
       depth: Math.min(state.depth ?? 0, state.stack.length - 1),
       stage: state.stage,
       twin: state.twin,
+      n: state.n,
     }
   }
-  if (linked) return { stack: [linked], depth: 0 }
-  return { stack: [HOME], depth: 0, stage: fresh }
+  if (linked) return { stack: [linked], depth: 0, n: 0 }
+  return { stack: [HOME], depth: 0, stage: fresh, n: 0 }
 }
 
 function write(entry: Entry, how: 'push' | 'replace') {
@@ -181,9 +183,10 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>, fresh?: St
 
   /** Leave the page on top for a new one, remembering where it was scrolled. */
   const go = useCallback(
-    (next: Entry) => {
+    (to: Entry) => {
       flush()
       write({ ...current.current, scroll: scroller.current?.scrollTop ?? 0 }, 'replace')
+      const next = { ...to, n: (current.current.n ?? 0) + 1 }
       write(next, 'push')
       current.current = next
       setEntry(next)
@@ -273,7 +276,7 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>, fresh?: St
         window.history.go(twin ? -k - 1 : -k)
         return
       }
-      const next = { stack: stack.slice(0, -k), depth: 0 }
+      const next = { stack: stack.slice(0, -k), depth: 0, n: current.current.n }
       current.current = next
       setEntry(next)
       write(next, 'replace')
@@ -297,7 +300,7 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>, fresh?: St
         return
       }
       write({ ...now, scroll: scroller.current?.scrollTop ?? 0 }, 'replace')
-      const next: Entry = { stack: now.stack, depth: now.depth, stage: v, twin: true }
+      const next: Entry = { stack: now.stack, depth: now.depth, stage: v, twin: true, n: (now.n ?? 0) + 1 }
       write(next, 'push')
       current.current = next
       setEntry(next)
@@ -338,10 +341,13 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>, fresh?: St
       const linked = pageInUrl()
       const next: Entry =
         state && isStack(state.stack) ? state : { stack: [linked ?? HOME], depth: 0 }
-      // A twin left on the rail looks just like the page behind it; back from
-      // it would seem to do nothing, so it goes on past.
+      // A twin left on the rail stands where the page behind it did -- the
+      // same page, or one a pick on the graph put in its place. Back from it
+      // would seem to do nothing, or bring back what was replaced, so it goes
+      // on past, as the app's own back does.
       const was = current.current
-      if (was.twin && !was.stage && !next.stage && sameStack(was.stack, next.stack)) {
+      const behind = was.n !== undefined && next.n === was.n - 1
+      if (was.twin && !was.stage && !next.stage && behind) {
         window.history.back()
         return
       }
