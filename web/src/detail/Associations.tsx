@@ -88,8 +88,6 @@ interface Props {
   onSignIn: () => void
   /** How many associations there are here, yours and others', for the tab. */
   onCount: (n: number) => void
-  /** Each time what is written here has arrived, so a preview can wait for it. */
-  onLoaded?: () => void
 }
 
 function rememberedSort(): NoteSort {
@@ -127,7 +125,7 @@ function localView(n: LocalNote, drawings: string[], you: string): PublicNote {
  * into your account when you log in. Others' public ones come from the server
  * either way.
  */
-export function Associations({ subject, label, onPick, onSignIn, onCount, onLoaded }: Props) {
+export function Associations({ subject, label, onPick, onSignIn, onCount }: Props) {
   const char = subject
   const isWord = subject.startsWith('word:')
   const { user, ready, syncing } = useAuth()
@@ -170,7 +168,6 @@ export function Associations({ subject, label, onPick, onSignIn, onCount, onLoad
       setTotal(known.total)
       setFailed(false)
       setLoading(false)
-      onLoaded?.()
       return
     }
     let stale = false
@@ -191,7 +188,6 @@ export function Associations({ subject, label, onPick, onSignIn, onCount, onLoad
       setTotal(page?.total ?? 0)
       setFailed(page === null)
       setLoading(false)
-      onLoaded?.()
     })()
     return () => {
       stale = true

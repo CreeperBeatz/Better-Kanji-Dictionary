@@ -251,14 +251,6 @@ export function App() {
   const [searchShare, setSearchShare] = useSearchShare()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
-  // A kanji hovered on the graph previews its page, and on a desktop its
-  // associations under it -- once the pointer rests there, so a sweep across
-  // the graph does not ask for each one it passes.
-  const [assocPreview, setAssocPreview] = useState<string | null>(null)
-  const [previewCount, setPreviewCount] = useState(0)
-  // The preview whose associations have arrived; until then there is nothing
-  // to show, rather than the last kanji's or an empty list.
-  const [previewLoaded, setPreviewLoaded] = useState<string | null>(null)
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
@@ -638,22 +630,6 @@ export function App() {
     )
   }, [data, hovered])
 
-  // What the rail's page previews while a kanji is hovered on the graph.
-  const previewChar =
-    !mobile && shownTop?.kind === 'kanji' && hoveredNode && hoveredNode.char !== shownTop.char ? hoveredNode.char : null
-  useEffect(() => {
-    if (!previewChar) {
-      setAssocPreview(null)
-      return
-    }
-    const timer = setTimeout(() => setAssocPreview(previewChar), 150)
-    return () => clearTimeout(timer)
-  }, [previewChar])
-  // Hovering another kanji clears the page's associations at once; the
-  // hovered one's show when they are here.
-  const previewing = previewChar !== null
-  const previewShown = previewing && assocPreview === previewChar && previewLoaded === previewChar
-
   // A preview is usually shorter than the page, which pulls the scroll up;
   // back on the page, it is where it was. The scroll is followed while the
   // page is showing, and the jump a preview causes is not.
@@ -746,10 +722,11 @@ export function App() {
   }
 
   // On a desktop both tabs start the same way: the page's character as it
-  // looks and what it means -- or the one hovered on the graph.
+  // looks and what it means. Associations are fetched for the page, not for
+  // what is hovered on the graph, so here the head stays the page's too.
   function pageHead() {
     if (shownTop?.kind === 'kanji') {
-      const node = cardPreview && hoveredNode ? hoveredNode : detailOf(shownTop.char)?.focus
+      const node = detailOf(shownTop.char)?.focus
       return (
         <section className="rail-section rail-page-head">
           {node ? (
@@ -899,10 +876,7 @@ export function App() {
                   onClick={() => chooseRailTab('associations')}
                 >
                   {t('associations')}
-                  {previewing
-                    ? previewShown &&
-                      previewCount > 0 && <span className="rail-tab-count">{previewCount}</span>
-                    : assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
               </div>
             </div>
@@ -933,26 +907,10 @@ export function App() {
               ))}
             {/* Kept mounted while hidden, so the count on its tab is there
                 before the tab is opened. */}
-            {subject && mobile && <div hidden={tab !== 'associations'}>{associations(subject)}</div>}
-            {subject && !mobile && (
+            {subject && (
               <div hidden={tab !== 'associations'}>
-                {tab === 'associations' && pageHead()}
-                {/* The page's own stay mounted under a preview, so they are
-                    back at once when the pointer moves off. */}
-                <div hidden={previewing}>{associations(subject)}</div>
-                {previewing && assocPreview === previewChar && (
-                  <div hidden={!previewShown}>
-                    <Associations
-                      key={`preview ${assocPreview}`}
-                      subject={assocPreview}
-                      label={assocPreview}
-                      onPick={openKanji}
-                      onSignIn={signIn}
-                      onCount={setPreviewCount}
-                      onLoaded={() => setPreviewLoaded(assocPreview)}
-                    />
-                  </div>
-                )}
+                {!mobile && tab === 'associations' && pageHead()}
+                {associations(subject)}
               </div>
             )}
           </div>
