@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useAuth } from '../account/auth'
 import { strings, useLang } from '../i18n'
 
 const S = strings(
@@ -31,8 +32,10 @@ const S = strings(
       "Can't type it or draw it? Say what it is made of and where the parts sit. Every answer is checked against how the kanji is really built.",
     partsEx1: 'sun beside moon',
     partsEx2: 'water on the left of blue',
-    how: 'These start when the dictionary finds nothing word for word: press Enter, or ✦ Search by meaning. Each suggestion says why it fits. Sign in to use them.',
-    tryIt: 'Tap an example to try it.',
+    signIn: 'You must be logged in to use this feature.',
+    signInWhy: "It doesn't require a subscription, but we want to avoid misuse.",
+    steps: 'Enter a few words and press {enter} or tap {button}.',
+    button: 'Search by meaning',
     alsoTitle: 'And the smaller things',
     alsoDraw: 'Draw a kanji (✎) or pick it by its parts (部). Both type into the box, so you can build a word one kanji at a time.',
     alsoInflect: 'Conjugations are undone: 食べたくなかった finds 食べる, and says what the ending did.',
@@ -59,8 +62,10 @@ const S = strings(
       'Не можете да го напишете или нарисувате? Кажете от какво е съставен и къде стоят частите. Всеки отговор се проверява спрямо истинския строеж на йероглифа.',
     partsEx1: 'слънце до луна',
     partsEx2: 'вода отляво на синьо',
-    how: 'Това се включва, когато речникът не намери нищо дума по дума: натиснете Enter или ✦ Търсене по смисъл. Всяко предложение казва защо пасва. Трябва да сте влезли в профила си.',
-    tryIt: 'Докоснете пример, за да го изпробвате.',
+    signIn: 'Трябва да сте влезли в профила си, за да използвате това.',
+    signInWhy: 'Не е нужен абонамент, просто искаме да избегнем злоупотреби.',
+    steps: 'Напишете няколко думи и натиснете {enter} или докоснете {button}.',
+    button: 'Търсене по смисъл',
     alsoTitle: 'И по-дребните неща',
     alsoDraw: 'Нарисувайте йероглиф (✎) или го изберете по частите му (部). И двете пишат в търсачката, така че можете да съставите дума йероглиф по йероглиф.',
     alsoInflect: 'Спреженията се разпознават: 食べたくなかった намира 食べる и казва какво е направило окончанието.',
@@ -97,6 +102,37 @@ export function SearchHelp({ onTry }: { onTry: (q: string) => void }) {
         />
       )}
     </>
+  )
+}
+
+/** How to reach the features above: signed in, then Enter or the button. */
+function HowTo({ t }: { t: T }) {
+  const { user } = useAuth()
+  return (
+    <div className="help-how">
+      {!user && (
+        <>
+          <p className="help-how-lead">
+            <svg viewBox="0 0 16 16" aria-hidden>
+              <rect x="3" y="7" width="10" height="7" rx="1.5" />
+              <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+            </svg>
+            {t('signIn')}
+          </p>
+          <p className="help-how-why">{t('signInWhy')}</p>
+        </>
+      )}
+      <p className="help-how-steps">
+        {t.node('steps', {
+          enter: <kbd>Enter</kbd>,
+          button: (
+            <span className="help-how-button">
+              <span aria-hidden>✦</span> {t('button')}
+            </span>
+          ),
+        })}
+      </p>
+    </div>
   )
 }
 
@@ -144,9 +180,6 @@ function HelpPopup({ t, onClose, onTry }: { t: T; onClose: () => void; onTry: (q
           {feature(t('apartTitle'), t('apart'), [t('apartEx')])}
           {feature(t('explainTitle'), t('explain'), [t('explainEx1'), t('explainEx2')])}
           {feature(t('partsTitle'), t('parts'), [t('partsEx1'), t('partsEx2')])}
-          <p className="help-how">
-            {t('how')} {t('tryIt')}
-          </p>
           <section className="help-feature help-bg" lang="bg">
             <p>{IN_BULGARIAN}</p>
             <div className="help-examples">
@@ -160,6 +193,7 @@ function HelpPopup({ t, onClose, onTry }: { t: T; onClose: () => void; onTry: (q
             <li>{t('alsoBg')}</li>
             <li>{t('alsoKey')}</li>
           </ul>
+          <HowTo t={t} />
         </div>
       </div>
     </div>,
