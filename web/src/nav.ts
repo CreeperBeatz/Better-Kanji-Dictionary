@@ -208,6 +208,36 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
     [go],
   )
 
+  /**
+   * Open a page straight over `base`, whatever was above it: a result picked
+   * from the search column, which replaces the entry beside it.
+   */
+  const openOver = useCallback(
+    (base: Page, p: Page) => {
+      const { stack } = current.current
+      if (sameStack(stack, [base, p])) return
+      go({ stack: [base, p], depth: stack.length === 1 && samePage(stack[0], base) ? 1 : 0 })
+    },
+    [go],
+  )
+
+  /**
+   * Put a search under the pages open now, or change the one there, in place:
+   * typing in the search column, which leaves the entry beside it alone.
+   */
+  const rebase = useCallback((p: Page) => {
+    const { stack } = current.current
+    const above = stack[0].kind === 'search' ? stack.slice(1) : stack
+    const next = { stack: [p, ...above].slice(-MAX), depth: 0 }
+    current.current = next
+    setEntry(next)
+    if (pendingReplace.current !== null) clearTimeout(pendingReplace.current)
+    pendingReplace.current = window.setTimeout(() => {
+      pendingReplace.current = null
+      write(current.current, 'replace')
+    }, 300)
+  }, [])
+
   /** Change the page on top in place -- a search as it is typed. */
   const replaceTop = useCallback((p: Page) => {
     const { stack, depth } = current.current
@@ -260,5 +290,5 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
     return () => window.removeEventListener('popstate', onPop)
   }, [scroller])
 
-  return { stack: entry.stack, push, reset, replaceTop, pop }
+  return { stack: entry.stack, push, reset, replaceTop, openOver, rebase, pop }
 }

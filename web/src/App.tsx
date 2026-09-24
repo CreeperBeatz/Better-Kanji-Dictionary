@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { KanjiMap } from './map/KanjiMap'
@@ -12,7 +12,7 @@ import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
-import { RailResizer, useRailWidth } from './RailResizer'
+import { RAIL_MIN, RailResizer, STAGE_MIN, useRailWidth } from './RailResizer'
 import { LevelFilter, ViewSwitch, type StageView } from './StageControls'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
@@ -30,8 +30,9 @@ const S = strings(
     sidePanel: 'Side panel',
     dictionary: 'Dictionary',
     associations: 'Associations',
-    foldAssociations: 'Fold the associations away',
-    unfoldAssociations: 'Show the associations',
+    showSearch: 'Show the search beside the dictionary',
+    hideSearch: 'Put the search back above the dictionary',
+    pickResult: 'Pick a result and it opens here.',
     jumpAssociations: 'Go to the associations',
     focus: 'Components',
     map: 'Map',
@@ -53,8 +54,9 @@ const S = strings(
     sidePanel: 'Страничен панел',
     dictionary: 'Речник',
     associations: 'Асоциации',
-    foldAssociations: 'Скрийте асоциациите',
-    unfoldAssociations: 'Покажете асоциациите',
+    showSearch: 'Покажете търсенето до речника',
+    hideSearch: 'Върнете търсенето над речника',
+    pickResult: 'Изберете резултат и той ще се отвори тук.',
     jumpAssociations: 'Към асоциациите',
     focus: 'Компоненти',
     map: 'Карта',
@@ -74,6 +76,16 @@ const VIEW_KEY = 'betterrtk:view'
 
 // Matches the narrow layout in theme.css.
 const MOBILE = '(max-width: 900px)'
+
+function useWindowWidth(): number {
+  return useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener('resize', onChange)
+      return () => window.removeEventListener('resize', onChange)
+    },
+    () => window.innerWidth,
+  )
+}
 
 function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
@@ -115,8 +127,11 @@ function useVisibleHeight(enabled: boolean) {
 }
 
 const RAIL_TAB_KEY = 'betterrtk:railTab'
-// On a desktop the associations sit under the page, folded away if you choose.
-const ASSOC_FOLDED_KEY = 'betterrtk:assocFolded'
+// On a wide enough desktop the search gets a column of its own, left of the
+// dictionary, so its results stay in view while one of them is open.
+const SPLIT_KEY = 'betterrtk:searchBeside'
+const SEARCH_W = 360
+const SPLIT_ROOM = SEARCH_W + RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
 
 function initialRailTab(): RailTab {
@@ -177,7 +192,7 @@ export function App() {
   const t = S(useLang())
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { stack, push, reset, replaceTop, pop } = useNav(scroller)
+  const { stack, push, reset, replaceTop, openOver, rebase, pop } = useNav(scroller)
   const top = stack[stack.length - 1]
   const root = stack[0]
   const under = stack.length > 1 ? stack[stack.length - 2] : null
@@ -220,28 +235,11 @@ export function App() {
   const [railWidth, setRailWidth] = useRailWidth()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
-  const [assocFolded, setAssocFolded] = useState(() => {
-    try {
-      return localStorage.getItem(ASSOC_FOLDED_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
   const assocRef = useRef<HTMLElement>(null)
-  const foldAssoc = useCallback((folded: boolean) => {
-    setAssocFolded(folded)
-    try {
-      if (folded) localStorage.setItem(ASSOC_FOLDED_KEY, '1')
-      else localStorage.removeItem(ASSOC_FOLDED_KEY)
-    } catch {
-      // not remembered, which is fine
-    }
-  }, [])
   // The page can be long, so the associations' place in the head goes down to them.
   const jumpToAssoc = useCallback(() => {
-    foldAssoc(false)
-    requestAnimationFrame(() => assocRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-  }, [foldAssoc])
+    assocRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
@@ -249,6 +247,49 @@ export function App() {
   const [pane, setPane] = useState<'rail' | 'stage'>('rail')
   const onStage = mobile && pane === 'stage'
   useVisibleHeight(mobile)
+
+  const windowWidth = useWindowWidth()
+  const [splitPref, setSplitPref] = useState(() => {
+    try {
+      return localStorage.getItem(SPLIT_KEY) !== '0'
+    } catch {
+      return true
+    }
+  })
+  const room = !mobile && windowWidth >= SPLIT_ROOM
+  const split = room && splitPref
+  const chooseSplit = useCallback((on: boolean) => {
+    setSplitPref(on)
+    try {
+      if (on) localStorage.removeItem(SPLIT_KEY)
+      else localStorage.setItem(SPLIT_KEY, '0')
+    } catch {
+      // not remembered, which is fine
+    }
+  }, [])
+  // The dictionary gives way before the stage does.
+  const railShown = split ? Math.min(railWidth, windowWidth - STAGE_MIN - SEARCH_W) : railWidth
+
+  // With the search in its own column, the rail shows what is open above it:
+  // the stack without the search at its bottom.
+  const entries = split && root.kind === 'search' ? stack.slice(1) : stack
+  const shownTop: Page | null = entries.length > 0 ? entries[entries.length - 1] : null
+  const shownUnder = entries.length > 1 ? entries[entries.length - 2] : null
+  const picked = entries[0]
+
+  // The rail's head is as tall as the search box beside it, so the rule
+  // under them runs straight across.
+  const searchHeadRef = useRef<HTMLDivElement>(null)
+  const [searchH, setSearchH] = useState(0)
+  useLayoutEffect(() => {
+    const head = searchHeadRef.current
+    if (!head || !split) return
+    const fit = () => setSearchH(head.offsetHeight)
+    fit()
+    const watch = new ResizeObserver(fit)
+    watch.observe(head)
+    return () => watch.disconnect()
+  }, [split])
 
   const chooseRailTab = useCallback((t: RailTab) => {
     setRailTab(t)
@@ -330,11 +371,13 @@ export function App() {
   useEffect(() => {
     if (top.kind === 'kanji') rememberKanji(top.char)
     else if (top.kind === 'word' && top.word) rememberWord(top.word)
-    else if (top.kind === 'search' && top.q.trim()) {
-      const timer = setTimeout(() => rememberSearch(top.q), 1500)
-      return () => clearTimeout(timer)
-    }
   }, [top])
+  const rootQ = root.kind === 'search' ? root.q : ''
+  useEffect(() => {
+    if (!rootQ.trim()) return
+    const timer = setTimeout(() => rememberSearch(rootQ), 1500)
+    return () => clearTimeout(timer)
+  }, [rootQ])
   // Its meanings join it once they are here, for the list to show.
   const shown = top.kind === 'kanji' && detail?.focus.char === top.char ? detail.focus : null
   useEffect(() => {
@@ -375,6 +418,30 @@ export function App() {
     [push, keepSearch],
   )
 
+  // A pick from the search column replaces what is open beside it.
+  const listKanji = useCallback(
+    (char: string) => {
+      setHovered(null)
+      rememberSearch(q)
+      openOver({ kind: 'search', q }, { kind: 'kanji', char })
+    },
+    [q, openOver],
+  )
+  const listWord = useCallback(
+    (w: Word) => {
+      rememberSearch(q)
+      openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
+    },
+    [q, openOver],
+  )
+  const listLevel = useCallback(
+    (level: Level) => {
+      rememberSearch(q)
+      openOver({ kind: 'search', q }, { kind: 'level', level })
+    },
+    [q, openOver],
+  )
+
   const deselect = useCallback(() => {
     setHovered(null)
     setFocus(null)
@@ -387,21 +454,23 @@ export function App() {
       setQ(text)
       toDictionary()
       const page: Page = { kind: 'search', q: text }
-      if (stack.length === 1 && stack[0].kind === 'search') replaceTop(page)
+      // Beside the dictionary, the results change and the open entry stays.
+      if (split) rebase(page)
+      else if (stack.length === 1 && stack[0].kind === 'search') replaceTop(page)
       else reset(page)
     },
-    [stack, replaceTop, reset, toDictionary],
+    [split, stack, replaceTop, reset, rebase, toDictionary],
   )
 
   // Going into the box goes to the search it holds, back down the stack if
   // that is where it is.
   const focusSearch = useCallback(() => {
     toDictionary()
-    if (top.kind === 'search') return false
+    if (split || top.kind === 'search') return false
     if (root.kind === 'search' && root.q === q) pop(stack.length - 1)
     else reset({ kind: 'search', q })
     return true
-  }, [top, root, q, stack.length, pop, reset, toDictionary])
+  }, [split, top, root, q, stack.length, pop, reset, toDictionary])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -494,10 +563,10 @@ export function App() {
   // there the tab steps aside and the page shows. A desktop has room for
   // both, so there they follow the page instead of taking turns with it.
   const subject =
-    top.kind === 'kanji'
-      ? { key: top.char, label: top.char }
-      : top.kind === 'word'
-        ? { key: `word:${top.id}`, label: top.word?.headword ?? t('thisWord') }
+    shownTop?.kind === 'kanji'
+      ? { key: shownTop.char, label: shownTop.char }
+      : shownTop?.kind === 'word'
+        ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
         : null
   const tab: RailTab = railTab === 'associations' && (!subject || !mobile) ? 'dictionary' : railTab
   const inDictionary = !onStage && tab === 'dictionary'
@@ -515,7 +584,21 @@ export function App() {
   }
 
   // What the page on top is, as written, named above every tab it has.
-  const current = top.kind === 'kanji' ? top.char : top.kind === 'word' ? top.word?.headword : undefined
+  const current =
+    shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? shownTop.word?.headword : undefined
+
+  const searchBar = (
+    <SearchBar
+      q={q}
+      onType={type}
+      onFocus={focusSearch}
+      onSubmit={() => {
+        setAsked(q.trim())
+        rememberSearch(q)
+      }}
+      inputRef={inputRef}
+    />
+  )
 
   return (
     <div className="shell">
@@ -523,20 +606,53 @@ export function App() {
         className="shell-grid"
         data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
-        style={{ '--rail': `${railWidth}px` } as React.CSSProperties}
+        data-split={split || undefined}
+        style={
+          {
+            '--rail': `${railShown}px`,
+            '--search': split ? `${SEARCH_W}px` : '0px',
+            '--search-h': `${searchH}px`,
+          } as React.CSSProperties
+        }
       >
+        {split && (
+          <aside className="search-column">
+            <div className="search-column-head" ref={searchHeadRef}>
+              {searchBar}
+            </div>
+            <div className="search-column-body">
+              <SearchPage
+                q={q}
+                onKanji={listKanji}
+                onWord={listWord}
+                onLevel={listLevel}
+                onSearch={type}
+                asked={asked}
+                onAsk={setAsked}
+                open={
+                  picked?.kind === 'kanji'
+                    ? { kanji: picked.char }
+                    : picked?.kind === 'word'
+                      ? { word: picked.id }
+                      : undefined
+                }
+              />
+            </div>
+          </aside>
+        )}
         <aside className="rail">
-          <SearchBar
-            q={q}
-            onType={type}
-            onFocus={focusSearch}
-            onSubmit={() => {
-              setAsked(q.trim())
-              rememberSearch(q)
-            }}
-            inputRef={inputRef}
-          />
+          {!split && searchBar}
           <div className="rail-head">
+            {room && (
+              <button
+                className="split-toggle"
+                aria-pressed={split}
+                onClick={() => chooseSplit(!split)}
+                title={t(split ? 'hideSearch' : 'showSearch')}
+              >
+                <SplitIcon open={split} />
+              </button>
+            )}
             <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
               <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
                 {t('dictionary')}
@@ -575,11 +691,11 @@ export function App() {
           </div>
 
           <div className="rail-body" ref={scroller}>
-            {(under || current) && (
+            {(shownUnder || current) && (
               <div className="rail-crumb">
-                {under ? (
+                {shownUnder ? (
                   <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
-                    <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(under, t) })}
+                    <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
                   </button>
                 ) : (
                   <span />
@@ -591,25 +707,22 @@ export function App() {
                 )}
               </div>
             )}
-            {tab === 'dictionary' && page(top)}
+            {tab === 'dictionary' &&
+              (shownTop ? (
+                page(shownTop)
+              ) : (
+                <p className="hint rail-section">{t('pickResult')}</p>
+              ))}
             {/* Kept mounted while hidden, so the count on its tab is there
                 before the tab is opened. */}
             {subject && mobile && <div hidden={tab !== 'associations'}>{associations(subject)}</div>}
             {subject && !mobile && (
-              <section className="assoc-fold" ref={assocRef}>
-                <button
-                  className="assoc-fold-head"
-                  aria-expanded={!assocFolded}
-                  onClick={() => foldAssoc(!assocFolded)}
-                  title={t(assocFolded ? 'unfoldAssociations' : 'foldAssociations')}
-                >
+              <section className="assoc-below" ref={assocRef}>
+                <h2 className="assoc-below-head">
                   {t('associations')}
                   {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                  <svg className="assoc-fold-chevron" viewBox="0 0 16 16" aria-hidden>
-                    <path d="M4 6l4 4 4-4" />
-                  </svg>
-                </button>
-                <div hidden={assocFolded}>{associations(subject)}</div>
+                </h2>
+                {associations(subject)}
               </section>
             )}
           </div>
@@ -617,7 +730,7 @@ export function App() {
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
         </aside>
-        <RailResizer width={railWidth} onWidth={setRailWidth} />
+        <RailResizer width={railShown} onWidth={setRailWidth} />
 
         <main className="stage">
           {error && selected && (
@@ -687,5 +800,16 @@ export function App() {
 
       {accountShown && <AccountDialog onClose={closeAccount} />}
     </div>
+  )
+}
+
+/** A panel with its left column filled while the search has a column of its own. */
+function SplitIcon({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden>
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+      <path d="M6 2.75v10.5" />
+      {open && <rect className="solid" x="1.75" y="2.75" width="4.25" height="10.5" rx="1.5" />}
+    </svg>
   )
 }

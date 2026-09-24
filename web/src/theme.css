@@ -85,6 +85,50 @@ body {
   transition: filter 180ms var(--ease), opacity 180ms var(--ease);
 }
 
+/* Search | dictionary | stage. */
+.shell-grid[data-split] {
+  grid-template-columns: var(--search) var(--rail) 1fr;
+}
+
+.search-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--rule);
+  background: var(--sumi-sunk);
+  overflow: hidden;
+}
+
+.search-column-head {
+  flex: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+.search-column-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The tabs sit on the same rule as the search box beside them. */
+.shell-grid[data-split] .rail-head {
+  min-height: var(--search-h);
+  align-items: flex-end;
+}
+
+.shell-grid[data-split] .rail-head > .split-toggle,
+.shell-grid[data-split] .rail-head > .view-switch {
+  margin-bottom: 6px;
+}
+
+/* The result open beside the list. */
+.kanji-hit[aria-current='true'],
+.word-card[aria-current='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+}
+
 /* The graph stays visible behind the search, just pushed back. */
 .shell-grid[data-dimmed] {
   filter: blur(7px) saturate(0.7);
@@ -151,7 +195,7 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--rail) - 5px);
+  left: calc(var(--search, 0px) + var(--rail) - 5px);
   width: 9px;
   z-index: 5;
   cursor: col-resize;
@@ -3650,47 +3694,51 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--shu);
 }
 
-/* A desktop's associations, under the page: a heading that folds them away. */
-.assoc-fold-head {
+/* A desktop's associations, after the page. */
+.assoc-below-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 16px 22px 0;
-  background: none;
-  border: 0;
+  margin: 0;
+  padding: 18px 22px 0;
   color: var(--paper-dim);
   font-family: var(--gothic);
   font-size: 13px;
   font-weight: 500;
-  text-align: left;
+}
+
+/* Beside the dictionary on a toggle: the search column, the rail's left end. */
+.split-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 4px 0 -8px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--muted);
   cursor: pointer;
 }
 
-.assoc-fold-head:hover {
+.split-toggle:hover {
+  border-color: var(--rule-bright);
   color: var(--paper);
 }
 
-.assoc-fold-head[aria-expanded='false'] {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--rule);
-}
-
-.assoc-fold-chevron {
-  flex: none;
+.split-toggle svg {
   width: 16px;
   height: 16px;
-  margin-left: auto;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 160ms var(--ease);
+  stroke-width: 1.3;
 }
 
-.assoc-fold-head[aria-expanded='false'] .assoc-fold-chevron {
-  transform: rotate(-90deg);
+.split-toggle svg .solid {
+  fill: currentColor;
+  stroke: none;
 }
 
 .rail-tab-count {
@@ -3890,13 +3938,16 @@ html {
   scrollbar-color: var(--rule-bright) transparent;
 }
 
-.rail-body {
+.rail-body,
+.search-column-body {
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
 
 .rail-body:hover,
-.rail-body:focus-within {
+.rail-body:focus-within,
+.search-column-body:hover,
+.search-column-body:focus-within {
   scrollbar-color: var(--rule-bright) transparent;
 }
 

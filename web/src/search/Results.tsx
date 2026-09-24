@@ -233,13 +233,24 @@ function remember(key: string, r: SearchResponse) {
   if (found.size > 60) found.delete(found.keys().next().value!)
 }
 
-function WordRow({ w, onWord, why }: { w: Word; onWord: (w: Word) => void; why?: string | null }) {
+function WordRow({
+  w,
+  onWord,
+  why,
+  open,
+}: {
+  w: Word
+  onWord: (w: Word) => void
+  why?: string | null
+  /** Open beside the list right now. */
+  open?: boolean
+}) {
   const lang = useLang()
   const t = S(lang)
   // The whole card opens the entry; its kanji are one tap further, on the entry's page.
   return (
     <li className="word">
-      <button className="word-card" onClick={() => onWord(w)} title={t('open')}>
+      <button className="word-card" onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
         <span className="word-head">
           <span className="word-forms">{w.headword}</span>
           {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
@@ -296,13 +307,14 @@ interface ChipKanji {
   fanout?: number | null
 }
 
-function KanjiChip({ k, onKanji }: { k: ChipKanji; onKanji: (c: string) => void }) {
+function KanjiChip({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
   const lang = useLang()
   const t = S(lang)
   const m = meaningsOf(k, lang)
   return (
     <button
       className="kanji-hit"
+      aria-current={open || undefined}
       onClick={() => onKanji(k.char)}
       title={m.value.slice(0, 3).join(', ')}
       data-fallback={m.fallback || undefined}
@@ -326,9 +338,11 @@ interface SearchProps {
   /** The query semantic search was asked for (Enter), and how to ask for one. */
   asked: string | null
   onAsk: (q: string) => void
+  /** What is open beside the list, when the search has a column of its own. */
+  open?: { kanji?: string; word?: number }
 }
 
-export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk, open }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -425,14 +439,14 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
       {result && result.kanji.length > 0 && (
         <div className="kanji-hits">
           {result.kanji.map((k) => (
-            <KanjiChip key={k.char} k={k} onKanji={onKanji} />
+            <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open?.kanji === k.char} />
           ))}
         </div>
       )}
       {result && result.words.length > 0 && (
         <ol className="words">
           {result.words.map((w) => (
-            <WordRow key={w.id} w={w} onWord={onWord} />
+            <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} />
           ))}
         </ol>
       )}
