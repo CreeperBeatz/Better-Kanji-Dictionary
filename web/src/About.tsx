@@ -22,6 +22,7 @@ const S = strings(
     edrdg: 'words, character data, radicals',
     kanjivg: 'stroke order, and handwriting lookup',
     dakanji: 'Character recognition powered by machine learning from Dariyooo (DaAppLab)',
+    rmbg: 'selecting the subject of a picture in a drawing',
     decomp: 'decomposition',
     kanjidata: 'JLPT levels, frequency and school grade of kanji',
     kanjium: 'pitch accent; lookalike and near-synonym kanji',
@@ -46,6 +47,7 @@ const S = strings(
     kanjivg: 'ред на чертите и търсене чрез рисуване',
     // The wording the model's author asks for; kept in English in both.
     dakanji: 'Character recognition powered by machine learning from Dariyooo (DaAppLab)',
+    rmbg: 'избиране на обекта в картина при рисуване',
     decomp: 'разлагане на части',
     kanjidata: 'нива от JLPT, честота и учебна година на йероглифите',
     kanjium: 'тонално ударение; приличащи си и близки по значение йероглифи',
@@ -74,6 +76,12 @@ const SOURCES: { name: string; what: What; href: string; licence: string }[] = [
     what: 'dakanji',
     href: 'https://github.com/CaptainDario/DaKanji-Single-Kanji-Recognition',
     licence: 'MIT · trained on the ETL Character Database (AIST) and KanjiVG',
+  },
+  {
+    name: 'RMBG-1.4',
+    what: 'rmbg',
+    href: 'https://huggingface.co/briaai/RMBG-1.4',
+    licence: 'Bria RMBG-1.4 licence, non-commercial use · BRIA AI',
   },
   {
     name: 'kanji-data',

@@ -19,15 +19,20 @@ import type { BinaryFileData, ExcalidrawImperativeAPI } from '@excalidraw/excali
 import { strings, useLang } from '../../i18n'
 import { cropOf, onImage, pixelMatrix, pixelToScene, sceneToPixel, type Pt } from './geometry'
 import { bounds, combine, erase, extract, invert, pixelsOf, polygonMask, wandMask, type Combine } from './mask'
+import { subjectMask } from './subject'
 
-export type PixelTool = 'lasso' | 'box' | 'wand'
+export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject'
 
 const S = strings(
   {
     lassoHint: 'Draw around part of a picture',
     boxHint: 'Drag a box over part of a picture',
     wandHint: 'Click a colour in a picture',
+    subjectHint: 'Click a picture to select what it shows, without its background',
     notOnPicture: 'That is not on a picture',
+    fetchingModel: 'Fetching the model, the first time only: {n}%',
+    finding: 'Finding the subject…',
+    subjectFailed: 'The subject could not be found: {why}',
     replace: 'New',
     replaceTitle: 'A new selection each time',
     add: 'Add',
@@ -53,7 +58,11 @@ const S = strings(
     lassoHint: 'Оградете част от картина',
     boxHint: 'Плъзнете правоъгълник върху част от картина',
     wandHint: 'Щракнете върху цвят в картина',
+    subjectHint: 'Щракнете върху картина, за да изберете какво показва, без фона',
     notOnPicture: 'Това не е върху картина',
+    fetchingModel: 'Изтегляне на модела, само първия път: {n}%',
+    finding: 'Търсене на обекта…',
+    subjectFailed: 'Обектът не можа да бъде намерен: {why}',
     replace: 'Нова',
     replaceTitle: 'Нова селекция всеки път',
     add: 'Добавяне',
@@ -164,6 +173,8 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
   const drag = useRef<Drag | null>(null)
   const images = useRef(new Map<string, Promise<HTMLImageElement>>())
   const pixels = useRef(new Map<string, ImageData>())
+  const subjects = useRef(new Map<string, Promise<HTMLCanvasElement>>())
+  const [busy, setBusy] = useState(false)
   const march = useRef(0)
 
   const pictureOf = useCallback(
@@ -351,6 +362,48 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
       select(pic, wandMask(data, sceneToPixel(el, pic.w, pic.h, p), tolerance, cropOf(el, pic.w, pic.h)), c)
       return
     }
+    if (tool === 'subject') {
+      const el = imageAt(api, p)
+      if (!el) {
+        setNote(t('notOnPicture'))
+        return
+      }
+      if (busy) return
+      const c = howFor(e)
+      const pic = await pictureOf(el)
+      if (!pic) return
+      let found = subjects.current.get(pic.fileId)
+      if (!found) {
+        found = subjectMask(pic.img, pic.w, pic.h, (pr) =>
+          setNote(pr.kind === 'loading' ? t('fetchingModel', { n: Math.floor(pr.share * 100) }) : t('finding')),
+        )
+        subjects.current.set(pic.fileId, found)
+        found.catch(() => subjects.current.delete(pic.fileId))
+      }
+      setBusy(true)
+      setNote(t('finding'))
+      try {
+        const mask = await found
+        // Kept to what the element shows, as the other tools' selections are.
+        const crop = cropOf(el, pic.w, pic.h)
+        const kept = polygonMask(pic.w, pic.h, [
+          { x: crop.x, y: crop.y },
+          { x: crop.x + crop.width, y: crop.y },
+          { x: crop.x + crop.width, y: crop.y + crop.height },
+          { x: crop.x, y: crop.y + crop.height },
+        ], crop)
+        const g = kept.getContext('2d')!
+        g.globalCompositeOperation = 'destination-in'
+        g.drawImage(mask, 0, 0)
+        setNote(null)
+        select(pic, kept, c)
+      } catch (err) {
+        setNote(t('subjectFailed', { why: err instanceof Error ? err.message : String(err) }))
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     e.currentTarget.setPointerCapture(e.pointerId)
     drag.current = tool === 'lasso' ? { kind: 'lasso', pts: [p], how: howFor(e) } : { kind: 'box', a: p, b: p, how: howFor(e) }
   }
@@ -495,7 +548,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
 
   if (!container || !tool) return null
 
-  const hint = note ?? (sel ? null : t(tool === 'lasso' ? 'lassoHint' : tool === 'box' ? 'boxHint' : 'wandHint'))
+  const hint = note ?? (sel ? null : t(`${tool}Hint`))
 
   return createPortal(
     <>

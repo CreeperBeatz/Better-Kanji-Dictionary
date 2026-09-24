@@ -35,7 +35,8 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.filter((n) => !keep.has(n)).map((n) => caches.delete(n))))
+      // models-* are downloaded by the pages themselves, and outlive a release.
+      .then((names) => Promise.all(names.filter((n) => !keep.has(n) && !n.startsWith('models-')).map((n) => caches.delete(n))))
       .then(() => self.clients.claim()),
   )
 })
