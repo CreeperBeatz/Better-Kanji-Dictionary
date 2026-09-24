@@ -19,7 +19,7 @@ import type { BinaryFileData, ExcalidrawImperativeAPI } from '@excalidraw/excali
 import { strings, useLang } from '../../i18n'
 import { cropOf, onImage, pixelMatrix, pixelToScene, sceneToPixel, type Pt } from './geometry'
 import { bounds, combine, erase, extract, invert, pixelsOf, polygonMask, wandMask, type Combine } from './mask'
-import { subjectMask } from './subject'
+import { onSubjectProgress, subjectMask, warmSubject } from './subject'
 
 export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject'
 
@@ -305,6 +305,19 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     return () => clearInterval(id)
   }, [sel, repaint])
 
+  // The subject tool fetches and sets up its model as soon as it is picked,
+  // saying how the download is going the first time.
+  const [fetching, setFetching] = useState<number | null>(null)
+  useEffect(() => {
+    if (tool !== 'subject') return
+    const off = onSubjectProgress((p) => setFetching(p.kind === 'loading' && p.share < 1 ? p.share : null))
+    warmSubject()
+    return () => {
+      off()
+      setFetching(null)
+    }
+  }, [tool])
+
   // Picking a tool takes Excalidraw's own out of hand; putting it down
   // drops the selection.
   useEffect(() => {
@@ -374,9 +387,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
       if (!pic) return
       let found = subjects.current.get(pic.fileId)
       if (!found) {
-        found = subjectMask(pic.img, pic.w, pic.h, (pr) =>
-          setNote(pr.kind === 'loading' ? t('fetchingModel', { n: Math.floor(pr.share * 100) }) : t('finding')),
-        )
+        found = subjectMask(pic.img, pic.w, pic.h)
         subjects.current.set(pic.fileId, found)
         found.catch(() => subjects.current.delete(pic.fileId))
       }
@@ -548,7 +559,9 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
 
   if (!container || !tool) return null
 
-  const hint = note ?? (sel ? null : t(`${tool}Hint`))
+  const hint =
+    note ??
+    (fetching !== null ? t('fetchingModel', { n: Math.floor(fetching * 100) }) : sel ? null : t(`${tool}Hint`))
 
   return createPortal(
     <>

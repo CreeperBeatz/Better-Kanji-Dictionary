@@ -52,6 +52,9 @@ self.addEventListener('fetch', (event) => {
   }
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith('/api/')) return
+  // Models are tens of megabytes, kept by the pages in caches of their own
+  // (models-*); revalidating them here would fetch them again on every use.
+  if (url.pathname.startsWith('/models/')) return
 
   if (req.mode === 'navigate') {
     event.respondWith(page(req))
