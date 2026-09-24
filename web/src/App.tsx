@@ -149,6 +149,8 @@ const TITLE = document.title
  * Slower, it takes a third of the way across.
  */
 const SWIPE = 40
+/** How far a page at its top is pulled down to go to the search. */
+const PULL = 80
 const HAN = /[㐀-䶿一-鿿]/
 
 /**
@@ -162,6 +164,10 @@ function movesItself(el: Element | null, within: Element): boolean {
     if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
   }
   return false
+}
+
+function searchBarOf(input: HTMLInputElement | null): HTMLElement | null {
+  return input?.closest('.searchbar') ?? null
 }
 
 /**
@@ -844,8 +850,15 @@ export function App() {
   const swipe = useRef<{
     x: number
     y: number
-    /** Decided once the finger has gone far enough to tell; null until then. */
-    sideways: boolean | null
+    /**
+     * Turning to the tab beside, or pulling the page down for the search;
+     * decided once the finger has gone far enough to tell.
+     */
+    mode: 'turn' | 'pull' | null
+    /** Whether the page has tabs to turn to. */
+    turns: boolean
+    /** Whether the page was at its top, so a pull down is not a scroll. */
+    atTop: boolean
     last: { x: number; at: number }
     /** Sideways speed, px/ms. */
     v: number
@@ -858,7 +871,7 @@ export function App() {
   }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
-    if (!mobile || !subject || e.touches.length !== 1) return
+    if (!mobile || e.touches.length !== 1) return
     if (movesItself(e.target as Element, e.currentTarget)) return
     // A page still sliding in is where it is going.
     scroller.current?.getAnimations().forEach((a) => a.finish())
@@ -866,7 +879,9 @@ export function App() {
     swipe.current = {
       x: touch.clientX,
       y: touch.clientY,
-      sideways: null,
+      mode: null,
+      turns: subject !== null,
+      atTop: e.currentTarget.scrollTop <= 0,
       last: { x: touch.clientX, at: e.timeStamp },
       v: 0,
     }
@@ -879,14 +894,20 @@ export function App() {
     const touch = e.touches[0]
     const dx = touch.clientX - s.x
     const dy = touch.clientY - s.y
-    if (s.sideways === null) {
+    if (s.mode === null) {
       if (Math.hypot(dx, dy) < 10) return
-      s.sideways = Math.abs(dx) > 1.5 * Math.abs(dy)
-      // Up or down is the page scrolling, which is the browser's.
-      if (!s.sideways) {
+      if (Math.abs(dx) > 1.5 * Math.abs(dy)) s.mode = s.turns ? 'turn' : null
+      else if (dy > 0 && s.atTop) s.mode = 'pull'
+      // Anything else is the page scrolling, which is the browser's.
+      if (s.mode === null) {
         swipe.current = null
         return
       }
+    }
+    if (s.mode === 'pull') {
+      // The search lights up once letting go would open it.
+      searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
+      return
     }
     const dt = e.timeStamp - s.last.at
     if (dt > 0) s.v = 0.7 * ((touch.clientX - s.last.x) / dt) + 0.3 * s.v
@@ -898,7 +919,12 @@ export function App() {
     const s = swipe.current
     swipe.current = null
     const el = scroller.current
-    if (!s?.sideways || !el) return
+    if (s?.mode === 'pull') {
+      searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
+      if (e.changedTouches[0].clientY - s.y > PULL) typeOver()
+      return
+    }
+    if (s?.mode !== 'turn' || !el) return
     const dx = e.changedTouches[0].clientX - s.x
     const next = besideTab(dx)
     const at = next ? dx : dx / 4
@@ -928,10 +954,21 @@ export function App() {
     const s = swipe.current
     swipe.current = null
     const el = scroller.current
-    if (!s?.sideways || !el) return
+    searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
+    if (s?.mode !== 'turn' || !el) return
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
+  }
+  // Pulled down, the page gives way to the search: the keyboard comes up with
+  // what was searched last selected, so typing starts a new search and a tap
+  // in the box carries on with the old one. Called from the touch itself, as
+  // phones only raise the keyboard for focus given in answer to a touch.
+  function typeOver() {
+    const input = inputRef.current
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(0, input.value.length)
   }
   // A tab tapped comes in with a short slide from its side of the one left.
   function tapPhoneTab(to: PhoneTab) {

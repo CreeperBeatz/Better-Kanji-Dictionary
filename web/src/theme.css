@@ -791,6 +791,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-color: var(--ai-deep);
 }
 
+/* On a phone, a page pulled down far enough that letting go opens the search. */
+.searchbar[data-pulled] .search-input {
+  border-color: var(--ai-deep);
+}
+
 .reading-note {
   margin-top: 8px;
   font-family: var(--mincho);
