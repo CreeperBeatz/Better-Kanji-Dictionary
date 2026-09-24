@@ -380,6 +380,37 @@ export function App() {
   const detail: DetailData | null =
     data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : null
 
+  // A character picked on the graph is open while the graph stays centred on
+  // another, so its page fetches its own.
+  const pageKanji = top.kind === 'kanji' ? top.char : null
+  const [pageData, setPageData] = useState<DetailData | null>(null)
+  const [pageOnDevice, setPageOnDevice] = useState<DetailData | null>(null)
+  useEffect(() => {
+    if (!pageKanji || pageKanji === focus) return
+    let stale = false
+    local.kanji(pageKanji)?.then(
+      (d) => !stale && setPageOnDevice(d),
+      () => {},
+    )
+    api.kanji(pageKanji).then(
+      (d) => !stale && setPageData(d),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [pageKanji, focus])
+
+  /** What the rail has on a character: the graph's, or the page's own. */
+  const detailOf = (char: string): DetailData | null =>
+    char === focus
+      ? detail
+      : pageData?.focus.char === char
+        ? pageData
+        : pageOnDevice?.focus.char === char
+          ? pageOnDevice
+          : null
+
   // A pick on the graph or map starts the stack again from that character.
   // `via` is the container a peek skipped through (言 -> 語 -> X), which counts
   // as visited too.
@@ -407,7 +438,7 @@ export function App() {
     return () => clearTimeout(timer)
   }, [rootQ])
   // Its meanings join it once they are here, for the list to show.
-  const shown = top.kind === 'kanji' && detail?.focus.char === top.char ? detail.focus : null
+  const shown = top.kind === 'kanji' ? (detailOf(top.char)?.focus ?? null) : null
   useEffect(() => {
     if (shown) rememberKanji(shown.char, shown)
   }, [shown])
@@ -439,19 +470,26 @@ export function App() {
     [push, toDictionary, keepSearch],
   )
 
-  // A pick on the decomposition graph opens on top of the page, so back goes
-  // to the character it was picked from -- or goes back, when it is that one.
-  // The graph stays centred where it was. `via` is the container a peek
-  // skipped through, which counts as visited.
+  // A pick on the decomposition graph opens on top of the page, and the graph
+  // stays centred where it was. Picks in a row take each other's place, so
+  // back from any of them is the character in the middle, and back from that
+  // is wherever it was come to from. `via` is the container a peek skipped
+  // through, which counts as visited.
   const graphOpen = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
       setPane('rail')
       if (via && via !== char) rememberKanji(via)
+      const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
+      const picked = top.kind === 'kanji' && top.centre !== undefined && top.centre === focus
       if (under?.kind === 'kanji' && under.char === char && (under.centre ?? under.char) === focus) pop()
-      else push(char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus })
+      else if (picked) {
+        if (top.char === char) return
+        replaceTop(page)
+        if (scroller.current) scroller.current.scrollTop = 0
+      } else push(page)
     },
-    [under, push, pop, focus],
+    [top, under, push, pop, replaceTop, focus],
   )
 
   // Recentring on a character on the graph opens it too, or takes the
@@ -640,10 +678,11 @@ export function App() {
             onPick={openKanji}
           />
         )
-      case 'kanji':
-        return detail && detail.focus.char === p.char ? (
+      case 'kanji': {
+        const d = detailOf(p.char)
+        return d ? (
           <DetailPanel
-            data={detail}
+            data={d}
             hovered={hoveredNode}
             onWord={openWord}
             onKanji={openKanji}
@@ -656,6 +695,7 @@ export function App() {
             </div>
           </section>
         )
+      }
     }
   }
 
