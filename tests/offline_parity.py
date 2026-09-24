@@ -49,6 +49,9 @@ HARD = [
     "書かれた", "着ます", "話せる", "泳いだ", "死んだ", "買った", "待って", "飲みたい", "寒かった",
     "ありがとう", "こんにちは", "ラーメン", "コーヒー", "漢字", "東京", "大学生", "する", "くる",
     "𠮟る", "𩸽", "〆切", "ー", "ぁ",
+    # Japanese in a question goes to Search by meaning; with one word or none it is still looked up
+    "difference between 暑い and 熱い", "why is 大人 read otona", "食べる to eat", "水 water", "to 食べる",
+    "атсуи: 暑い или 熱い", "水 вода", "大人 x y",
     # letters unicode61 keeps apart from their unaccented look-alikes
     "йод", "иод", "ёж", "ѝ", "край", "ǡ", "ḯ",
 ]

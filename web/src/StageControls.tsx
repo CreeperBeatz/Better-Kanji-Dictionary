@@ -1,6 +1,5 @@
-/** The controls that sit over the stage in both views: trail, level filter, view switch. */
+/** The controls that sit over the stage in both views: the level filter, and the way between the views. */
 
-import { useLayoutEffect, useRef, useState } from 'react'
 import type { ContainerFilter } from './graph/KanjiGraph'
 import { strings, useLang } from './i18n'
 
@@ -26,12 +25,10 @@ const S = strings(
     n5Map: 'N5 and the parts it is built from',
     filterMap: 'Which characters the map shows',
     filterFocus: 'Which containing characters to show',
-    recent: 'Recently opened',
-    clearList: 'clear the list',
-    view: 'View',
-    focus: 'Decompose',
+    focus: 'Components',
     focusTitle: 'One character, what it is made of and what it builds (D)',
     map: 'Map',
+    browseMap: 'Browse the kanji map',
     mapTitle: 'Every character at this level, to wander around in (M)',
   },
   {
@@ -53,12 +50,10 @@ const S = strings(
     n5Map: 'N5 и частите, от които е изграден',
     filterMap: 'Кои йероглифи показва картата',
     filterFocus: 'Кои съдържащи йероглифи да се показват',
-    recent: 'Последно отваряни',
-    clearList: 'изчистете списъка',
-    view: 'Изглед',
-    focus: 'Разлагане',
+    focus: 'Компоненти',
     focusTitle: 'Един йероглиф - от какво е съставен и какво изгражда (D)',
     map: 'Карта',
+    browseMap: 'Разгледайте картата на йероглифите',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
   },
 )
@@ -102,56 +97,6 @@ export function LevelFilter({
   )
 }
 
-interface RecentProps {
-  recent: string[]
-  /** The character open now, if any. */
-  current: string | null
-  onPick: (char: string) => void
-}
-
-/** The Recent tab: everything opened, newest first. Opening one leaves the list as it is. */
-export function RecentGrid({ recent, current, onPick, onClear }: RecentProps & { onClear: () => void }) {
-  const t = S(useLang())
-  const newest = [...recent].reverse()
-  return (
-    <section className="rail-section">
-      <h2>{t('recent')}</h2>
-      <div className="recent-grid">
-        {newest.map((c) => (
-          <button
-            key={c}
-            className="recent-glyph"
-            onClick={() => onPick(c)}
-            aria-current={c === current ? 'page' : undefined}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-      {recent.length > 1 && (
-        <p className="assoc-actions">
-          <button className="clear" onClick={onClear}>
-            {t('clearList')}
-          </button>
-        </p>
-      )}
-    </section>
-  )
-}
-
-/** A character with what it is made of and what it builds. */
-function FocusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden>
-      <path d="M8 8V3M8 8l-4.5 3.5M8 8l4.5 3.5" />
-      <circle cx="8" cy="8" r="2.4" className="solid" />
-      <circle cx="8" cy="2.6" r="1.5" />
-      <circle cx="3.2" cy="12" r="1.5" />
-      <circle cx="12.8" cy="12" r="1.5" />
-    </svg>
-  )
-}
-
 /** A field of characters. */
 function MapIcon() {
   return (
@@ -161,68 +106,13 @@ function MapIcon() {
   )
 }
 
-/** Labelled whenever the labels fit beside the rest of the row it sits in,
-    icons alone when they do not; the labels stay for screen readers and the
-    titles on hover either way. */
-export function ViewSwitch({ view, onView }: { view: StageView; onView: (v: StageView) => void }) {
+/** On the empty search: out onto the map of every character. */
+export function ToMap({ onClick }: { onClick: () => void }) {
   const t = S(useLang())
-  const own = useRef<HTMLDivElement>(null)
-  // An invisible labelled copy, so the width the labels need is known while
-  // they are hidden, and follows the language and the font as they load.
-  const labelled = useRef<HTMLDivElement>(null)
-  const [fits, setFits] = useState(true)
-
-  useLayoutEffect(() => {
-    const el = own.current
-    const row = el?.parentElement
-    const copy = labelled.current
-    if (!el || !row || !copy) return
-    const check = () => {
-      const s = getComputedStyle(row)
-      const gap = parseFloat(s.columnGap) || 0
-      const room = row.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight)
-      let used = copy.getBoundingClientRect().width
-      for (const c of row.children) if (c !== el) used += c.getBoundingClientRect().width + gap
-      setFits(used <= room)
-    }
-    const watch = new ResizeObserver(check)
-    watch.observe(row)
-    watch.observe(copy)
-    for (const c of row.children) if (c !== el) watch.observe(c)
-    return () => watch.disconnect()
-  }, [])
-
-  const buttons = (live: boolean) => (
-    <>
-      <button
-        role={live ? 'tab' : undefined}
-        aria-selected={live ? view === 'focus' : undefined}
-        onClick={live ? () => onView('focus') : undefined}
-        title={live ? t('focusTitle') : undefined}
-        tabIndex={live ? undefined : -1}
-      >
-        <FocusIcon />
-        <span className="view-label">{t('focus')}</span>
-      </button>
-      <button
-        role={live ? 'tab' : undefined}
-        aria-selected={live ? view === 'map' : undefined}
-        onClick={live ? () => onView('map') : undefined}
-        title={live ? t('mapTitle') : undefined}
-        tabIndex={live ? undefined : -1}
-      >
-        <MapIcon />
-        <span className="view-label">{t('map')}</span>
-      </button>
-    </>
-  )
-
   return (
-    <div ref={own} className="view-switch" role="tablist" aria-label={t('view')} data-compact={!fits || undefined}>
-      {buttons(true)}
-      <div ref={labelled} className="view-switch view-switch-measure" aria-hidden inert>
-        {buttons(false)}
-      </div>
-    </div>
+    <button className="stage-link map-link" onClick={onClick} title={t('mapTitle')}>
+      <MapIcon />
+      {t('browseMap')}
+    </button>
   )
 }

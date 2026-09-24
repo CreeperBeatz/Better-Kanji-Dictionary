@@ -85,6 +85,65 @@ body {
   transition: filter 180ms var(--ease), opacity 180ms var(--ease);
 }
 
+/* Search | dictionary | stage. */
+.shell-grid[data-split] {
+  grid-template-columns: var(--search) var(--rail) 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The search box, across the tops of the search and the dictionary. */
+.split-head {
+  grid-column: 1 / 3;
+  grid-row: 1;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--sumi-sunk);
+}
+
+.shell-grid[data-split] > .search-column {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.shell-grid[data-split] > .rail {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.shell-grid[data-split] > .stage {
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+
+/* Not split, the box sits at the top of the rail, ruled off from the page. */
+.shell-grid:not([data-pane]) .rail > .searchbar {
+  border-bottom: 1px solid var(--rule);
+}
+
+.search-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--rule);
+  background: var(--sumi-sunk);
+  overflow: hidden;
+}
+
+.search-column-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The result open beside the list. */
+.level-cell[aria-current='true'],
+.kanji-hit[aria-current='true'],
+.word-card[aria-current='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+}
+
 /* The graph stays visible behind the search, just pushed back. */
 .shell-grid[data-dimmed] {
   filter: blur(7px) saturate(0.7);
@@ -151,7 +210,7 @@ body {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--rail) - 5px);
+  left: calc(var(--search, 0px) + var(--rail) - 5px);
   width: 9px;
   z-index: 5;
   cursor: col-resize;
@@ -181,6 +240,12 @@ body {
 }
 
 /* While dragging, the pointer passes over the graph and text; neither should react. */
+/* Between the search column and the dictionary. */
+.rail-resizer.split-resizer {
+  top: var(--search-h);
+  left: calc(var(--search) - 5px);
+}
+
 body.rail-resizing {
   cursor: col-resize;
   user-select: none;
@@ -532,36 +597,84 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke-dasharray: 3 4;
 }
 
-/* ---------------------------------------------------------------- recent tab */
+/* ---------------------------------------------------------------- recents (the empty search) */
 
-.recent-grid {
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
-  gap: 6px;
+  gap: 2px;
 }
 
-.recent-glyph {
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  background: var(--sumi);
-  border: 1px solid var(--rule);
+.recent-list button {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  background: none;
+  border: 1px solid transparent;
   border-radius: 3px;
   color: var(--paper);
-  font-family: var(--mincho);
-  font-size: 26px;
-  line-height: 1;
+  font-family: var(--gothic);
+  text-align: left;
+  padding: 6px 8px;
   cursor: pointer;
 }
 
-.recent-glyph:active,
-.recent-glyph:hover {
-  border-color: var(--ai-deep);
+.recent-list button:active {
   background: var(--ai-wash);
+  border-color: var(--ai-deep);
 }
 
-.recent-glyph[aria-current='page'] {
-  border-color: var(--shu);
+/* A phone keeps :hover on whatever was last tapped, which is the row under your finger. */
+@media (hover: hover) {
+  .recent-list button:hover {
+    background: var(--ai-wash);
+    border-color: var(--ai-deep);
+  }
+}
+
+/* Wide enough for one character, so kanji, words and queries start in line. */
+.recent-head,
+.recent-query-icon {
+  flex: none;
+  min-width: 1.1em;
+  font-family: var(--mincho);
+  font-size: 17px;
+}
+
+.recent-query-icon {
+  align-self: center;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.recent-query {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.recent-reading {
+  flex: none;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.recent-gloss {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--paper-dim);
+  font-size: 13px;
 }
 
 .legend {
@@ -1253,6 +1366,51 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .assoc-images figcaption {
   display: flex;
   gap: 10px;
+}
+
+/* A posted note's image: larger on a click (ImageZoom). */
+.assoc-image-zoom {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: zoom-in;
+}
+
+.assoc-image-zoom:hover img {
+  border-color: var(--ai-deep);
+}
+
+.overlay.image-zoom {
+  align-items: center;
+  padding: 48px;
+  background: rgba(8, 7, 6, 0.86);
+  cursor: zoom-out;
+}
+
+.image-zoom img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 3px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  cursor: default;
+}
+
+.image-zoom-x {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  color: var(--paper-dim);
+  font-size: 28px;
+}
+
+.image-zoom-x:hover {
+  background: var(--sumi-lift);
+  color: var(--paper);
 }
 
 .assoc-drawing {
@@ -2043,6 +2201,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: pointer;
 }
 
+.level-links button[data-on] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
 .level-links button:hover {
   background: var(--ai-wash);
   border-color: var(--ai-deep);
@@ -2314,35 +2478,30 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* ---------------------------------------------------------------- stage controls */
 
-/* At the end of the rail's tabs: which view the stage shows. Boxed, so it
-   reads as a switch for the stage rather than one more tab of the rail. */
-.view-switch {
-  flex: none;
-  display: flex;
-  gap: 2px;
-  padding: 2px;
+/* Between the stage's two views: a link out to the map from the empty
+   search, and one back to the character from the map. */
+.stage-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--sumi);
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: var(--sumi);
-}
-
-.view-switch button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 0;
-  border-radius: 2px;
-  color: var(--muted);
+  color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  padding: 3px 10px;
+  font-size: 13px;
   cursor: pointer;
-  transition: background 120ms var(--ease), color 120ms var(--ease);
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
 }
 
-.view-switch svg {
+.stage-link:hover {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.stage-link svg {
   flex: none;
   width: 14px;
   height: 14px;
@@ -2350,49 +2509,275 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke: currentColor;
   stroke-width: 1.2;
 }
-.view-switch svg .solid,
-.view-switch svg.solid {
+
+.stage-link svg .solid,
+.stage-link svg.solid {
   fill: currentColor;
   stroke: none;
 }
 
-.view-switch button:hover {
+.search-home-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 4px;
+}
+
+/* For whoever is still wandering around: there, but quiet, at the row's end. */
+.search-help-link {
+  margin-left: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 12px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.search-help-link:hover {
+  color: var(--paper-dim);
+}
+
+.help-panel {
+  position: relative;
+  width: min(540px, 100%);
+}
+
+.help-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* Clear of the X in the corner, now that there is no title above it. */
+.help-feature:first-child h3 {
+  padding-right: 32px;
+}
+
+.help-feature {
+  margin: 0 0 14px;
+}
+
+.help-feature h3 {
+  margin: 0 0 2px;
+  color: var(--paper);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.help-feature p {
+  margin: 0;
+  color: var(--paper-dim);
+}
+
+.help-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.help-examples button {
+  padding: 4px 11px;
+  background: none;
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.help-examples button:hover {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
   color: var(--paper);
 }
 
-.view-switch button[aria-selected='true'] {
-  background: var(--sumi-lift);
+.help-how {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ai-deep);
+  border-radius: 4px;
+  background: var(--ai-wash);
+}
+
+.help-how p {
+  margin: 0;
+}
+
+.help-how-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--paper);
-  box-shadow: inset 0 -1px 0 var(--shu);
+  font-weight: 500;
 }
 
-/* Without room for its labels, the switch goes to icons (see ViewSwitch). */
-.view-switch[data-compact] > button {
-  padding: 4px 8px;
+.help-how-lead svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: var(--ai);
+  stroke-width: 1.4;
+  stroke-linecap: round;
 }
-.view-switch[data-compact] > button .view-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
+
+.help-how-why {
+  margin-top: 2px !important;
+  padding-left: 23px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.help-how-lead ~ .help-how-steps {
+  margin-top: 10px !important;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+}
+
+.help-how-steps {
+  color: var(--paper-dim);
+  line-height: 1.9;
+}
+
+.help-how-steps kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  background: var(--sumi);
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 11.5px;
+}
+
+.help-how-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 9px;
+  border: 1px solid var(--ai-deep);
+  border-radius: 999px;
+  background: var(--sumi);
+  color: var(--ai);
+  font-size: 12px;
   white-space: nowrap;
 }
 
-/* The labelled copy it measures itself against. */
-.view-switch-measure {
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: max-content;
-  visibility: hidden;
-  pointer-events: none;
-  white-space: nowrap;
+.help-also-title {
+  margin: 18px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.help-also {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--paper-dim);
+}
+
+.help-also li + li {
+  margin-top: 4px;
 }
 
 .filter,
 .info-button {
   z-index: 3;
+}
+
+/* A character picked on the map, previewed over it. */
+/* Placed over its node by the map, each frame (placeCard). */
+.map-card-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.map-card {
+  position: relative;
+  width: 272px;
+  padding: 14px 16px 16px;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.map-card-x {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 2px 6px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-card-x:hover {
+  color: var(--paper);
+}
+
+.map-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-right: 18px;
+}
+
+.map-card-glyph {
+  font-family: var(--mincho);
+  font-size: 56px;
+  line-height: 1;
+  color: var(--paper);
+}
+
+.map-card-meaning {
+  padding-top: 6px;
+  font-family: var(--mincho);
+  font-size: 16px;
+  color: var(--paper);
+}
+
+.map-card-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 14px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.map-card-facts dt {
+  color: var(--muted);
+}
+
+.map-card-facts dd {
+  margin: 0;
+  color: var(--paper-dim);
+  font-family: var(--mincho);
+}
+
+.map-card-meta {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.map-card-open {
+  margin-top: 14px;
 }
 
 /* ---------------------------------------------------------------- map */
@@ -3559,11 +3944,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 4px;
 }
 
-.rail-head > .view-switch {
-  position: relative;
-  margin-left: auto;
-}
-
 .rail-tabs button {
   position: relative;
   display: inline-flex;
@@ -3600,6 +3980,33 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   bottom: -1px;
   height: 2px;
   background: var(--shu);
+}
+
+/* A desktop's associations, after the page. */
+.assoc-below-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 18px 22px 0;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The search column's toggle, at the end of the search row. */
+.split-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.split-toggle svg .solid {
+  fill: currentColor;
+  stroke: none;
 }
 
 .rail-tab-count {
@@ -3799,13 +4206,16 @@ html {
   scrollbar-color: var(--rule-bright) transparent;
 }
 
-.rail-body {
+.rail-body,
+.search-column-body {
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
 
 .rail-body:hover,
-.rail-body:focus-within {
+.rail-body:focus-within,
+.search-column-body:hover,
+.search-column-body:focus-within {
   scrollbar-color: var(--rule-bright) transparent;
 }
 

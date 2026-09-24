@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../api'
+import { strings, useLang } from '../i18n'
 import { getImage, isLocalImage } from '../localNotes'
+
+const S = strings(
+  { zoom: 'Show the image larger', close: 'Close' },
+  { zoom: 'Покажете изображението по-голямо', close: 'Затворете' },
+)
 
 export function Note({ text }: { text: string }) {
   return (
@@ -17,8 +24,14 @@ export function Note({ text }: { text: string }) {
   )
 }
 
-/** An image from either the server or this browser's own store. */
-export function NoteImage({ name }: { name: string }) {
+/**
+ * An image from either the server or this browser's own store. `zoomable`
+ * ones open larger in a popup when clicked -- on a posted note, not in the
+ * composer, where a click is for managing the attachment.
+ */
+export function NoteImage({ name, zoomable = false }: { name: string; zoomable?: boolean }) {
+  const t = S(useLang())
+  const [zoomed, setZoomed] = useState(false)
   const local = isLocalImage(name)
   const [blobUrl, setBlobUrl] = useState<{ name: string; url: string } | null>(null)
 
@@ -38,5 +51,49 @@ export function NoteImage({ name }: { name: string }) {
   }, [name, local])
 
   const src = local ? (blobUrl?.name === name ? blobUrl.url : null) : api.imageUrl(name)
-  return src ? <img src={src} alt="" /> : <span className="assoc-image-pending" />
+  if (!src) return <span className="assoc-image-pending" />
+  if (!zoomable) return <img src={src} alt="" />
+  return (
+    <>
+      <button className="assoc-image-zoom" onClick={() => setZoomed(true)} title={t('zoom')} aria-label={t('zoom')}>
+        <img src={src} alt="" />
+      </button>
+      {zoomed && <ImageZoom src={src} onClose={() => setZoomed(false)} />}
+    </>
+  )
+}
+
+/** The image as large as the window allows, over everything, with a way out. */
+function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
+  const t = S(useLang())
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation() // captured first, so nothing under it closes too
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+
+  return createPortal(
+    <div
+      className="overlay image-zoom"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        e.stopPropagation()
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <img src={src} alt="" />
+      <button className="account-x image-zoom-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
+        ×
+      </button>
+    </div>,
+    document.body,
+  )
 }

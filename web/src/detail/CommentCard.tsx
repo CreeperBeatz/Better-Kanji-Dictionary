@@ -169,7 +169,7 @@ export function CommentCard({
           <div className="assoc-images">
             {note.images.map((name) => (
               <figure key={name}>
-                <NoteImage name={name} />
+                <NoteImage name={name} zoomable />
               </figure>
             ))}
           </div>

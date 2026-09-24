@@ -54,6 +54,31 @@ const S = strings(
 const PAGE = 10
 const SORT_KEY = 'betterrtk:sort'
 
+// What was last fetched for a subject, so hovering the same kanji on the
+// graph again -- or coming back to its page -- shows it without asking. Kept
+// a minute; anything written, edited, deleted or liked here forgets it.
+const FRESH_MS = 60_000
+interface Fetched {
+  at: number
+  mine: PublicNote[]
+  others: PublicNote[]
+  total: number
+}
+const fetched = new Map<string, Fetched>()
+const partsFetched = new Map<string, { at: number; parts: { char: string; texts: string[] }[] }>()
+
+function fresh<T extends { at: number }>(m: Map<string, T>, key: string): T | undefined {
+  const got = m.get(key)
+  return got && Date.now() - got.at < FRESH_MS ? got : undefined
+}
+
+/** Drops what is kept for a subject, after something here has changed. */
+function forget(char: string) {
+  for (const key of fetched.keys()) if (key.endsWith(` ${char}`)) fetched.delete(key)
+  // A note on this subject also shows under whatever is built from it.
+  partsFetched.clear()
+}
+
 interface Props {
   /** A character, or a word as `word:<id>`. */
   subject: string
@@ -63,6 +88,8 @@ interface Props {
   onSignIn: () => void
   /** How many associations there are here, yours and others', for the tab. */
   onCount: (n: number) => void
+  /** Each time what is written here has arrived, so a preview can wait for it. */
+  onLoaded?: () => void
 }
 
 function rememberedSort(): NoteSort {
@@ -100,7 +127,7 @@ function localView(n: LocalNote, drawings: string[], you: string): PublicNote {
  * into your account when you log in. Others' public ones come from the server
  * either way.
  */
-export function Associations({ subject, label, onPick, onSignIn, onCount }: Props) {
+export function Associations({ subject, label, onPick, onSignIn, onCount, onLoaded }: Props) {
   const char = subject
   const isWord = subject.startsWith('word:')
   const { user, ready, syncing } = useAuth()
@@ -108,23 +135,19 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
   const you = t('you')
   const me = user?.id ?? null
   const [sort, setSortState] = useState<NoteSort>(rememberedSort)
-  const [mine, setMine] = useState<PublicNote[]>([])
-  const [others, setOthers] = useState<PublicNote[]>([])
-  const [total, setTotal] = useState(0)
+  const kept = fresh(fetched, `${me ?? 'local'} ${sort} ${PAGE} ${char}`)
+  const [mine, setMine] = useState<PublicNote[]>(kept?.mine ?? [])
+  const [others, setOthers] = useState<PublicNote[]>(kept?.others ?? [])
+  const [total, setTotal] = useState(kept?.total ?? 0)
   const [shown, setShown] = useState(PAGE)
   const [loading, setLoading] = useState(false)
   const [failed, setFailed] = useState(false)
   const [version, setVersion] = useState(0)
   const [editing, setEditing] = useState<string | null>(null)
-  const [parts, setParts] = useState<{ char: string; texts: string[] }[]>([])
-  const reload = useCallback(() => setVersion((v) => v + 1), [])
-
-  useEffect(() => {
-    setShown(PAGE)
-    setEditing(null)
-    setMine([])
-    setOthers([])
-    setTotal(0)
+  const [parts, setParts] = useState(() => fresh(partsFetched, `${me ?? 'local'} ${char}`)?.parts ?? [])
+  const reload = useCallback(() => {
+    forget(char)
+    setVersion((v) => v + 1)
   }, [char])
 
   function setSort(s: NoteSort) {
@@ -139,6 +162,17 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
 
   useEffect(() => {
     if (!ready || syncing) return
+    const key = `${me ?? 'local'} ${sort} ${shown} ${char}`
+    const known = fresh(fetched, key)
+    if (known) {
+      setMine(known.mine)
+      setOthers(known.others)
+      setTotal(known.total)
+      setFailed(false)
+      setLoading(false)
+      onLoaded?.()
+      return
+    }
     let stale = false
     setLoading(true)
     ;(async () => {
@@ -151,11 +185,13 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
         )
       }
       if (stale) return
+      if (page) fetched.set(key, { at: Date.now(), mine: own, others: page.items, total: page.total })
       setMine(own)
       setOthers(page?.items ?? [])
       setTotal(page?.total ?? 0)
       setFailed(page === null)
       setLoading(false)
+      onLoaded?.()
     })()
     return () => {
       stale = true
@@ -165,6 +201,12 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
   // What you wrote on this character's parts, so a mnemonic can build on them.
   useEffect(() => {
     if (!ready || syncing) return
+    const key = `${me ?? 'local'} ${char}`
+    const known = fresh(partsFetched, key)
+    if (known) {
+      setParts(known.parts)
+      return
+    }
     let stale = false
     ;(async () => {
       const d = await api.associations(char).catch(() => null)
@@ -177,7 +219,9 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
               texts: (await notesFor(c.char).catch(() => [])).map((n) => n.text),
             })),
           )
-      if (!stale) setParts(found.map((p) => ({ ...p, texts: p.texts.filter((x) => x.trim()) })))
+      const got = found.map((p) => ({ ...p, texts: p.texts.filter((x) => x.trim()) }))
+      if (d) partsFetched.set(key, { at: Date.now(), parts: got })
+      if (!stale) setParts(got)
     })()
     return () => {
       stale = true
@@ -186,11 +230,15 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
 
   useEffect(() => onCount(mine.length + total), [mine.length, total, onCount])
 
-  const patch = useCallback((id: string, change: Partial<PublicNote>) => {
-    const apply = (ns: PublicNote[]) => ns.map((n) => (n.id === id ? { ...n, ...change } : n))
-    setOthers(apply)
-    setMine(apply)
-  }, [])
+  const patch = useCallback(
+    (id: string, change: Partial<PublicNote>) => {
+      forget(char)
+      const apply = (ns: PublicNote[]) => ns.map((n) => (n.id === id ? { ...n, ...change } : n))
+      setOthers(apply)
+      setMine(apply)
+    },
+    [char],
+  )
 
   async function post(text: string, images: string[], visibility: Visibility) {
     if (me) {

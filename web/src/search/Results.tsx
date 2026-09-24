@@ -16,7 +16,10 @@ import {
   type SemanticResponse,
   type Word,
 } from '../api'
+import { clearHistory, useHistory, type Visit } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
+import { ToMap } from '../StageControls'
+import { SearchHelp } from './SearchHelp'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
@@ -52,9 +55,8 @@ const S = strings(
     alternativeTitle: 'Search for {q} in Bulgarian',
     nothing: 'Nothing matched {q}.',
     looking: 'looking',
-    home:
-      'Search by meaning, reading or character. Draw it if you cannot type it, or pick it apart by ' +
-      'radical; either one types into the search, so you can build a word a character at a time.',
+    recentSearches: 'Recent searches',
+    clearHistory: 'clear the history',
     browse: 'Browse a JLPT level',
     parts: 'Parts they are built from',
     partsHint: 'These carry no JLPT level of their own, but N{level} cannot be written without them.',
@@ -95,9 +97,8 @@ const S = strings(
     alternativeTitle: 'Търсете {q} на български',
     nothing: 'Нищо не отговаря на {q}.',
     looking: 'търсене',
-    home:
-      'Търсете по значение, четене или йероглиф. Нарисувайте го, ако не можете да го напишете, или го ' +
-      'разглобете по радикали; и двете пишат в търсачката, така че можете да съставите дума йероглиф по йероглиф.',
+    recentSearches: 'Скорошни търсения',
+    clearHistory: 'изчистете историята',
     browse: 'Разгледайте ниво от JLPT',
     parts: 'Части, от които са изградени',
     partsHint: 'Те нямат собствено ниво в JLPT, но без тях N{level} не може да се напише.',
@@ -117,6 +118,8 @@ const S = strings(
 // Keyed by language too: in Bulgarian, Latin can also be read as shlyokavitsa.
 const found = new Map<string, SearchResponse>()
 const levels = new Map<Level, { kanji: KanjiNode[]; components: KanjiNode[] }>()
+// The level open on the empty search, kept across its coming and going.
+let shownLevel: Level | null = null
 
 const keyOf = (lang: Lang, common: boolean, sort: string, q: string) =>
   `${lang}${common ? ' common' : ''} ${sort} ${q}`
@@ -234,13 +237,24 @@ function remember(key: string, r: SearchResponse) {
   if (found.size > 60) found.delete(found.keys().next().value!)
 }
 
-function WordRow({ w, onWord, why }: { w: Word; onWord: (w: Word) => void; why?: string | null }) {
+function WordRow({
+  w,
+  onWord,
+  why,
+  open,
+}: {
+  w: Word
+  onWord: (w: Word) => void
+  why?: string | null
+  /** Open beside the list right now. */
+  open?: boolean
+}) {
   const lang = useLang()
   const t = S(lang)
   // The whole card opens the entry; its kanji are one tap further, on the entry's page.
   return (
     <li className="word">
-      <button className="word-card" onClick={() => onWord(w)} title={t('open')}>
+      <button className="word-card" onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
         <span className="word-head">
           <span className="word-forms">{w.headword}</span>
           {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
@@ -297,13 +311,14 @@ interface ChipKanji {
   fanout?: number | null
 }
 
-function KanjiChip({ k, onKanji }: { k: ChipKanji; onKanji: (c: string) => void }) {
+function KanjiChip({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
   const lang = useLang()
   const t = S(lang)
   const m = meaningsOf(k, lang)
   return (
     <button
       className="kanji-hit"
+      aria-current={open || undefined}
       onClick={() => onKanji(k.char)}
       title={m.value.slice(0, 3).join(', ')}
       data-fallback={m.fallback || undefined}
@@ -321,15 +336,18 @@ interface SearchProps {
   q: string
   onKanji: (char: string) => void
   onWord: (word: Word) => void
-  onLevel: (level: Level) => void
   /** Search for something else, as if it had been typed: a suggested reading. */
   onSearch: (q: string) => void
   /** The query semantic search was asked for (Enter), and how to ask for one. */
   asked: string | null
   onAsk: (q: string) => void
+  /** What is open beside the list, when the search has a column of its own. */
+  open?: { kanji?: string; word?: number }
+  /** Shows the map of every character, from the empty search. */
+  onMap: () => void
 }
 
-export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -381,7 +399,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
     })
   }
 
-  if (!term) return <HomePage onLevel={onLevel} />
+  if (!term) return <HomePage onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} open={open?.kanji} />
 
   const reading = result?.interpretation?.reading
   const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
@@ -389,7 +407,9 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
   // one being typed, so the model is only asked once the dictionary has had its
   // say, and its answer stays up while the next query is on its way.
   const unmatched = result && result.words.length === 0 && result.kanji.length === 0 ? result.query : null
-  const nothing = <p className="hint">{t('nothing', { q: term })}</p>
+  // A question has nothing to match word for word; it is for Search by meaning.
+  const question = result?.interpretation?.kind === 'question'
+  const nothing = question ? null : <p className="hint">{t('nothing', { q: term })}</p>
   const alternatives = result?.alternatives ?? []
 
   // The last answer stays up while the next one is on its way, so the list
@@ -426,14 +446,14 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
       {result && result.kanji.length > 0 && (
         <div className="kanji-hits">
           {result.kanji.map((k) => (
-            <KanjiChip key={k.char} k={k} onKanji={onKanji} />
+            <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open?.kanji === k.char} />
           ))}
         </div>
       )}
       {result && result.words.length > 0 && (
         <ol className="words">
           {result.words.map((w) => (
-            <WordRow key={w.id} w={w} onWord={onWord} />
+            <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} />
           ))}
         </ol>
       )}
@@ -625,24 +645,136 @@ function Semantic({
   )
 }
 
-function HomePage({ onLevel }: { onLevel: (level: Level) => void }) {
-  const t = S(useLang())
+// How many the empty search lists; the history keeps more.
+const SHOWN = 20
+
+/** A magnifying glass, marking a query among the characters and words. */
+function QueryIcon() {
+  return (
+    <svg className="recent-query-icon" viewBox="0 0 16 16" aria-hidden>
+      <circle cx="6.8" cy="6.8" r="4.3" />
+      <path d="M10 10l3.6 3.6" />
+    </svg>
+  )
+}
+
+/**
+ * With nothing typed: the JLPT levels, then what you looked up lately -- one
+ * list, newest first, whether it was typed, opened from a result or picked
+ * on the graph.
+ */
+function HomePage({
+  onKanji,
+  onWord,
+  onSearch,
+  onMap,
+  open,
+}: {
+  onKanji: (char: string) => void
+  onWord: (word: Word) => void
+  onSearch: (q: string) => void
+  onMap: () => void
+  /** The kanji open beside the search, marked in a level's grid. */
+  open?: string
+}) {
+  const lang = useLang()
+  const t = S(lang)
+  const history = useHistory()
+  // A level is searched in place: its kanji open under the buttons, and stay
+  // open while you go into one of them and back.
+  const [level, setLevel] = useState<Level | null>(() => shownLevel)
+  const pickLevel = (n: Level) => {
+    shownLevel = level === n ? null : n
+    setLevel(shownLevel)
+  }
+
+  function row(v: Visit) {
+    switch (v.kind) {
+      case 'search':
+        return (
+          <button onClick={() => onSearch(v.q)}>
+            <QueryIcon />
+            <span className="recent-query">{v.q}</span>
+          </button>
+        )
+      case 'kanji': {
+        const m = v.meanings ? meaningsOf({ meanings: v.meanings, meaningsBg: v.meaningsBg }, lang).value : []
+        return (
+          <button onClick={() => onKanji(v.char)}>
+            <span className="recent-head" lang="ja">
+              {v.char}
+            </span>
+            <span className="recent-gloss">{m.slice(0, 3).join(', ')}</span>
+          </button>
+        )
+      }
+      case 'word': {
+        const w = v.word
+        return (
+          <button onClick={() => onWord(w)}>
+            <span className="recent-head" lang="ja">
+              {w.headword}
+            </span>
+            {w.reading !== w.headword && (
+              <span className="recent-reading" lang="ja">
+                {w.reading}
+              </span>
+            )}
+            {w.senses[0] && <span className="recent-gloss">{glossOf(w.senses[0], lang).value}</span>}
+          </button>
+        )
+      }
+    }
+  }
+
+  const key = (v: Visit) => (v.kind === 'search' ? `s ${v.q}` : v.kind === 'kanji' ? `k ${v.char}` : `w ${v.word.id}`)
+
   return (
     <section className="rail-section search-home">
-      <p className="hint">{t('home')}</p>
+      <div className="search-home-top">
+        <ToMap onClick={onMap} />
+        <SearchHelp onTry={onSearch} />
+      </div>
       <h3 className="overlay-group">{t('browse')}</h3>
       <div className="level-links">
         {LEVELS.map((n) => (
-          <button key={n} onClick={() => onLevel(n)}>
+          <button key={n} onClick={() => pickLevel(n)} aria-pressed={level === n} data-on={level === n || undefined}>
             N{n}
           </button>
         ))}
       </div>
+      {level && <LevelGrid level={level} onKanji={onKanji} open={open} />}
+      {/* With a level's kanji open, they are what is being searched; the history waits. */}
+      {!level && history.length > 0 && (
+        <>
+          <h3 className="overlay-group">{t('recentSearches')}</h3>
+          <ul className="recent-list">
+            {history.slice(0, SHOWN).map((v) => (
+              <li key={key(v)}>{row(v)}</li>
+            ))}
+          </ul>
+          <p className="assoc-actions">
+            <button className="clear" onClick={clearHistory}>
+              {t('clearHistory')}
+            </button>
+          </p>
+        </>
+      )}
     </section>
   )
 }
 
+/** A whole JLPT level on a page of its own: where a /level/N link lands. */
 export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: string) => void }) {
+  return (
+    <section className="rail-section">
+      <LevelGrid level={level} onKanji={onKanji} />
+    </section>
+  )
+}
+
+/** A level's kanji, and the parts they are built from. `open` is marked. */
+function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: string) => void; open?: string }) {
   const lang = useLang()
   const t = S(lang)
   const [data, setData] = useState(() => levels.get(level) ?? null)
@@ -671,7 +803,7 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
   const meanings = (k: KanjiNode) => meaningsOf(k, lang).value.slice(0, 3).join(', ')
 
   return (
-    <section className="rail-section">
+    <div className="level-block">
       <h3 className="overlay-group">
         N{level} <span className="strokes-count">{data?.kanji.length ?? ''}</span>
       </h3>
@@ -679,7 +811,13 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
       {data && (
         <div className="level-grid">
           {data.kanji.map((k) => (
-            <button key={k.char} className="level-cell" onClick={() => onKanji(k.char)} title={meanings(k)}>
+            <button
+              key={k.char}
+              className="level-cell"
+              onClick={() => onKanji(k.char)}
+              title={meanings(k)}
+              aria-current={open === k.char || undefined}
+            >
               {k.char}
             </button>
           ))}
@@ -707,6 +845,6 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
           </div>
         </>
       )}
-    </section>
+    </div>
   )
 }
