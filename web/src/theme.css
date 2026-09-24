@@ -3982,19 +3982,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--shu);
 }
 
-/* A desktop's associations, after the page. */
-.assoc-below-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 18px 22px 0;
-  color: var(--paper-dim);
-  font-family: var(--gothic);
-  font-size: 13px;
-  font-weight: 500;
-}
-
 /* The search column's toggle, at the end of the search row. */
 .split-toggle svg {
   width: 17px;

@@ -81,6 +81,24 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
+/** A character as it looks, and what it means: the top of its page, on either tab. */
+export function KanjiHead({ node }: { node: KanjiNode }) {
+  const lang = useLang()
+  const t = S(lang)
+  const [lead, ...rest] = meaningsOf(node, lang).value
+  return (
+    <div className="detail-head">
+      <span className="detail-glyph">{node.char}</span>
+      <div>
+        <p className="detail-meanings">
+          {lead ?? t('noMeaning')}
+          {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Props) {
   const lang = useLang()
   const t = S(lang)
@@ -106,21 +124,12 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
   const n = hovered ?? data.focus
   const isPreview = hovered !== null && hovered.char !== data.focus.char
 
-  const [lead, ...rest] = meaningsOf(n, lang).value
   const level = levelOf(n, lang)
   const counts = data.counts
 
   return (
     <section className="rail-section">
-      <div className="detail-head">
-        <span className="detail-glyph">{n.char}</span>
-        <div>
-          <p className="detail-meanings">
-            {lead ?? t('noMeaning')}
-            {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
-          </p>
-        </div>
-      </div>
+      <KanjiHead node={n} />
 
       {onComponents && !isPreview && (
         <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>

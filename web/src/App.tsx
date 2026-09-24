@@ -8,8 +8,9 @@ import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
 import { strings, useLang, type Translate } from './i18n'
+import { glossOf } from './i18n/content'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
-import { DetailPanel, type DetailData } from './detail/DetailPanel'
+import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
@@ -403,6 +404,26 @@ export function App() {
     }
   }, [pageKanji, focus])
 
+  // A word opened from a link comes with nothing but its id; the head above
+  // its associations wants what it is.
+  const pageWordId = top.kind === 'word' && !top.word ? top.id : null
+  const [pageWord, setPageWord] = useState<Word | null>(null)
+  useEffect(() => {
+    if (pageWordId === null) return
+    let stale = false
+    local.wordEntry(pageWordId)?.then(
+      (d) => !stale && d && setPageWord((w) => (w?.id === pageWordId ? w : d.word)),
+      () => {},
+    )
+    api.word(pageWordId).then(
+      (d) => !stale && setPageWord(d.word),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [pageWordId])
+
   /** What the rail has on a character: the graph's, or the page's own. */
   const detailOf = (char: string): DetailData | null =>
     char === focus
@@ -702,15 +723,14 @@ export function App() {
   }
 
   // Kanji and words carry associations; searches and levels do not, so
-  // there the tab steps aside and the page shows. A desktop has room for
-  // both, so there they follow the page instead of taking turns with it.
+  // there the tab steps aside and the page shows.
   const subject =
     shownTop?.kind === 'kanji'
       ? { key: shownTop.char, label: shownTop.char }
       : shownTop?.kind === 'word'
         ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
         : null
-  const tab: RailTab = railTab === 'associations' && (!subject || !mobile) ? 'dictionary' : railTab
+  const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
   const inDictionary = !onStage && tab === 'dictionary'
   function associations(s: { key: string; label: string }) {
     return (
@@ -723,6 +743,40 @@ export function App() {
         onCount={setAssocCount}
       />
     )
+  }
+
+  // On a desktop both tabs start the same way: the page's character as it
+  // looks and what it means -- or the one hovered on the graph.
+  function pageHead() {
+    if (shownTop?.kind === 'kanji') {
+      const node = cardPreview && hoveredNode ? hoveredNode : detailOf(shownTop.char)?.focus
+      return (
+        <section className="rail-section rail-page-head">
+          {node ? (
+            <KanjiHead node={node} />
+          ) : (
+            <div className="detail-head">
+              <span className="detail-glyph">{shownTop.char}</span>
+            </div>
+          )}
+        </section>
+      )
+    }
+    if (shownTop?.kind === 'word') {
+      const w = shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)
+      return (
+        <section className="rail-section rail-page-head word-panel">
+          <h2 className="entry-head">{w?.headword ?? subject?.label}</h2>
+          {w && (
+            <p className="entry-reading">
+              {w.reading}
+              {w.senses[0] && <span className="rest"> {glossOf(w.senses[0], t.lang).value}</span>}
+            </p>
+          )}
+        </section>
+      )
+    }
+    return null
   }
 
   // What the page on top is, as written, named above every tab it has.
@@ -833,6 +887,27 @@ export function App() {
             </div>
           )}
 
+          {!mobile && subject && (
+            <div className="rail-head">
+              <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
+                <button role="tab" aria-selected={tab === 'dictionary'} onClick={() => chooseRailTab('dictionary')}>
+                  {t('dictionary')}
+                </button>
+                <button
+                  role="tab"
+                  aria-selected={tab === 'associations'}
+                  onClick={() => chooseRailTab('associations')}
+                >
+                  {t('associations')}
+                  {previewing
+                    ? previewShown &&
+                      previewCount > 0 && <span className="rail-tab-count">{previewCount}</span>
+                    : assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="rail-body" ref={scroller}>
             {(shownUnder || current) && (
               <div className="rail-crumb">
@@ -860,14 +935,8 @@ export function App() {
                 before the tab is opened. */}
             {subject && mobile && <div hidden={tab !== 'associations'}>{associations(subject)}</div>}
             {subject && !mobile && (
-              <section className="assoc-below">
-                <h2 className="assoc-below-head">
-                  {t('associations')}
-                  {previewing
-                    ? previewShown &&
-                      previewCount > 0 && <span className="rail-tab-count">{previewCount}</span>
-                    : assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                </h2>
+              <div hidden={tab !== 'associations'}>
+                {tab === 'associations' && pageHead()}
                 {/* The page's own stay mounted under a preview, so they are
                     back at once when the pointer moves off. */}
                 <div hidden={previewing}>{associations(subject)}</div>
@@ -884,7 +953,7 @@ export function App() {
                     />
                   </div>
                 )}
-              </section>
+              </div>
             )}
           </div>
           {/* "Its parts" -- the decomposition editor and review queue -- is
