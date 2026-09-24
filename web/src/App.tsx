@@ -427,6 +427,20 @@ export function App() {
     [push, keepSearch],
   )
 
+  // A pick on the decomposition graph opens on top of the page, so back goes
+  // to the character it was picked from -- or goes back, when it is that one.
+  // `via` is the container a peek skipped through, which counts as visited.
+  const graphDrill = useCallback(
+    (char: string, via?: string) => {
+      setHovered(null)
+      if (via && via !== char) rememberKanji(via)
+      setFocus(char)
+      if (under?.kind === 'kanji' && under.char === char) pop()
+      else push({ kind: 'kanji', char })
+    },
+    [under, push, pop],
+  )
+
   // A pick from the search column replaces what is open beside it.
   const listKanji = useCallback(
     (char: string) => {
@@ -826,7 +840,7 @@ export function App() {
           )}
 
           {!error && data && selected && view === 'focus' && (
-            <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={hoverGraph} legend={legendOpen} />
+            <KanjiGraph data={data} filter={filter} onDrill={graphDrill} onHover={hoverGraph} legend={legendOpen} />
           )}
 
           {!error && mapOpened && (
