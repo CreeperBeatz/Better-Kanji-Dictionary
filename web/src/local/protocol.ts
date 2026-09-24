@@ -45,6 +45,7 @@ export type Method =
   | 'searchByRadicals'
   | 'byLevel'
   | 'wordsFor'
+  | 'readingWords'
   | 'kanji'
   | 'wordEntry'
 

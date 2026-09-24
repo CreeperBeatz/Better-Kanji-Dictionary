@@ -426,6 +426,12 @@ export const api = {
       get<{ char: string; words: Word[] }>(`/api/search/words-for/${encodeURIComponent(char)}`),
     ),
 
+  /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
+  readingWords: (char: string) =>
+    localFirst(local.readingWords(char), () =>
+      get<{ char: string; words: Record<string, Word> }>(`/api/search/reading-words/${encodeURIComponent(char)}`),
+    ),
+
   byLevel: (level: 1 | 2 | 3 | 4 | 5) =>
     localFirst(local.byLevel(level), () =>
       get<{ level: number; kanji: KanjiNode[]; components: KanjiNode[]; counts: { kanji: number; components: number } }>(

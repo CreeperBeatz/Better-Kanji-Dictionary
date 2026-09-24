@@ -24,6 +24,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
 import { Pitch } from './Pitch'
+import { Valency } from './Valency'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -261,6 +262,7 @@ function WordRow({
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
           </span>
+          <Valency word={w} />
         </span>
         {w.inflection && w.inflection.length > 0 && (
           <span className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</span>

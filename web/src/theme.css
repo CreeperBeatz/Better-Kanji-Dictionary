@@ -462,6 +462,30 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+.facts dd.yomi {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.9em;
+}
+
+/* A reading that forms a word of its own -- あ.げる, 上げる -- opens it. */
+.yomi-link {
+  padding: 0;
+  font: inherit;
+  color: var(--paper);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--faint);
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.yomi-link:hover,
+.yomi-link:focus-visible {
+  color: var(--ai);
+  border-bottom-color: var(--ai);
+}
+
 .fanout-line {
   margin: 16px 0 0;
   font-size: 13.5px;
@@ -1045,6 +1069,37 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--ai);
 }
 
+/* Beside it, が or を for a verb: a slot every row keeps, verb or not, so
+   "common" stays put down the list. Room for both, for verbs that go either way. */
+.valency {
+  flex: none;
+  display: inline-flex;
+  gap: 3px;
+  width: 41px;
+  align-self: baseline;
+}
+
+.valency > span {
+  display: inline-block;
+  width: 19px;
+  height: 19px;
+  box-sizing: border-box;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 17px;
+  text-align: center;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
+.valency > [data-v='vi'] {
+  color: var(--ai);
+}
+
+.valency > [data-v='vt'] {
+  color: var(--shu);
+}
+
 .word-inflection {
   display: block;
   margin: 3px 0 0;
@@ -1239,7 +1294,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .vocab-row {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto auto 1fr auto;
   align-items: baseline;
   gap: 8px;
   width: calc(100% + 12px);
