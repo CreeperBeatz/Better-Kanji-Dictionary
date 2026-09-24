@@ -742,7 +742,8 @@ function HomePage({
         ))}
       </div>
       {level && <LevelGrid level={level} onKanji={onKanji} open={open} />}
-      {history.length > 0 && (
+      {/* With a level's kanji open, they are what is being searched; the history waits. */}
+      {!level && history.length > 0 && (
         <>
           <h3 className="overlay-group">{t('recentSearches')}</h3>
           <ul className="recent-list">
