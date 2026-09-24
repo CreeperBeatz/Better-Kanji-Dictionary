@@ -6,6 +6,7 @@ import './sketch-theme.css'
 import { getLang, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { PixelTools, type PixelTool } from './pixels/PixelTools'
+import { ImageSearch } from './ImageSearch'
 
 const S = strings(
   {
@@ -20,6 +21,7 @@ const S = strings(
     box: 'Box select: select a rectangle of a picture',
     wand: 'Magic wand: select a colour in a picture',
     subject: 'Select the subject: a picture without its background',
+    findPicture: 'Find a picture to draw with',
   },
   {
     drawingFor: 'Рисунка за {c}',
@@ -33,6 +35,7 @@ const S = strings(
     box: 'Правоъгълна селекция: изберете правоъгълник от картина',
     wand: 'Магическа пръчка: изберете цвят в картина',
     subject: 'Изберете обекта: картина без фона ѝ',
+    findPicture: 'Намерете картина, с която да рисувате',
   },
 )
 
@@ -81,6 +84,7 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
   const [tool, setTool] = useState<PixelTool | null>(null)
   const [host, setHost] = useState<HTMLDivElement | null>(null)
   const [mobile, setMobile] = useState(false)
+  const [finding, setFinding] = useState(false)
   // What the scene looked like on opening, so closing only asks when
   // something would actually be lost.
   const openedAt = useRef<number | null>(null)
@@ -158,6 +162,17 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
           {icon}
         </button>
       ))}
+      <span className="px-tools-rule" aria-hidden />
+      <button
+        className="px-tool"
+        data-on={finding || undefined}
+        aria-pressed={finding}
+        onClick={() => setFinding((f) => !f)}
+        title={t('findPicture')}
+        aria-label={t('findPicture')}
+      >
+        {icon('M8.5 3a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11ZM12.6 12.6 17 17M6 10l1.6-2 1.4 1.5 1-1 1.5 1.5')}
+      </button>
     </div>
   )
 
@@ -191,6 +206,7 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
             renderTopRightUI={(isMobile) => (isMobile ? <Mobile on={setMobile} /> : tools)}
           />
           {mobile && <div className="px-tools-side">{tools}</div>}
+          {excalidraw && finding && <ImageSearch api={excalidraw} onClose={() => setFinding(false)} />}
           {excalidraw && host && <PixelTools api={excalidraw} host={host} tool={tool} onTool={setTool} />}
         </div>
       </div>

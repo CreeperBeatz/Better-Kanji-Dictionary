@@ -228,3 +228,143 @@
 .px-tools-side .px-tools {
   flex-direction: column;
 }
+
+.px-tools-rule {
+  width: 1px;
+  margin: 6px 3px;
+  background: var(--rule-bright);
+}
+
+.px-tools-side .px-tools-rule {
+  width: auto;
+  height: 1px;
+  margin: 3px 6px;
+}
+
+/* ------------------------------------------------------ finding a picture */
+
+.imgsearch {
+  position: absolute;
+  top: 64px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-family: var(--gothic);
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.imgsearch-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.imgsearch-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 9px;
+  background: var(--sumi-sunk);
+  color: var(--paper);
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  outline: none;
+}
+
+.imgsearch-input:focus {
+  border-color: var(--ai-deep);
+}
+
+.imgsearch-kinds {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.imgsearch-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.imgsearch-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.imgsearch-grid button {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.imgsearch-grid button:hover:not(:disabled) {
+  border-color: var(--ai);
+}
+
+.imgsearch-grid button[data-adding] {
+  border-color: var(--ai);
+  opacity: 0.6;
+}
+
+.imgsearch-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.imgsearch-note {
+  margin: 8px 2px;
+  color: var(--paper-dim);
+}
+
+.imgsearch-more {
+  display: block;
+  margin: 8px auto;
+}
+
+.imgsearch-credit {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.imgsearch-credit a {
+  color: var(--ai);
+}
+
+@media (max-width: 730px) {
+  .imgsearch {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    top: 64px;
+    bottom: 76px;
+  }
+}
+
+.imgsearch-input::-webkit-search-cancel-button {
+  display: none;
+}
