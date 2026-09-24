@@ -13,7 +13,8 @@ import { DetailPanel, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
-import { LevelFilter, ToComponents, type StageView } from './StageControls'
+import { LevelFilter, type StageView } from './StageControls'
+import { MapCard } from './map/MapCard'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
 
@@ -33,6 +34,7 @@ const S = strings(
     showSearch: 'Show the search beside the dictionary',
     hideSearch: 'Put the search back above the dictionary',
     pickResult: 'Pick a result and it opens here.',
+    mapBestCollapsed: 'The map is best viewed in collapsed view',
     focus: 'Components',
     map: 'Map',
     back: 'Back (Backspace)',
@@ -56,6 +58,7 @@ const S = strings(
     showSearch: 'Покажете търсенето до речника',
     hideSearch: 'Върнете търсенето над речника',
     pickResult: 'Изберете резултат и той ще се отвори тук.',
+    mapBestCollapsed: 'Картата се разглежда най-добре в свит изглед',
     focus: 'Компоненти',
     map: 'Карта',
     back: 'Назад (Backspace)',
@@ -325,6 +328,12 @@ export function App() {
     if (v === 'map') setMapOpened(true)
   }, [])
 
+  // A character picked on the map is previewed over it, not opened.
+  const [mapCard, setMapCard] = useState<string | null>(null)
+  useEffect(() => {
+    if (view !== 'map') setMapCard(null)
+  }, [view])
+
   useEffect(() => {
     document.title = titleOf(top)
   }, [top])
@@ -422,6 +431,7 @@ export function App() {
   const openLevel = useCallback(
     (level: Level) => {
       keepSearch()
+      setFilter(level)
       push({ kind: 'level', level })
     },
     [push, keepSearch],
@@ -440,6 +450,32 @@ export function App() {
     },
     [under, push, pop],
   )
+
+  // From the map's card: the character in the dictionary, and its graph.
+  const seeInDictionary = useCallback(
+    (char: string) => {
+      setMapCard(null)
+      drill(char)
+      if (mobile) {
+        setViewState('focus')
+        setPane('rail')
+      } else setView('focus')
+    },
+    [drill, mobile, setView],
+  )
+
+  // The map wants the room the search column takes: going to it split says
+  // so, once, and points at the button that folds it away.
+  const [mapHint, setMapHint] = useState(false)
+  useEffect(() => {
+    if (view !== 'map' || !split) {
+      setMapHint(false)
+      return
+    }
+    setMapHint(true)
+    const timer = setTimeout(() => setMapHint(false), 3200)
+    return () => clearTimeout(timer)
+  }, [view, split])
 
   // A pick from the search column replaces what is open beside it.
   const listKanji = useCallback(
@@ -461,6 +497,7 @@ export function App() {
   const listLevel = useCallback(
     (level: Level) => {
       rememberSearch(q)
+      setFilter(level)
       openOver({ kind: 'search', q }, { kind: 'level', level })
     },
     [q, openOver],
@@ -668,6 +705,7 @@ export function App() {
         room && (
           <button
             className="searchbar-tool split-toggle"
+            data-flash={mapHint || undefined}
             aria-pressed={split}
             onClick={() => chooseSplit(!split)}
             title={t(split ? 'hideSearch' : 'showSearch')}
@@ -847,22 +885,27 @@ export function App() {
             <div className="map-host" hidden={view !== 'map'}>
               <KanjiMap
                 scope={scopeOf(filter)}
-                focus={focus}
-                focusNode={selected && data?.focus.char === focus ? data.focus : null}
-                onSelect={(char) => {
-                  drill(char)
-                  setView('focus')
-                }}
-                onDeselect={deselect}
-                onOpen={() => setView('focus')}
+                focus={mapCard ?? focus}
+                focusNode={!mapCard && selected && data?.focus.char === focus ? data.focus : null}
+                onSelect={setMapCard}
+                onDeselect={() => (mapCard ? setMapCard(null) : deselect())}
+                onOpen={seeInDictionary}
                 onScope={setFilter}
                 legend={legendOpen && view === 'map'}
               />
             </div>
           )}
 
+          {view === 'map' && mapCard && (
+            <MapCard char={mapCard} onOpen={() => seeInDictionary(mapCard)} onClose={() => setMapCard(null)} />
+          )}
+          {view === 'map' && mapHint && (
+            <p className="map-hint" role="status">
+              {t('mapBestCollapsed')}
+            </p>
+          )}
+
           <div className="stage-top">
-            {!mobile && !error && view === 'map' && <ToComponents onClick={() => setView('focus')} />}
             <div className="stage-corner">
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />

@@ -97,36 +97,12 @@ export function LevelFilter({
   )
 }
 
-/** A character with what it is made of and what it builds. */
-function FocusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden>
-      <path d="M8 8V3M8 8l-4.5 3.5M8 8l4.5 3.5" />
-      <circle cx="8" cy="8" r="2.4" className="solid" />
-      <circle cx="8" cy="2.6" r="1.5" />
-      <circle cx="3.2" cy="12" r="1.5" />
-      <circle cx="12.8" cy="12" r="1.5" />
-    </svg>
-  )
-}
-
 /** A field of characters. */
 function MapIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden className="solid">
       {[3, 8, 13].flatMap((y) => [3, 8, 13].map((x) => <circle key={`${x}${y}`} cx={x} cy={y} r="1.3" />))}
     </svg>
-  )
-}
-
-/** On the map: back to the one character, what it is made of and what it builds. */
-export function ToComponents({ onClick }: { onClick: () => void }) {
-  const t = S(useLang())
-  return (
-    <button className="stage-link" onClick={onClick} title={t('focusTitle')}>
-      <FocusIcon />
-      {t('focus')}
-    </button>
   )
 }
 
