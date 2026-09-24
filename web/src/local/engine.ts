@@ -133,6 +133,26 @@ function distinct(xs: number[]): number[] {
   return [...new Set(xs)]
 }
 
+function compareKeys(a: number[], b: number[]): number {
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
+  return 0
+}
+
+/** The (written, kana) a word read this way would have, likeliest first: the server's `reading_forms`. */
+function readingForms(char: string, reading: string, on: boolean): [string, string][] {
+  const r = reading.replace(/^-+|-+$/g, '')
+  if (!on) {
+    const dot = r.indexOf('.')
+    const [stem, okuri] = dot < 0 ? [r, ''] : [r.slice(0, dot), r.slice(dot + 1)]
+    return [[char + okuri, stem + okuri]]
+  }
+  const kana = katakanaToHiragana(r)
+  const out: [string, string][] = [[char, kana], [char + 'する', kana + 'する']]
+  if (kana.endsWith('つ') || kana.endsWith('ち')) out.push([char + 'する', kana.slice(0, -1) + 'っする'])
+  out.push([char + 'じる', kana + 'じる'], [char + 'ずる', kana + 'ずる'])
+  return out
+}
+
 // Words in Latin or Cyrillic letters. Japanese among two or more of them is a
 // question about it, for Search by meaning, not a word to look up
 // (server/routes/search.py, is_question).
@@ -587,6 +607,40 @@ export class Engine {
   async wordsFor(char: string): Promise<{ char: string; words: Word[] }> {
     const ids = [...char].length === 1 ? (this.pack.wordsFor[char] ?? []) : []
     return { char, words: await this.fetchWords(ids.map((id) => this.indexOfId(id)).filter((i) => i >= 0)) }
+  }
+
+  /** For each of the character's readings, the word it forms: the server's `reading_words`. */
+  async readingWords(char: string): Promise<{ char: string; words: Record<string, Word> }> {
+    const r = [...char].length === 1 ? this.row(char) : undefined
+    if (!r) return { char, words: {} }
+    const readings: [string, boolean][] = [...r[8].map((y) => [y, true] as [string, boolean]), ...r[9].map((y) => [y, false] as [string, boolean])]
+
+    const found: [string, string, number, number][] = [] // reading, written, rank, word index
+    for (const [reading, on] of readings) {
+      readingForms(char, reading, on).forEach(([written, kana], rank) => {
+        const a = this.forms.indexOf(written)
+        const b = this.forms.indexOf(kana)
+        if (a < 0 || b < 0) return
+        const reads = new Set(this.wordsOfForm(b))
+        for (const w of this.wordsOfForm(a)) if (reads.has(w)) found.push([reading, written, rank, w])
+      })
+    }
+    const words = new Map((await this.fetchWords([...new Set(found.map((f) => f[3]))])).map((w) => [w.id, w]))
+    const key = ([, written, rank, w]: (typeof found)[number]): number[] => {
+      const nf = this.nf[w]
+      return [this.common[w] ? 0 : 1, words.get(this.ids[w])?.headword === written ? 0 : 1, nf ? 0 : 1, nf, rank, this.ids[w]]
+    }
+    const best = new Map<string, (typeof found)[number]>()
+    for (const f of found) {
+      const was = best.get(f[0])
+      if (!was || compareKeys(key(f), key(was)) < 0) best.set(f[0], f)
+    }
+    const out: Record<string, Word> = {}
+    for (const [reading, f] of best) {
+      const w = words.get(this.ids[f[3]])
+      if (w) out[reading] = w
+    }
+    return { char, words: out }
   }
 
   /** What the rail shows for a character before its graph arrives. */

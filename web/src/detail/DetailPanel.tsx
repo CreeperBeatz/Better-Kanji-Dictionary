@@ -5,6 +5,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
+import { Valency } from '../search/Valency'
 
 const S = strings(
   {
@@ -25,6 +26,7 @@ const S = strings(
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
     openEntry: 'Open this entry',
+    openReading: 'Open {word}, read {reading}',
     builtFrom_one: 'Built from {b} part',
     builtFrom_other: 'Built from {b} parts',
     acrossLevels: ' across {n} levels',
@@ -48,6 +50,7 @@ const S = strings(
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
     openEntry: 'Отворете тази статия',
+    openReading: 'Отворете {word}, четено {reading}',
     builtFrom_one: 'Изграден от {b} част',
     builtFrom_other: 'Изграден от {b} части',
     acrossLevels: ' на {n} нива',
@@ -81,10 +84,29 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
+/** A character as it looks, and what it means: the top of its page, on either tab. */
+export function KanjiHead({ node }: { node: KanjiNode }) {
+  const lang = useLang()
+  const t = S(lang)
+  const [lead, ...rest] = meaningsOf(node, lang).value
+  return (
+    <div className="detail-head">
+      <span className="detail-glyph">{node.char}</span>
+      <div>
+        <p className="detail-meanings">
+          {lead ?? t('noMeaning')}
+          {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
+  const [byReading, setByReading] = useState<{ char: string; words: Record<string, Word> } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
 
   // Vocabulary follows the focus, not the hover -- otherwise it would thrash
@@ -101,26 +123,51 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
     }
   }, [data.focus.char])
 
+  // Each reading opens the word it forms: あ.げる on 上 is 上げる.
+  useEffect(() => {
+    let stale = false
+    api.readingWords(data.focus.char).then(
+      (d) => !stale && setByReading(d),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [data.focus.char])
+
   // Hovering a node previews it without disturbing the graph; the focus is what
   // you see when nothing is under the cursor.
   const n = hovered ?? data.focus
   const isPreview = hovered !== null && hovered.char !== data.focus.char
 
-  const [lead, ...rest] = meaningsOf(n, lang).value
+  const formed = byReading?.char === n.char ? byReading.words : {}
+  // Every reading, since the verbs tend to come last; one for a prefix or
+  // suffix form and the plain one -- うえ, -うえ -- linked to whichever forms a word.
+  const readings = (list: string[]) => {
+    const plain = new Map<string, Word | undefined>()
+    for (const r of list) {
+      const p = r.replace(/^-+|-+$/g, '')
+      plain.set(p, plain.get(p) ?? formed[r])
+    }
+    return [...plain].map(([r, w]) => (
+      <span key={r}>
+        {w ? (
+          <button className="yomi-link" onClick={() => onWord(w)} title={t('openReading', { word: w.headword, reading: w.reading })}>
+            {r}
+          </button>
+        ) : (
+          r
+        )}
+      </span>
+    ))
+  }
+
   const level = levelOf(n, lang)
   const counts = data.counts
 
   return (
     <section className="rail-section">
-      <div className="detail-head">
-        <span className="detail-glyph">{n.char}</span>
-        <div>
-          <p className="detail-meanings">
-            {lead ?? t('noMeaning')}
-            {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
-          </p>
-        </div>
-      </div>
+      <KanjiHead node={n} />
 
       {onComponents && !isPreview && (
         <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>
@@ -132,13 +179,13 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
         {n.onYomi.length > 0 && (
           <>
             <dt>{t('on')}</dt>
-            <dd className="yomi">{n.onYomi.slice(0, 4).join('  ')}</dd>
+            <dd className="yomi">{readings(n.onYomi)}</dd>
           </>
         )}
         {n.kunYomi.length > 0 && (
           <>
             <dt>{t('kun')}</dt>
-            <dd className="yomi">{n.kunYomi.slice(0, 4).join('  ')}</dd>
+            <dd className="yomi">{readings(n.kunYomi)}</dd>
           </>
         )}
         {n.strokes != null && (
@@ -179,6 +226,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
                   <span className="vocab-word">{w.headword}</span>
                   <span className="vocab-reading">{w.reading}</span>
                   <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
+                  <Valency word={w} />
                 </button>
               </li>
             ))}

@@ -204,6 +204,7 @@ export const local = {
   searchByRadicals: (radicals: string[]) => call<RadicalSearchResponse>('searchByRadicals', radicals),
   byLevel: (level: number) => call<LevelResponse>('byLevel', level),
   wordsFor: (char: string) => call<{ char: string; words: Word[] }>('wordsFor', char),
+  readingWords: (char: string) => call<{ char: string; words: Record<string, Word> }>('readingWords', char),
   kanji: (char: string) => call<{ focus: KanjiNode; strokes: string[] } | null>('kanji', char),
   wordEntry: (id: number) => call<WordEntry | null>('wordEntry', id),
 }

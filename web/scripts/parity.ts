@@ -20,6 +20,7 @@ interface Golden {
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
   wordsFor: { char: string; out: number[] }[]
+  readingWords: { char: string; out: Record<string, number> }[]
   describe: { chars: string[]; out: unknown[] }
 }
 
@@ -134,6 +135,15 @@ for (const { char, out } of golden.wordsFor) {
   else note('words-for', char, out, got)
 }
 console.log(`words-for: ${wfOk}/${golden.wordsFor.length} identical`)
+
+let rwOk = 0
+for (const { char, out } of golden.readingWords) {
+  const got = Object.fromEntries(Object.entries((await engine.readingWords(char)).words).map(([r, w]) => [r, w.id]))
+  const keys = [...new Set([...Object.keys(out), ...Object.keys(got)])].sort()
+  if (keys.every((k) => out[k] === got[k])) rwOk++
+  else note('reading-words', char, out, got)
+}
+console.log(`reading-words: ${rwOk}/${golden.readingWords.length} identical`)
 
 for (const f of failures.slice(0, 40)) console.log(f)
 if (failures.length > 40) console.log(`... and ${failures.length - 40} more`)

@@ -5,7 +5,7 @@
     python tests/offline_parity.py --keep DIR # and leave the answers in DIR
 
 Asks the server's own route functions -- search, recognise, the radical
-picker, words-for -- then has web/scripts/parity.ts put the same questions to
+picker, words-for, reading-words -- then has web/scripts/parity.ts put the same questions to
 the TypeScript engine over the built offline pack, and lists every answer
 that differs. Queries are the hand-picked hard cases below plus a seeded
 random sample of real headwords, readings, glosses and their prefixes, each
@@ -32,7 +32,7 @@ from server import bulgarian, offline, recognize  # noqa: E402
 from server.db import query  # noqa: E402
 from server.japanese import katakana_to_hiragana  # noqa: E402
 from server.routes.radicals import search_by_radicals  # noqa: E402
-from server.routes.search import search, words_for_kanji  # noqa: E402
+from server.routes.search import reading_words, search, words_for_kanji  # noqa: E402
 
 HARD = [
     # English, including prefixes, stop words, punctuation and accents
@@ -181,7 +181,7 @@ def main() -> int:
         asked += [(q, "en", True, how) for q in HARD + queries[: 50 if quick else 300]]
         asked += [(q, "bg", False, how) for q in HARD_BG]
     print(f"asking the server {len(asked)} searches")
-    golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": []}
+    golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": [], "readingWords": []}
     for q, lang, common, (sort, order) in asked:
         out = search(q=q[:64], limit=30, lang=lang, common=common, sort=sort, order=order)
         golden["search"].append({"q": q[:64], "lang": lang, "common": common, "sort": sort, "order": order, "out": out})
@@ -220,6 +220,8 @@ def main() -> int:
 
     for char in rng.sample(common, 60 if quick else 300):
         golden["wordsFor"].append({"char": char, "out": [w["id"] for w in words_for_kanji(char, limit=12)["words"]]})
+        out = {r: w["id"] for r, w in reading_words(char)["words"].items()}
+        golden["readingWords"].append({"char": char, "out": out})
 
     web = ROOT / "web"
     keep = sys.argv[sys.argv.index("--keep") + 1] if "--keep" in sys.argv else None

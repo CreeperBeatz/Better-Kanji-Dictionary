@@ -10,8 +10,13 @@ export type ContainerFilter = 'all' | 'common' | 1 | 2 | 3 | 4 | 5
 interface Props {
   data: GraphResponse
   filter: ContainerFilter
-  /** `via` is the container a peeked character was reached through. */
-  onDrill: (char: string, via?: string) => void
+  /** The character whose page is open, marked on the graph. */
+  open: string | null
+  /** Open a character's page, leaving the graph where it is. `via` is the
+      container a peeked character was reached through. */
+  onOpen: (char: string, via?: string) => void
+  /** Make a character the graph's centre. */
+  onRecentre: (char: string, via?: string) => void
   onHover: (char: string | null) => void
   /** Show how to read the graph, opened from the (i). */
   legend: boolean
@@ -24,6 +29,7 @@ const S = strings(
     rare: 'rare',
     zoom: 'Zoom',
     recentre: 'Recentre on {c}',
+    open: 'See in Dictionary',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     whole: 'Show the whole graph',
@@ -39,6 +45,7 @@ const S = strings(
     rare: 'рядък',
     zoom: 'Мащаб',
     recentre: 'Центрирайте върху {c}',
+    open: 'Вижте в речника',
     zoomIn: 'Приближете',
     zoomOut: 'Отдалечете',
     whole: 'Покажете целия граф',
@@ -136,7 +143,7 @@ const PREFETCH = 64
 /** Hover this long before the peek opens, so sweeping across the graph is quiet. */
 const OPEN_DELAY = 120
 const CLOSE_DELAY = 200
-/** Press this long on a touch screen to see a character's details, as hovering does. */
+/** Press this long on a touch screen for the menu a right click opens. */
 const HOLD_DELAY = 450
 
 async function fetchAbove(chars: string[]): Promise<void> {
@@ -153,7 +160,18 @@ interface Peek {
   via: Set<string>
 }
 
-export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
+/** Where a card or menu over the graph stands, in the svg's own pixels. */
+interface Spot {
+  char: string
+  via?: string
+  x: number
+  y: number
+  /** The svg's size then, for the card to keep inside. */
+  width: number
+  height: number
+}
+
+export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, legend }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
@@ -176,8 +194,14 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null)
   // A pinch ends with fingers lifting over nodes, which must not open them.
   const pinched = useRef(false)
-  const [held, setHeld] = useState<{ node: KanjiNode; x: number; y: number } | null>(null)
+  // Touch has no hover or right click: a tap shows a character's card, and
+  // pressing and holding opens the menu a right click does.
+  const [card, setCard] = useState<Spot | null>(null)
+  const [menu, setMenu] = useState<Spot | null>(null)
   const hold = useRef<{ timer?: number; shown: boolean }>({ shown: false })
+  // What the last press was made with, which decides what its click does.
+  const pointer = useRef('mouse')
+  const popRef = useRef<HTMLDivElement>(null)
   // The full entries, for the hold card: layout nodes carry only what drawing needs.
   const entries = useMemo(() => {
     const m = new Map<string, KanjiNode>()
@@ -248,12 +272,43 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   // A new focus or filter closes whatever was open.
   useEffect(() => {
     setPeek(null)
+    setCard(null)
+    setMenu(null)
     const t = timers.current
     return () => {
       clearTimeout(t.open)
       clearTimeout(t.close)
     }
   }, [data.focus.char, filter])
+
+  // A press anywhere but on the card or menu puts it away; a press on a node
+  // then opens that one's instead.
+  const popped = card !== null || menu !== null
+  useEffect(() => {
+    if (!popped) return
+    function away(e: PointerEvent) {
+      if (popRef.current?.contains(e.target as Node)) return
+      setCard(null)
+      setMenu(null)
+    }
+    function esc(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      setCard(null)
+      setMenu(null)
+    }
+    document.addEventListener('pointerdown', away, true)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', away, true)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [popped])
+
+  /** The card and menu stand where the node was; moving the graph leaves them behind. */
+  function unpop() {
+    setCard(null)
+    setMenu(null)
+  }
 
   function openPeek(host: PositionedNode) {
     const above = aboveCache.get(host.char)
@@ -315,6 +370,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     e.preventDefault()
     const rect = svgRef.current?.getBoundingClientRect()
     if (!rect) return
+    unpop()
     zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top)
   }
 
@@ -324,6 +380,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
   }
 
   function onPointerDown(e: React.PointerEvent) {
+    pointer.current = e.pointerType
     if (e.button !== 0) return
     if (e.pointerType === 'touch') {
       const rect = svgRef.current?.getBoundingClientRect()
@@ -336,6 +393,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
         pinched.current = true
         clearTimeout(hold.current.timer)
         setPeek(null)
+        unpop()
         pinch.current = spread()
         return
       }
@@ -343,29 +401,32 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
   }
 
-  // Touch has no hover, so pressing and holding stands in for it. Letting go
-  // hides the card and does not open the character.
-  function startHold(e: React.PointerEvent, char: string) {
-    hold.current.shown = false
-    if (e.pointerType !== 'touch') return
+  /** Where a pointer event is, in the svg's own pixels. */
+  function spotOf(e: { clientX: number; clientY: number }, char: string, via?: string): Spot | null {
     const rect = svgRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
+    if (!rect) return null
+    return { char, via, x: e.clientX - rect.left, y: e.clientY - rect.top, width: rect.width, height: rect.height }
+  }
+
+  // Letting go leaves the menu up, for the finger to pick from.
+  function startHold(e: React.PointerEvent, char: string, via?: string) {
+    hold.current.shown = false
     clearTimeout(hold.current.timer)
+    // The one in the middle is the centre already.
+    if (e.pointerType !== 'touch' || char === data.focus.char) return
+    const spot = spotOf(e, char, via)
+    if (!spot) return
     hold.current.timer = window.setTimeout(() => {
-      const node = entries.get(char)
-      if (!node) return
       hold.current.shown = true
       drag.current = null
       setPeek(null)
-      setHeld({ node, x, y })
+      setCard(null)
+      setMenu(spot)
     }, HOLD_DELAY)
   }
 
   function endHold() {
     clearTimeout(hold.current.timer)
-    setHeld(null)
   }
 
   function onPointerMove(e: React.PointerEvent) {
@@ -391,6 +452,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
       d.moved = true
       svgRef.current?.setPointerCapture?.(e.pointerId)
       setPeek(null)
+      unpop()
     }
     if (d.moved) setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
   }
@@ -402,17 +464,67 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
     endHold()
   }
 
-  function activate(node: PositionedNode) {
-    // The click that ends a press-and-hold only closes the card.
+  // A click opens the character's page and leaves the graph as it is; a
+  // double click, or the menu, makes it the centre. On a touch screen, where
+  // the page is not beside the graph, a tap shows its card instead.
+  function activate(e: React.MouseEvent | React.KeyboardEvent, char: string, via?: string) {
+    // The click that ends a press-and-hold only leaves the menu up.
     if (hold.current.shown) {
       hold.current.shown = false
       return
     }
     if (pinched.current) return
+    if ('clientX' in e && pointer.current === 'touch') {
+      const spot = spotOf(e, char, via)
+      if (spot) setCard(spot)
+      return
+    }
     // The one in the middle too: after a search has taken the rail, clicking
     // it brings its page back. When its page is already up, nothing changes.
-    onDrill(node.char)
+    onOpen(char, via)
   }
+
+  function recentreOn(char: string, via?: string) {
+    unpop()
+    if (char !== data.focus.char) onRecentre(char, via)
+  }
+
+  /** What a node answers to, on the graph or in a peek. */
+  function handlers(char: string, via?: string) {
+    return {
+      onClick: (e: React.MouseEvent) => {
+        e.stopPropagation()
+        activate(e, char, via)
+      },
+      onDoubleClick: (e: React.MouseEvent) => {
+        if (pointer.current === 'touch') return
+        e.stopPropagation()
+        recentreOn(char, via)
+      },
+      onContextMenu: (e: React.MouseEvent) => {
+        e.preventDefault()
+        e.stopPropagation()
+        // Some phones say a long press is one too; the hold has that covered.
+        if (pointer.current === 'touch' || char === data.focus.char) return
+        setCard(null)
+        setMenu(spotOf(e, char, via))
+      },
+      onPointerDown: (e: React.PointerEvent) => startHold(e, char, via),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          activate(e, char, via)
+        }
+      },
+    }
+  }
+
+  /** The full entry for a character on the graph or in the peek. */
+  function entryOf(char: string): KanjiNode | undefined {
+    return entries.get(char) ?? peek?.items.find((it) => it.char === char)?.node
+  }
+
+  const cardNode = card && entryOf(card.char)
 
   const renderNode = (n: PositionedNode, extra?: { className?: string; onEnter?: () => void }) => {
     const above = n.kind === 'container' ? aboveCache.get(n.char) : undefined
@@ -432,8 +544,7 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
           transform: `translate(${n.x}px, ${n.y}px)`,
           opacity: extra ? 1 : n.weight === undefined ? 1 : 0.42 + n.weight * 0.58,
         }}
-        onClick={() => activate(n)}
-        onPointerDown={(e) => startHold(e, n.char)}
+        {...handlers(n.char)}
         onMouseEnter={() => {
           setOver(n.char)
           onHover(n.char)
@@ -447,12 +558,6 @@ export function KanjiGraph({ data, filter, onDrill, onHover, legend }: Props) {
         }}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            activate(n)
-          }
-        }}
       >
         <title>
           {n.char}
@@ -466,6 +571,9 @@ ${t('via')}`}
         <circle className="plate" r={n.radius} strokeWidth={n.kind === 'focus' ? 1 : 0.75} />
 
         {n.kind === 'focus' && <circle className="seal" r={n.radius + 7} />}
+
+        {/* Its page is the one open, while the graph stays centred elsewhere. */}
+        {n.kind !== 'focus' && n.char === open && <circle className="open-ring" r={n.radius + 5} />}
 
         {hasAbove && (
           <path
@@ -534,9 +642,10 @@ ${t('via')}`}
               peek={peek}
               zoom={Math.max(1, 1 / view.scale)}
               host={renderNode(peek.host, { className: 'peek-host', onEnter: stay })}
+              open={open}
               onEnter={stay}
               onLeave={leave}
-              onPick={(c) => onDrill(c, peek.host.char)}
+              handlers={(c) => handlers(c, peek.host.char)}
             />
           )}
         </g>
@@ -562,13 +671,28 @@ ${t('via')}`}
         </button>
       </div>
 
-      {held && (
+      {card && cardNode && (
         <HoldCard
-          node={held.node}
-          x={held.x}
-          y={held.y}
-          width={svgRef.current?.getBoundingClientRect().width ?? 0}
+          ref={popRef}
+          node={cardNode}
+          x={card.x}
+          y={card.y}
+          width={card.width}
+          below={card.y < card.height / 2}
+          openLabel={t('open')}
+          onOpen={() => {
+            setCard(null)
+            onOpen(card.char, card.via)
+          }}
         />
+      )}
+
+      {menu && (
+        <div ref={popRef} className="graph-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+          <button role="menuitem" autoFocus onClick={() => recentreOn(menu.char, menu.via)}>
+            <span aria-hidden="true">◎</span> {t('recentre', { c: menu.char })}
+          </button>
+        </div>
       )}
 
       {legend && (
@@ -599,18 +723,21 @@ function PeekLayer({
   peek,
   zoom,
   host,
+  open,
   onEnter,
   onLeave,
-  onPick,
+  handlers,
 }: {
   peek: Peek
   /** A crowded graph is drawn small; the peek magnifies around its host so it
       always reads at full size. */
   zoom: number
   host: React.ReactNode
+  open: string | null
   onEnter: () => void
   onLeave: () => void
-  onPick: (char: string) => void
+  /** Picking one opens it and leaves the peek up. */
+  handlers: (char: string) => React.DOMAttributes<SVGGElement>
 }) {
   const t = S(useLang())
   const { host: h, items } = peek
@@ -669,18 +796,9 @@ function PeekLayer({
               animationDelay: `${Math.min(i, 24) * 14}ms`,
             } as React.CSSProperties
           }
-          onClick={(e) => {
-            e.stopPropagation()
-            onPick(it.char)
-          }}
+          {...handlers(it.char)}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              onPick(it.char)
-            }
-          }}
         >
           <title>
             {it.char}
@@ -691,6 +809,7 @@ ${levelOf(it.node, t)}`}
 ${t('via')}`}
           </title>
           <circle className="plate" r={it.radius} />
+          {it.char === open && <circle className="open-ring" r={it.radius + 4} />}
           <text className="glyph" fontSize={it.radius * 1.28}>
             {it.char}
           </text>

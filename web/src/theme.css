@@ -177,8 +177,8 @@ body {
   border-bottom: 1px solid var(--rule);
 }
 
-/* Above every page: the way back on the left, what you are looking at on
-   the right -- the same on the dictionary and associations tabs. */
+/* Above every page with one behind it: the way back, the same on the
+   dictionary and associations tabs. */
 .rail-crumb {
   display: flex;
   align-items: center;
@@ -191,18 +191,6 @@ body {
 .back-link.rail-back {
   flex: none;
   margin: 0;
-}
-
-.rail-current {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--mincho);
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--paper);
 }
 
 /* A wide invisible grip over the rail's border; the border itself lights up. */
@@ -474,6 +462,30 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+.facts dd.yomi {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.9em;
+}
+
+/* A reading that forms a word of its own -- あ.げる, 上げる -- opens it. */
+.yomi-link {
+  padding: 0;
+  font: inherit;
+  color: var(--paper);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--faint);
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.yomi-link:hover,
+.yomi-link:focus-visible {
+  color: var(--ai);
+  border-bottom-color: var(--ai);
+}
+
 .fanout-line {
   margin: 16px 0 0;
   font-size: 13.5px;
@@ -726,16 +738,19 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     height: var(--app-h, 100%);
   }
 
-  /* The rail's parts join the page's grid: tabs along the top, the search
-     along the bottom where the thumb is, and between them one pane at a time --
-     the rail's pages or the stage. The hidden one keeps its size, so the graph
-     and the map keep their framing and the pages their scroll. */
+  /* The rail's parts join the page's grid: the search along the top, a
+     page's tabs along the bottom where the thumb is, and between them one pane
+     at a time -- the rail's pages or the stage. The hidden one keeps its size,
+     so the graph and the map keep their framing and the pages their scroll. */
   /* minmax(0, ...) so a row that scrolls sideways, like the draw pad's
      guesses, scrolls inside the screen instead of widening it. */
+  /* Hidden overflow, so a page swiped aside goes off the screen instead of
+     widening it. */
   .shell-grid {
+    overflow: hidden;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
-    grid-template-areas: 'head' 'main' 'bar';
+    grid-template-areas: 'bar' 'main' 'tabs';
   }
 
   .rail {
@@ -744,12 +759,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
   .rail-resizer {
     display: none;
-  }
-
-  .rail-head {
-    grid-area: head;
-    padding: 0 12px 0 8px;
-    background: var(--sumi-sunk);
   }
 
   .rail-body {
@@ -764,6 +773,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
   .searchbar {
     grid-area: bar;
+  }
+
+  .phone-tabs {
+    grid-area: tabs;
   }
 
   .shell-grid[data-pane='rail'] .stage,
@@ -799,6 +812,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .search-input:focus {
   outline: none;
+  border-color: var(--ai-deep);
+}
+
+/* On a phone, a page pulled down far enough that letting go opens the search. */
+.searchbar[data-pulled] .search-input {
   border-color: var(--ai-deep);
 }
 
@@ -1051,6 +1069,63 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--ai);
 }
 
+/* Before it, が or を for a verb, する before those for a noun that takes it.
+   Every row keeps room for both particles, verb or not, and the marks sit
+   right against "common", so it stays put down the list. */
+.valency {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.verb-marks {
+  flex: none;
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 47px;
+  align-self: center;
+}
+
+.word-head .verb-marks {
+  margin-left: auto;
+}
+
+.word-head .verb-marks + .word-common {
+  margin-left: 0;
+}
+
+/* A noun that takes する: said, not boxed, so it is not read as a third particle. */
+.suru {
+  font-family: var(--gothic);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.valency > span {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  font-family: var(--gothic);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  border: 1.5px solid currentColor;
+  border-radius: 5px;
+}
+
+.valency > [data-v='vi'] {
+  color: var(--ai);
+}
+
+.valency > [data-v='vt'] {
+  color: var(--shu);
+}
+
 .word-inflection {
   display: block;
   margin: 3px 0 0;
@@ -1245,7 +1320,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .vocab-row {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto auto 1fr auto;
   align-items: baseline;
   gap: 8px;
   width: calc(100% + 12px);
@@ -2089,7 +2164,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 10px 0 0 auto;
 }
 
-/* The draw pad, a popup under the search box (above it on a phone). Every
+/* The draw pad, a popup under the search box. Every
    part has a fixed size, so it does not jump about as the guesses come and
    go: what it guessed on top, two rows of them and then a scroll, the box
    below, and one line for the buttons and the stroke count. */
@@ -2218,11 +2293,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 @media (max-width: 900px) {
-  /* Along the bottom: the tools open upward, above the box. */
+  /* Along the top: the tools open downward, under the box. */
   .searchbar {
-    flex-direction: column-reverse;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid var(--rule);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .searchbar .profile-button {
+    flex: none;
+    margin-left: 2px;
   }
 
   /* 16px, or iOS zooms the page when the box is focused. */
@@ -2238,13 +2317,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   }
 
   .searchtools {
-    margin: 0 0 10px;
     max-height: 52vh;
   }
 
   .drawpop {
-    top: auto;
-    bottom: calc(100% + 6px);
     left: 10px;
     right: 10px;
   }
@@ -2307,6 +2383,62 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+
+/* The kanji of the word a graph is of, along the bottom of it: which one is shown. */
+.word-kanji {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 4px 10px;
+  transform: translateX(-50%);
+  font-family: var(--mincho);
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.word-kanji-char {
+  position: relative;
+  padding: 2px 5px 6px;
+  font: inherit;
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--paper-dim);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 120ms var(--ease), background 120ms var(--ease);
+}
+
+@media (hover: hover) {
+  .word-kanji-char:hover {
+    color: var(--paper);
+    background: var(--sumi);
+  }
+}
+
+.word-kanji-char[aria-pressed='true'] {
+  color: var(--paper);
+  cursor: default;
+}
+
+.word-kanji-char[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 14px;
+  height: 2px;
+  margin-left: -7px;
+  background: var(--shu);
+  border-radius: 1px;
+}
 
 .info-button {
   position: absolute;
@@ -3982,19 +4114,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--shu);
 }
 
-/* A desktop's associations, after the page. */
-.assoc-below-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 18px 22px 0;
-  color: var(--paper-dim);
-  font-family: var(--gothic);
-  font-size: 13px;
-  font-weight: 500;
-}
-
 /* The search column's toggle, at the end of the search row. */
 .split-toggle svg {
   width: 17px;
@@ -4240,47 +4359,51 @@ html {
   background-color: var(--muted);
 }
 
-/* After the tab styles above, so these win on a phone. */
+/* Phone scrollbars float over the content; nothing to reserve room for. */
 @media (max-width: 900px) {
-  /* Phone scrollbars float over the content; nothing to reserve room for. */
   .rail-body {
     scrollbar-gutter: auto;
   }
-
-  .rail-tabs {
-    flex: 1;
-    gap: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .rail-tabs button {
-    flex: none;
-    padding: 9px 8px 10px;
-    font-size: 12.5px;
-  }
-
-  .rail-tabs button:first-child {
-    margin-left: 0;
-  }
-
-  .rail-tabs button[aria-selected='true']::after {
-    left: 8px;
-    right: 8px;
-  }
 }
 
-/* Six tabs on a narrow phone: closer together, so they mostly fit unscrolled. */
-@media (max-width: 440px) {
-  .rail-tabs button {
-    padding-left: 6px;
-    padding-right: 6px;
-  }
+/* A phone's page tabs, along the bottom: Dictionary, Associations, Components. */
+.phone-tabs {
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--sumi-sunk);
+  border-top: 1px solid var(--rule);
+}
 
-  .rail-tabs button[aria-selected='true']::after {
-    left: 6px;
-    right: 6px;
-  }
+.phone-tabs button {
+  position: relative;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 4px 14px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.phone-tabs button[aria-selected='true'] {
+  color: var(--paper);
+}
+
+/* The vermilion mark on the edge it faces the page from. */
+.phone-tabs button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 22%;
+  right: 22%;
+  height: 2px;
+  background: var(--shu);
 }
 
 /* ---------------------------------------------------------------- press and hold (touch) */
@@ -4308,7 +4431,6 @@ html {
   border: 1px solid var(--rule-bright);
   border-radius: 4px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
-  pointer-events: none;
   animation: hold-in 120ms var(--ease);
 }
 
@@ -4317,6 +4439,76 @@ html {
     opacity: 0;
     transform: translate(-50%, calc(-100% + 6px));
   }
+}
+
+/* Below the finger, when a tap near the top leaves no room above it. */
+.hold-card[data-below] {
+  transform: translate(-50%, 0);
+  animation-name: hold-in-below;
+}
+
+@keyframes hold-in-below {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+.hold-card-open {
+  margin-top: 12px;
+}
+
+/* A right click on the graph, or a press and hold: what else a node does. */
+.graph-menu {
+  position: absolute;
+  z-index: 6;
+  padding: 4px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  animation: menu-in 100ms var(--ease);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.graph-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.graph-menu button:hover,
+.graph-menu button:focus-visible {
+  background: var(--ai-wash);
+  outline: none;
+}
+
+.graph-menu button span {
+  color: var(--ai);
+}
+
+/* The character whose page is open, while the graph is centred on another. */
+.open-ring {
+  fill: none;
+  stroke: var(--ai);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 2.5;
+  pointer-events: none;
 }
 
 .hold-card-head {
@@ -4368,7 +4560,8 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hold-card {
+  .hold-card,
+  .graph-menu {
     animation: none;
   }
 }

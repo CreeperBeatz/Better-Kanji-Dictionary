@@ -8,13 +8,15 @@ import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
 import { strings, useLang, type Translate } from './i18n'
+import { glossOf } from './i18n/content'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
-import { DetailPanel, type DetailData } from './detail/DetailPanel'
+import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
+import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Page, type Stack } from './nav'
 
@@ -35,7 +37,6 @@ const S = strings(
     hideSearch: 'Put the search back above the dictionary',
     pickResult: 'Pick a result and it opens here.',
     focus: 'Components',
-    map: 'Map',
     back: 'Back (Backspace)',
     backTo: 'back to {page}',
     theWord: 'the word',
@@ -58,7 +59,6 @@ const S = strings(
     hideSearch: 'Върнете търсенето над речника',
     pickResult: 'Изберете резултат и той ще се отвори тук.',
     focus: 'Компоненти',
-    map: 'Карта',
     back: 'Назад (Backspace)',
     backTo: 'назад към {page}',
     theWord: 'думата',
@@ -97,8 +97,8 @@ function useMediaQuery(query: string): boolean {
 }
 
 /**
- * On a phone the search sits along the bottom, and the keyboard must push it
- * up rather than cover it. Android resizes the page for the keyboard (see the
+ * On a phone a page's tabs sit along the bottom, and the keyboard must push
+ * them up rather than cover what is being typed over. Android resizes the page for the keyboard (see the
  * viewport tag); iOS does not, so the app is sized to what is still visible.
  */
 function useVisibleHeight(enabled: boolean) {
@@ -143,22 +143,101 @@ function initialRailTab(): RailTab {
 
 const TITLE = document.title
 
-// A link to a character opens on it in the focus view. Otherwise a desktop
-// opens on the whole common map, to wander in, and a phone on the character.
+/**
+ * How far a quick flick goes sideways across a page to turn to the next tab.
+ * Slower, it takes a third of the way across.
+ */
+const SWIPE = 40
+/** How far a page at its top is pulled down to go to the search. */
+const PULL = 80
+const HAN = /[㐀-䶿一-鿿]/
+
+/**
+ * Whether a touch starting here is the element's own to use sideways: typing,
+ * drawing, or a row that scrolls across.
+ */
+function movesItself(el: Element | null, within: Element): boolean {
+  for (let at = el; at && at !== within; at = at.parentElement) {
+    if (at.matches('input, textarea, canvas, [contenteditable], .excalidraw')) return true
+    const x = getComputedStyle(at).overflowX
+    if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
+  }
+  return false
+}
+
+function searchBarOf(input: HTMLInputElement | null): HTMLElement | null {
+  return input?.closest('.searchbar') ?? null
+}
+
+/**
+ * Slides a pane sideways from one offset to another. It ends back in its
+ * place, since a transform left on it would trap the fixed overlays inside it.
+ */
+function slide(el: HTMLElement, from: number, to: number, ms: number) {
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return el.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }], {
+    duration: still ? 0 : ms,
+    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+  })
+}
+
+/**
+ * A still copy of a pane laid over it, for it to leave the screen by while
+ * the pane itself already shows what replaces it. It sits beside the pane, so
+ * the same rules style it, and stays visible when the pane is hidden.
+ */
+function ghostOf(el: HTMLElement): HTMLElement {
+  const r = el.getBoundingClientRect()
+  const g = el.cloneNode(true) as HTMLElement
+  g.removeAttribute('id')
+  g.dataset.ghost = ''
+  g.setAttribute('aria-hidden', 'true')
+  g.inert = true
+  Object.assign(g.style, {
+    position: 'fixed',
+    left: `${r.left}px`,
+    top: `${r.top}px`,
+    width: `${r.width}px`,
+    height: `${r.height}px`,
+    margin: '0',
+    overflow: 'hidden',
+    visibility: 'visible',
+    pointerEvents: 'none',
+    zIndex: '4',
+  })
+  el.after(g)
+  // Over the pane even if something above it moves fixed boxes, and
+  // scrolled as it was, once it is in the page to scroll.
+  const at = g.getBoundingClientRect()
+  g.style.left = `${2 * r.left - at.left}px`
+  g.style.top = `${2 * r.top - at.top}px`
+  g.scrollTop = el.scrollTop
+  return g
+}
+
+// Opening the app afresh lands on the whole common map, to wander in, on a
+// phone as on a desktop. A link to a character or a word opens on its focus
+// view; a link to anything else, on a desktop, beside the map.
 // Picking a character, on the map or from a list, goes to its focus view.
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linkedPage = pageInUrl()
 const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
 function initialView(): StageView {
-  return linked || openedOnPhone ? 'focus' : 'map'
+  if (linked || linkedPage?.kind === 'word') return 'focus'
+  return linkedPage && openedOnPhone ? 'focus' : 'map'
 }
 
-/** The character nearest the top of the stack: the one the graph shows. */
-function kanjiIn(stack: Stack): string | null {
+/**
+ * What the graph centres on for this stack: the nearest character, or the one
+ * the graph was on when that character was picked there -- or the kanji of a
+ * word picked to be shown.
+ */
+function centreIn(stack: Stack): string | null {
   for (let i = stack.length - 1; i >= 0; i--) {
     const p = stack[i]
-    if (p.kind === 'kanji') return p.char
+    if (p.kind === 'kanji') return p.centre ?? p.char
+    if (p.kind === 'word' && p.centre) return p.centre
   }
   return null
 }
@@ -184,19 +263,20 @@ export function App() {
   const t = S(useLang())
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { stack, push, reset, replaceTop, openOver, rebase, pop } = useNav(scroller)
+  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
+    scroller,
+    openedOnPhone && !linkedPage ? 'map' : undefined,
+  )
   const top = stack[stack.length - 1]
   const root = stack[0]
   const under = stack.length > 1 ? stack[stack.length - 2] : null
 
   // The character the graph and map show. It follows the stack's nearest
-  // character, and stays put while the stack has none (a search, a word
-  // opened from it). Clicking empty map clears it.
-  const stackKanji = kanjiIn(stack)
-  const [focus, setFocus] = useState<string | null>(stackKanji)
-  useEffect(() => {
-    if (stackKanji) setFocus(stackKanji)
-  }, [stackKanji])
+  // character -- or the one a character was picked on the graph from, or a
+  // word's kanji (below) -- and stays put while the stack has none (a search).
+  // Clicking empty map clears it.
+  const stackCentre = centreIn(stack)
+  const [focus, setFocus] = useState<string | null>(stackCentre)
   const selected = focus !== null
 
   // The search box's text. It is the bottom page's query while that is a
@@ -243,20 +323,20 @@ export function App() {
   const [searchShare, setSearchShare] = useSearchShare()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
-  // A kanji hovered on the graph previews its page, and on a desktop its
-  // associations under it -- once the pointer rests there, so a sweep across
-  // the graph does not ask for each one it passes.
-  const [assocPreview, setAssocPreview] = useState<string | null>(null)
-  const [previewCount, setPreviewCount] = useState(0)
-  // The preview whose associations have arrived; until then there is nothing
-  // to show, rather than the last kanji's or an empty list.
-  const [previewLoaded, setPreviewLoaded] = useState<string | null>(null)
 
   // On a phone the rail and the stage cannot both have room, so one fills the
-  // screen at a time and Focus and Map join the rail's tabs.
+  // screen at a time: the graph is a page's Components tab, the map is gone to
+  // from the search.
   const mobile = useMediaQuery(MOBILE)
-  const [pane, setPane] = useState<'rail' | 'stage'>('rail')
-  const onStage = mobile && pane === 'stage'
+  // Which one is a step in history, so back from the graph is the page again.
+  const pane = mobile && stage ? 'stage' : 'rail'
+  const onStage = pane === 'stage'
+  // Back or forward onto a step that shows the graph or the map shows that one.
+  useEffect(() => {
+    if (!mobile || !stage) return
+    setViewState(stage)
+    if (stage === 'map') setMapOpened(true)
+  }, [mobile, stage])
   useVisibleHeight(mobile)
 
   const windowWidth = useWindowWidth()
@@ -313,26 +393,32 @@ export function App() {
     return () => watch.disconnect()
   }, [split])
 
-  const chooseRailTab = useCallback((t: RailTab) => {
-    setRailTab(t)
-    setPane('rail')
-    try {
-      localStorage.setItem(RAIL_TAB_KEY, t)
-    } catch {
-      // not remembered, which is fine
-    }
-  }, [])
+  const chooseRailTab = useCallback(
+    (t: RailTab) => {
+      setRailTab(t)
+      leaveStage('back')
+      try {
+        localStorage.setItem(RAIL_TAB_KEY, t)
+      } catch {
+        // not remembered, which is fine
+      }
+    },
+    [leaveStage],
+  )
 
   const toDictionary = useCallback(() => {
     setRailTab('dictionary')
-    setPane('rail')
-  }, [])
+    leaveStage('replace')
+  }, [leaveStage])
 
-  const setView = useCallback((v: StageView) => {
-    setViewState(v)
-    setPane('stage')
-    if (v === 'map') setMapOpened(true)
-  }, [])
+  const setView = useCallback(
+    (v: StageView) => {
+      setViewState(v)
+      if (mobile) enterStage(v)
+      if (v === 'map') setMapOpened(true)
+    },
+    [mobile, enterStage],
+  )
 
   // A character picked on the map is previewed over it, not opened.
   const [mapCard, setMapCard] = useState<string | null>(null)
@@ -375,13 +461,100 @@ export function App() {
   const detail: DetailData | null =
     data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : null
 
-  // A pick on the graph or map starts the stack again from that character.
-  // `via` is the container a peek skipped through (言 -> 語 -> X), which counts
-  // as visited too.
-  const drill = useCallback(
-    (char: string, via?: string) => {
+  // A character picked on the graph is open while the graph stays centred on
+  // another, so its page fetches its own.
+  const pageKanji = top.kind === 'kanji' ? top.char : null
+  const [pageData, setPageData] = useState<DetailData | null>(null)
+  const [pageOnDevice, setPageOnDevice] = useState<DetailData | null>(null)
+  useEffect(() => {
+    if (!pageKanji || pageKanji === focus) return
+    let stale = false
+    local.kanji(pageKanji)?.then(
+      (d) => !stale && setPageOnDevice(d),
+      () => {},
+    )
+    api.kanji(pageKanji).then(
+      (d) => !stale && setPageData(d),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [pageKanji, focus])
+
+  // A word opened from a link comes with nothing but its id; the head above
+  // its associations wants what it is.
+  const pageWordId = top.kind === 'word' && !top.word ? top.id : null
+  const [pageWord, setPageWord] = useState<Word | null>(null)
+  useEffect(() => {
+    if (pageWordId === null) return
+    let stale = false
+    local.wordEntry(pageWordId)?.then(
+      (d) => !stale && d && setPageWord((w) => (w?.id === pageWordId ? w : d.word)),
+      () => {},
+    )
+    api.word(pageWordId).then(
+      (d) => !stale && setPageWord(d.word),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [pageWordId])
+
+  // A word's graph is of one of its kanji at a time: the one picked over the
+  // graph, else the one the graph is on already -- 強 stays on going to 勉強 --
+  // else the one whose page it was opened from, else its first.
+  const topWord = top.kind === 'word' ? (top.word ?? (pageWord?.id === top.id ? pageWord : undefined)) : undefined
+  const wordKanji = topWord ? [...new Set([...topWord.headword].filter((c) => HAN.test(c)))] : []
+  const inWord = (c: string | null | undefined): c is string => !!c && wordKanji.includes(c)
+  const wordCentre =
+    top.kind === 'word' && wordKanji.length > 0
+      ? inWord(top.centre)
+        ? top.centre
+        : inWord(focus)
+          ? focus
+          : under?.kind === 'kanji' && inWord(under.char)
+            ? under.char
+            : wordKanji[0]
+      : null
+  // One effect for both, so going back from a word to the page under it puts
+  // the graph back on that page's character.
+  const centre = wordCentre ?? stackCentre
+  useEffect(() => {
+    if (centre) setFocus(centre)
+  }, [centre])
+  // A word without kanji, linked to, has no graph: the map, on a desktop.
+  const kanaOnly = topWord !== undefined && wordKanji.length === 0
+  useEffect(() => {
+    if (kanaOnly && !mobile && !focus && view === 'focus') setView('map')
+    // Only as the word arrives; the view is the user's after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kanaOnly])
+  const showWordKanji = useCallback(
+    (char: string) => {
+      if (top.kind !== 'word') return
       setHovered(null)
-      if (via && via !== char) rememberKanji(via)
+      setFocus(char)
+      replaceTop({ ...top, centre: char })
+    },
+    [top, replaceTop],
+  )
+
+  /** What the rail has on a character: the graph's, or the page's own. */
+  const detailOf = (char: string): DetailData | null =>
+    char === focus
+      ? detail
+      : pageData?.focus.char === char
+        ? pageData
+        : pageOnDevice?.focus.char === char
+          ? pageOnDevice
+          : null
+
+  // A character seen in the dictionary from the map starts the stack again from it.
+  const drill = useCallback(
+    (char: string) => {
+      setHovered(null)
       setFocus(char)
       reset({ kind: 'kanji', char })
     },
@@ -402,7 +575,7 @@ export function App() {
     return () => clearTimeout(timer)
   }, [rootQ])
   // Its meanings join it once they are here, for the list to show.
-  const shown = top.kind === 'kanji' && detail?.focus.char === top.char ? detail.focus : null
+  const shown = top.kind === 'kanji' ? (detailOf(top.char)?.focus ?? null) : null
   useEffect(() => {
     if (shown) rememberKanji(shown.char, shown)
   }, [shown])
@@ -416,49 +589,75 @@ export function App() {
   const openKanji = useCallback(
     (char: string) => {
       setHovered(null)
-      setPane('rail')
+      leaveStage('replace')
       setViewState('focus')
       keepSearch()
       if (under?.kind === 'kanji' && under.char === char) pop()
       else push({ kind: 'kanji', char })
     },
-    [under, push, pop, keepSearch],
+    [under, push, pop, keepSearch, leaveStage],
   )
 
+  // A word, like a character, goes to its graph -- of its kanji -- when it has one.
   const openWord = useCallback(
     (w: Word) => {
       toDictionary()
       keepSearch()
+      if (HAN.test(w.headword)) setViewState('focus')
       push({ kind: 'word', id: w.id, word: w })
     },
     [push, toDictionary, keepSearch],
   )
 
-  // A pick on the decomposition graph opens on top of the page, so back goes
-  // to the character it was picked from -- or goes back, when it is that one.
-  // `via` is the container a peek skipped through, which counts as visited.
-  const graphDrill = useCallback(
+  // A pick on the decomposition graph opens on top of the page, and the graph
+  // stays centred where it was. Picks in a row take each other's place, so
+  // back from any of them is the character in the middle, and back from that
+  // is wherever it was come to from. `via` is the container a peek skipped
+  // through, which counts as visited.
+  const graphOpen = useCallback(
+    (char: string, via?: string) => {
+      setHovered(null)
+      leaveStage('replace')
+      if (via && via !== char) rememberKanji(via)
+      const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
+      const picked = top.kind === 'kanji' && top.centre !== undefined && top.centre === focus
+      if (under?.kind === 'kanji' && under.char === char && (under.centre ?? under.char) === focus) pop()
+      else if (picked) {
+        if (top.char === char) return
+        replaceTop(page)
+        if (scroller.current) scroller.current.scrollTop = 0
+      } else push(page)
+    },
+    [top, under, push, pop, replaceTop, focus, leaveStage],
+  )
+
+  // Recentring on a character on the graph opens it too, or takes the
+  // centre it was opened with off it when it is open already.
+  const graphRecentre = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
       if (via && via !== char) rememberKanji(via)
       setFocus(char)
-      if (under?.kind === 'kanji' && under.char === char) pop()
-      else push({ kind: 'kanji', char })
+      if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
+      else if (under?.kind === 'kanji' && under.char === char && !under.centre) pop()
+      // On a phone the graph stays up: this was done on it.
+      else push({ kind: 'kanji', char }, true)
     },
-    [under, push, pop],
+    [top, under, push, pop, replaceTop],
   )
 
   // From the map's card: the character in the dictionary, and its graph.
   const seeInDictionary = useCallback(
     (char: string) => {
       setMapCard(null)
+      // Opening it puts the page up, on a phone.
       drill(char)
       if (mobile) {
         setViewState('focus')
-        setPane('rail')
+        leaveStage('replace')
       } else setView('focus')
     },
-    [drill, mobile, setView],
+    [drill, mobile, setView, leaveStage],
   )
 
   // Out to the map from the search, with the search column folded away for it.
@@ -479,6 +678,7 @@ export function App() {
   )
   const listWord = useCallback(
     (w: Word) => {
+      if (HAN.test(w.headword)) setViewState('focus')
       rememberSearch(q)
       openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
     },
@@ -557,22 +757,6 @@ export function App() {
     )
   }, [data, hovered])
 
-  // What the rail's page previews while a kanji is hovered on the graph.
-  const previewChar =
-    !mobile && shownTop?.kind === 'kanji' && hoveredNode && hoveredNode.char !== shownTop.char ? hoveredNode.char : null
-  useEffect(() => {
-    if (!previewChar) {
-      setAssocPreview(null)
-      return
-    }
-    const timer = setTimeout(() => setAssocPreview(previewChar), 150)
-    return () => clearTimeout(timer)
-  }, [previewChar])
-  // Hovering another kanji clears the page's associations at once; the
-  // hovered one's show when they are here.
-  const previewing = previewChar !== null
-  const previewShown = previewing && assocPreview === previewChar && previewLoaded === previewChar
-
   // A preview is usually shorter than the page, which pulls the scroll up;
   // back on the page, it is where it was. The scroll is followed while the
   // page is showing, and the jump a preview causes is not.
@@ -620,14 +804,15 @@ export function App() {
             onPick={openKanji}
           />
         )
-      case 'kanji':
-        return detail && detail.focus.char === p.char ? (
+      case 'kanji': {
+        const d = detailOf(p.char)
+        return d ? (
           <DetailPanel
-            data={detail}
+            data={d}
             hovered={hoveredNode}
             onWord={openWord}
             onKanji={openKanji}
-            onComponents={mobile || view !== 'focus' ? () => setView('focus') : undefined}
+            onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
           />
         ) : (
           <section className="rail-section">
@@ -636,20 +821,19 @@ export function App() {
             </div>
           </section>
         )
+      }
     }
   }
 
   // Kanji and words carry associations; searches and levels do not, so
-  // there the tab steps aside and the page shows. A desktop has room for
-  // both, so there they follow the page instead of taking turns with it.
+  // there the tab steps aside and the page shows.
   const subject =
     shownTop?.kind === 'kanji'
       ? { key: shownTop.char, label: shownTop.char }
       : shownTop?.kind === 'word'
         ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
         : null
-  const tab: RailTab = railTab === 'associations' && (!subject || !mobile) ? 'dictionary' : railTab
-  const inDictionary = !onStage && tab === 'dictionary'
+  const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
   function associations(s: { key: string; label: string }) {
     return (
       <Associations
@@ -663,14 +847,205 @@ export function App() {
     )
   }
 
-  // What the page on top is, as written, named above every tab it has.
-  const current = !mobile
-    ? undefined
-    : shownTop?.kind === 'kanji'
-      ? shownTop.char
-      : shownTop?.kind === 'word'
-        ? shownTop.word?.headword
-        : undefined
+  // Both tabs start the same way: the page's character as it looks and what
+  // it means. Associations are fetched for the page, not for what is hovered
+  // on the graph, so here the head stays the page's too.
+  function pageHead() {
+    if (shownTop?.kind === 'kanji') {
+      const node = detailOf(shownTop.char)?.focus
+      return (
+        <section className="rail-section">
+          {node ? (
+            <KanjiHead node={node} />
+          ) : (
+            <div className="detail-head">
+              <span className="detail-glyph">{shownTop.char}</span>
+            </div>
+          )}
+        </section>
+      )
+    }
+    if (shownTop?.kind === 'word') {
+      const w = shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)
+      return (
+        <section className="rail-section word-panel">
+          <h2 className="entry-head">{w?.headword ?? subject?.label}</h2>
+          {w && (
+            <p className="entry-reading">
+              {w.reading}
+              {w.senses[0] && <span className="rest"> {glossOf(w.senses[0], t.lang).value}</span>}
+            </p>
+          )}
+        </section>
+      )
+    }
+    return null
+  }
+
+  // On a phone a page's tabs are Dictionary, Associations and Components:
+  // for a word, those of the kanji its graph is of.
+  const componentsOf = shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? wordCentre : null
+  // Back from the graph is the dictionary, whichever tab it was gone to from.
+  function showComponents() {
+    setRailTab('dictionary')
+    setView('focus')
+  }
+  type PhoneTab = RailTab | 'components'
+  const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : tab
+  const phoneTabs: PhoneTab[] = componentsOf ? ['dictionary', 'associations', 'components'] : ['dictionary', 'associations']
+  function toPhoneTab(to: PhoneTab) {
+    if (to === 'components') showComponents()
+    else chooseRailTab(to)
+  }
+
+  // Swiping across a page goes to the tab beside it: the page follows the
+  // finger, and let go far enough or fast enough it carries on off the screen
+  // and the next tab slides in from the other side. On the graph a swipe
+  // moves the graph, so there it is the tabs, or back, that return.
+  const stageRef = useRef<HTMLElement>(null)
+  const swipe = useRef<{
+    x: number
+    y: number
+    /**
+     * Turning to the tab beside, or pulling the page down for the search;
+     * decided once the finger has gone far enough to tell.
+     */
+    mode: 'turn' | 'pull' | null
+    /** Whether the page has tabs to turn to. */
+    turns: boolean
+    /** Whether the page was at its top, so a pull down is not a scroll. */
+    atTop: boolean
+    last: { x: number; at: number }
+    /** Sideways speed, px/ms. */
+    v: number
+  } | null>(null)
+  // The tab turned from, as a still copy, and where it goes as the tab turned
+  // to comes in beside it: for the effect below, once that one is showing.
+  // Side by side all the way, so there is never an empty screen between them.
+  const turning = useRef<{ ghost: HTMLElement; at: number; to: number; ms: number } | null>(null)
+  function turn(to: PhoneTab, at: number, ms: number) {
+    const from = phoneTab === 'components' ? stageRef.current : scroller.current
+    if (!from) return toPhoneTab(to)
+    turning.current?.ghost.remove()
+    from.style.transform = ''
+    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? -1 : 1
+    const how = { ghost: ghostOf(from), at, to: side * from.clientWidth, ms }
+    // Where the finger left it, until the turn starts.
+    how.ghost.style.transform = `translateX(${at}px)`
+    turning.current = how
+    toPhoneTab(to)
+    // Should the tab not turn after all, the copy does not stay over the page.
+    window.setTimeout(() => {
+      if (turning.current !== how) return
+      turning.current = null
+      how.ghost.remove()
+    }, 800)
+  }
+  function besideTab(dx: number): PhoneTab | undefined {
+    return phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
+  }
+  function swipeStart(e: React.TouchEvent) {
+    swipe.current = null
+    if (!mobile || e.touches.length !== 1) return
+    if (movesItself(e.target as Element, e.currentTarget)) return
+    // A page still sliding in is where it is going.
+    scroller.current?.getAnimations().forEach((a) => a.finish())
+    document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
+    const touch = e.touches[0]
+    swipe.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      mode: null,
+      turns: subject !== null,
+      atTop: e.currentTarget.scrollTop <= 0,
+      last: { x: touch.clientX, at: e.timeStamp },
+      v: 0,
+    }
+  }
+  function swipeMove(e: React.TouchEvent) {
+    const s = swipe.current
+    const el = scroller.current
+    if (!s || !el) return
+    if (e.touches.length !== 1) return swipeCancel()
+    const touch = e.touches[0]
+    const dx = touch.clientX - s.x
+    const dy = touch.clientY - s.y
+    if (s.mode === null) {
+      if (Math.hypot(dx, dy) < 10) return
+      if (Math.abs(dx) > 1.5 * Math.abs(dy)) s.mode = s.turns ? 'turn' : null
+      else if (dy > 0 && s.atTop) s.mode = 'pull'
+      // Anything else is the page scrolling, which is the browser's.
+      if (s.mode === null) {
+        swipe.current = null
+        return
+      }
+    }
+    if (s.mode === 'pull') {
+      // The search lights up once letting go would open it.
+      searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
+      return
+    }
+    const dt = e.timeStamp - s.last.at
+    if (dt > 0) s.v = 0.7 * ((touch.clientX - s.last.x) / dt) + 0.3 * s.v
+    s.last = { x: touch.clientX, at: e.timeStamp }
+    // Past the last tab the page gives a little, and comes back.
+    el.style.transform = `translateX(${besideTab(dx) ? dx : dx / 4}px)`
+  }
+  function swipeEnd(e: React.TouchEvent) {
+    const s = swipe.current
+    swipe.current = null
+    const el = scroller.current
+    if (s?.mode === 'pull') {
+      searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
+      if (e.changedTouches[0].clientY - s.y > PULL) typeOver()
+      return
+    }
+    if (s?.mode !== 'turn' || !el) return
+    const dx = e.changedTouches[0].clientX - s.x
+    const next = besideTab(dx)
+    const at = next ? dx : dx / 4
+    el.style.transform = ''
+    const flung = Math.abs(s.v) > 0.4 && Math.sign(s.v) === Math.sign(dx) && Math.abs(dx) > SWIPE
+    if (!next || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
+      slide(el, at, 0, 220)
+      return
+    }
+    // Off the screen at the speed it was thrown, the next tab right behind it.
+    const out = dx < 0 ? -el.clientWidth : el.clientWidth
+    turn(next, at, Math.min(280, Math.max(140, Math.abs(out - at) / Math.max(Math.abs(s.v), 1.5))))
+  }
+  function swipeCancel() {
+    const s = swipe.current
+    swipe.current = null
+    const el = scroller.current
+    searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
+    if (s?.mode !== 'turn' || !el) return
+    const at = new DOMMatrix(getComputedStyle(el).transform).m41
+    el.style.transform = ''
+    slide(el, at, 0, 220)
+  }
+  // Pulled down, the page gives way to the search: the keyboard comes up with
+  // what was searched last selected, so typing starts a new search and a tap
+  // in the box carries on with the old one. Called from the touch itself, as
+  // phones only raise the keyboard for focus given in answer to a touch.
+  function typeOver() {
+    const input = inputRef.current
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(0, input.value.length)
+  }
+  // A tab tapped turns the same way, from where the page stands.
+  function tapPhoneTab(to: PhoneTab) {
+    if (to !== phoneTab) turn(to, 0, 260)
+  }
+  useLayoutEffect(() => {
+    const how = turning.current
+    turning.current = null
+    if (!how) return
+    const el = phoneTab === 'components' ? stageRef.current : scroller.current
+    if (el) slide(el, how.at - how.to, 0, how.ms)
+    slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
+  }, [phoneTab])
 
   const searchBar = (
     <SearchBar
@@ -683,7 +1058,11 @@ export function App() {
       }}
       inputRef={inputRef}
       after={
-        room && (
+        // On a phone the search is along the top, and who you are at its end.
+        mobile ? (
+          <ProfileButton onOpen={signIn} />
+        ) : (
+          room && (
           <button
             className="searchbar-tool split-toggle"
             aria-pressed={split}
@@ -692,6 +1071,7 @@ export function App() {
           >
             <SplitIcon open={split} />
           </button>
+          )
         )
       }
     />
@@ -742,50 +1122,37 @@ export function App() {
         )}
         <aside className="rail">
           {!split && searchBar}
-          {/* A phone shows one pane at a time and switches between them here;
-              a desktop has them all on screen at once. */}
-          {mobile && (
+          {!mobile && subject && (
             <div className="rail-head">
               <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
-                <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
+                <button role="tab" aria-selected={tab === 'dictionary'} onClick={() => chooseRailTab('dictionary')}>
                   {t('dictionary')}
                 </button>
-                {subject && (
-                  <button
-                    role="tab"
-                    aria-selected={!onStage && tab === 'associations'}
-                    onClick={() => chooseRailTab('associations')}
-                  >
-                    {t('associations')}
-                    {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                  </button>
-                )}
-                <button role="tab" aria-selected={onStage && view === 'focus'} onClick={() => setView('focus')}>
-                  {t('focus')}
-                </button>
-                <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
-                  {t('map')}
+                <button
+                  role="tab"
+                  aria-selected={tab === 'associations'}
+                  onClick={() => chooseRailTab('associations')}
+                >
+                  {t('associations')}
+                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
               </div>
-              <ProfileButton onOpen={signIn} />
             </div>
           )}
 
-          <div className="rail-body" ref={scroller}>
-            {(shownUnder || current) && (
+          <div
+            className="rail-body"
+            ref={scroller}
+            onTouchStart={swipeStart}
+            onTouchMove={swipeMove}
+            onTouchEnd={swipeEnd}
+            onTouchCancel={swipeCancel}
+          >
+            {shownUnder && (
               <div className="rail-crumb">
-                {shownUnder ? (
-                  <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
-                    <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
-                  </button>
-                ) : (
-                  <span />
-                )}
-                {current && (
-                  <span className="rail-current" lang="ja">
-                    {current}
-                  </span>
-                )}
+                <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
+                  <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
+                </button>
               </div>
             )}
             {tab === 'dictionary' &&
@@ -796,35 +1163,23 @@ export function App() {
               ))}
             {/* Kept mounted while hidden, so the count on its tab is there
                 before the tab is opened. */}
-            {subject && mobile && <div hidden={tab !== 'associations'}>{associations(subject)}</div>}
-            {subject && !mobile && (
-              <section className="assoc-below">
-                <h2 className="assoc-below-head">
-                  {t('associations')}
-                  {previewing
-                    ? previewShown &&
-                      previewCount > 0 && <span className="rail-tab-count">{previewCount}</span>
-                    : assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                </h2>
-                {/* The page's own stay mounted under a preview, so they are
-                    back at once when the pointer moves off. */}
-                <div hidden={previewing}>{associations(subject)}</div>
-                {previewing && assocPreview === previewChar && (
-                  <div hidden={!previewShown}>
-                    <Associations
-                      key={`preview ${assocPreview}`}
-                      subject={assocPreview}
-                      label={assocPreview}
-                      onPick={openKanji}
-                      onSignIn={signIn}
-                      onCount={setPreviewCount}
-                      onLoaded={() => setPreviewLoaded(assocPreview)}
-                    />
-                  </div>
-                )}
-              </section>
+            {subject && (
+              <div hidden={tab !== 'associations'}>
+                {tab === 'associations' && pageHead()}
+                {associations(subject)}
+              </div>
             )}
           </div>
+          {mobile && subject && !(onStage && view === 'map') && (
+            <nav className="phone-tabs" role="tablist" aria-label={t('sidePanel')}>
+              {phoneTabs.map((p) => (
+                <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
+                  {t(p === 'components' ? 'focus' : p)}
+                  {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                </button>
+              ))}
+            </nav>
+          )}
           {/* "Its parts" -- the decomposition editor and review queue -- is
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
@@ -832,7 +1187,7 @@ export function App() {
         {split && <SplitResizer share={searchShare} total={2 * railShown} onShare={setSearchShare} />}
         <RailResizer width={railShown} onWidth={setRailWidth} columns={split ? 2 : 1} />
 
-        <main className="stage">
+        <main className="stage" ref={stageRef}>
           {error && selected && (
             <div className="stage-empty">
               <p>
@@ -857,7 +1212,15 @@ export function App() {
           )}
 
           {!error && data && selected && view === 'focus' && (
-            <KanjiGraph data={data} filter={filter} onDrill={graphDrill} onHover={hoverGraph} legend={legendOpen} />
+            <KanjiGraph
+              data={data}
+              filter={filter}
+              open={shownTop?.kind === 'kanji' ? shownTop.char : null}
+              onOpen={graphOpen}
+              onRecentre={graphRecentre}
+              onHover={hoverGraph}
+              legend={legendOpen}
+            />
           )}
 
           {!error && mapOpened && (
@@ -884,12 +1247,16 @@ export function App() {
             </div>
           )}
 
+          {!error && selected && view === 'focus' && topWord && wordKanji.length > 1 && (
+            <WordKanji word={topWord.headword} current={focus} onPick={showWordKanji} />
+          )}
+
           <div className="stage-top">
             <div className="stage-corner">
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
               )}
-              {/* On a phone it sits beside the tabs instead, where it is always on screen. */}
+              {/* On a phone it sits at the end of the search bar instead, always on screen. */}
               {!mobile && <ProfileButton onOpen={signIn} />}
             </div>
           </div>

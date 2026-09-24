@@ -24,6 +24,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
 import { Pitch } from './Pitch'
+import { Valency } from './Valency'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -258,6 +259,7 @@ function WordRow({
         <span className="word-head">
           <span className="word-forms">{w.headword}</span>
           {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
+          <Valency word={w} />
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
           </span>

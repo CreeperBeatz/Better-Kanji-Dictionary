@@ -273,6 +273,8 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
       if (!level) throw new Error('no such level')
       return level
     }
+    case 'readingWords':
+      return e.readingWords(args[0] as string)
     case 'wordsFor':
       return e.wordsFor(args[0] as string)
     case 'kanji':

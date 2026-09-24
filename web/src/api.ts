@@ -338,6 +338,26 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
   return res.json()
 }
 
+/**
+ * Answers that do not change while the app is open, kept: two parts of the
+ * page asking at once -- a word's head and its panel, a picked character's
+ * page and then its graph -- share one request. A failure is asked again.
+ */
+function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): (k: K) => Promise<T> {
+  const answers = new Map<K, Promise<T>>()
+  return (k) => {
+    let p = answers.get(k)
+    if (p) answers.delete(k) // to the back of the queue, as used just now
+    else {
+      p = ask(k)
+      p.catch(() => answers.get(k) === p && answers.delete(k))
+    }
+    answers.set(k, p)
+    if (answers.size > size) answers.delete(answers.keys().next().value!)
+    return p
+  }
+}
+
 /** The device's answer if it has one, the server's otherwise. */
 function localFirst<T>(fromDevice: Promise<T> | null, fromServer: () => Promise<T>): Promise<T> {
   return fromDevice ? fromDevice.catch(fromServer) : fromServer()
@@ -356,7 +376,7 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
 const similarCache = new Map<string, Promise<SimilarResponse>>()
 
 export const api = {
-  kanji: (char: string) => get<GraphResponse>(`/api/kanji/${encodeURIComponent(char)}`),
+  kanji: kept((char: string) => get<GraphResponse>(`/api/kanji/${encodeURIComponent(char)}`)),
 
   /** Direct containers of several characters, for the hover peek. */
   containersOf: (chars: string[]) =>
@@ -378,7 +398,7 @@ export const api = {
     return p
   },
 
-  word: (id: number) => get<WordEntry>(`/api/search/word/${id}`),
+  word: kept((id: number) => get<WordEntry>(`/api/search/word/${id}`)),
 
   radicals: () =>
     localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
@@ -424,6 +444,12 @@ export const api = {
   wordsFor: (char: string) =>
     localFirst(local.wordsFor(char), () =>
       get<{ char: string; words: Word[] }>(`/api/search/words-for/${encodeURIComponent(char)}`),
+    ),
+
+  /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
+  readingWords: (char: string) =>
+    localFirst(local.readingWords(char), () =>
+      get<{ char: string; words: Record<string, Word> }>(`/api/search/reading-words/${encodeURIComponent(char)}`),
     ),
 
   byLevel: (level: 1 | 2 | 3 | 4 | 5) =>

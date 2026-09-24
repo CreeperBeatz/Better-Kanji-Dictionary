@@ -608,6 +608,73 @@ def words_for_kanji(char: str, limit: int = Query(12, ge=1, le=60)) -> dict:
     }
 
 
+def reading_forms(char: str, reading: str, on: bool) -> list[tuple[str, str]]:
+    """The (written, kana) a word read this way would have, likeliest first.
+
+    A kun reading carries its okurigana after the dot, so あ.げる on 上 is
+    上げる, read あげる. An on reading is the character alone as a noun, or a
+    verb on it: 察する -- with つ turning to っ before する, as in さっする --
+    感じる, 案ずる. The dashes that mark a prefix or suffix form are dropped.
+    """
+    r = reading.strip("-")
+    if not on:
+        stem, _, okuri = r.partition(".")
+        return [(char + okuri, stem + okuri)]
+    kana = katakana_to_hiragana(r)
+    out = [(char, kana), (char + "する", kana + "する")]
+    if kana.endswith(("つ", "ち")):
+        out.append((char + "する", kana[:-1] + "っする"))
+    out += [(char + "じる", kana + "じる"), (char + "ずる", kana + "ずる")]
+    return out
+
+
+@router.get("/reading-words/{char}")
+def reading_words(char: str) -> dict:
+    """For each of the character's readings, the word it forms, where there is one.
+
+    Keyed by the reading as KANJIDIC writes it. Of the words a reading could
+    be -- a noun and a verb on the same on reading, homographs -- the most
+    common one, then one headed by that spelling, then the likeliest shape.
+    """
+    if len(char) != 1:
+        return {"char": char, "words": {}}
+    row = query("SELECT on_yomi, kun_yomi FROM kanji WHERE char = ?", (char,))
+    if not row:
+        return {"char": char, "words": {}}
+    readings = [(r, True) for r in json.loads(row[0]["on_yomi"] or "[]")]
+    readings += [(r, False) for r in json.loads(row[0]["kun_yomi"] or "[]")]
+
+    shapes = {reading: reading_forms(char, reading, on) for reading, on in readings}
+    pairs = {pair for forms in shapes.values() for pair in forms}
+    if not pairs:
+        return {"char": char, "words": {}}
+    # Every word written one of these ways and read one of those, in one go;
+    # which (written, kana) pair each row is sorts out below.
+    written = sorted({w for w, _ in pairs})
+    kana = sorted({k for _, k in pairs})
+    by_pair: dict[tuple[str, str], list] = {}
+    for r in query(
+        f"SELECT DISTINCT w.id, w.headword, w.common, w.nf, a.text AS written, b.text AS kana "
+        f"FROM word_form a JOIN word_form b ON b.word_id = a.word_id JOIN word w ON w.id = a.word_id "
+        f"WHERE a.text IN ({','.join('?' * len(written))}) AND b.text IN ({','.join('?' * len(kana))})",
+        (*written, *kana),
+    ):
+        by_pair.setdefault((r["written"], r["kana"]), []).append(r)
+
+    best: dict[str, int] = {}
+    for reading, forms in shapes.items():
+        found = [
+            (not r["common"], r["headword"] != w, r["nf"] is None, r["nf"] or 0, rank, r["id"])
+            for rank, (w, k) in enumerate(forms)
+            for r in by_pair.get((w, k), [])
+        ]
+        if found:
+            best[reading] = min(found)[-1]
+
+    words = _fetch_words(list(set(best.values())))
+    return {"char": char, "words": {r: words[i] for r, i in best.items() if i in words}}
+
+
 @router.get("/examples/{headword}")
 def examples(headword: str, limit: int = Query(5, ge=1, le=30)) -> dict:
     rows = query(

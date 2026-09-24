@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type { KanjiNode } from '../api'
 import { levelOf } from '../detail/DetailPanel'
 import { strings, useLang } from '../i18n'
@@ -10,18 +11,39 @@ const S = strings(
   { none: 'няма записано значение', on: 'Он', kun: 'Кун', strokes: 'Черти', level: 'Ниво' },
 )
 
+interface Props {
+  node: KanjiNode
+  x: number
+  y: number
+  width: number
+  /** Below the finger rather than above: tapped near the top, where above has no room. */
+  below: boolean
+  openLabel: string
+  onOpen: () => void
+}
+
 /**
- * What a touch screen shows while a character is pressed and held: the same
- * facts a mouse gets by hovering, which on a wide screen land in the rail.
- * Placed above the finger so the finger does not cover it.
+ * What a touch screen shows when a character is tapped: the same facts a
+ * mouse gets by hovering, which on a wide screen land in the rail, and the
+ * way to its page. Placed off the finger so the finger does not cover it.
  */
-export function HoldCard({ node, x, y, width }: { node: KanjiNode; x: number; y: number; width: number }) {
+export const HoldCard = forwardRef<HTMLDivElement, Props>(function HoldCard(
+  { node, x, y, width, below, openLabel, onOpen },
+  ref,
+) {
   const lang = useLang()
   const t = S(lang)
   const [lead, ...rest] = meaningsOf(node, lang).value
   const left = Math.min(Math.max(x, HALF_WIDTH + 8), Math.max(HALF_WIDTH + 8, width - HALF_WIDTH - 8))
   return (
-    <div className="hold-card" style={{ left, top: y - 28 }} role="tooltip">
+    <div
+      ref={ref}
+      className="hold-card"
+      data-below={below || undefined}
+      style={{ left, top: below ? y + 28 : y - 28 }}
+      role="dialog"
+      aria-label={node.char}
+    >
       <div className="hold-card-head">
         <span className="hold-card-glyph">{node.char}</span>
         <p>
@@ -51,6 +73,9 @@ export function HoldCard({ node, x, y, width }: { node: KanjiNode; x: number; y:
         <dt>{t('level')}</dt>
         <dd>{levelOf(node, lang)}</dd>
       </dl>
+      <button className="see-components hold-card-open" onClick={onOpen}>
+        {openLabel}
+      </button>
     </div>
   )
-}
+})
