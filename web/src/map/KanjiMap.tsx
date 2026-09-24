@@ -41,6 +41,8 @@ interface Props {
   onScope: (f: ContainerFilter) => void
   /** Show how to read the map, opened from the (i). */
   legend: boolean
+  /** Floats over the focus node, following it as the map moves. */
+  card?: React.ReactNode
 }
 
 interface Camera {
@@ -210,7 +212,43 @@ function createState() {
     bins: Array.from({ length: 3 * ALPHA_STEPS }, () => [] as number[]),
     /** cancels the idle sprite prewarm, if one is running */
     warm: null as null | (() => void),
+    /** what floats over the focus node -- the card a pick opens -- placed each frame */
+    card: null as HTMLDivElement | null,
+    cardWatch: null as ResizeObserver | null,
   }
+}
+
+/** The gap between a node and the card over it, and between the card and the map's edge. */
+const CARD_GAP = 12
+const CARD_MARGIN = 8
+
+/**
+ * Puts the card over the focus node, centred above it -- or below, when there
+ * is no room above -- and inside the map; hidden while the node is off it.
+ */
+function placeCard(s: MapState, ox: number, oy: number, k: number) {
+  const el = s.card
+  const d = s.data
+  const pos = s.pos
+  if (!el) return
+  if (!d || !pos || s.focus < 0) {
+    el.style.visibility = 'hidden'
+    return
+  }
+  const x = pos[2 * s.focus] * k + ox
+  const y = pos[2 * s.focus + 1] * k + oy
+  if (x < 0 || x > s.w || y < 0 || y > s.h) {
+    el.style.visibility = 'hidden'
+    return
+  }
+  const r = d.size[s.focus] * k
+  const cw = el.offsetWidth
+  const ch = el.offsetHeight
+  const left = Math.min(s.w - cw - CARD_MARGIN, Math.max(CARD_MARGIN, x - cw / 2))
+  const above = y - r - CARD_GAP - ch
+  const top = above >= CARD_MARGIN ? above : Math.min(s.h - ch - CARD_MARGIN, y + r + CARD_GAP)
+  el.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`
+  el.style.visibility = 'visible'
 }
 
 type MapState = ReturnType<typeof createState>
@@ -291,6 +329,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   const { k } = s.cam
   const ox = w / 2 - s.cam.x * k
   const oy = h / 2 - s.cam.y * k
+  placeCard(s, ox, oy, k)
   const pad = s.maxSize * k + 20
   const inView = (i: number) => {
     const x = pos[2 * i] * k + ox
@@ -471,7 +510,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   return s.anim !== null || atlas.pending > 0
 }
 
-export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend }: Props) {
+export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend, card }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
@@ -504,6 +543,20 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
       if (!s.raf) s.raf = requestAnimationFrame(frame)
     }
   }, [s])
+
+  // The card is placed again whenever its size changes -- its readings
+  // arriving, the language changing -- as well as whenever the map moves.
+  const cardRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      s.cardWatch?.disconnect()
+      s.cardWatch = null
+      s.card = el
+      if (!el) return
+      s.cardWatch = new ResizeObserver(() => request())
+      s.cardWatch.observe(el)
+    },
+    [s, request],
+  )
 
   // ------------------------------------------------------------------ camera
 
@@ -944,6 +997,11 @@ export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen
         onContextMenu={(e) => e.preventDefault()}
       />
       <div className="map-tip" ref={tipRef} hidden />
+      {card && (
+        <div className="map-card-anchor" ref={cardRef}>
+          {card}
+        </div>
+      )}
 
       {phase !== 'ready' && (
         <p className="map-status" role="status">

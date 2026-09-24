@@ -2474,11 +2474,18 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 /* A character picked on the map, previewed over it. */
-.map-card {
+/* Placed over its node by the map, each frame (placeCard). */
+.map-card-anchor {
   position: absolute;
-  top: 12px;
-  left: 16px;
+  top: 0;
+  left: 0;
   z-index: 4;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.map-card {
+  position: relative;
   width: 272px;
   padding: 14px 16px 16px;
   background: var(--sumi-lift);

@@ -890,15 +890,21 @@ export function App() {
                 onSelect={setMapCard}
                 onDeselect={() => (mapCard ? setMapCard(null) : deselect())}
                 onOpen={seeInDictionary}
+                card={
+                  mapCard && (
+                    <MapCard
+                      char={mapCard}
+                      onOpen={() => seeInDictionary(mapCard)}
+                      onClose={() => setMapCard(null)}
+                    />
+                  )
+                }
                 onScope={setFilter}
                 legend={legendOpen && view === 'map'}
               />
             </div>
           )}
 
-          {view === 'map' && mapCard && (
-            <MapCard char={mapCard} onOpen={() => seeInDictionary(mapCard)} onClose={() => setMapCard(null)} />
-          )}
           {view === 'map' && mapHint && (
             <p className="map-hint" role="status">
               {t('mapBestCollapsed')}
