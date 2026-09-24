@@ -19,6 +19,7 @@ import {
 import { clearHistory, useHistory, type Visit } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
 import { ToMap } from '../StageControls'
+import { SearchHelp } from './SearchHelp'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
@@ -719,7 +720,10 @@ function HomePage({
 
   return (
     <section className="rail-section search-home">
-      <ToMap onClick={onMap} />
+      <div className="search-home-top">
+        <ToMap onClick={onMap} />
+        <SearchHelp onTry={onSearch} />
+      </div>
       <h3 className="overlay-group">{t('browse')}</h3>
       <div className="level-links">
         {LEVELS.map((n) => (

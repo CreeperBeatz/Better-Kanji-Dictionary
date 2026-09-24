@@ -2509,8 +2509,126 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke: none;
 }
 
-.search-home > .map-link {
+.search-home-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
   margin-bottom: 4px;
+}
+
+/* For whoever is still wandering around: there, but quiet. */
+.search-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-help-link {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.search-help-link:hover {
+  color: var(--paper-dim);
+}
+
+.help-panel {
+  position: relative;
+  width: min(540px, 100%);
+}
+
+.help-panel h2 {
+  margin: 0 0 12px;
+  padding-right: 28px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
+.help-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.help-lead {
+  margin: 0 0 14px;
+  color: var(--paper);
+  font-size: 14px;
+}
+
+.help-feature {
+  margin: 0 0 14px;
+}
+
+.help-feature h3 {
+  margin: 0 0 2px;
+  color: var(--paper);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.help-feature p {
+  margin: 0;
+  color: var(--paper-dim);
+}
+
+.help-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.help-examples button {
+  padding: 4px 11px;
+  background: none;
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.help-examples button:hover {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.help-how {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--ai-deep);
+  background: var(--sumi);
+  color: var(--paper-dim);
+}
+
+.help-also-title {
+  margin: 18px 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.help-also {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--paper-dim);
+}
+
+.help-also li + li {
+  margin-top: 4px;
 }
 
 .filter,
