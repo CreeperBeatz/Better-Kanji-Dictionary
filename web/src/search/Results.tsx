@@ -18,6 +18,7 @@ import {
 } from '../api'
 import { clearHistory, useHistory, type Visit } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
+import { ToMap } from '../StageControls'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
@@ -340,9 +341,11 @@ interface SearchProps {
   onAsk: (q: string) => void
   /** What is open beside the list, when the search has a column of its own. */
   open?: { kanji?: string; word?: number }
+  /** Shows the map of every character, from the empty search. */
+  onMap: () => void
 }
 
-export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk, open }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk, open, onMap }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -394,7 +397,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
     })
   }
 
-  if (!term) return <HomePage onLevel={onLevel} onKanji={onKanji} onWord={onWord} onSearch={onSearch} />
+  if (!term) return <HomePage onLevel={onLevel} onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} />
 
   const reading = result?.interpretation?.reading
   const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
@@ -661,11 +664,13 @@ function HomePage({
   onKanji,
   onWord,
   onSearch,
+  onMap,
 }: {
   onLevel: (level: Level) => void
   onKanji: (char: string) => void
   onWord: (word: Word) => void
   onSearch: (q: string) => void
+  onMap: () => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -714,6 +719,7 @@ function HomePage({
 
   return (
     <section className="rail-section search-home">
+      <ToMap onClick={onMap} />
       <h3 className="overlay-group">{t('browse')}</h3>
       <div className="level-links">
         {LEVELS.map((n) => (

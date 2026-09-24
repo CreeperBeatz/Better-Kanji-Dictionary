@@ -13,7 +13,7 @@ import { DetailPanel, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
-import { LevelFilter, ViewSwitch, type StageView } from './StageControls'
+import { LevelFilter, ToComponents, type StageView } from './StageControls'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
 
@@ -70,7 +70,6 @@ const S = strings(
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
-const VIEW_KEY = 'betterrtk:view'
 
 // Matches the narrow layout in theme.css.
 const MOBILE = '(max-width: 900px)'
@@ -144,20 +143,14 @@ function initialRailTab(): RailTab {
 const TITLE = document.title
 
 // A link to a character opens on it in the focus view. Otherwise a desktop
-// opens on the whole common map, to wander in, and a phone on the view it was
-// left on.
+// opens on the whole common map, to wander in, and a phone on the character.
+// Picking a character, on the map or from a list, goes to its focus view.
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linkedPage = pageInUrl()
 const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
 function initialView(): StageView {
-  if (linked) return 'focus'
-  if (!openedOnPhone) return 'map'
-  try {
-    return localStorage.getItem(VIEW_KEY) === 'map' ? 'map' : 'focus'
-  } catch {
-    return 'focus'
-  }
+  return linked || openedOnPhone ? 'focus' : 'map'
 }
 
 /** The character nearest the top of the stack: the one the graph shows. */
@@ -307,11 +300,6 @@ export function App() {
     setViewState(v)
     setPane('stage')
     if (v === 'map') setMapOpened(true)
-    try {
-      localStorage.setItem(VIEW_KEY, v)
-    } catch {
-      // not remembered, which is fine
-    }
   }, [])
 
   useEffect(() => {
@@ -391,6 +379,7 @@ export function App() {
     (char: string) => {
       setHovered(null)
       setPane('rail')
+      setViewState('focus')
       keepSearch()
       if (under?.kind === 'kanji' && under.char === char) pop()
       else push({ kind: 'kanji', char })
@@ -419,6 +408,7 @@ export function App() {
   const listKanji = useCallback(
     (char: string) => {
       setHovered(null)
+      setViewState('focus')
       rememberSearch(q)
       openOver({ kind: 'search', q }, { kind: 'kanji', char })
     },
@@ -523,6 +513,7 @@ export function App() {
             onSearch={type}
             asked={asked}
             onAsk={setAsked}
+            onMap={() => setView('map')}
           />
         )
       case 'level':
@@ -626,6 +617,7 @@ export function App() {
                 onSearch={type}
                 asked={asked}
                 onAsk={setAsked}
+                onMap={() => setView('map')}
                 open={
                   picked?.kind === 'kanji'
                     ? { kanji: picked.char }
@@ -675,9 +667,6 @@ export function App() {
                 </button>
               </div>
             )}
-            {/* On a desktop the stage's views sit at the end of the tabs,
-                apart from them; on a phone they are tabs themselves. */}
-            {!mobile && !error && <ViewSwitch view={view} onView={setView} />}
             {mobile && <ProfileButton onOpen={signIn} />}
           </div>
 
@@ -758,7 +747,10 @@ export function App() {
                 scope={scopeOf(filter)}
                 focus={focus}
                 focusNode={selected && data?.focus.char === focus ? data.focus : null}
-                onSelect={drill}
+                onSelect={(char) => {
+                  drill(char)
+                  setView('focus')
+                }}
                 onDeselect={deselect}
                 onOpen={() => setView('focus')}
                 onScope={setFilter}
@@ -768,6 +760,7 @@ export function App() {
           )}
 
           <div className="stage-top">
+            {!mobile && !error && view === 'map' && <ToComponents onClick={() => setView('focus')} />}
             <div className="stage-corner">
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />

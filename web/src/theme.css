@@ -117,8 +117,7 @@ body {
   align-items: flex-end;
 }
 
-.shell-grid[data-split] .rail-head > .split-toggle,
-.shell-grid[data-split] .rail-head > .view-switch {
+.shell-grid[data-split] .rail-head > .split-toggle {
   margin-bottom: 6px;
 }
 
@@ -2411,35 +2410,30 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* ---------------------------------------------------------------- stage controls */
 
-/* At the end of the rail's tabs: which view the stage shows. Boxed, so it
-   reads as a switch for the stage rather than one more tab of the rail. */
-.view-switch {
-  flex: none;
-  display: flex;
-  gap: 2px;
-  padding: 2px;
+/* Between the stage's two views: a link out to the map from the empty
+   search, and one back to the character from the map. */
+.stage-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--sumi);
   border: 1px solid var(--rule);
   border-radius: 3px;
-  background: var(--sumi);
-}
-
-.view-switch button {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 0;
-  border-radius: 2px;
-  color: var(--muted);
+  color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  padding: 3px 10px;
+  font-size: 13px;
   cursor: pointer;
-  transition: background 120ms var(--ease), color 120ms var(--ease);
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
 }
 
-.view-switch svg {
+.stage-link:hover {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
+.stage-link svg {
   flex: none;
   width: 14px;
   height: 14px;
@@ -2447,44 +2441,19 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke: currentColor;
   stroke-width: 1.2;
 }
-.view-switch svg .solid,
-.view-switch svg.solid {
+
+.stage-link svg .solid,
+.stage-link svg.solid {
   fill: currentColor;
   stroke: none;
 }
 
-.view-switch button:hover {
-  color: var(--paper);
+.stage-top > .stage-link {
+  margin-right: auto;
 }
 
-.view-switch button[aria-selected='true'] {
-  background: var(--sumi-lift);
-  color: var(--paper);
-  box-shadow: inset 0 -1px 0 var(--shu);
-}
-
-/* Without room for its labels, the switch goes to icons (see ViewSwitch). */
-.view-switch[data-compact] > button {
-  padding: 4px 8px;
-}
-.view-switch[data-compact] > button .view-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-/* The labelled copy it measures itself against. */
-.view-switch-measure {
-  position: absolute;
-  top: -1px;
-  right: -1px;
-  width: max-content;
-  visibility: hidden;
-  pointer-events: none;
-  white-space: nowrap;
+.search-home > .map-link {
+  margin-bottom: 4px;
 }
 
 .filter,
@@ -3654,11 +3623,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   flex: none;
   min-width: 0;
   gap: 4px;
-}
-
-.rail-head > .view-switch {
-  position: relative;
-  margin-left: auto;
 }
 
 .rail-tabs button {
