@@ -212,6 +212,21 @@ export function App() {
   const [onDevice, setOnDevice] = useState<DetailData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hovered, setHovered] = useState<string | null>(null)
+  // Going from one node to the next, the graph says "nothing" for a moment in
+  // between; waiting that out keeps the page from flashing back to the focus.
+  const hoverOut = useRef<number | null>(null)
+  const hoverGraph = useCallback((char: string | null) => {
+    if (hoverOut.current !== null) {
+      clearTimeout(hoverOut.current)
+      hoverOut.current = null
+    }
+    if (char) setHovered(char)
+    else
+      hoverOut.current = window.setTimeout(() => {
+        hoverOut.current = null
+        setHovered(null)
+      }, 120)
+  }, [])
   // How to read the graph or map, behind the (i) rather than always on screen.
   const [legendOpen, setLegendOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -232,6 +247,9 @@ export function App() {
   // the graph does not ask for each one it passes.
   const [assocPreview, setAssocPreview] = useState<string | null>(null)
   const [previewCount, setPreviewCount] = useState(0)
+  // The preview whose associations have arrived; until then there is nothing
+  // to show, rather than the last kanji's or an empty list.
+  const [previewLoaded, setPreviewLoaded] = useState<string | null>(null)
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
@@ -517,7 +535,10 @@ export function App() {
     const timer = setTimeout(() => setAssocPreview(previewChar), 150)
     return () => clearTimeout(timer)
   }, [previewChar])
-  const previewing = previewChar !== null && assocPreview === previewChar
+  // Hovering another kanji clears the page's associations at once; the
+  // hovered one's show when they are here.
+  const previewing = previewChar !== null
+  const previewShown = previewing && assocPreview === previewChar && previewLoaded === previewChar
 
   function page(p: Page) {
     switch (p.kind) {
@@ -728,22 +749,26 @@ export function App() {
               <section className="assoc-below">
                 <h2 className="assoc-below-head">
                   {t('associations')}
-                  {(previewing ? previewCount : assocCount) > 0 && (
-                    <span className="rail-tab-count">{previewing ? previewCount : assocCount}</span>
-                  )}
+                  {previewing
+                    ? previewShown &&
+                      previewCount > 0 && <span className="rail-tab-count">{previewCount}</span>
+                    : assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </h2>
                 {/* The page's own stay mounted under a preview, so they are
                     back at once when the pointer moves off. */}
                 <div hidden={previewing}>{associations(subject)}</div>
-                {previewing && assocPreview && (
-                  <Associations
-                    key={`preview ${assocPreview}`}
-                    subject={assocPreview}
-                    label={assocPreview}
-                    onPick={openKanji}
-                    onSignIn={signIn}
-                    onCount={setPreviewCount}
-                  />
+                {previewing && assocPreview === previewChar && (
+                  <div hidden={!previewShown}>
+                    <Associations
+                      key={`preview ${assocPreview}`}
+                      subject={assocPreview}
+                      label={assocPreview}
+                      onPick={openKanji}
+                      onSignIn={signIn}
+                      onCount={setPreviewCount}
+                      onLoaded={() => setPreviewLoaded(assocPreview)}
+                    />
+                  </div>
                 )}
               </section>
             )}
@@ -780,7 +805,7 @@ export function App() {
           )}
 
           {!error && data && selected && view === 'focus' && (
-            <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={setHovered} legend={legendOpen} />
+            <KanjiGraph data={data} filter={filter} onDrill={drill} onHover={hoverGraph} legend={legendOpen} />
           )}
 
           {!error && mapOpened && (
