@@ -127,7 +127,8 @@ function useVisibleHeight(enabled: boolean) {
 const RAIL_TAB_KEY = 'betterrtk:railTab'
 // On a wide enough desktop the search gets a column of its own, left of the
 // dictionary, so its results stay in view while one of them is open. The two
-// are as wide as each other, and the rail's edge resizes both.
+// share their width 40 to 60, and the rail's edge resizes both.
+const SEARCH_SHARE = 0.4
 const SPLIT_KEY = 'betterrtk:searchBeside'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
@@ -260,8 +261,11 @@ export function App() {
       // not remembered, which is fine
     }
   }, [])
-  // The columns give way before the stage does.
+  // Split, the rail's width is kept as the two columns' average, so it means
+  // the same either way; the columns give way before the stage does.
   const railShown = split ? Math.round(Math.min(railWidth, (windowWidth - STAGE_MIN) / 2)) : railWidth
+  const searchPx = split ? Math.round(2 * railShown * SEARCH_SHARE) : 0
+  const entryPx = split ? 2 * railShown - searchPx : railShown
 
   // With the search in its own column, the rail shows what is open above it:
   // the stack without the search at its bottom.
@@ -602,8 +606,8 @@ export function App() {
         data-split={split || undefined}
         style={
           {
-            '--rail': `${railShown}px`,
-            '--search': split ? `${railShown}px` : '0px',
+            '--rail': `${entryPx}px`,
+            '--search': `${searchPx}px`,
             '--search-h': `${searchH}px`,
           } as React.CSSProperties
         }
