@@ -171,18 +171,48 @@ function searchBarOf(input: HTMLInputElement | null): HTMLElement | null {
 
 /**
  * Slides a pane sideways from one offset to another. It ends back in its
- * place unless held, since a transform left on it would trap the fixed
- * overlays inside it.
+ * place, since a transform left on it would trap the fixed overlays inside it.
  */
-function slide(el: HTMLElement, from: number, to: number, ms: number, o: { hold?: boolean; fade?: boolean } = {}) {
+function slide(el: HTMLElement, from: number, to: number, ms: number) {
   const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  return el.animate(
-    [
-      { transform: `translateX(${from}px)`, opacity: o.fade ? 0 : 1 },
-      { transform: `translateX(${to}px)`, opacity: 1 },
-    ],
-    { duration: still ? 0 : ms, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: o.hold ? 'forwards' : 'none' },
-  )
+  return el.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }], {
+    duration: still ? 0 : ms,
+    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+  })
+}
+
+/**
+ * A still copy of a pane laid over it, for it to leave the screen by while
+ * the pane itself already shows what replaces it. It sits beside the pane, so
+ * the same rules style it, and stays visible when the pane is hidden.
+ */
+function ghostOf(el: HTMLElement): HTMLElement {
+  const r = el.getBoundingClientRect()
+  const g = el.cloneNode(true) as HTMLElement
+  g.removeAttribute('id')
+  g.dataset.ghost = ''
+  g.setAttribute('aria-hidden', 'true')
+  g.inert = true
+  Object.assign(g.style, {
+    position: 'fixed',
+    left: `${r.left}px`,
+    top: `${r.top}px`,
+    width: `${r.width}px`,
+    height: `${r.height}px`,
+    margin: '0',
+    overflow: 'hidden',
+    visibility: 'visible',
+    pointerEvents: 'none',
+    zIndex: '4',
+  })
+  el.after(g)
+  // Over the pane even if something above it moves fixed boxes, and
+  // scrolled as it was, once it is in the page to scroll.
+  const at = g.getBoundingClientRect()
+  g.style.left = `${2 * r.left - at.left}px`
+  g.style.top = `${2 * r.top - at.top}px`
+  g.scrollTop = el.scrollTop
+  return g
 }
 
 // Opening the app afresh lands on the whole common map, to wander in, on a
@@ -889,9 +919,28 @@ export function App() {
     /** Sideways speed, px/ms. */
     v: number
   } | null>(null)
-  // Where the tab being turned to comes in from, for the effect below to
-  // slide it in once it is showing.
-  const entering = useRef<{ from: number; fade: boolean } | null>(null)
+  // The tab turned from, as a still copy, and where it goes as the tab turned
+  // to comes in beside it: for the effect below, once that one is showing.
+  // Side by side all the way, so there is never an empty screen between them.
+  const turning = useRef<{ ghost: HTMLElement; at: number; to: number; ms: number } | null>(null)
+  function turn(to: PhoneTab, at: number, ms: number) {
+    const from = phoneTab === 'components' ? stageRef.current : scroller.current
+    if (!from) return toPhoneTab(to)
+    turning.current?.ghost.remove()
+    from.style.transform = ''
+    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? -1 : 1
+    const how = { ghost: ghostOf(from), at, to: side * from.clientWidth, ms }
+    // Where the finger left it, until the turn starts.
+    how.ghost.style.transform = `translateX(${at}px)`
+    turning.current = how
+    toPhoneTab(to)
+    // Should the tab not turn after all, the copy does not stay over the page.
+    window.setTimeout(() => {
+      if (turning.current !== how) return
+      turning.current = null
+      how.ghost.remove()
+    }, 800)
+  }
   function besideTab(dx: number): PhoneTab | undefined {
     return phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
   }
@@ -901,6 +950,7 @@ export function App() {
     if (movesItself(e.target as Element, e.currentTarget)) return
     // A page still sliding in is where it is going.
     scroller.current?.getAnimations().forEach((a) => a.finish())
+    document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const touch = e.touches[0]
     swipe.current = {
       x: touch.clientX,
@@ -960,21 +1010,9 @@ export function App() {
       slide(el, at, 0, 220)
       return
     }
-    // Off the screen at the speed it was thrown, then held there until the
-    // next tab is showing.
+    // Off the screen at the speed it was thrown, the next tab right behind it.
     const out = dx < 0 ? -el.clientWidth : el.clientWidth
-    const ms = Math.min(260, Math.max(120, Math.abs(out - at) / Math.max(Math.abs(s.v), 1.5)))
-    slide(el, at, out, ms, { hold: true }).onfinish = () => {
-      const how = { from: -out, fade: false }
-      entering.current = how
-      toPhoneTab(next)
-      // Should the tab not turn after all, the page is not left off screen.
-      window.setTimeout(() => {
-        if (entering.current !== how) return
-        entering.current = null
-        el.getAnimations().forEach((a) => a.cancel())
-      }, 500)
-    }
+    turn(next, at, Math.min(280, Math.max(140, Math.abs(out - at) / Math.max(Math.abs(s.v), 1.5))))
   }
   function swipeCancel() {
     const s = swipe.current
@@ -996,21 +1034,17 @@ export function App() {
     input.focus()
     input.setSelectionRange(0, input.value.length)
   }
-  // A tab tapped comes in with a short slide from its side of the one left.
+  // A tab tapped turns the same way, from where the page stands.
   function tapPhoneTab(to: PhoneTab) {
-    if (to === phoneTab) return
-    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? 1 : -1
-    entering.current = { from: side * 48, fade: true }
-    toPhoneTab(to)
+    if (to !== phoneTab) turn(to, 0, 260)
   }
   useLayoutEffect(() => {
-    const how = entering.current
-    entering.current = null
-    // Whatever held the page off screen lets go, now that another tab shows.
-    scroller.current?.getAnimations().forEach((a) => a.cancel())
+    const how = turning.current
+    turning.current = null
     if (!how) return
     const el = phoneTab === 'components' ? stageRef.current : scroller.current
-    if (el) slide(el, how.from, 0, how.fade ? 200 : 280, { fade: how.fade })
+    if (el) slide(el, how.at - how.to, 0, how.ms)
+    slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
   }, [phoneTab])
 
   const searchBar = (
