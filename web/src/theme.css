@@ -177,8 +177,8 @@ body {
   border-bottom: 1px solid var(--rule);
 }
 
-/* Above every page: the way back on the left, what you are looking at on
-   the right -- the same on the dictionary and associations tabs. */
+/* Above every page with one behind it: the way back, the same on the
+   dictionary and associations tabs. */
 .rail-crumb {
   display: flex;
   align-items: center;
@@ -191,18 +191,6 @@ body {
 .back-link.rail-back {
   flex: none;
   margin: 0;
-}
-
-.rail-current {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--mincho);
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--paper);
 }
 
 /* A wide invisible grip over the rail's border; the border itself lights up. */
@@ -732,7 +720,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
      so the graph and the map keep their framing and the pages their scroll. */
   /* minmax(0, ...) so a row that scrolls sideways, like the draw pad's
      guesses, scrolls inside the screen instead of widening it. */
+  /* Hidden overflow, so a page swiped aside goes off the screen instead of
+     widening it. */
   .shell-grid {
+    overflow: hidden;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas: 'bar' 'main' 'tabs';

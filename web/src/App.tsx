@@ -144,8 +144,11 @@ function initialRailTab(): RailTab {
 
 const TITLE = document.title
 
-/** How far a finger goes sideways across a page to turn to the next tab. */
-const SWIPE = 60
+/**
+ * How far a quick flick goes sideways across a page to turn to the next tab.
+ * Slower, it takes a third of the way across.
+ */
+const SWIPE = 40
 const HAN = /[㐀-䶿一-鿿]/
 
 /**
@@ -159,6 +162,22 @@ function movesItself(el: Element | null, within: Element): boolean {
     if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
   }
   return false
+}
+
+/**
+ * Slides a pane sideways from one offset to another. It ends back in its
+ * place unless held, since a transform left on it would trap the fixed
+ * overlays inside it.
+ */
+function slide(el: HTMLElement, from: number, to: number, ms: number, o: { hold?: boolean; fade?: boolean } = {}) {
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  return el.animate(
+    [
+      { transform: `translateX(${from}px)`, opacity: o.fade ? 0 : 1 },
+      { transform: `translateX(${to}px)`, opacity: 1 },
+    ],
+    { duration: still ? 0 : ms, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)', fill: o.hold ? 'forwards' : 'none' },
+  )
 }
 
 // Opening the app afresh lands on the whole common map, to wander in, on a
@@ -755,9 +774,9 @@ export function App() {
     )
   }
 
-  // On a desktop both tabs start the same way: the page's character as it
-  // looks and what it means. Associations are fetched for the page, not for
-  // what is hovered on the graph, so here the head stays the page's too.
+  // Both tabs start the same way: the page's character as it looks and what
+  // it means. Associations are fetched for the page, not for what is hovered
+  // on the graph, so here the head stays the page's too.
   function pageHead() {
     if (shownTop?.kind === 'kanji') {
       const node = detailOf(shownTop.char)?.focus
@@ -817,36 +836,119 @@ export function App() {
     else chooseRailTab(to)
   }
 
-  // Swiping across a page goes to the tab beside it. On the graph a swipe
+  // Swiping across a page goes to the tab beside it: the page follows the
+  // finger, and let go far enough or fast enough it carries on off the screen
+  // and the next tab slides in from the other side. On the graph a swipe
   // moves the graph, so there it is the tabs, or back, that return.
-  const swipe = useRef<{ x: number; y: number; at: number } | null>(null)
+  const stageRef = useRef<HTMLElement>(null)
+  const swipe = useRef<{
+    x: number
+    y: number
+    /** Decided once the finger has gone far enough to tell; null until then. */
+    sideways: boolean | null
+    last: { x: number; at: number }
+    /** Sideways speed, px/ms. */
+    v: number
+  } | null>(null)
+  // Where the tab being turned to comes in from, for the effect below to
+  // slide it in once it is showing.
+  const entering = useRef<{ from: number; fade: boolean } | null>(null)
+  function besideTab(dx: number): PhoneTab | undefined {
+    return phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
+  }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
     if (!mobile || !subject || e.touches.length !== 1) return
     if (movesItself(e.target as Element, e.currentTarget)) return
+    // A page still sliding in is where it is going.
+    scroller.current?.getAnimations().forEach((a) => a.finish())
     const touch = e.touches[0]
-    swipe.current = { x: touch.clientX, y: touch.clientY, at: e.timeStamp }
+    swipe.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      sideways: null,
+      last: { x: touch.clientX, at: e.timeStamp },
+      v: 0,
+    }
+  }
+  function swipeMove(e: React.TouchEvent) {
+    const s = swipe.current
+    const el = scroller.current
+    if (!s || !el) return
+    if (e.touches.length !== 1) return swipeCancel()
+    const touch = e.touches[0]
+    const dx = touch.clientX - s.x
+    const dy = touch.clientY - s.y
+    if (s.sideways === null) {
+      if (Math.hypot(dx, dy) < 10) return
+      s.sideways = Math.abs(dx) > 1.5 * Math.abs(dy)
+      // Up or down is the page scrolling, which is the browser's.
+      if (!s.sideways) {
+        swipe.current = null
+        return
+      }
+    }
+    const dt = e.timeStamp - s.last.at
+    if (dt > 0) s.v = 0.7 * ((touch.clientX - s.last.x) / dt) + 0.3 * s.v
+    s.last = { x: touch.clientX, at: e.timeStamp }
+    // Past the last tab the page gives a little, and comes back.
+    el.style.transform = `translateX(${besideTab(dx) ? dx : dx / 4}px)`
   }
   function swipeEnd(e: React.TouchEvent) {
-    const from = swipe.current
+    const s = swipe.current
     swipe.current = null
-    if (!from) return
-    const touch = e.changedTouches[0]
-    const dx = touch.clientX - from.x
-    const dy = touch.clientY - from.y
-    if (Math.abs(dx) < SWIPE || Math.abs(dx) < 2 * Math.abs(dy) || e.timeStamp - from.at > 700) return
-    const next = phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
-    if (next) toPhoneTab(next)
+    const el = scroller.current
+    if (!s?.sideways || !el) return
+    const dx = e.changedTouches[0].clientX - s.x
+    const next = besideTab(dx)
+    const at = next ? dx : dx / 4
+    el.style.transform = ''
+    const flung = Math.abs(s.v) > 0.4 && Math.sign(s.v) === Math.sign(dx) && Math.abs(dx) > SWIPE
+    if (!next || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
+      slide(el, at, 0, 220)
+      return
+    }
+    // Off the screen at the speed it was thrown, then held there until the
+    // next tab is showing.
+    const out = dx < 0 ? -el.clientWidth : el.clientWidth
+    const ms = Math.min(260, Math.max(120, Math.abs(out - at) / Math.max(Math.abs(s.v), 1.5)))
+    slide(el, at, out, ms, { hold: true }).onfinish = () => {
+      const how = { from: -out, fade: false }
+      entering.current = how
+      toPhoneTab(next)
+      // Should the tab not turn after all, the page is not left off screen.
+      window.setTimeout(() => {
+        if (entering.current !== how) return
+        entering.current = null
+        el.getAnimations().forEach((a) => a.cancel())
+      }, 500)
+    }
   }
-
-  // What the page on top is, as written, named above every tab it has.
-  const current = !mobile
-    ? undefined
-    : shownTop?.kind === 'kanji'
-      ? shownTop.char
-      : shownTop?.kind === 'word'
-        ? shownTop.word?.headword
-        : undefined
+  function swipeCancel() {
+    const s = swipe.current
+    swipe.current = null
+    const el = scroller.current
+    if (!s?.sideways || !el) return
+    const at = new DOMMatrix(getComputedStyle(el).transform).m41
+    el.style.transform = ''
+    slide(el, at, 0, 220)
+  }
+  // A tab tapped comes in with a short slide from its side of the one left.
+  function tapPhoneTab(to: PhoneTab) {
+    if (to === phoneTab) return
+    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? 1 : -1
+    entering.current = { from: side * 48, fade: true }
+    toPhoneTab(to)
+  }
+  useLayoutEffect(() => {
+    const how = entering.current
+    entering.current = null
+    // Whatever held the page off screen lets go, now that another tab shows.
+    scroller.current?.getAnimations().forEach((a) => a.cancel())
+    if (!how) return
+    const el = phoneTab === 'components' ? stageRef.current : scroller.current
+    if (el) slide(el, how.from, 0, how.fade ? 200 : 280, { fade: how.fade })
+  }, [phoneTab])
 
   const searchBar = (
     <SearchBar
@@ -941,21 +1043,19 @@ export function App() {
             </div>
           )}
 
-          <div className="rail-body" ref={scroller} onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
-            {(shownUnder || current) && (
+          <div
+            className="rail-body"
+            ref={scroller}
+            onTouchStart={swipeStart}
+            onTouchMove={swipeMove}
+            onTouchEnd={swipeEnd}
+            onTouchCancel={swipeCancel}
+          >
+            {shownUnder && (
               <div className="rail-crumb">
-                {shownUnder ? (
-                  <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
-                    <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
-                  </button>
-                ) : (
-                  <span />
-                )}
-                {current && (
-                  <span className="rail-current" lang="ja">
-                    {current}
-                  </span>
-                )}
+                <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
+                  <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
+                </button>
               </div>
             )}
             {tab === 'dictionary' &&
@@ -968,7 +1068,7 @@ export function App() {
                 before the tab is opened. */}
             {subject && (
               <div hidden={tab !== 'associations'}>
-                {!mobile && tab === 'associations' && pageHead()}
+                {tab === 'associations' && pageHead()}
                 {associations(subject)}
               </div>
             )}
@@ -976,7 +1076,7 @@ export function App() {
           {mobile && subject && !(onStage && view === 'map') && (
             <nav className="phone-tabs" role="tablist" aria-label={t('sidePanel')}>
               {phoneTabs.map((p) => (
-                <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => toPhoneTab(p)}>
+                <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
                   {t(p === 'components' ? 'focus' : p)}
                   {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
@@ -990,7 +1090,7 @@ export function App() {
         {split && <SplitResizer share={searchShare} total={2 * railShown} onShare={setSearchShare} />}
         <RailResizer width={railShown} onWidth={setRailWidth} columns={split ? 2 : 1} />
 
-        <main className="stage">
+        <main className="stage" ref={stageRef}>
           {error && selected && (
             <div className="stage-empty">
               <p>
