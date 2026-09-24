@@ -8,8 +8,8 @@
  *
  * Every step is a browser history entry, so Android's back button and iOS's
  * swipe walk the stack too, and the URL names the page on top so it can be
- * linked to. The stack is also kept in this browser, so opening the app lands
- * on the search you left.
+ * linked to. Opening the app afresh starts from an empty search, not the page
+ * left last time.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -43,7 +43,6 @@ interface Entry {
   scroll?: number
 }
 
-const KEY = 'betterrtk:stack'
 const MAX = 40
 const HOME: Page = { kind: 'search', q: '' }
 const KANJI_PATH = /^\/kanji\/([^/]+)\/?$/
@@ -109,26 +108,9 @@ function isStack(s: unknown): s is Stack {
   return Array.isArray(s) && s.length > 0 && s.every((p) => p && typeof p === 'object' && 'kind' in p)
 }
 
-function saved(): Stack | null {
-  try {
-    const s = JSON.parse(localStorage.getItem(KEY) ?? 'null')
-    return isStack(s) ? s : null
-  } catch {
-    return null
-  }
-}
-
-function save(stack: Stack) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(stack))
-  } catch {
-    // not remembered, which is fine
-  }
-}
-
 /**
  * Where the app opens: the entry a reload left in history, else the page the
- * URL names, else the stack from last time, else an empty search.
+ * URL names, else an empty search.
  */
 function opening(): Entry {
   const state = window.history.state as Entry | null
@@ -137,7 +119,7 @@ function opening(): Entry {
     return { stack: state.stack, depth: Math.min(state.depth ?? 0, state.stack.length - 1) }
   }
   if (linked) return { stack: [linked], depth: 0 }
-  return { stack: saved() ?? [HOME], depth: 0 }
+  return { stack: [HOME], depth: 0 }
 }
 
 function write(entry: Entry, how: 'push' | 'replace') {
@@ -170,8 +152,6 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
     write(current.current, 'replace')
     // Once: record where the app opened, under whatever URL that was.
   }, [])
-
-  useEffect(() => save(entry.stack.slice(-MAX)), [entry.stack])
 
   const flush = useCallback(() => {
     if (pendingReplace.current === null) return

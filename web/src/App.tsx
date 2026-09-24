@@ -143,15 +143,17 @@ function initialRailTab(): RailTab {
 
 const TITLE = document.title
 
-// A link to a character opens on it in the focus view. Otherwise a desktop
-// opens on the whole common map, to wander in, and a phone on the character.
+// Opening the app afresh lands on the whole common map, to wander in, on a
+// phone as on a desktop. A link to a character opens on it in the focus view;
+// a link to anything else, on a desktop, beside the map.
 // Picking a character, on the map or from a list, goes to its focus view.
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linkedPage = pageInUrl()
 const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
 function initialView(): StageView {
-  return linked || openedOnPhone ? 'focus' : 'map'
+  if (linked) return 'focus'
+  return linkedPage && openedOnPhone ? 'focus' : 'map'
 }
 
 /** The character nearest the top of the stack: the one the graph shows. */
@@ -260,7 +262,7 @@ export function App() {
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
   const mobile = useMediaQuery(MOBILE)
-  const [pane, setPane] = useState<'rail' | 'stage'>('rail')
+  const [pane, setPane] = useState<'rail' | 'stage'>(linkedPage ? 'rail' : 'stage')
   const onStage = mobile && pane === 'stage'
   useVisibleHeight(mobile)
 
