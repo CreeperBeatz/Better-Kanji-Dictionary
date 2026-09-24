@@ -225,6 +225,11 @@ body {
 }
 
 /* While dragging, the pointer passes over the graph and text; neither should react. */
+/* Between the search column and the dictionary. */
+.rail-resizer.split-resizer {
+  left: calc(var(--search) - 5px);
+}
+
 body.rail-resizing {
   cursor: col-resize;
   user-select: none;

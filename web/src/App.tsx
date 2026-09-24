@@ -12,7 +12,7 @@ import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordPanel } from './detail/WordPanel'
-import { RAIL_MIN, RailResizer, STAGE_MIN, useRailWidth } from './RailResizer'
+import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { LevelFilter, ViewSwitch, type StageView } from './StageControls'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
@@ -126,9 +126,8 @@ function useVisibleHeight(enabled: boolean) {
 
 const RAIL_TAB_KEY = 'betterrtk:railTab'
 // On a wide enough desktop the search gets a column of its own, left of the
-// dictionary, so its results stay in view while one of them is open. The two
-// share their width 40 to 60, and the rail's edge resizes both.
-const SEARCH_SHARE = 0.4
+// dictionary, so its results stay in view while one of them is open. The
+// rail's edge resizes the two together; the edge between them moves the split.
 const SPLIT_KEY = 'betterrtk:searchBeside'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
@@ -232,6 +231,7 @@ export function App() {
   // its camera while the focus view is showing.
   const [mapOpened, setMapOpened] = useState(view === 'map')
   const [railWidth, setRailWidth] = useRailWidth()
+  const [searchShare, setSearchShare] = useSearchShare()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   const [assocCount, setAssocCount] = useState(0)
 
@@ -264,7 +264,7 @@ export function App() {
   // Split, the rail's width is kept as the two columns' average, so it means
   // the same either way; the columns give way before the stage does.
   const railShown = split ? Math.round(Math.min(railWidth, (windowWidth - STAGE_MIN) / 2)) : railWidth
-  const searchPx = split ? Math.round(2 * railShown * SEARCH_SHARE) : 0
+  const searchPx = split ? Math.round(2 * railShown * clampShare(searchShare, 2 * railShown)) : 0
   const entryPx = split ? 2 * railShown - searchPx : railShown
 
   // With the search in its own column, the rail shows what is open above it:
@@ -721,6 +721,7 @@ export function App() {
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}
         </aside>
+        {split && <SplitResizer share={searchShare} total={2 * railShown} onShare={setSearchShare} />}
         <RailResizer width={railShown} onWidth={setRailWidth} columns={split ? 2 : 1} />
 
         <main className="stage">
