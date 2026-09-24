@@ -34,7 +34,6 @@ const S = strings(
     showSearch: 'Show the search beside the dictionary',
     hideSearch: 'Put the search back above the dictionary',
     pickResult: 'Pick a result and it opens here.',
-    mapBestCollapsed: 'The map is best viewed in collapsed view',
     focus: 'Components',
     map: 'Map',
     back: 'Back (Backspace)',
@@ -58,7 +57,6 @@ const S = strings(
     showSearch: 'Покажете търсенето до речника',
     hideSearch: 'Върнете търсенето над речника',
     pickResult: 'Изберете резултат и той ще се отвори тук.',
-    mapBestCollapsed: 'Картата се разглежда най-добре в свит изглед',
     focus: 'Компоненти',
     map: 'Карта',
     back: 'Назад (Backspace)',
@@ -270,8 +268,16 @@ export function App() {
     }
   })
   const room = !mobile && windowWidth >= SPLIT_ROOM
-  const split = room && splitPref
+  // The map wants the room the search column takes, so while it is up the
+  // column is folded away -- not as a choice, just for the map -- and is back
+  // as it was on leaving it. The app opening on the map counts too.
+  const [mapFolded, setMapFolded] = useState(() => view === 'map')
+  useEffect(() => {
+    if (view !== 'map') setMapFolded(false)
+  }, [view])
+  const split = room && splitPref && !mapFolded
   const chooseSplit = useCallback((on: boolean) => {
+    setMapFolded(false)
     setSplitPref(on)
     try {
       if (on) localStorage.removeItem(SPLIT_KEY)
@@ -464,18 +470,11 @@ export function App() {
     [drill, mobile, setView],
   )
 
-  // The map wants the room the search column takes: going to it split says
-  // so, once, and points at the button that folds it away.
-  const [mapHint, setMapHint] = useState(false)
-  useEffect(() => {
-    if (view !== 'map' || !split) {
-      setMapHint(false)
-      return
-    }
-    setMapHint(true)
-    const timer = setTimeout(() => setMapHint(false), 3200)
-    return () => clearTimeout(timer)
-  }, [view, split])
+  // Out to the map from the search, with the search column folded away for it.
+  const browseMap = useCallback(() => {
+    setMapFolded(true)
+    setView('map')
+  }, [setView])
 
   // A pick from the search column replaces what is open beside it.
   const listKanji = useCallback(
@@ -624,7 +623,7 @@ export function App() {
             onSearch={type}
             asked={asked}
             onAsk={setAsked}
-            onMap={() => setView('map')}
+            onMap={browseMap}
           />
         )
       case 'level':
@@ -705,7 +704,6 @@ export function App() {
         room && (
           <button
             className="searchbar-tool split-toggle"
-            data-flash={mapHint || undefined}
             aria-pressed={split}
             onClick={() => chooseSplit(!split)}
             title={t(split ? 'hideSearch' : 'showSearch')}
@@ -749,7 +747,7 @@ export function App() {
                 onSearch={type}
                 asked={asked}
                 onAsk={setAsked}
-                onMap={() => setView('map')}
+                onMap={browseMap}
                 open={
                   picked?.kind === 'kanji'
                     ? { kanji: picked.char }
@@ -903,12 +901,6 @@ export function App() {
                 legend={legendOpen && view === 'map'}
               />
             </div>
-          )}
-
-          {view === 'map' && mapHint && (
-            <p className="map-hint" role="status">
-              {t('mapBestCollapsed')}
-            </p>
           )}
 
           <div className="stage-top">
