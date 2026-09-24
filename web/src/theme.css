@@ -726,16 +726,16 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     height: var(--app-h, 100%);
   }
 
-  /* The rail's parts join the page's grid: tabs along the top, the search
-     along the bottom where the thumb is, and between them one pane at a time --
-     the rail's pages or the stage. The hidden one keeps its size, so the graph
-     and the map keep their framing and the pages their scroll. */
+  /* The rail's parts join the page's grid: the search along the top, a
+     page's tabs along the bottom where the thumb is, and between them one pane
+     at a time -- the rail's pages or the stage. The hidden one keeps its size,
+     so the graph and the map keep their framing and the pages their scroll. */
   /* minmax(0, ...) so a row that scrolls sideways, like the draw pad's
      guesses, scrolls inside the screen instead of widening it. */
   .shell-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
-    grid-template-areas: 'head' 'main' 'bar';
+    grid-template-areas: 'bar' 'main' 'tabs';
   }
 
   .rail {
@@ -744,12 +744,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
   .rail-resizer {
     display: none;
-  }
-
-  .rail-head {
-    grid-area: head;
-    padding: 0 12px 0 8px;
-    background: var(--sumi-sunk);
   }
 
   .rail-body {
@@ -764,6 +758,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
   .searchbar {
     grid-area: bar;
+  }
+
+  .phone-tabs {
+    grid-area: tabs;
   }
 
   .shell-grid[data-pane='rail'] .stage,
@@ -2089,7 +2087,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 10px 0 0 auto;
 }
 
-/* The draw pad, a popup under the search box (above it on a phone). Every
+/* The draw pad, a popup under the search box. Every
    part has a fixed size, so it does not jump about as the guesses come and
    go: what it guessed on top, two rows of them and then a scroll, the box
    below, and one line for the buttons and the stroke count. */
@@ -2218,11 +2216,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 @media (max-width: 900px) {
-  /* Along the bottom: the tools open upward, above the box. */
+  /* Along the top: the tools open downward, under the box. */
   .searchbar {
-    flex-direction: column-reverse;
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid var(--rule);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .searchbar .profile-button {
+    flex: none;
+    margin-left: 2px;
   }
 
   /* 16px, or iOS zooms the page when the box is focused. */
@@ -2238,13 +2240,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   }
 
   .searchtools {
-    margin: 0 0 10px;
     max-height: 52vh;
   }
 
   .drawpop {
-    top: auto;
-    bottom: calc(100% + 6px);
     left: 10px;
     right: 10px;
   }
@@ -4227,47 +4226,51 @@ html {
   background-color: var(--muted);
 }
 
-/* After the tab styles above, so these win on a phone. */
+/* Phone scrollbars float over the content; nothing to reserve room for. */
 @media (max-width: 900px) {
-  /* Phone scrollbars float over the content; nothing to reserve room for. */
   .rail-body {
     scrollbar-gutter: auto;
   }
-
-  .rail-tabs {
-    flex: 1;
-    gap: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .rail-tabs button {
-    flex: none;
-    padding: 9px 8px 10px;
-    font-size: 12.5px;
-  }
-
-  .rail-tabs button:first-child {
-    margin-left: 0;
-  }
-
-  .rail-tabs button[aria-selected='true']::after {
-    left: 8px;
-    right: 8px;
-  }
 }
 
-/* Six tabs on a narrow phone: closer together, so they mostly fit unscrolled. */
-@media (max-width: 440px) {
-  .rail-tabs button {
-    padding-left: 6px;
-    padding-right: 6px;
-  }
+/* A phone's page tabs, along the bottom: Dictionary, Associations, Components. */
+.phone-tabs {
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--sumi-sunk);
+  border-top: 1px solid var(--rule);
+}
 
-  .rail-tabs button[aria-selected='true']::after {
-    left: 6px;
-    right: 6px;
-  }
+.phone-tabs button {
+  position: relative;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 13px 4px 14px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.phone-tabs button[aria-selected='true'] {
+  color: var(--paper);
+}
+
+/* The vermilion mark on the edge it faces the page from. */
+.phone-tabs button[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 22%;
+  right: 22%;
+  height: 2px;
+  background: var(--shu);
 }
 
 /* ---------------------------------------------------------------- press and hold (touch) */

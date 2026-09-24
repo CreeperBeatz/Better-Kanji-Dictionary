@@ -144,6 +144,23 @@ function initialRailTab(): RailTab {
 
 const TITLE = document.title
 
+/** How far a finger goes sideways across a page to turn to the next tab. */
+const SWIPE = 60
+const HAN = /[㐀-䶿一-鿿]/
+
+/**
+ * Whether a touch starting here is the element's own to use sideways: typing,
+ * drawing, or a row that scrolls across.
+ */
+function movesItself(el: Element | null, within: Element): boolean {
+  for (let at = el; at && at !== within; at = at.parentElement) {
+    if (at.matches('input, textarea, canvas, [contenteditable], .excalidraw')) return true
+    const x = getComputedStyle(at).overflowX
+    if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
+  }
+  return false
+}
+
 // Opening the app afresh lands on the whole common map, to wander in, on a
 // phone as on a desktop. A link to a character opens on it in the focus view;
 // a link to anything else, on a desktop, beside the map.
@@ -191,7 +208,10 @@ export function App() {
   const t = S(useLang())
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { stack, push, reset, replaceTop, openOver, rebase, pop } = useNav(scroller)
+  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
+    scroller,
+    openedOnPhone && !linkedPage ? 'map' : undefined,
+  )
   const top = stack[stack.length - 1]
   const root = stack[0]
   const under = stack.length > 1 ? stack[stack.length - 2] : null
@@ -255,8 +275,15 @@ export function App() {
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time and Focus and Map join the rail's tabs.
   const mobile = useMediaQuery(MOBILE)
-  const [pane, setPane] = useState<'rail' | 'stage'>(linkedPage ? 'rail' : 'stage')
-  const onStage = mobile && pane === 'stage'
+  // Which one is a step in history, so back from the graph is the page again.
+  const pane = mobile && stage ? 'stage' : 'rail'
+  const onStage = pane === 'stage'
+  // Back or forward onto a step that shows the graph or the map shows that one.
+  useEffect(() => {
+    if (!mobile || !stage) return
+    setViewState(stage)
+    if (stage === 'map') setMapOpened(true)
+  }, [mobile, stage])
   useVisibleHeight(mobile)
 
   const windowWidth = useWindowWidth()
@@ -313,26 +340,32 @@ export function App() {
     return () => watch.disconnect()
   }, [split])
 
-  const chooseRailTab = useCallback((t: RailTab) => {
-    setRailTab(t)
-    setPane('rail')
-    try {
-      localStorage.setItem(RAIL_TAB_KEY, t)
-    } catch {
-      // not remembered, which is fine
-    }
-  }, [])
+  const chooseRailTab = useCallback(
+    (t: RailTab) => {
+      setRailTab(t)
+      leaveStage('back')
+      try {
+        localStorage.setItem(RAIL_TAB_KEY, t)
+      } catch {
+        // not remembered, which is fine
+      }
+    },
+    [leaveStage],
+  )
 
   const toDictionary = useCallback(() => {
     setRailTab('dictionary')
-    setPane('rail')
-  }, [])
+    leaveStage('replace')
+  }, [leaveStage])
 
-  const setView = useCallback((v: StageView) => {
-    setViewState(v)
-    setPane('stage')
-    if (v === 'map') setMapOpened(true)
-  }, [])
+  const setView = useCallback(
+    (v: StageView) => {
+      setViewState(v)
+      if (mobile) enterStage(v)
+      if (v === 'map') setMapOpened(true)
+    },
+    [mobile, enterStage],
+  )
 
   // A character picked on the map is previewed over it, not opened.
   const [mapCard, setMapCard] = useState<string | null>(null)
@@ -467,13 +500,13 @@ export function App() {
   const openKanji = useCallback(
     (char: string) => {
       setHovered(null)
-      setPane('rail')
+      leaveStage('replace')
       setViewState('focus')
       keepSearch()
       if (under?.kind === 'kanji' && under.char === char) pop()
       else push({ kind: 'kanji', char })
     },
-    [under, push, pop, keepSearch],
+    [under, push, pop, keepSearch, leaveStage],
   )
 
   const openWord = useCallback(
@@ -493,7 +526,7 @@ export function App() {
   const graphOpen = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
-      setPane('rail')
+      leaveStage('replace')
       if (via && via !== char) rememberKanji(via)
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
       const picked = top.kind === 'kanji' && top.centre !== undefined && top.centre === focus
@@ -504,7 +537,7 @@ export function App() {
         if (scroller.current) scroller.current.scrollTop = 0
       } else push(page)
     },
-    [top, under, push, pop, replaceTop, focus],
+    [top, under, push, pop, replaceTop, focus, leaveStage],
   )
 
   // Recentring on a character on the graph opens it too, or takes the
@@ -516,7 +549,8 @@ export function App() {
       setFocus(char)
       if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
       else if (under?.kind === 'kanji' && under.char === char && !under.centre) pop()
-      else push({ kind: 'kanji', char })
+      // On a phone the graph stays up: this was done on it.
+      else push({ kind: 'kanji', char }, true)
     },
     [top, under, push, pop, replaceTop],
   )
@@ -525,13 +559,14 @@ export function App() {
   const seeInDictionary = useCallback(
     (char: string) => {
       setMapCard(null)
+      // Opening it puts the page up, on a phone.
       drill(char)
       if (mobile) {
         setViewState('focus')
-        setPane('rail')
+        leaveStage('replace')
       } else setView('focus')
     },
-    [drill, mobile, setView],
+    [drill, mobile, setView, leaveStage],
   )
 
   // Out to the map from the search, with the search column folded away for it.
@@ -685,7 +720,7 @@ export function App() {
             hovered={hoveredNode}
             onWord={openWord}
             onKanji={openKanji}
-            onComponents={mobile || view !== 'focus' ? () => setView('focus') : undefined}
+            onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
           />
         ) : (
           <section className="rail-section">
@@ -707,7 +742,6 @@ export function App() {
         ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
         : null
   const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
-  const inDictionary = !onStage && tab === 'dictionary'
   function associations(s: { key: string; label: string }) {
     return (
       <Associations
@@ -756,6 +790,55 @@ export function App() {
     return null
   }
 
+  // On a phone a page's tabs are Dictionary, Associations and Components.
+  // A word's components are those of its character the graph is on, or of
+  // its first.
+  const shownWord =
+    shownTop?.kind === 'word' ? (shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)) : undefined
+  const componentsOf =
+    shownTop?.kind === 'kanji'
+      ? shownTop.char
+      : shownWord
+        ? focus && shownWord.headword.includes(focus)
+          ? focus
+          : ([...shownWord.headword].find((c) => HAN.test(c)) ?? null)
+        : null
+  // Back from the graph is the dictionary, whichever tab it was gone to from.
+  function showComponents() {
+    if (shownTop?.kind === 'word' && componentsOf && componentsOf !== focus) setFocus(componentsOf)
+    setRailTab('dictionary')
+    setView('focus')
+  }
+  type PhoneTab = RailTab | 'components'
+  const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : tab
+  const phoneTabs: PhoneTab[] = componentsOf ? ['dictionary', 'associations', 'components'] : ['dictionary', 'associations']
+  function toPhoneTab(to: PhoneTab) {
+    if (to === 'components') showComponents()
+    else chooseRailTab(to)
+  }
+
+  // Swiping across a page goes to the tab beside it. On the graph a swipe
+  // moves the graph, so there it is the tabs, or back, that return.
+  const swipe = useRef<{ x: number; y: number; at: number } | null>(null)
+  function swipeStart(e: React.TouchEvent) {
+    swipe.current = null
+    if (!mobile || !subject || e.touches.length !== 1) return
+    if (movesItself(e.target as Element, e.currentTarget)) return
+    const touch = e.touches[0]
+    swipe.current = { x: touch.clientX, y: touch.clientY, at: e.timeStamp }
+  }
+  function swipeEnd(e: React.TouchEvent) {
+    const from = swipe.current
+    swipe.current = null
+    if (!from) return
+    const touch = e.changedTouches[0]
+    const dx = touch.clientX - from.x
+    const dy = touch.clientY - from.y
+    if (Math.abs(dx) < SWIPE || Math.abs(dx) < 2 * Math.abs(dy) || e.timeStamp - from.at > 700) return
+    const next = phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
+    if (next) toPhoneTab(next)
+  }
+
   // What the page on top is, as written, named above every tab it has.
   const current = !mobile
     ? undefined
@@ -776,7 +859,11 @@ export function App() {
       }}
       inputRef={inputRef}
       after={
-        room && (
+        // On a phone the search is along the top, and who you are at its end.
+        mobile ? (
+          <ProfileButton onOpen={signIn} />
+        ) : (
+          room && (
           <button
             className="searchbar-tool split-toggle"
             aria-pressed={split}
@@ -785,6 +872,7 @@ export function App() {
           >
             <SplitIcon open={split} />
           </button>
+          )
         )
       }
     />
@@ -835,35 +923,6 @@ export function App() {
         )}
         <aside className="rail">
           {!split && searchBar}
-          {/* A phone shows one pane at a time and switches between them here;
-              a desktop has them all on screen at once. */}
-          {mobile && (
-            <div className="rail-head">
-              <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
-                <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
-                  {t('dictionary')}
-                </button>
-                {subject && (
-                  <button
-                    role="tab"
-                    aria-selected={!onStage && tab === 'associations'}
-                    onClick={() => chooseRailTab('associations')}
-                  >
-                    {t('associations')}
-                    {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                  </button>
-                )}
-                <button role="tab" aria-selected={onStage && view === 'focus'} onClick={() => setView('focus')}>
-                  {t('focus')}
-                </button>
-                <button role="tab" aria-selected={onStage && view === 'map'} onClick={() => setView('map')}>
-                  {t('map')}
-                </button>
-              </div>
-              <ProfileButton onOpen={signIn} />
-            </div>
-          )}
-
           {!mobile && subject && (
             <div className="rail-head">
               <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
@@ -882,7 +941,7 @@ export function App() {
             </div>
           )}
 
-          <div className="rail-body" ref={scroller}>
+          <div className="rail-body" ref={scroller} onTouchStart={swipeStart} onTouchEnd={swipeEnd}>
             {(shownUnder || current) && (
               <div className="rail-crumb">
                 {shownUnder ? (
@@ -914,6 +973,16 @@ export function App() {
               </div>
             )}
           </div>
+          {mobile && subject && !(onStage && view === 'map') && (
+            <nav className="phone-tabs" role="tablist" aria-label={t('sidePanel')}>
+              {phoneTabs.map((p) => (
+                <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => toPhoneTab(p)}>
+                  {t(p === 'components' ? 'focus' : p)}
+                  {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                </button>
+              ))}
+            </nav>
+          )}
           {/* "Its parts" -- the decomposition editor and review queue -- is
               hidden for now. src/review/DecompPanel.tsx and the /api/decomp
               routes are untouched, so putting it back is one line. */}

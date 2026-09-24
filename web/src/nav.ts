@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Word } from './api'
+import type { StageView } from './StageControls'
 
 export type Level = 1 | 2 | 3 | 4 | 5
 
@@ -41,7 +42,16 @@ interface Entry {
   depth: number
   /** The rail's scroll when you left the page, to put it back on return. */
   scroll?: number
+  /**
+   * On a phone, which shows one pane at a time: the stage view this entry
+   * shows instead of the rail's page. Going to the graph or the map is a
+   * step of its own, so back from it is the page again.
+   */
+  stage?: StageView
+  /** Stepped to from this same stack on the rail, which is right behind it. */
+  twin?: boolean
 }
+
 
 const MAX = 40
 const HOME: Page = { kind: 'search', q: '' }
@@ -110,16 +120,21 @@ function isStack(s: unknown): s is Stack {
 
 /**
  * Where the app opens: the entry a reload left in history, else the page the
- * URL names, else an empty search.
+ * URL names, else an empty search -- on `fresh`, when that is on a stage view.
  */
-function opening(): Entry {
+function opening(fresh?: StageView): Entry {
   const state = window.history.state as Entry | null
   const linked = pageInUrl()
   if (state && isStack(state.stack) && (!linked || samePage(linked, state.stack[state.stack.length - 1]))) {
-    return { stack: state.stack, depth: Math.min(state.depth ?? 0, state.stack.length - 1) }
+    return {
+      stack: state.stack,
+      depth: Math.min(state.depth ?? 0, state.stack.length - 1),
+      stage: state.stage,
+      twin: state.twin,
+    }
   }
   if (linked) return { stack: [linked], depth: 0 }
-  return { stack: [HOME], depth: 0 }
+  return { stack: [HOME], depth: 0, stage: fresh }
 }
 
 function write(entry: Entry, how: 'push' | 'replace') {
@@ -141,8 +156,9 @@ function restoreScroll(el: HTMLElement | null, to: number) {
   setTimeout(() => (el.scrollTop = to), 120)
 }
 
-export function useNav(scroller: React.RefObject<HTMLElement | null>) {
-  const [entry, setEntry] = useState<Entry>(opening)
+/** `fresh` is the stage view an empty search opens on, on a phone. */
+export function useNav(scroller: React.RefObject<HTMLElement | null>, fresh?: StageView) {
+  const [entry, setEntry] = useState<Entry>(() => opening(fresh))
   const current = useRef(entry)
   current.current = entry
   // Typing replaces the entry on every key; the URL catches up after a pause.
@@ -173,12 +189,19 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
     [flush, scroller],
   )
 
-  /** Open a page on top of this one. */
+  /**
+   * Open a page on top of this one -- on the rail, or `staying` on the stage
+   * view, as recentring the graph on a phone does.
+   */
   const push = useCallback(
-    (p: Page) => {
-      const { stack, depth } = current.current
+    (p: Page, staying = false) => {
+      const { stack, depth, stage } = current.current
       if (samePage(stack[stack.length - 1], p)) return
-      go({ stack: [...stack, p].slice(-MAX), depth: Math.min(depth + 1, MAX - 1) })
+      go({
+        stack: [...stack, p].slice(-MAX),
+        depth: Math.min(depth + 1, MAX - 1),
+        stage: staying ? stage : undefined,
+      })
     },
     [go],
   )
@@ -212,7 +235,7 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
   const rebase = useCallback((p: Page) => {
     const { stack } = current.current
     const above = stack[0].kind === 'search' ? stack.slice(1) : stack
-    const next = { stack: [p, ...above].slice(-MAX), depth: 0 }
+    const next = { ...current.current, stack: [p, ...above].slice(-MAX), depth: 0 }
     current.current = next
     setEntry(next)
     if (pendingReplace.current !== null) clearTimeout(pendingReplace.current)
@@ -224,8 +247,8 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
 
   /** Change the page on top in place -- a search as it is typed. */
   const replaceTop = useCallback((p: Page) => {
-    const { stack, depth } = current.current
-    const next = { stack: [...stack.slice(0, -1), p], depth }
+    const { stack } = current.current
+    const next = { ...current.current, stack: [...stack.slice(0, -1), p] }
     current.current = next
     setEntry(next)
     if (pendingReplace.current !== null) clearTimeout(pendingReplace.current)
@@ -238,12 +261,13 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
   /** Take `n` pages off the top, through history where it has them. */
   const pop = useCallback(
     (n = 1) => {
-      const { stack, depth } = current.current
+      const { stack, depth, twin } = current.current
       const k = Math.min(n, stack.length - 1)
       if (k <= 0) return
       flush()
       if (depth >= k) {
-        window.history.go(-k)
+        // A twin has this same stack behind it, to step over too.
+        window.history.go(twin ? -k - 1 : -k)
         return
       }
       const next = { stack: stack.slice(0, -k), depth: 0 }
@@ -253,6 +277,51 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
       if (scroller.current) scroller.current.scrollTop = 0
     },
     [flush, scroller],
+  )
+
+  /** On a phone: show a stage view instead of the page, as a step back can undo. */
+  const enterStage = useCallback(
+    (v: StageView) => {
+      const now = current.current
+      if (now.stage === v) return
+      flush()
+      if (now.stage) {
+        // From one stage view to the other: the same step, changed.
+        const next = { ...now, stage: v }
+        current.current = next
+        setEntry(next)
+        write(next, 'replace')
+        return
+      }
+      write({ ...now, scroll: scroller.current?.scrollTop ?? 0 }, 'replace')
+      const next: Entry = { stack: now.stack, depth: now.depth, stage: v, twin: true }
+      write(next, 'push')
+      current.current = next
+      setEntry(next)
+    },
+    [flush, scroller],
+  )
+
+  /**
+   * Back to the page from a stage view. `back` steps back to the page it was
+   * stepped to from, when it was; otherwise, or when a new page is about to
+   * be opened anyway, the step is changed in place.
+   */
+  const leaveStage = useCallback(
+    (how: 'back' | 'replace') => {
+      const now = current.current
+      if (!now.stage) return
+      flush()
+      if (how === 'back' && now.twin) {
+        window.history.back()
+        return
+      }
+      const next = { ...now, stage: undefined }
+      current.current = next
+      setEntry(next)
+      write(next, 'replace')
+    },
+    [flush],
   )
 
   // Back and forward, from the app or the browser.
@@ -266,6 +335,13 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
       const linked = pageInUrl()
       const next: Entry =
         state && isStack(state.stack) ? state : { stack: [linked ?? HOME], depth: 0 }
+      // A twin left on the rail looks just like the page behind it; back from
+      // it would seem to do nothing, so it goes on past.
+      const was = current.current
+      if (was.twin && !was.stage && !next.stage && sameStack(was.stack, next.stack)) {
+        window.history.back()
+        return
+      }
       current.current = next
       setEntry(next)
       restoreScroll(scroller.current, next.scroll ?? 0)
@@ -274,5 +350,5 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
     return () => window.removeEventListener('popstate', onPop)
   }, [scroller])
 
-  return { stack: entry.stack, push, reset, replaceTop, openOver, rebase, pop }
+  return { stack: entry.stack, stage: entry.stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage }
 }
