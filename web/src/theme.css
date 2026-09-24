@@ -4276,6 +4276,133 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--sumi-lift);
 }
 
+.composer-tool[data-on] {
+  color: var(--ai);
+}
+
+/* ------------------------------------------------------- GIFs from KLIPY */
+
+.gifpicker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0 38px;
+  padding: 8px;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+}
+
+.gifpicker-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gifpicker-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  background: var(--sumi);
+  color: var(--paper);
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  outline: none;
+}
+
+.gifpicker-input:focus {
+  border-color: var(--ai-deep);
+}
+
+.gifpicker-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.gifpicker-results {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.gifpicker-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.gifpicker-grid button {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.gifpicker-grid button:hover {
+  border-color: var(--ai);
+}
+
+.gifpicker-grid img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gifpicker-note {
+  margin: 6px 2px;
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
+.gifpicker-more {
+  display: block;
+  margin: 6px auto;
+}
+
+.gifpicker-credit {
+  margin: 0;
+  font-size: 11.5px;
+}
+
+.gifpicker-credit a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.gifpicker-credit a:hover {
+  color: var(--ai);
+}
+
+/* A GIF in a note, with KLIPY's name in its corner as they ask. */
+.assoc-gif {
+  position: relative;
+  display: block;
+}
+
+.assoc-gif-credit {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 0 4px;
+  font-family: var(--gothic);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--paper);
+  background: rgba(12, 10, 9, 0.6);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
 /* Who sees it, and sending it: kept together at the right, wrapping as one. */
 .composer-send {
   display: inline-flex;

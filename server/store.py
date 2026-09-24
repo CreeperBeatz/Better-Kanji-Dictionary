@@ -237,7 +237,8 @@ def _drop_unused(images: list[str], data: dict) -> None:
     """Delete these image files, and their scenes, if no record still names them."""
     still_used = {img for a in data["associations"].values() for img in a.get("images", [])}
     for img in images:
-        if img not in still_used:
+        # A GIF is an address on KLIPY's servers, not a file of ours.
+        if img not in still_used and not img.startswith("https://"):
             (IMAGES / img).unlink(missing_ok=True)
             scene_path(img).unlink(missing_ok=True)
 

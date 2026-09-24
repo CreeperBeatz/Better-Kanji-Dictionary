@@ -21,6 +21,7 @@ from .. import store
 from ..errors import AppError
 from ..db import query, query_one
 from .auth import optional_user, require_user
+from .gifs import is_gif_url
 
 router = APIRouter(prefix="/api/assoc", tags=["associations"])
 
@@ -93,8 +94,9 @@ def _content(payload: dict) -> tuple[str, list[str]]:
     if len(text) > MAX_TEXT:
         raise AppError(400, "note_too_long", f"a note is at most {MAX_TEXT} characters", max=MAX_TEXT)
     images = [i for i in (payload.get("images") or []) if isinstance(i, str)]
-    # Only names this server handed out, never paths.
-    if any(Path(i).name != i or not (store.IMAGES / i).is_file() for i in images):
+    # Only names this server handed out, never paths -- or a GIF on KLIPY's
+    # servers, which may not be copied here (routes/gifs.py).
+    if any(not is_gif_url(i) and (Path(i).name != i or not (store.IMAGES / i).is_file()) for i in images):
         raise AppError(400, "image_unknown", "unknown image")
     if not text and not images:
         raise AppError(400, "note_empty", "a note needs some text or a picture")

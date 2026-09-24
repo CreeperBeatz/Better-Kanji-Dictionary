@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { api } from '../api'
+import { api, isGifUrl } from '../api'
 import { strings, useLang } from '../i18n'
 import { getImage, isLocalImage } from '../localNotes'
 
@@ -52,11 +52,20 @@ export function NoteImage({ name, zoomable = false }: { name: string; zoomable?:
 
   const src = local ? (blobUrl?.name === name ? blobUrl.url : null) : api.imageUrl(name)
   if (!src) return <span className="assoc-image-pending" />
-  if (!zoomable) return <img src={src} alt="" />
+  // A GIF comes from KLIPY, which asks to be named wherever its GIFs are.
+  const img = isGifUrl(name) ? (
+    <span className="assoc-gif">
+      <img src={src} alt="" referrerPolicy="no-referrer" />
+      <span className="assoc-gif-credit">KLIPY</span>
+    </span>
+  ) : (
+    <img src={src} alt="" />
+  )
+  if (!zoomable) return img
   return (
     <>
       <button className="assoc-image-zoom" onClick={() => setZoomed(true)} title={t('zoom')} aria-label={t('zoom')}>
-        <img src={src} alt="" />
+        {img}
       </button>
       {zoomed && <ImageZoom src={src} onClose={() => setZoomed(false)} />}
     </>
