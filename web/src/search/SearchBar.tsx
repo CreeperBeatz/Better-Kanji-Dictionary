@@ -53,11 +53,13 @@ interface Props {
   /** Enter, or the search key on a phone's keyboard. */
   onSubmit: () => void
   inputRef: React.RefObject<HTMLInputElement | null>
+  /** Anything else for the end of the row, after the tools. */
+  after?: React.ReactNode
 }
 
 const coarse = () => window.matchMedia('(pointer: coarse)').matches
 
-export function SearchBar({ q, onType, onFocus, onSubmit, inputRef }: Props) {
+export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Props) {
   const [tool, setTool] = useState<Tool | null>(null)
   const t = S(useLang())
   const drawRef = useRef<HTMLDivElement>(null)
@@ -170,6 +172,7 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef }: Props) {
           </span>
           <span>{t('radicals')}</span>
         </button>
+        {after}
       </div>
 
       {tool === 'draw' && (

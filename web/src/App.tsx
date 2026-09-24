@@ -572,8 +572,13 @@ export function App() {
   }
 
   // What the page on top is, as written, named above every tab it has.
-  const current =
-    shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? shownTop.word?.headword : undefined
+  const current = !mobile
+    ? undefined
+    : shownTop?.kind === 'kanji'
+      ? shownTop.char
+      : shownTop?.kind === 'word'
+        ? shownTop.word?.headword
+        : undefined
 
   const searchBar = (
     <SearchBar
@@ -585,6 +590,18 @@ export function App() {
         rememberSearch(q)
       }}
       inputRef={inputRef}
+      after={
+        room && (
+          <button
+            className="searchbar-tool split-toggle"
+            aria-pressed={split}
+            onClick={() => chooseSplit(!split)}
+            title={t(split ? 'hideSearch' : 'showSearch')}
+          >
+            <SplitIcon open={split} />
+          </button>
+        )
+      }
     />
   )
 
@@ -603,11 +620,14 @@ export function App() {
           } as React.CSSProperties
         }
       >
+        {/* Split, the search box runs across the tops of both columns. */}
+        {split && (
+          <div className="split-head" ref={searchHeadRef}>
+            {searchBar}
+          </div>
+        )}
         {split && (
           <aside className="search-column">
-            <div className="search-column-head" ref={searchHeadRef}>
-              {searchBar}
-            </div>
             <div className="search-column-body">
               <SearchPage
                 q={q}
@@ -631,20 +651,10 @@ export function App() {
         )}
         <aside className="rail">
           {!split && searchBar}
-          <div className="rail-head">
-            {room && (
-              <button
-                className="split-toggle"
-                aria-pressed={split}
-                onClick={() => chooseSplit(!split)}
-                title={t(split ? 'hideSearch' : 'showSearch')}
-              >
-                <SplitIcon open={split} />
-              </button>
-            )}
-            {/* A phone shows one pane at a time and switches between them here;
-                a desktop has them all on screen at once. */}
-            {mobile && (
+          {/* A phone shows one pane at a time and switches between them here;
+              a desktop has them all on screen at once. */}
+          {mobile && (
+            <div className="rail-head">
               <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
                 <button role="tab" aria-selected={inDictionary} onClick={() => chooseRailTab('dictionary')}>
                   {t('dictionary')}
@@ -666,9 +676,9 @@ export function App() {
                   {t('map')}
                 </button>
               </div>
-            )}
-            {mobile && <ProfileButton onOpen={signIn} />}
-          </div>
+              <ProfileButton onOpen={signIn} />
+            </div>
+          )}
 
           <div className="rail-body" ref={scroller}>
             {(shownUnder || current) && (
