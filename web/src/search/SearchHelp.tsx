@@ -79,6 +79,7 @@ type T = ReturnType<typeof S>
 
 // For Bulgarian speakers whatever the interface language, so said in
 // Bulgarian either way: Cyrillic is searched as Bulgarian in both.
+const IN_BULGARIAN_TITLE = 'Работи и на Български'
 const IN_BULGARIAN = 'Ако не си спомняш за думата на Английски, може да я потърсиш и на Български'
 const IN_BULGARIAN_EX = 'пеперуда'
 
@@ -181,6 +182,7 @@ function HelpPopup({ t, onClose, onTry }: { t: T; onClose: () => void; onTry: (q
           {feature(t('explainTitle'), t('explain'), [t('explainEx1'), t('explainEx2')])}
           {feature(t('partsTitle'), t('parts'), [t('partsEx1'), t('partsEx2')])}
           <section className="help-feature help-bg" lang="bg">
+            <h3>{IN_BULGARIAN_TITLE}</h3>
             <p>{IN_BULGARIAN}</p>
             <div className="help-examples">
               <button onClick={() => onTry(IN_BULGARIAN_EX)}>{IN_BULGARIAN_EX}</button>

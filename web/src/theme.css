@@ -2600,10 +2600,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-.help-bg {
-  margin: 16px 0 0;
-}
-
 .help-how {
   margin: 18px 0 0;
   padding: 12px 14px;
