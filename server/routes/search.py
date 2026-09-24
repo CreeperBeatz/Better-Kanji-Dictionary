@@ -30,6 +30,16 @@ from .auth import require_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
+# Words in Latin or Cyrillic letters. Japanese among two or more of them is a
+# question about it -- "difference between 暑い and 熱い" -- not a word to look
+# up: the dictionary steps aside for Search by meaning, rather than answering
+# with every character the question happens to contain.
+_WORD = re.compile(r"[A-Za-z\u0400-\u04FF]+")
+
+
+def is_question(q: str) -> bool:
+    return has_japanese(q) and len(_WORD.findall(q)) >= 2
+
 
 def _fetch_words(ids: list[int]) -> dict[int, dict]:
     if not ids:
@@ -252,6 +262,8 @@ def search(
     q = q.strip()
     if not q:
         return {"query": q, "words": [], "interpretation": None}
+    if is_question(q):
+        return {"query": q, "interpretation": {"kind": "question"}, "alternatives": [], "kanji": [], "words": [], "total": 0}
 
     word_ids: list[int] = []
     interpretation: dict | None = None

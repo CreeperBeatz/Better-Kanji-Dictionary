@@ -407,7 +407,9 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   // one being typed, so the model is only asked once the dictionary has had its
   // say, and its answer stays up while the next query is on its way.
   const unmatched = result && result.words.length === 0 && result.kanji.length === 0 ? result.query : null
-  const nothing = <p className="hint">{t('nothing', { q: term })}</p>
+  // A question has nothing to match word for word; it is for Search by meaning.
+  const question = result?.interpretation?.kind === 'question'
+  const nothing = question ? null : <p className="hint">{t('nothing', { q: term })}</p>
   const alternatives = result?.alternatives ?? []
 
   // The last answer stays up while the next one is on its way, so the list

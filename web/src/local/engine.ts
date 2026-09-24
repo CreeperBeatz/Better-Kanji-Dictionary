@@ -133,6 +133,15 @@ function distinct(xs: number[]): number[] {
   return [...new Set(xs)]
 }
 
+// Words in Latin or Cyrillic letters. Japanese among two or more of them is a
+// question about it, for Search by meaning, not a word to look up
+// (server/routes/search.py, is_question).
+const WORD = /[A-Za-z\u0400-\u04FF]+/g
+
+function isQuestion(q: string): boolean {
+  return hasJapanese(q) && (q.match(WORD) ?? []).length >= 2
+}
+
 export class Engine {
   private readonly store: EntryStore
   private readonly pack: KanjiPack
@@ -350,6 +359,9 @@ export class Engine {
   ): Promise<SearchResponse> {
     const q = pyStrip(input)
     if (!q) return { query: q, interpretation: null, alternatives: [], kanji: [], words: [], total: 0 }
+    if (isQuestion(q)) {
+      return { query: q, interpretation: { kind: 'question' }, alternatives: [], kanji: [], words: [], total: 0 }
+    }
 
     let wordIdx: number[] = []
     let interpretation: SearchResponse['interpretation'] = null
