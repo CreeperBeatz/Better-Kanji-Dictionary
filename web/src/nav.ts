@@ -26,8 +26,11 @@ export type Page =
    * picked there, which it stays centred on while this page is up.
    */
   | { kind: 'kanji'; char: string; centre?: string }
-  /** `word` is what the list already knew, so the head shows at once. */
-  | { kind: 'word'; id: number; word?: Word }
+  /**
+   * `word` is what the list already knew, so the head shows at once.
+   * `centre` is which of its kanji the graph shows, once one was picked.
+   */
+  | { kind: 'word'; id: number; word?: Word; centre?: string }
 
 export type Stack = Page[]
 

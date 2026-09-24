@@ -16,6 +16,7 @@ import { WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
+import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Page, type Stack } from './nav'
 
@@ -187,27 +188,28 @@ function slide(el: HTMLElement, from: number, to: number, ms: number, o: { hold?
 }
 
 // Opening the app afresh lands on the whole common map, to wander in, on a
-// phone as on a desktop. A link to a character opens on it in the focus view;
-// a link to anything else, on a desktop, beside the map.
+// phone as on a desktop. A link to a character or a word opens on its focus
+// view; a link to anything else, on a desktop, beside the map.
 // Picking a character, on the map or from a list, goes to its focus view.
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linkedPage = pageInUrl()
 const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
 function initialView(): StageView {
-  if (linked) return 'focus'
+  if (linked || linkedPage?.kind === 'word') return 'focus'
   return linkedPage && openedOnPhone ? 'focus' : 'map'
 }
 
-/** The character nearest the top of the stack: the one the graph shows. */
 /**
  * What the graph centres on for this stack: the nearest character, or the one
- * the graph was on when that character was picked there.
+ * the graph was on when that character was picked there -- or the kanji of a
+ * word picked to be shown.
  */
 function centreIn(stack: Stack): string | null {
   for (let i = stack.length - 1; i >= 0; i--) {
     const p = stack[i]
     if (p.kind === 'kanji') return p.centre ?? p.char
+    if (p.kind === 'word' && p.centre) return p.centre
   }
   return null
 }
@@ -474,6 +476,39 @@ export function App() {
     }
   }, [pageWordId])
 
+  // A word's graph is of one of its kanji at a time: the one picked over the
+  // graph, else the one the graph is on already -- 強 stays on going to 勉強 --
+  // else its first.
+  const topWord = top.kind === 'word' ? (top.word ?? (pageWord?.id === top.id ? pageWord : undefined)) : undefined
+  const wordKanji = topWord ? [...new Set([...topWord.headword].filter((c) => HAN.test(c)))] : []
+  const wordCentre =
+    top.kind === 'word' && wordKanji.length > 0
+      ? top.centre && wordKanji.includes(top.centre)
+        ? top.centre
+        : focus && wordKanji.includes(focus)
+          ? focus
+          : wordKanji[0]
+      : null
+  useEffect(() => {
+    if (wordCentre) setFocus(wordCentre)
+  }, [wordCentre])
+  // A word without kanji, linked to, has no graph: the map, on a desktop.
+  const kanaOnly = topWord !== undefined && wordKanji.length === 0
+  useEffect(() => {
+    if (kanaOnly && !mobile && !focus && view === 'focus') setView('map')
+    // Only as the word arrives; the view is the user's after that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kanaOnly])
+  const showWordKanji = useCallback(
+    (char: string) => {
+      if (top.kind !== 'word') return
+      setHovered(null)
+      setFocus(char)
+      replaceTop({ ...top, centre: char })
+    },
+    [top, replaceTop],
+  )
+
   /** What the rail has on a character: the graph's, or the page's own. */
   const detailOf = (char: string): DetailData | null =>
     char === focus
@@ -534,10 +569,12 @@ export function App() {
     [under, push, pop, keepSearch, leaveStage],
   )
 
+  // A word, like a character, goes to its graph -- of its kanji -- when it has one.
   const openWord = useCallback(
     (w: Word) => {
       toDictionary()
       keepSearch()
+      if (HAN.test(w.headword)) setViewState('focus')
       push({ kind: 'word', id: w.id, word: w })
     },
     [push, toDictionary, keepSearch],
@@ -612,6 +649,7 @@ export function App() {
   )
   const listWord = useCallback(
     (w: Word) => {
+      if (HAN.test(w.headword)) setViewState('focus')
       rememberSearch(q)
       openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
     },
@@ -815,22 +853,11 @@ export function App() {
     return null
   }
 
-  // On a phone a page's tabs are Dictionary, Associations and Components.
-  // A word's components are those of its character the graph is on, or of
-  // its first.
-  const shownWord =
-    shownTop?.kind === 'word' ? (shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)) : undefined
-  const componentsOf =
-    shownTop?.kind === 'kanji'
-      ? shownTop.char
-      : shownWord
-        ? focus && shownWord.headword.includes(focus)
-          ? focus
-          : ([...shownWord.headword].find((c) => HAN.test(c)) ?? null)
-        : null
+  // On a phone a page's tabs are Dictionary, Associations and Components:
+  // for a word, those of the kanji its graph is of.
+  const componentsOf = shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? wordCentre : null
   // Back from the graph is the dictionary, whichever tab it was gone to from.
   function showComponents() {
-    if (shownTop?.kind === 'word' && componentsOf && componentsOf !== focus) setFocus(componentsOf)
     setRailTab('dictionary')
     setView('focus')
   }
@@ -1185,6 +1212,10 @@ export function App() {
                 legend={legendOpen && view === 'map'}
               />
             </div>
+          )}
+
+          {!error && selected && view === 'focus' && topWord && wordKanji.length > 1 && (
+            <WordKanji word={topWord.headword} current={focus} onPick={showWordKanji} />
           )}
 
           <div className="stage-top">
