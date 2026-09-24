@@ -2384,7 +2384,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 
-/* The word a graph is of, along the bottom of it: which of its kanji is shown. */
+/* The kanji of the word a graph is of, along the bottom of it: which one is shown. */
 .word-kanji {
   position: absolute;
   bottom: 16px;
@@ -2438,12 +2438,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-left: -7px;
   background: var(--shu);
   border-radius: 1px;
-}
-
-.word-kanji-kana {
-  padding: 0 1px;
-  font-size: 17px;
-  color: var(--muted);
 }
 
 .info-button {

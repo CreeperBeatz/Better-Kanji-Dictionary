@@ -14,31 +14,24 @@ const S = strings(
 const HAN = /[㐀-䶿一-鿿]/
 
 /**
- * The word a graph is of, over it: each of its kanji picks which one the
- * graph shows, the kana between them left as they are written. The one shown
- * carries the focus's vermilion.
+ * The kanji of the word a graph is of, over it: each picks which one the
+ * graph shows. The one shown carries the focus's vermilion.
  */
 export function WordKanji({ word, current, onPick }: { word: string; current: string | null; onPick: (char: string) => void }) {
   const t = S(useLang())
   return (
     <nav className="word-kanji" aria-label={t('label', { word })}>
-      {[...word].map((c, i) =>
-        HAN.test(c) ? (
-          <button
-            key={i}
-            className="word-kanji-char"
-            aria-pressed={c === current}
-            onClick={() => onPick(c)}
-            title={t('show', { char: c })}
-          >
-            {c}
-          </button>
-        ) : (
-          <span key={i} className="word-kanji-kana">
-            {c}
-          </span>
-        ),
-      )}
+      {[...new Set([...word].filter((c) => HAN.test(c)))].map((c) => (
+        <button
+          key={c}
+          className="word-kanji-char"
+          aria-pressed={c === current}
+          onClick={() => onPick(c)}
+          title={t('show', { char: c })}
+        >
+          {c}
+        </button>
+      ))}
     </nav>
   )
 }
