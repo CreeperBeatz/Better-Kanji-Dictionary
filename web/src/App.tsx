@@ -540,6 +540,27 @@ export function App() {
   const previewing = previewChar !== null
   const previewShown = previewing && assocPreview === previewChar && previewLoaded === previewChar
 
+  // A preview is usually shorter than the page, which pulls the scroll up;
+  // back on the page, it is where it was. The scroll is followed while the
+  // page is showing, and the jump a preview causes is not.
+  const cardPreview = shownTop?.kind === 'kanji' && hoveredNode !== null && hoveredNode.char !== shownTop.char
+  const pageScroll = useRef(0)
+  const inPreview = useRef(false)
+  useEffect(() => {
+    const el = scroller.current
+    if (!el) return
+    const follow = () => {
+      if (!inPreview.current) pageScroll.current = el.scrollTop
+    }
+    el.addEventListener('scroll', follow, { passive: true })
+    return () => el.removeEventListener('scroll', follow)
+  }, [])
+  useLayoutEffect(() => {
+    const was = inPreview.current
+    inPreview.current = cardPreview
+    if (was && !cardPreview && scroller.current) scroller.current.scrollTop = pageScroll.current
+  }, [cardPreview])
+
   function page(p: Page) {
     switch (p.kind) {
       case 'search':
