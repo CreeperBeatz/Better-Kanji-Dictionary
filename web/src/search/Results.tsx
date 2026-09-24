@@ -118,6 +118,8 @@ const S = strings(
 // Keyed by language too: in Bulgarian, Latin can also be read as shlyokavitsa.
 const found = new Map<string, SearchResponse>()
 const levels = new Map<Level, { kanji: KanjiNode[]; components: KanjiNode[] }>()
+// The level open on the empty search, kept across its coming and going.
+let shownLevel: Level | null = null
 
 const keyOf = (lang: Lang, common: boolean, sort: string, q: string) =>
   `${lang}${common ? ' common' : ''} ${sort} ${q}`
@@ -334,7 +336,6 @@ interface SearchProps {
   q: string
   onKanji: (char: string) => void
   onWord: (word: Word) => void
-  onLevel: (level: Level) => void
   /** Search for something else, as if it had been typed: a suggested reading. */
   onSearch: (q: string) => void
   /** The query semantic search was asked for (Enter), and how to ask for one. */
@@ -346,7 +347,7 @@ interface SearchProps {
   onMap: () => void
 }
 
-export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk, open, onMap }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -398,7 +399,7 @@ export function SearchPage({ q, onKanji, onWord, onLevel, onSearch, asked, onAsk
     })
   }
 
-  if (!term) return <HomePage onLevel={onLevel} onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} />
+  if (!term) return <HomePage onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} open={open?.kanji} />
 
   const reading = result?.interpretation?.reading
   const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
@@ -661,21 +662,29 @@ function QueryIcon() {
  * on the graph.
  */
 function HomePage({
-  onLevel,
   onKanji,
   onWord,
   onSearch,
   onMap,
+  open,
 }: {
-  onLevel: (level: Level) => void
   onKanji: (char: string) => void
   onWord: (word: Word) => void
   onSearch: (q: string) => void
   onMap: () => void
+  /** The kanji open beside the search, marked in a level's grid. */
+  open?: string
 }) {
   const lang = useLang()
   const t = S(lang)
   const history = useHistory()
+  // A level is searched in place: its kanji open under the buttons, and stay
+  // open while you go into one of them and back.
+  const [level, setLevel] = useState<Level | null>(() => shownLevel)
+  const pickLevel = (n: Level) => {
+    shownLevel = level === n ? null : n
+    setLevel(shownLevel)
+  }
 
   function row(v: Visit) {
     switch (v.kind) {
@@ -727,11 +736,12 @@ function HomePage({
       <h3 className="overlay-group">{t('browse')}</h3>
       <div className="level-links">
         {LEVELS.map((n) => (
-          <button key={n} onClick={() => onLevel(n)}>
+          <button key={n} onClick={() => pickLevel(n)} aria-pressed={level === n} data-on={level === n || undefined}>
             N{n}
           </button>
         ))}
       </div>
+      {level && <LevelGrid level={level} onKanji={onKanji} open={open} />}
       {history.length > 0 && (
         <>
           <h3 className="overlay-group">{t('recentSearches')}</h3>
@@ -751,16 +761,17 @@ function HomePage({
   )
 }
 
-export function LevelPage({
-  level,
-  onKanji,
-  open,
-}: {
-  level: Level
-  onKanji: (char: string) => void
-  /** The kanji open beside the grid, when it has the search column. */
-  open?: string
-}) {
+/** A whole JLPT level on a page of its own: where a /level/N link lands. */
+export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: string) => void }) {
+  return (
+    <section className="rail-section">
+      <LevelGrid level={level} onKanji={onKanji} />
+    </section>
+  )
+}
+
+/** A level's kanji, and the parts they are built from. `open` is marked. */
+function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: string) => void; open?: string }) {
   const lang = useLang()
   const t = S(lang)
   const [data, setData] = useState(() => levels.get(level) ?? null)
@@ -789,7 +800,7 @@ export function LevelPage({
   const meanings = (k: KanjiNode) => meaningsOf(k, lang).value.slice(0, 3).join(', ')
 
   return (
-    <section className="rail-section">
+    <div className="level-block">
       <h3 className="overlay-group">
         N{level} <span className="strokes-count">{data?.kanji.length ?? ''}</span>
       </h3>
@@ -831,6 +842,6 @@ export function LevelPage({
           </div>
         </>
       )}
-    </section>
+    </div>
   )
 }

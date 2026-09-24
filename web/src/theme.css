@@ -2201,6 +2201,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: pointer;
 }
 
+.level-links button[data-on] {
+  background: var(--ai-wash);
+  border-color: var(--ai-deep);
+  color: var(--paper);
+}
+
 .level-links button:hover {
   background: var(--ai-wash);
   border-color: var(--ai-deep);

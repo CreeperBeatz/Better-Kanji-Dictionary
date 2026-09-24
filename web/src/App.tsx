@@ -16,7 +16,7 @@ import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidt
 import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
-import { pageInUrl, useNav, type Level, type Page, type Stack } from './nav'
+import { pageInUrl, useNav, type Page, type Stack } from './nav'
 
 // What a failed graph fetch says when the network, not the server, is why:
 // a marker, shown in the interface language.
@@ -294,11 +294,7 @@ export function App() {
 
   // With the search in its own column, the rail shows what is open above it:
   // the stack without the search at its bottom.
-  // What the search column lists: the search at the bottom of the stack, or a
-  // JLPT level picked there -- or, when the stack began on the graph or map,
-  // the search in the box.
-  const listed: Page = root.kind === 'search' || root.kind === 'level' ? root : { kind: 'search', q }
-  const entries = split && (root.kind === 'search' || root.kind === 'level') ? stack.slice(1) : stack
+  const entries = split && root.kind === 'search' ? stack.slice(1) : stack
   const shownTop: Page | null = entries.length > 0 ? entries[entries.length - 1] : null
   const shownUnder = entries.length > 1 ? entries[entries.length - 2] : null
   const picked = entries[0]
@@ -438,14 +434,6 @@ export function App() {
     [push, toDictionary, keepSearch],
   )
 
-  const openLevel = useCallback(
-    (level: Level) => {
-      keepSearch()
-      push({ kind: 'level', level })
-    },
-    [push, keepSearch],
-  )
-
   // A pick on the decomposition graph opens on top of the page, so back goes
   // to the character it was picked from -- or goes back, when it is that one.
   // `via` is the container a peek skipped through, which counts as visited.
@@ -485,21 +473,17 @@ export function App() {
       setHovered(null)
       setViewState('focus')
       rememberSearch(q)
-      openOver(listed, { kind: 'kanji', char })
+      openOver({ kind: 'search', q }, { kind: 'kanji', char })
     },
-    [q, listed, openOver],
+    [q, openOver],
   )
   const listWord = useCallback(
     (w: Word) => {
       rememberSearch(q)
-      openOver(listed, { kind: 'word', id: w.id, word: w })
+      openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
     },
-    [q, listed, openOver],
+    [q, openOver],
   )
-  // A level is a list of kanji to search through, so it takes the search
-  // column's place, and the entry beside it stays.
-  const listLevel = useCallback((level: Level) => rebase({ kind: 'level', level }), [rebase])
-  const unlistLevel = useCallback(() => rebase({ kind: 'search', q }), [q, rebase])
 
   const deselect = useCallback(() => {
     setHovered(null)
@@ -618,7 +602,6 @@ export function App() {
             q={p.q}
             onKanji={openKanji}
             onWord={openWord}
-            onLevel={openLevel}
             onSearch={type}
             asked={asked}
             onAsk={setAsked}
@@ -738,38 +721,22 @@ export function App() {
         {split && (
           <aside className="search-column">
             <div className="search-column-body">
-              {listed.kind === 'level' ? (
-                <>
-                  <div className="rail-crumb">
-                    <button className="back-link rail-back" onClick={unlistLevel} title={t('back')}>
-                      <span aria-hidden>←</span> {t.node('backTo', { page: nameOf({ kind: 'search', q }, t) })}
-                    </button>
-                  </div>
-                  <LevelPage
-                    level={listed.level}
-                    onKanji={listKanji}
-                    open={picked?.kind === 'kanji' ? picked.char : undefined}
-                  />
-                </>
-              ) : (
-                <SearchPage
-                  q={q}
-                  onKanji={listKanji}
-                  onWord={listWord}
-                  onLevel={listLevel}
-                  onSearch={type}
-                  asked={asked}
-                  onAsk={setAsked}
-                  onMap={browseMap}
-                  open={
-                    picked?.kind === 'kanji'
-                      ? { kanji: picked.char }
-                      : picked?.kind === 'word'
-                        ? { word: picked.id }
-                        : undefined
-                  }
-                />
-              )}
+              <SearchPage
+                q={q}
+                onKanji={listKanji}
+                onWord={listWord}
+                onSearch={type}
+                asked={asked}
+                onAsk={setAsked}
+                onMap={browseMap}
+                open={
+                  picked?.kind === 'kanji'
+                    ? { kanji: picked.char }
+                    : picked?.kind === 'word'
+                      ? { word: picked.id }
+                      : undefined
+                }
+              />
             </div>
           </aside>
         )}
