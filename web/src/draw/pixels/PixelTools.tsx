@@ -21,7 +21,8 @@ import { cropOf, onImage, pixelMatrix, pixelToScene, sceneToPixel, type Pt } fro
 import { bounds, erase, extract, invert, pixelsOf, polygonMask, wandMask } from './mask'
 import { onSubjectProgress, subjectMask, warmSubject } from './subject'
 
-export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject'
+/** The picture tools, and the pixel eraser (PixelEraser.tsx), which share the custom tool slot. */
+export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject' | 'erase'
 
 const S = strings(
   {
@@ -100,7 +101,7 @@ interface Props {
 
 const INK = '#7e9cc6'
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((ok, fail) => {
     const img = new Image()
     img.onload = () => ok(img)
@@ -124,7 +125,7 @@ function elementOf(api: ExcalidrawImperativeAPI, id: string): ExcalidrawImageEle
   return el && el.type === 'image' ? el : null
 }
 
-function newFileId(): FileId {
+export function newFileId(): FileId {
   return (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/-/g, '') as FileId
 }
 
@@ -534,7 +535,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     return () => window.removeEventListener('keydown', onKey, true)
   })
 
-  if (!container || !tool) return null
+  if (!container || !tool || tool === 'erase') return null
 
   const hint =
     note ??

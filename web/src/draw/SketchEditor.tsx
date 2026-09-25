@@ -6,6 +6,7 @@ import './sketch-theme.css'
 import { getLang, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { PixelTools, type PixelTool } from './pixels/PixelTools'
+import { PixelEraser } from './pixels/PixelEraser'
 import { ImageSearch } from './ImageSearch'
 import { ToolGroups } from './ToolGroups'
 
@@ -162,6 +163,7 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
           )}
           {excalidraw && finding && <ImageSearch api={excalidraw} onClose={() => setFinding(false)} />}
           {excalidraw && host && <PixelTools api={excalidraw} host={host} tool={tool} onTool={setTool} />}
+          {excalidraw && host && <PixelEraser api={excalidraw} host={host} on={tool === 'erase'} />}
         </div>
       </div>
     </div>
