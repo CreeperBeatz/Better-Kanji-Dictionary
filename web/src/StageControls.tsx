@@ -28,7 +28,7 @@ const S = strings(
     focus: 'Components',
     focusTitle: 'One character, what it is made of and what it builds (D)',
     map: 'Map',
-    browseMap: 'Browse the kanji map',
+    browseMap: 'Kanji Map',
     mapTitle: 'Every character at this level, to wander around in (M)',
   },
   {
@@ -53,7 +53,7 @@ const S = strings(
     focus: 'Компоненти',
     focusTitle: 'Един йероглиф - от какво е съставен и какво изгражда (D)',
     map: 'Карта',
-    browseMap: 'Разгледайте картата на йероглифите',
+    browseMap: 'Йероглифна карта',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
   },
 )

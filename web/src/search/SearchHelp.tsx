@@ -14,7 +14,7 @@ import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    learn: 'Learn what our search can do',
+    learn: 'Learn what the search can do',
     title: 'What the search can do',
     describeTitle: 'Describe what you mean',
     describe: 'A feeling, a situation, something you half remember: it finds the words for it.',
@@ -45,7 +45,7 @@ const S = strings(
     close: 'Close',
   },
   {
-    learn: 'Вижте какво може търсачката',
+    learn: 'Какво може търсачката',
     title: 'Какво може търсачката',
     describeTitle: 'Опишете какво имате предвид',
     describe: 'Чувство, ситуация, нещо полузабравено: тя намира думите за него.',

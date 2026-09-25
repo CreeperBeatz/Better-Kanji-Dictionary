@@ -2650,16 +2650,23 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .search-home-top {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  gap: 14px;
   margin-bottom: 4px;
 }
 
-/* For whoever is still wandering around: there, but quiet, at the row's end. */
+.search-home-top .map-link {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* For whoever is still wandering around: there, but quiet, at the row's end.
+   Short of room it wraps in place, rather than dropping below the map. */
 .search-help-link {
+  min-width: 0;
   margin-left: auto;
   padding: 0;
+  text-align: right;
   background: none;
   border: 0;
   color: var(--muted);
