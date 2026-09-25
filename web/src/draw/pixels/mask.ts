@@ -13,10 +13,10 @@ export interface Rect {
   height: number
 }
 
-function blank(w: number, h: number): HTMLCanvasElement {
+export function blank(w: number, h: number): HTMLCanvasElement {
   const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
+  c.width = Math.max(1, Math.round(w))
+  c.height = Math.max(1, Math.round(h))
   return c
 }
 
@@ -100,6 +100,17 @@ export function wandMask(src: ImageData, at: Pt, tolerance: number, within: Rect
     }
   }
   ctx(c).putImageData(out, 0, 0)
+  return c
+}
+
+/** The mask kept to a rectangle of it. */
+export function keptTo(mask: HTMLCanvasElement, within: Rect): HTMLCanvasElement {
+  const c = blank(mask.width, mask.height)
+  const g = ctx(c)
+  g.fillStyle = '#fff'
+  g.fillRect(within.x, within.y, within.width, within.height)
+  g.globalCompositeOperation = 'destination-in'
+  g.drawImage(mask, 0, 0)
   return c
 }
 

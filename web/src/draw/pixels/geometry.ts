@@ -14,6 +14,11 @@ export interface Pt {
   y: number
 }
 
+/** A point in the view (CSS pixels from the canvas's corner), in the scene. */
+export function viewToScene(st: { zoom: { value: number }; scrollX: number; scrollY: number }, p: Pt): Pt {
+  return { x: p.x / st.zoom.value - st.scrollX, y: p.y / st.zoom.value - st.scrollY }
+}
+
 /** The part of the picture the element shows, in its pixels. */
 export function cropOf(el: ExcalidrawImageElement, natW: number, natH: number) {
   return el.crop ?? { x: 0, y: 0, width: natW, height: natH, naturalWidth: natW, naturalHeight: natH }

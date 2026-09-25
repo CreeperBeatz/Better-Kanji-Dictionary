@@ -5,12 +5,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { convertToExcalidrawElements, CaptureUpdateAction } from '@excalidraw/excalidraw'
+import { convertToExcalidrawElements } from '@excalidraw/excalidraw'
 import type { FileId } from '@excalidraw/excalidraw/element/types'
 import type { BinaryFileData, DataURL, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { api as server, type ImageHit, type ImageKind } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { commit, loadImage } from './pixels/files'
+import { viewToScene } from './pixels/geometry'
 
 const S = strings(
   {
@@ -139,30 +141,21 @@ export function ImageSearch({ api, onClose }: Props) {
     try {
       const blob = await server.fetchImage(hit.id)
       const dataURL = await dataUrlOf(blob)
-      const img = new Image()
-      img.src = dataURL
-      await img.decode()
+      const img = await loadImage(dataURL)
       const fileId = `pixabay-${hit.id}` as FileId
       const file: BinaryFileData = { id: fileId, mimeType: blob.type as BinaryFileData['mimeType'], dataURL: dataURL as DataURL, created: Date.now() }
-      api.addFiles([file])
       // In the middle of what is on screen, half as big as the view at most.
       const st = api.getAppState()
-      const zoom = st.zoom.value
-      const room = (Math.min(st.width, st.height) * 0.5) / zoom
+      const room = (Math.min(st.width, st.height) * 0.5) / st.zoom.value
       const k = Math.min(1, room / Math.max(img.naturalWidth, img.naturalHeight))
       const width = img.naturalWidth * k
       const height = img.naturalHeight * k
-      const cx = st.width / 2 / zoom - st.scrollX
-      const cy = st.height / 2 / zoom - st.scrollY
+      const mid = viewToScene(st, { x: st.width / 2, y: st.height / 2 })
       const [el] = convertToExcalidrawElements([
-        { type: 'image', fileId, status: 'saved', x: cx - width / 2, y: cy - height / 2, width, height },
+        { type: 'image', fileId, status: 'saved', x: mid.x - width / 2, y: mid.y - height / 2, width, height },
       ])
       api.setActiveTool({ type: 'selection' })
-      api.updateScene({
-        elements: [...api.getSceneElementsIncludingDeleted(), el],
-        appState: { selectedElementIds: { [el.id]: true } },
-        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-      })
+      commit(api, [...api.getSceneElementsIncludingDeleted(), el], [file], { selectedElementIds: { [el.id]: true } })
       onClose()
     } catch (e) {
       setError(errorText(e, lang))
@@ -195,7 +188,7 @@ export function ImageSearch({ api, onClose }: Props) {
           ×
         </button>
       </div>
-      <div className="px-seg imgsearch-kinds">
+      <div className="imgsearch-kinds">
         {KINDS.map((k) => (
           <button key={k} data-on={kind === k || undefined} aria-pressed={kind === k} onClick={() => setKind(k)}>
             {t(k)}

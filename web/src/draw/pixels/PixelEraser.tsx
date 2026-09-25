@@ -21,19 +21,15 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CaptureUpdateAction, convertToExcalidrawElements, exportToCanvas, getCommonBounds, newElementWith } from '@excalidraw/excalidraw'
-import type {
-  ExcalidrawElement,
-  ExcalidrawFreeDrawElement,
-  ExcalidrawImageElement,
-  ExcalidrawLinearElement,
-  FileId,
-} from '@excalidraw/excalidraw/element/types'
+import { convertToExcalidrawElements, exportToCanvas, getCommonBounds, newElementWith } from '@excalidraw/excalidraw'
+import type { ExcalidrawElement, ExcalidrawFreeDrawElement, ExcalidrawLinearElement } from '@excalidraw/excalidraw/element/types'
 import type { AppState, BinaryFileData, BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { strings, useLang } from '../../i18n'
+import { useCaptureKeys } from '../keys'
 import { erasePath, touchesBox, type Circle, type Piece } from './erase'
-import { cropOf, pixelMatrix, type Pt } from './geometry'
-import { loadImage, newFileId } from './PixelTools'
+import { commit, fileOf, loadImage, newFileId } from './files'
+import { cropOf, pixelMatrix, viewToScene, type Pt } from './geometry'
+import { blank, erase, type Rect } from './mask'
 
 const S = strings(
   {
@@ -61,6 +57,41 @@ function inkReach(el: ExcalidrawElement): number {
 }
 
 const random = () => Math.floor(Math.random() * 2 ** 31)
+
+/**
+ * What shows as the paper. The preview is drawn through the same dark-mode
+ * filter as the scene, so that is the scene's own background colour.
+ */
+const paperOf = (st: AppState) => (st.viewBackgroundColor === 'transparent' ? '#ffffff' : st.viewBackgroundColor)
+
+interface Box {
+  x0: number
+  y0: number
+  x1: number
+  y1: number
+}
+
+/** The box the circles cover, grown by `pad`. */
+function boxOf(circles: Circle[], pad = 0): Box {
+  const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }
+  for (const c of circles) {
+    b.x0 = Math.min(b.x0, c.x - c.r - pad)
+    b.y0 = Math.min(b.y0, c.y - c.r - pad)
+    b.x1 = Math.max(b.x1, c.x + c.r + pad)
+    b.y1 = Math.max(b.y1, c.y + c.r + pad)
+  }
+  return b
+}
+
+/** A box in the scene, through `m`, as a rectangle of pixels. */
+function pixelsUnder(m: DOMMatrix, b: Box): Rect {
+  const pts = [m.transformPoint({ x: b.x0, y: b.y0 }), m.transformPoint({ x: b.x1, y: b.y0 }), m.transformPoint({ x: b.x1, y: b.y1 }), m.transformPoint({ x: b.x0, y: b.y1 })]
+  const xs = pts.map((p) => p.x)
+  const ys = pts.map((p) => p.y)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
+}
 
 /** A copy of `el` as an element of its own. */
 function fresh<T extends ExcalidrawElement>(el: T, updates: Partial<T>): T {
@@ -93,15 +124,8 @@ function pieceOf<T extends ExcalidrawFreeDrawElement | ExcalidrawLinearElement>(
   return first ? (newElementWith(el, updates as never) as T) : fresh(el, updates as Partial<T>)
 }
 
-function blank(w: number, h: number): HTMLCanvasElement {
-  const c = document.createElement('canvas')
-  c.width = Math.max(1, Math.round(w))
-  c.height = Math.max(1, Math.round(h))
-  return c
-}
-
 /** The circles on a canvas, through `m` from the scene to its pixels. */
-function maskOf(w: number, h: number, m: DOMMatrix, circles: Circle[], clip?: { x: number; y: number; width: number; height: number }) {
+function maskOf(w: number, h: number, m: DOMMatrix, circles: Circle[], clip?: Rect) {
   const mask = blank(w, h)
   const g = mask.getContext('2d')!
   if (clip) {
@@ -119,32 +143,24 @@ function maskOf(w: number, h: number, m: DOMMatrix, circles: Circle[], clip?: { 
   return mask
 }
 
-/** `src` with the mask's pixels made transparent, or null if none of them had anything. */
-function erased(src: CanvasImageSource, w: number, h: number, mask: HTMLCanvasElement): HTMLCanvasElement | null {
-  const probe = blank(w, h)
-  const p = probe.getContext('2d')!
-  p.drawImage(mask, 0, 0)
+/**
+ * `src` with the mask's pixels made transparent, or null if the mask covers
+ * nothing of it. Only `near`, where the mask is, is looked at.
+ */
+function erased(src: CanvasImageSource, w: number, h: number, mask: HTMLCanvasElement, near: Rect): HTMLCanvasElement | null {
+  const x0 = Math.max(0, Math.floor(near.x))
+  const y0 = Math.max(0, Math.floor(near.y))
+  const x1 = Math.min(w, Math.ceil(near.x + near.width))
+  const y1 = Math.min(h, Math.ceil(near.y + near.height))
+  if (x1 <= x0 || y1 <= y0) return null
+  const probe = blank(x1 - x0, y1 - y0)
+  const p = probe.getContext('2d', { willReadFrequently: true })!
+  p.drawImage(mask, -x0, -y0)
   p.globalCompositeOperation = 'source-in'
-  p.drawImage(src, 0, 0, w, h)
+  p.drawImage(src, -x0, -y0, w, h)
   const alpha = p.getImageData(0, 0, probe.width, probe.height).data
-  let any = false
-  for (let i = 3; i < alpha.length; i += 4) {
-    if (alpha[i]) {
-      any = true
-      break
-    }
-  }
-  if (!any) return null
-  const out = blank(w, h)
-  const g = out.getContext('2d')!
-  g.drawImage(src, 0, 0, w, h)
-  g.globalCompositeOperation = 'destination-out'
-  g.drawImage(mask, 0, 0)
-  return out
-}
-
-function fileOf(c: HTMLCanvasElement): BinaryFileData {
-  return { id: newFileId(), mimeType: 'image/png', dataURL: c.toDataURL('image/png') as BinaryFileData['dataURL'], created: Date.now() }
+  for (let i = 3; i < alpha.length; i += 4) if (alpha[i]) return erase(src, w, h, mask)
+  return null
 }
 
 /**
@@ -199,20 +215,21 @@ interface Outcome {
 async function eraseScene(api: ExcalidrawImperativeAPI, circles: Circle[], appState: AppState): Promise<Outcome> {
   const out: Outcome = { replace: new Map(), files: [], pictured: new Set() }
   const files = api.getFiles()
-  const reach = Math.max(...circles.map((c) => c.r))
-  const bx0 = Math.min(...circles.map((c) => c.x)) - reach
-  const by0 = Math.min(...circles.map((c) => c.y)) - reach
-  const bx1 = Math.max(...circles.map((c) => c.x)) + reach
-  const by1 = Math.max(...circles.map((c) => c.y)) + reach
+  const reach = boxOf(circles)
+  // Pictures are loaded, and other elements made pictures, all at once.
+  const jobs: Promise<void>[] = []
 
   for (const el of api.getSceneElements()) {
     if (el.locked) continue
     const [x0, y0, x1, y1] = getCommonBounds([el])
     const ink = inkReach(el)
-    if (x1 + ink < bx0 || x0 - ink > bx1 || y1 + ink < by0 || y0 - ink > by1) continue
+    if (x1 + ink < reach.x0 || x0 - ink > reach.x1 || y1 + ink < reach.y0 || y0 - ink > reach.y1) continue
+    // Only the circles near it are tried against it.
+    const near = circles.filter((c) => c.x + c.r + ink >= x0 && c.x - c.r - ink <= x1 && c.y + c.r + ink >= y0 && c.y - c.r - ink <= y1)
+    if (!near.length) continue
 
     if (el.type === 'text') {
-      if (touchesBox(el.x, el.y, el.width, el.height, el.angle, circles)) {
+      if (touchesBox(el.x, el.y, el.width, el.height, el.angle, near)) {
         out.replace.set(el.id, [newElementWith(el, { isDeleted: true })])
       }
       continue
@@ -221,7 +238,7 @@ async function eraseScene(api: ExcalidrawImperativeAPI, circles: Circle[], appSt
     if (cuttable(el)) {
       const pts: Pt[] = el.points.map(([x, y]) => ({ x: el.x + x, y: el.y + y }))
       const pressures = el.type === 'freedraw' && !el.simulatePressure && el.pressures.length === pts.length ? [...el.pressures] : null
-      const pieces = erasePath(pts, pressures, circles, ink)
+      const pieces = erasePath(pts, pressures, near, ink)
       if (!pieces) continue
       out.replace.set(el.id, pieces.length ? pieces.map((p, i) => pieceOf(el, p, i === 0)) : [newElementWith(el, { isDeleted: true })])
       continue
@@ -230,35 +247,41 @@ async function eraseScene(api: ExcalidrawImperativeAPI, circles: Circle[], appSt
     if (el.type === 'image') {
       const file = el.fileId && files[el.fileId]
       if (!file) continue
-      const img = await loadImage(file.dataURL).catch(() => null)
-      if (!img) continue
-      const w = img.naturalWidth
-      const h = img.naturalHeight
-      const toPixels = pixelMatrix(el, w, h, 1, 0, 0).inverse()
-      const done = erased(img, w, h, maskOf(w, h, toPixels, circles, cropOf(el, w, h)))
-      if (!done) continue
-      const f = fileOf(done)
-      out.files.push(f)
-      out.replace.set(el.id, [newElementWith(el as ExcalidrawImageElement, { fileId: f.id as FileId })])
+      jobs.push(
+        loadImage(file.dataURL).then((img) => {
+          const w = img.naturalWidth
+          const h = img.naturalHeight
+          const toPixels = pixelMatrix(el, w, h, 1, 0, 0).inverse()
+          const done = erased(img, w, h, maskOf(w, h, toPixels, near, cropOf(el, w, h)), pixelsUnder(toPixels, boxOf(near)))
+          if (!done) return
+          const f = fileOf(done)
+          out.files.push(f)
+          out.replace.set(el.id, [newElementWith(el, { fileId: f.id })])
+        }, () => {}),
+      )
       continue
     }
 
     if (el.type === 'frame' || el.type === 'magicframe' || el.type === 'embeddable' || el.type === 'iframe' || el.type === 'selection') continue
 
     // Anything else is made a picture, and erased as one.
-    const pic = await pictureOf(el, files, appState.zoom.value)
-    const { canvas, x, y, scale } = pic
-    const toPixels = new DOMMatrix().scaleSelf(scale, scale).translateSelf(-x, -y)
-    const done = erased(canvas, canvas.width, canvas.height, maskOf(canvas.width, canvas.height, toPixels, circles))
-    if (!done) continue
-    const f = fileOf(done)
-    out.files.push(f)
-    const [image] = convertToExcalidrawElements([
-      { type: 'image', fileId: f.id as FileId, status: 'saved', x, y, width: canvas.width / scale, height: canvas.height / scale },
-    ])
-    out.replace.set(el.id, [newElementWith(el, { isDeleted: true }), { ...image, groupIds: el.groupIds, frameId: el.frameId } as ExcalidrawElement])
-    out.pictured.add(el.id)
+    jobs.push(
+      pictureOf(el, files, appState.zoom.value).then(({ canvas, x, y, scale }) => {
+        const toPixels = new DOMMatrix().scaleSelf(scale, scale).translateSelf(-x, -y)
+        const mask = maskOf(canvas.width, canvas.height, toPixels, near)
+        const done = erased(canvas, canvas.width, canvas.height, mask, pixelsUnder(toPixels, boxOf(near)))
+        if (!done) return
+        const f = fileOf(done)
+        out.files.push(f)
+        const [image] = convertToExcalidrawElements([
+          { type: 'image', fileId: f.id, status: 'saved', x, y, width: canvas.width / scale, height: canvas.height / scale },
+        ])
+        out.replace.set(el.id, [newElementWith(el, { isDeleted: true }), { ...image, groupIds: el.groupIds, frameId: el.frameId } as ExcalidrawElement])
+        out.pictured.add(el.id)
+      }),
+    )
   }
+  await Promise.all(jobs)
   return out
 }
 
@@ -295,22 +318,14 @@ export function PixelEraser({ api, host, on }: Props) {
   const last = useRef<Pt | null>(null)
 
   // [ and ] make it smaller and bigger, as in paint programs.
-  useEffect(() => {
-    if (!on) return
-    function onKey(e: KeyboardEvent) {
-      const at = e.target as HTMLElement | null
-      if (at && (at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable)) return
-      if (e.key !== '[' && e.key !== ']') return
-      e.preventDefault()
-      e.stopPropagation()
-      setSize((s) => {
-        const step = s < 20 ? 2 : s < 60 ? 5 : 10
-        return Math.min(MAX, Math.max(MIN, s + (e.key === ']' ? step : -step)))
-      })
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [on])
+  useCaptureKeys(on, (e) => {
+    if (e.key !== '[' && e.key !== ']') return false
+    setSize((s) => {
+      const step = s < 20 ? 2 : s < 60 ? 5 : 10
+      return Math.min(MAX, Math.max(MIN, s + (e.key === ']' ? step : -step)))
+    })
+    return true
+  })
 
   useEffect(() => {
     if (ring.current) {
@@ -335,14 +350,11 @@ export function PixelEraser({ api, host, on }: Props) {
   /** One circle of the stroke, kept in the scene and painted over on screen. */
   function stamp(p: Pt) {
     const st = api.getAppState()
-    const z = st.zoom.value
-    stroke.current!.push({ x: p.x / z - st.scrollX, y: p.y / z - st.scrollY, r: size / 2 / z })
+    stroke.current!.push({ ...viewToScene(st, p), r: size / 2 / st.zoom.value })
     const cv = preview.current!
     const dpr = window.devicePixelRatio || 1
     const g = cv.getContext('2d')!
-    // The preview is drawn through the same dark-mode filter as the scene,
-    // so the scene's own background colour is the paper's.
-    g.fillStyle = st.viewBackgroundColor === 'transparent' ? '#ffffff' : st.viewBackgroundColor
+    g.fillStyle = paperOf(st)
     g.beginPath()
     g.arc(p.x * dpr, p.y * dpr, (size / 2) * dpr, 0, Math.PI * 2)
     g.fill()
@@ -392,13 +404,8 @@ export function PixelEraser({ api, host, on }: Props) {
         // with the circles over it.
         if (files.length) freeze(circles)
         const elements = api.getSceneElementsIncludingDeleted().flatMap((el) => (replace.get(el.id) ?? [el]).map((e) => unbound(e, pictured)))
-        api.updateScene({ elements, captureUpdate: CaptureUpdateAction.IMMEDIATELY })
-        if (files.length) {
-          // After the scene has them: Excalidraw only loads the files its
-          // elements use.
-          api.addFiles(files)
-          await Promise.all(files.map((f) => loadImage(f.dataURL).catch(() => null)))
-        }
+        commit(api, elements, files)
+        await Promise.all(files.map((f) => loadImage(f.dataURL).catch(() => null)))
       }
     } finally {
       // Cleared once the scene has been drawn with the change, not before.
@@ -422,7 +429,7 @@ export function PixelEraser({ api, host, on }: Props) {
     g.drawImage(scene, 0, 0, cv.width, cv.height)
     const st = api.getAppState()
     const k = st.zoom.value * (cv.width / container!.clientWidth)
-    g.fillStyle = st.viewBackgroundColor === 'transparent' ? '#ffffff' : st.viewBackgroundColor
+    g.fillStyle = paperOf(st)
     g.beginPath()
     for (const c of circles) {
       const x = (c.x + st.scrollX) * k
@@ -448,7 +455,7 @@ export function PixelEraser({ api, host, on }: Props) {
       />
       <div ref={ring} className="px-erase-ring" aria-hidden />
       <div className="px-bar" role="toolbar">
-        <label className="px-tolerance" title={t('sizeTitle')}>
+        <label className="px-slider" title={t('sizeTitle')}>
           <span>{t('size')}</span>
           <input type="range" min={MIN} max={MAX} value={size} onChange={(e) => setSize(Number(e.target.value))} />
           <span className="px-size">{size}</span>

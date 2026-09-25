@@ -149,7 +149,7 @@
   padding: 4px;
   background: var(--sumi-lift);
   border-radius: 4px;
-  box-shadow: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-island);
 }
 
 .sketch-canvas .sk-menu .ToolIcon {
@@ -230,30 +230,25 @@
   font: inherit;
   padding: 4px 10px;
   background: none;
-  color: var(--paper-dim);
-  border: 0;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.px-act {
   color: var(--paper);
   border: 1px solid transparent;
   border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 .px-act:hover {
   background: var(--rule);
 }
 
-.px-tolerance {
+.px-slider {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--paper-dim);
 }
 
-.px-tolerance input {
+.px-slider input {
   width: 90px;
   accent-color: var(--ai);
 }
@@ -351,10 +346,40 @@
   border-color: var(--ai-deep);
 }
 
+.imgsearch-input::-webkit-search-cancel-button {
+  display: none;
+}
+
 .imgsearch-kinds {
   align-self: flex-start;
+  display: flex;
   max-width: 100%;
   overflow-x: auto;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+}
+
+.imgsearch-kinds button {
+  font: inherit;
+  padding: 4px 10px;
+  background: none;
+  color: var(--paper-dim);
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.imgsearch-kinds button + button {
+  border-left: 1px solid var(--rule-bright);
+}
+
+.imgsearch-kinds button[data-on] {
+  background: var(--ai-wash);
+  color: var(--paper);
+}
+
+.imgsearch-kinds button:hover:not([data-on]) {
+  background: var(--rule);
 }
 
 .imgsearch-results {
@@ -425,11 +450,6 @@
     left: 8px;
     right: 8px;
     width: auto;
-    top: 64px;
     bottom: 76px;
   }
-}
-
-.imgsearch-input::-webkit-search-cancel-button {
-  display: none;
 }

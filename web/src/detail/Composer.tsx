@@ -381,7 +381,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
           </span>
         </div>
       )}
-      {open && gifs && <GifPicker onPick={(h) => addGif(h.url)} onClose={() => setGifs(false)} />}
+      {gifs && <GifPicker onPick={(h) => addGif(h.url)} onClose={() => setGifs(false)} />}
       {problem !== null && <p className="account-problem">{problem || t('postFailed')}</p>}
 
       {sketching && (

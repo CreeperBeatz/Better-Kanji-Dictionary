@@ -5,10 +5,11 @@ import '@excalidraw/excalidraw/index.css'
 import './sketch-theme.css'
 import { getLang, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
-import { PixelTools, type PixelTool } from './pixels/PixelTools'
+import { isCtrlD, useCaptureKeys } from './keys'
+import { PixelTools } from './pixels/PixelTools'
 import { PixelEraser } from './pixels/PixelEraser'
 import { ImageSearch } from './ImageSearch'
-import { ToolGroups } from './ToolGroups'
+import { ToolGroups, type Tool } from './ToolGroups'
 
 const S = strings(
   {
@@ -49,7 +50,9 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
   const [excalidraw, setExcalidraw] = useState<ExcalidrawImperativeAPI | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [tool, setTool] = useState<PixelTool | null>(null)
+  const [tool, setTool] = useState<Tool | null>(null)
+  // Whether a picture's selection is held, which takes Escape and Ctrl+D first.
+  const [selecting, setSelecting] = useState(false)
   const [host, setHost] = useState<HTMLDivElement | null>(null)
   const [finding, setFinding] = useState(false)
   // What the scene looked like on opening, so closing only asks when
@@ -71,23 +74,33 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
     }
   }, [])
 
-  // Ctrl+D deselects, as in paint programs, rather than duplicating (or
-  // bookmarking the page). With a picture tool in hand, PixelTools takes it
-  // for the picture's selection.
+  // Our tools share Excalidraw's custom tool slot: taking one up takes
+  // Excalidraw's out of hand, putting ours down gives its selection tool
+  // back, and picking one of its own (a click, a key) puts ours down.
   useEffect(() => {
-    if (!excalidraw || tool) return
-    const api = excalidraw
-    function onKey(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 'd') return
-      const at = e.target as HTMLElement | null
-      if (at && (at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable)) return
-      e.preventDefault()
-      e.stopPropagation()
-      api.updateScene({ appState: { selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null } })
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
+    if (!excalidraw) return
+    const custom = excalidraw.getAppState().activeTool.type === 'custom'
+    if (tool && !custom) excalidraw.setActiveTool({ type: 'custom', customType: 'pixels' })
+    if (!tool && custom) excalidraw.setActiveTool({ type: 'selection' })
   }, [excalidraw, tool])
+  useEffect(() => {
+    if (!excalidraw) return
+    let was = excalidraw.getAppState().activeTool.type
+    return excalidraw.onChange((_, appState) => {
+      const now = appState.activeTool.type
+      if (was === 'custom' && now !== 'custom') setTool(null)
+      was = now
+    })
+  }, [excalidraw])
+
+  // Ctrl+D deselects, as in paint programs, rather than duplicating (or
+  // bookmarking the page), and Escape puts our tool down.
+  useCaptureKeys(!!excalidraw && !selecting, (e) => {
+    if (isCtrlD(e)) excalidraw!.updateScene({ appState: { selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null } })
+    else if (e.key === 'Escape' && tool) setTool(null)
+    else return false
+    return true
+  })
 
   function changed() {
     if (!excalidraw) return false
@@ -159,11 +172,13 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
             }}
           />
           {excalidraw && host && (
-            <ToolGroups api={excalidraw} host={host} tool={tool} onTool={setTool} finding={finding} onFinding={setFinding} />
+            <>
+              <ToolGroups api={excalidraw} host={host} tool={tool} onTool={setTool} finding={finding} onFinding={setFinding} />
+              {finding && <ImageSearch api={excalidraw} onClose={() => setFinding(false)} />}
+              <PixelTools api={excalidraw} host={host} tool={tool === 'erase' ? null : tool} onSelection={setSelecting} />
+              <PixelEraser api={excalidraw} host={host} on={tool === 'erase'} />
+            </>
           )}
-          {excalidraw && finding && <ImageSearch api={excalidraw} onClose={() => setFinding(false)} />}
-          {excalidraw && host && <PixelTools api={excalidraw} host={host} tool={tool} onTool={setTool} />}
-          {excalidraw && host && <PixelEraser api={excalidraw} host={host} on={tool === 'erase'} />}
         </div>
       </div>
     </div>

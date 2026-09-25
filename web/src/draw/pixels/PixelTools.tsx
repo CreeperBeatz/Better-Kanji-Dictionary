@@ -9,20 +9,24 @@
  * pixels, so it stays put as the view is panned and zoomed or the picture is
  * moved. A change to the pixels is a new file for the element, which
  * Excalidraw's undo takes back like any other edit.
+ *
+ * Taking Excalidraw's tool out of hand, and giving it back, is the editor's
+ * (SketchEditor.tsx), for the pixel eraser shares the slot.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CaptureUpdateAction, convertToExcalidrawElements, newElementWith } from '@excalidraw/excalidraw'
-import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalidraw/excalidraw/element/types'
+import { convertToExcalidrawElements, newElementWith } from '@excalidraw/excalidraw'
+import type { ExcalidrawElement, ExcalidrawImageElement } from '@excalidraw/excalidraw/element/types'
 import type { BinaryFileData, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { strings, useLang } from '../../i18n'
-import { cropOf, onImage, pixelMatrix, pixelToScene, sceneToPixel, type Pt } from './geometry'
-import { bounds, erase, extract, invert, pixelsOf, polygonMask, wandMask } from './mask'
+import { isCtrlD, useCaptureKeys } from '../keys'
+import { commit, fileOf, loadImage } from './files'
+import { cropOf, onImage, pixelMatrix, pixelToScene, sceneToPixel, viewToScene, type Pt } from './geometry'
+import { blank, bounds, erase, extract, invert, keptTo, pixelsOf, polygonMask, wandMask } from './mask'
 import { onSubjectProgress, subjectMask, warmSubject } from './subject'
 
-/** The picture tools, and the pixel eraser (PixelEraser.tsx), which share the custom tool slot. */
-export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject' | 'erase'
+export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject'
 
 const S = strings(
   {
@@ -96,19 +100,11 @@ interface Props {
   /** Where Excalidraw is mounted; the overlay goes inside its container. */
   host: HTMLElement
   tool: PixelTool | null
-  onTool: (t: PixelTool | null) => void
+  /** Told whether there is a selection, which takes Escape and Ctrl+D while there is. */
+  onSelection: (has: boolean) => void
 }
 
 const INK = '#7e9cc6'
-
-export function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((ok, fail) => {
-    const img = new Image()
-    img.onload = () => ok(img)
-    img.onerror = fail
-    img.src = src
-  })
-}
 
 function imageAt(api: ExcalidrawImperativeAPI, p: Pt): ExcalidrawImageElement | null {
   const files = api.getFiles()
@@ -125,14 +121,9 @@ function elementOf(api: ExcalidrawImperativeAPI, id: string): ExcalidrawImageEle
   return el && el.type === 'image' ? el : null
 }
 
-export function newFileId(): FileId {
-  return (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/-/g, '') as FileId
-}
-
 /** Diagonal stripes for the selection's edge, which march as they are shifted. */
 function antsPattern(g: CanvasRenderingContext2D): CanvasPattern {
-  const c = document.createElement('canvas')
-  c.width = c.height = 8
+  const c = blank(8, 8)
   const t = c.getContext('2d')!
   t.fillStyle = '#12100e'
   t.fillRect(0, 0, 8, 8)
@@ -147,7 +138,21 @@ function antsPattern(g: CanvasRenderingContext2D): CanvasPattern {
   return g.createPattern(c, 'repeat')!
 }
 
-export function PixelTools({ api, host, tool, onTool }: Props) {
+/**
+ * The selection as it shows on screen, and its edge, drawn once for a view of
+ * it: the ants' march only refills the edge.
+ */
+interface Edge {
+  mask: HTMLCanvasElement
+  el: ExcalidrawImageElement
+  view: string
+  fill: HTMLCanvasElement
+  ring: HTMLCanvasElement
+  ants: HTMLCanvasElement
+  pattern: CanvasPattern
+}
+
+export function PixelTools({ api, host, tool, onSelection }: Props) {
   const t = S(useLang())
   const container = host.querySelector<HTMLElement>('.excalidraw-container')
   const overlay = useRef<HTMLCanvasElement>(null)
@@ -160,8 +165,9 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
   const images = useRef(new Map<string, Promise<HTMLImageElement>>())
   const pixels = useRef(new Map<string, ImageData>())
   const subjects = useRef(new Map<string, Promise<HTMLCanvasElement>>())
-  const [busy, setBusy] = useState(false)
+  const busy = useRef(false)
   const march = useRef(0)
+  const edge = useRef<Edge | null>(null)
 
   const pictureOf = useCallback(
     async (el: ExcalidrawImageElement): Promise<Picture | null> => {
@@ -169,6 +175,12 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
       if (!file) return null
       let p = images.current.get(file.id)
       if (!p) {
+        // Each edit is a new file, so what is cached for pictures no longer
+        // in the scene goes before anything is added.
+        const used = new Set(api.getSceneElements().flatMap((e) => (e.type === 'image' && e.fileId ? [e.fileId as string] : [])))
+        for (const cache of [images.current, pixels.current, subjects.current]) {
+          for (const id of cache.keys()) if (!used.has(id)) cache.delete(id)
+        }
         p = loadImage(file.dataURL)
         images.current.set(file.id, p)
       }
@@ -205,37 +217,41 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     const s = selRef.current
     const el = s && elementOf(api, s.pic.id)
     if (s && el) {
-      // The selection drawn where it shows, then its edge found by shifting
-      // it a pixel each way and cutting the original out of the result.
-      const fill = document.createElement('canvas')
-      fill.width = W
-      fill.height = H
-      const f = fill.getContext('2d')!
-      f.setTransform(new DOMMatrix().scaleSelf(dpr, dpr).multiplySelf(pixelMatrix(el, s.pic.w, s.pic.h, zoom, st.scrollX, st.scrollY)))
-      f.drawImage(s.mask, 0, 0)
-      f.setTransform(1, 0, 0, 1, 0, 0)
-
-      const ring = document.createElement('canvas')
-      ring.width = W
-      ring.height = H
-      const r = ring.getContext('2d')!
-      const d = Math.max(1, Math.round(dpr))
-      for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) r.drawImage(fill, dx, dy)
-      r.globalCompositeOperation = 'destination-out'
-      r.drawImage(fill, 0, 0)
-      r.globalCompositeOperation = 'source-in'
-      const ants = antsPattern(r)
-      ants.setTransform(new DOMMatrix().translateSelf(march.current, 0))
-      r.fillStyle = ants
-      r.fillRect(0, 0, W, H)
-
-      f.globalCompositeOperation = 'source-in'
-      f.fillStyle = INK
-      f.fillRect(0, 0, W, H)
+      const view = `${W} ${H} ${zoom} ${st.scrollX} ${st.scrollY}`
+      let e = edge.current
+      if (!e || e.mask !== s.mask || e.el !== el || e.view !== view) {
+        // The selection drawn where it shows, then its edge found by shifting
+        // it a pixel each way and cutting the original out of the result.
+        const fill = blank(W, H)
+        const f = fill.getContext('2d')!
+        f.setTransform(new DOMMatrix().scaleSelf(dpr, dpr).multiplySelf(pixelMatrix(el, s.pic.w, s.pic.h, zoom, st.scrollX, st.scrollY)))
+        f.drawImage(s.mask, 0, 0)
+        f.setTransform(1, 0, 0, 1, 0, 0)
+        const ring = blank(W, H)
+        const r = ring.getContext('2d')!
+        const d = Math.max(1, Math.round(dpr))
+        for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]]) r.drawImage(fill, dx, dy)
+        r.globalCompositeOperation = 'destination-out'
+        r.drawImage(fill, 0, 0)
+        f.globalCompositeOperation = 'source-in'
+        f.fillStyle = INK
+        f.fillRect(0, 0, W, H)
+        const ants = e?.ants.width === W && e.ants.height === H ? e.ants : blank(W, H)
+        e = edge.current = { mask: s.mask, el, view, fill, ring, ants, pattern: e?.pattern ?? antsPattern(ants.getContext('2d')!) }
+      }
+      const a = e.ants.getContext('2d')!
+      a.globalCompositeOperation = 'copy'
+      a.drawImage(e.ring, 0, 0)
+      a.globalCompositeOperation = 'source-in'
+      e.pattern.setTransform(new DOMMatrix().translateSelf(march.current, 0))
+      a.fillStyle = e.pattern
+      a.fillRect(0, 0, W, H)
       g.globalAlpha = 0.3
-      g.drawImage(fill, 0, 0)
+      g.drawImage(e.fill, 0, 0)
       g.globalAlpha = 1
-      g.drawImage(ring, 0, 0)
+      g.drawImage(e.ants, 0, 0)
+    } else {
+      edge.current = null
     }
 
     const dr = drag.current
@@ -270,17 +286,18 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
   // The view moves, or the picture does: the selection goes with it. If the
   // picture is gone, or has other pixels now (undo), the selection is too.
   useEffect(() => {
-    return api.onChange((elements, appState, files) => {
+    if (!tool) return
+    return api.onChange((elements, _, files) => {
       const s = selRef.current
       if (s) {
         const el = elements.find((e) => e.id === s.pic.id) as ExcalidrawImageElement | undefined
         if (!el || el.isDeleted || el.fileId !== s.pic.fileId || !files[s.pic.fileId]) setSel(null)
       }
-      // Another tool picked from Excalidraw's own toolbar puts this one down.
-      if (tool && appState.activeTool.type !== 'custom') onTool(null)
       repaint()
     })
-  }, [api, tool, onTool, repaint])
+  }, [api, tool, repaint])
+
+  useEffect(() => onSelection(!!sel), [sel, onSelection])
 
   useEffect(() => {
     if (!sel) return
@@ -304,26 +321,20 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     }
   }, [tool])
 
-  // Picking a tool takes Excalidraw's own out of hand; putting it down
-  // drops the selection.
+  // Putting the tool down drops the selection.
   useEffect(() => {
-    if (tool) {
-      if (api.getAppState().activeTool.type !== 'custom') {
-        api.setActiveTool({ type: 'custom', customType: 'pixels' })
-      }
-      setNote(null)
-    } else {
+    setNote(null)
+    if (!tool) {
       setSel(null)
       drag.current = null
     }
-  }, [tool, api])
+  }, [tool])
 
   // --- the pointer -------------------------------------------------------
 
   function scenePoint(e: React.PointerEvent): Pt {
     const r = overlay.current!.getBoundingClientRect()
-    const st = api.getAppState()
-    return { x: (e.clientX - r.left) / st.zoom.value - st.scrollX, y: (e.clientY - r.top) / st.zoom.value - st.scrollY }
+    return viewToScene(api.getAppState(), { x: e.clientX - r.left, y: e.clientY - r.top })
   }
 
   /** Each selection replaces the one before; an empty one is none. */
@@ -358,7 +369,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         setNote(t('notOnPicture'))
         return
       }
-      if (busy) return
+      if (busy.current) return
       const pic = await pictureOf(el)
       if (!pic) return
       let found = subjects.current.get(pic.fileId)
@@ -367,27 +378,17 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         subjects.current.set(pic.fileId, found)
         found.catch(() => subjects.current.delete(pic.fileId))
       }
-      setBusy(true)
+      busy.current = true
       setNote(t('finding'))
       try {
-        const mask = await found
         // Kept to what the element shows, as the other tools' selections are.
-        const crop = cropOf(el, pic.w, pic.h)
-        const kept = polygonMask(pic.w, pic.h, [
-          { x: crop.x, y: crop.y },
-          { x: crop.x + crop.width, y: crop.y },
-          { x: crop.x + crop.width, y: crop.y + crop.height },
-          { x: crop.x, y: crop.y + crop.height },
-        ], crop)
-        const g = kept.getContext('2d')!
-        g.globalCompositeOperation = 'destination-in'
-        g.drawImage(mask, 0, 0)
+        const mask = keptTo(await found, cropOf(el, pic.w, pic.h))
         setNote(null)
-        select(pic, kept)
+        select(pic, mask)
       } catch (err) {
         setNote(t('subjectFailed', { why: err instanceof Error ? err.message : String(err) }))
       } finally {
-        setBusy(false)
+        busy.current = false
       }
       return
     }
@@ -444,18 +445,9 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
 
   // --- what can be done with a selection ---------------------------------
 
-  /** A picture made from a canvas, handed to Excalidraw as a new file. */
-  function fileFrom(c: HTMLCanvasElement): FileId {
-    const id = newFileId()
-    const file: BinaryFileData = { id, mimeType: 'image/png', dataURL: c.toDataURL('image/png') as BinaryFileData['dataURL'], created: Date.now() }
-    api.addFiles([file])
-    return id
-  }
-
-  /** The scene with the picture's pixels replaced by `c`'s, if given. */
-  function withPixels(el: ExcalidrawImageElement, c: HTMLCanvasElement | null): ExcalidrawElement[] {
-    const fileId = c ? fileFrom(c) : null
-    return api.getSceneElementsIncludingDeleted().map((e) => (fileId && e.id === el.id ? newElementWith(el, { fileId }) : e))
+  /** The scene with the picture's pixels replaced by `file`'s, if given. */
+  function withPixels(el: ExcalidrawImageElement, file: BinaryFileData | null): ExcalidrawElement[] {
+    return api.getSceneElementsIncludingDeleted().map((e) => (file && e.id === el.id ? newElementWith(el, { fileId: file.id }) : e))
   }
 
   function apply(kind: 'erase' | 'keep' | 'cut' | 'copy') {
@@ -465,21 +457,21 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     const { pic } = s
     const crop = cropOf(el, pic.w, pic.h)
     if (kind === 'erase' || kind === 'keep') {
-      const gone = kind === 'erase' ? s.mask : invert(s.mask, crop)
-      api.updateScene({ elements: withPixels(el, erase(pic.img, pic.w, pic.h, gone)), captureUpdate: CaptureUpdateAction.IMMEDIATELY })
+      const file = fileOf(erase(pic.img, pic.w, pic.h, kind === 'erase' ? s.mask : invert(s.mask, crop)))
+      commit(api, withPixels(el, file), [file])
       setSel(null)
       return
     }
     const box = bounds(s.mask)
     if (!box) return
-    const piece = fileFrom(extract(pic.img, pic.w, pic.h, s.mask, box))
+    const piece = fileOf(extract(pic.img, pic.w, pic.h, s.mask, box))
     const centre = pixelToScene(el, pic.w, pic.h, { x: box.x + box.width / 2, y: box.y + box.height / 2 })
     const width = (box.width * el.width) / crop.width
     const height = (box.height * el.height) / crop.height
     const [lifted] = convertToExcalidrawElements([
       {
         type: 'image',
-        fileId: piece,
+        fileId: piece.id,
         status: 'saved',
         x: centre.x - width / 2,
         y: centre.y - height / 2,
@@ -489,53 +481,29 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         scale: el.scale,
       },
     ])
-    const rest = withPixels(el, kind === 'cut' ? erase(pic.img, pic.w, pic.h, s.mask) : null)
-    // The piece comes out selected, with Excalidraw's own tool back in hand,
-    // ready to be dragged away.
-    onTool(null)
+    const cutOut = kind === 'cut' ? fileOf(erase(pic.img, pic.w, pic.h, s.mask)) : null
+    // The piece comes out selected, with Excalidraw's own tool back in hand
+    // (which puts this one down), ready to be dragged away.
     api.setActiveTool({ type: 'selection' })
-    api.updateScene({
-      elements: [...rest, lifted],
-      appState: { selectedElementIds: { [lifted.id]: true } },
-      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-    })
+    commit(api, [...withPixels(el, cutOut), lifted], cutOut ? [cutOut, piece] : [piece], { selectedElementIds: { [lifted.id]: true } })
   }
 
   function flip() {
     const s = selRef.current
     const el = s && elementOf(api, s.pic.id)
-    if (!s || !el) return
-    const mask = invert(s.mask, cropOf(el, s.pic.w, s.pic.h))
-    setSel(bounds(mask) ? { pic: s.pic, mask } : null)
+    if (s && el) select(s.pic, invert(s.mask, cropOf(el, s.pic.w, s.pic.h)))
   }
 
-  // Delete erases, and Ctrl+D and Escape deselect, before Excalidraw (or the
-  // browser, for Ctrl+D) can take them.
-  useEffect(() => {
-    if (!tool) return
-    function onKey(e: KeyboardEvent) {
-      const at = e.target as HTMLElement | null
-      if (at && (at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable)) return
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selRef.current) {
-        e.preventDefault()
-        e.stopPropagation()
-        apply('erase')
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        setSel(null)
-      } else if (e.key === 'Escape') {
-        e.preventDefault()
-        e.stopPropagation()
-        if (selRef.current) setSel(null)
-        else onTool(null)
-      }
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
+  // While there is a selection, Delete erases it, and Ctrl+D and Escape
+  // deselect, before Excalidraw (or the browser, for Ctrl+D) can take them.
+  useCaptureKeys(!!sel, (e) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') apply('erase')
+    else if (isCtrlD(e) || e.key === 'Escape') setSel(null)
+    else return false
+    return true
   })
 
-  if (!container || !tool || tool === 'erase') return null
+  if (!container || !tool) return null
 
   const hint =
     note ??
@@ -557,7 +525,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
       />
       <div className="px-bar" role="toolbar">
         {tool === 'wand' && (
-          <label className="px-tolerance" title={t('toleranceTitle')}>
+          <label className="px-slider" title={t('toleranceTitle')}>
             <span>{t('tolerance')}</span>
             <input type="range" min={0} max={128} value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))} />
           </label>

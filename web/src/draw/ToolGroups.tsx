@@ -13,10 +13,11 @@
  * edited in place, their number keys caught before Excalidraw sees them.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { strings, useLang } from '../i18n'
+import { useCaptureKeys } from './keys'
 import type { PixelTool } from './pixels/PixelTools'
 
 const S = strings(
@@ -68,14 +69,24 @@ const S = strings(
 
 const SHAPES = ['rectangle', 'diamond', 'ellipse'] as const
 type Shape = (typeof SHAPES)[number]
-type Picker = Exclude<PixelTool, 'erase'>
-const PIXELS: Picker[] = ['lasso', 'box', 'wand', 'subject']
+const PIXELS: PixelTool[] = ['lasso', 'box', 'wand', 'subject']
+
+/** Our tools in Excalidraw's custom slot: the picture tools and the pixel eraser. */
+export type Tool = PixelTool | 'erase'
 
 /** The Excalidraw tools that stay in the row, by the number that now picks them. */
 const RENUMBERED = { arrow: '3', line: '4', freedraw: '5', text: '6' } as const
-const BY_KEY: Record<string, keyof typeof RENUMBERED> = { 3: 'arrow', 4: 'line', 5: 'freedraw', 6: 'text' }
+const BY_KEY = Object.fromEntries(Object.entries(RENUMBERED).map(([tool, n]) => [n, tool])) as Record<string, keyof typeof RENUMBERED>
 
 type Group = 'shapes' | 'picture' | 'erase' | 'select'
+
+/** Which of Excalidraw's tools in hand keep a group's row open. */
+const KEEPS: Record<Group, (type: string) => boolean> = {
+  shapes: (type) => (SHAPES as readonly string[]).includes(type),
+  picture: (type) => type === 'selection' || type === 'image',
+  erase: (type) => type === 'eraser' || type === 'custom',
+  select: (type) => type === 'custom',
+}
 
 /** A choice in a group's row. */
 interface Item {
@@ -93,7 +104,7 @@ const icon = (d: string) => (
   </svg>
 )
 
-const PIXEL_ICONS: Record<Picker, React.ReactNode> = {
+const PIXEL_ICONS: Record<PixelTool, React.ReactNode> = {
   lasso: icon('M10 4c4 0 7 1.8 7 4.2S14 12.5 10 12.5 3 10.6 3 8.2 6 4 10 4Zm-5.6 7.3C3.5 13 4 15.4 6.2 16.3'),
   box: icon('M3 3h3M9 3h2M14 3h3v3M17 9v2M17 14v3h-3M11 17H9M6 17H3v-3M3 11V9M3 6V3'),
   wand: icon('M3.5 16.5l9-9M11 6l3 3M14.5 2.5v2M17.5 5.5h-2M16.6 3.4l-1.4 1.4M9 3.5v1.5M4 9h1.5'),
@@ -133,28 +144,25 @@ function renumber(root: ParentNode) {
   }
 }
 
-const typing = (at: EventTarget | null) =>
-  at instanceof HTMLElement && (at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable)
-
 interface ButtonProps {
   checked: boolean
   title: string
   onPick: (pointer: string) => void
   children: React.ReactNode
   keyLabel?: string
-  className?: string
   label?: string
 }
 
 /** A button in Excalidraw's own markup, so its stylesheet dresses it like the rest. */
-function ToolButton({ checked, title, onPick, children, keyLabel, className, label }: ButtonProps) {
+function ToolButton({ checked, title, onPick, children, keyLabel, label }: ButtonProps) {
   const pointer = useRef('mouse')
+  const titled = keyLabel ? `${title} — ${keyLabel}` : title
   return (
-    <label className={`ToolIcon Shape ${className ?? ''}`} title={title} onPointerDown={(e) => (pointer.current = e.pointerType)}>
+    <label className="ToolIcon Shape" title={titled} onPointerDown={(e) => (pointer.current = e.pointerType)}>
       <input
         className="ToolIcon_type_radio ToolIcon_size_medium"
         type="radio"
-        aria-label={title}
+        aria-label={titled}
         checked={checked}
         readOnly
         onClick={() => onPick(pointer.current)}
@@ -174,8 +182,8 @@ interface Props {
   api: ExcalidrawImperativeAPI
   /** Where Excalidraw is mounted. */
   host: HTMLElement
-  tool: PixelTool | null
-  onTool: (t: PixelTool | null) => void
+  tool: Tool | null
+  onTool: (t: Tool | null) => void
   finding: boolean
   onFinding: (on: boolean) => void
 }
@@ -196,7 +204,8 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
   const container = host.querySelector<HTMLElement>('.excalidraw-container')
 
   // Excalidraw rebuilds its toolbar when it changes layout (a phone turned,
-  // a window narrowed), so the groups follow it into whichever row it has now.
+  // a window narrowed), so the groups follow it into whichever row it has
+  // now -- looked for once a frame at most, however much the editor changes.
   useEffect(() => {
     function attach() {
       const selection = inputOf(host, 'selection')?.parentElement?.parentElement ?? null
@@ -211,31 +220,34 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
       })
     }
     attach()
-    const watch = new MutationObserver(attach)
+    let frame = 0
+    const watch = new MutationObserver(() => {
+      frame ||= requestAnimationFrame(() => {
+        frame = 0
+        attach()
+      })
+    })
     watch.observe(host, { childList: true, subtree: true })
     return () => {
       watch.disconnect()
+      cancelAnimationFrame(frame)
       slot.remove()
     }
   }, [host, slot])
 
-  // A tool picked from outside a group (Excalidraw's letter keys, its own
-  // buttons) puts that group's row away.
-  useEffect(
-    () =>
-      api.onChange((_, appState) => {
-        const type = appState.activeTool.type
-        setActive(type)
-        setOpen((o) =>
-          (o === 'shapes' && !(SHAPES as readonly string[]).includes(type)) ||
-          (o === 'picture' && type !== 'selection' && type !== 'image') ||
-          (o === 'erase' && type !== 'eraser' && type !== 'custom')
-            ? null
-            : o,
-        )
-      }),
-    [api],
-  )
+  // Taking up a tool that does not belong to the open row -- from another
+  // group, Excalidraw's letter keys or its own buttons, or by putting one of
+  // ours down -- puts the row away.
+  useEffect(() => {
+    let was = api.getAppState().activeTool.type
+    return api.onChange((_, appState) => {
+      const type = appState.activeTool.type
+      if (type === was) return
+      was = type
+      setActive(type)
+      setOpen((o) => (o && !KEEPS[o](type) ? null : o))
+    })
+  }, [api])
 
   const menu = useRef<HTMLDivElement>(null)
   const buttons = useRef<Record<Group, HTMLDivElement | null>>({ shapes: null, picture: null, erase: null, select: null })
@@ -254,136 +266,147 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
   const shape = (SHAPES as readonly string[]).includes(active) ? (active as Shape) : null
   const picker = tool && tool !== 'erase' ? tool : null
   const erasing = active === 'eraser' || tool === 'erase'
-  // The picture tools' row goes when the tool is put down (by Escape, or a
-  // cut piece handed back to Excalidraw's selection).
-  const shown = (open === 'select' && !picker) || (open === 'erase' && !erasing) ? null : open
 
-  // Each group, taken up without picking, works as its first tool -- except
-  // Picture, whose first opens a file dialog, which should not come up unasked.
-  const pickShapes = useCallback(() => {
-    if (open === 'shapes') return setOpen(null)
-    if (!shape) api.setActiveTool({ type: SHAPES[0] })
-    setOpen('shapes')
-  }, [api, open, shape])
-  const pickPicture = useCallback(() => {
-    if (open === 'picture') return setOpen(null)
-    onTool(null)
-    if (active !== 'selection' && active !== 'image') api.setActiveTool({ type: 'selection' })
-    setOpen('picture')
-  }, [api, open, active, onTool])
-  const pickEraser = useCallback(() => {
-    if (shown === 'erase') return setOpen(null)
-    if (!erasing) onTool('erase')
-    setOpen('erase')
-  }, [shown, erasing, onTool])
-  const pickSelect = useCallback(() => {
-    if (shown === 'select') return setOpen(null)
-    if (!picker) onTool(PIXELS[0])
-    setOpen('select')
-  }, [shown, picker, onTool])
+  /**
+   * A group's button: opens its row, or puts it away. Taken up without
+   * picking, a group works as its first tool -- except Picture, whose first
+   * opens a file dialog, which should not come up unasked.
+   */
+  function take(group: Group, first: () => void) {
+    if (open === group) return setOpen(null)
+    first()
+    setOpen(group)
+  }
 
-  const items: Item[] =
-    shown === 'shapes'
-      ? SHAPES.map((s) => ({
-          id: s,
-          checked: shape === s,
-          title: borrowed[s]?.label ?? s,
-          icon: <Svg html={borrowed[s]?.svg} />,
-          pick: () => api.setActiveTool({ type: s }),
-        }))
-      : shown === 'picture'
-        ? [
-            {
-              id: 'upload',
-              checked: active === 'image',
-              title: t('uploadTitle'),
-              label: t('upload'),
-              icon: <Svg html={borrowed.image?.svg} />,
-              pick: (pointer) => {
-                setOpen(null)
-                onFinding(false)
-                api.setActiveTool({ type: 'image', insertOnCanvasDirectly: pointer !== 'mouse' })
-              },
-            },
-            {
-              id: 'search',
-              checked: finding,
-              title: t('searchTitle'),
-              label: t('search'),
-              icon: SEARCH_ICON,
-              pick: () => {
-                setOpen(null)
-                onFinding(!finding)
-              },
-            },
-          ]
-        : shown === 'erase'
-          ? [
-              {
-                id: 'pixel',
-                checked: tool === 'erase',
-                title: t('pixelEraserTitle'),
-                label: t('pixelEraser'),
-                icon: <Svg html={borrowed.eraser?.svg} />,
-                pick: () => onTool('erase'),
-              },
-              {
-                id: 'object',
-                checked: active === 'eraser',
-                title: t('objectEraserTitle'),
-                label: t('objectEraser'),
-                icon: OBJECT_ERASER_ICON,
-                pick: () => api.setActiveTool({ type: 'eraser' }),
-              },
-            ]
-          : shown === 'select'
-          ? PIXELS.map((p) => ({
-              id: p,
-              checked: tool === p,
-              title: t(`${p}Title`),
-              label: t(p),
-              icon: PIXEL_ICONS[p],
-              pick: () => onTool(p),
-            }))
-          : []
+  const groups: { id: Group; key: string; title: string; checked: boolean; icon: React.ReactNode; pick: () => void }[] = [
+    {
+      id: 'shapes',
+      key: '2',
+      title: t('shapes'),
+      checked: !!shape,
+      icon: <Svg html={borrowed[shape ?? SHAPES[0]]?.svg} />,
+      pick: () => take('shapes', () => shape || api.setActiveTool({ type: SHAPES[0] })),
+    },
+    {
+      id: 'picture',
+      key: '7',
+      title: t('picture'),
+      checked: open === 'picture' || finding || active === 'image',
+      icon: <Svg html={borrowed.image?.svg} />,
+      pick: () =>
+        take('picture', () => {
+          onTool(null)
+          if (active !== 'selection' && active !== 'image') api.setActiveTool({ type: 'selection' })
+        }),
+    },
+    {
+      id: 'erase',
+      key: '8',
+      title: t('eraser'),
+      checked: erasing,
+      icon: active === 'eraser' ? OBJECT_ERASER_ICON : <Svg html={borrowed.eraser?.svg} />,
+      pick: () => take('erase', () => erasing || onTool('erase')),
+    },
+    {
+      id: 'select',
+      key: '9',
+      title: t('select'),
+      checked: !!picker,
+      icon: PIXEL_ICONS[picker ?? PIXELS[0]],
+      pick: () => take('select', () => picker || onTool(PIXELS[0])),
+    },
+  ]
+
+  const rows: Record<Group, () => Item[]> = {
+    shapes: () =>
+      SHAPES.map((s) => ({
+        id: s,
+        checked: shape === s,
+        title: borrowed[s]?.label ?? s,
+        icon: <Svg html={borrowed[s]?.svg} />,
+        pick: () => api.setActiveTool({ type: s }),
+      })),
+    picture: () => [
+      {
+        id: 'upload',
+        checked: active === 'image',
+        title: t('uploadTitle'),
+        label: t('upload'),
+        icon: <Svg html={borrowed.image?.svg} />,
+        pick: (pointer) => {
+          setOpen(null)
+          onFinding(false)
+          api.setActiveTool({ type: 'image', insertOnCanvasDirectly: pointer !== 'mouse' })
+        },
+      },
+      {
+        id: 'search',
+        checked: finding,
+        title: t('searchTitle'),
+        label: t('search'),
+        icon: SEARCH_ICON,
+        pick: () => {
+          setOpen(null)
+          onFinding(!finding)
+        },
+      },
+    ],
+    erase: () => [
+      {
+        id: 'pixel',
+        checked: tool === 'erase',
+        title: t('pixelEraserTitle'),
+        label: t('pixelEraser'),
+        icon: <Svg html={borrowed.eraser?.svg} />,
+        pick: () => onTool('erase'),
+      },
+      {
+        id: 'object',
+        checked: active === 'eraser',
+        title: t('objectEraserTitle'),
+        label: t('objectEraser'),
+        icon: OBJECT_ERASER_ICON,
+        pick: () => api.setActiveTool({ type: 'eraser' }),
+      },
+    ],
+    select: () =>
+      PIXELS.map((p) => ({
+        id: p,
+        checked: tool === p,
+        title: t(`${p}Title`),
+        label: t(p),
+        icon: PIXEL_ICONS[p],
+        pick: () => onTool(p),
+      })),
+  }
+  const items = open ? rows[open]() : []
 
   // The number keys: in an open row, its items; otherwise, or for a number
   // the row does not have (which leaves it), the toolbar, in the order it now
   // stands.
-  const inRow = useRef(items)
-  useEffect(() => {
-    inRow.current = items
-  })
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target) || !/^[0-9]$/.test(e.key)) return
-      const st = api.getAppState()
-      if (st.openDialog || st.newElement || st.selectionElement || st.selectedElementsAreBeingDragged || st.editingTextElement) return
-      const k = e.key
-      const item = inRow.current[Number(k) - 1]
-      if (item) item.pick('mouse')
-      else {
-        if (inRow.current.length) setOpen(null)
-        if (k === '2') pickShapes()
-        else if (k === '7') pickPicture()
-        else if (k === '8') pickEraser()
-        else if (k === '9') pickSelect()
-        else if (BY_KEY[k]) api.setActiveTool({ type: BY_KEY[k] })
-        else if (k !== '0') return
-      }
-      e.preventDefault()
-      e.stopPropagation()
+  useCaptureKeys(true, (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || !/^[0-9]$/.test(e.key)) return false
+    const st = api.getAppState()
+    if (st.openDialog || st.newElement || st.selectionElement || st.selectedElementsAreBeingDragged || st.editingTextElement) return false
+    const item = items[Number(e.key) - 1]
+    if (item) {
+      item.pick('mouse')
+      return true
     }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [api, pickShapes, pickPicture, pickEraser, pickSelect])
+    if (items.length) setOpen(null)
+    const group = groups.find((g) => g.key === e.key)
+    if (group) group.pick()
+    else if (BY_KEY[e.key]) api.setActiveTool({ type: BY_KEY[e.key] })
+    else return e.key === '0'
+    return true
+  })
 
   // The row sits under the toolbar, below its group's button.
   const [at, setAt] = useState<{ top: number; left: number } | null>(null)
   useLayoutEffect(() => {
-    if (!shown || !container || !row) return
+    if (!open || !container || !row) return
     function place() {
-      const button = buttons.current[shown!]
+      const button = buttons.current[open!]
       const island = row!.closest('.App-toolbar')
       if (!button || !island || !menu.current) return
       const box = container!.getBoundingClientRect()
@@ -400,41 +423,23 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
     place()
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
-  }, [shown, container, row, shape, tool, active])
+  }, [open, container, row, shape, tool, active])
 
   if (!row || !container) return null
-
-  const shapeIcon = shape ?? SHAPES[0]
-  const pixel = picker ?? PIXELS[0]
 
   return (
     <>
       {createPortal(
-        <>
-          <div className="sk-group" data-group="shapes" ref={(el) => void (buttons.current.shapes = el)}>
-            <ToolButton checked={!!shape} title={`${t('shapes')} — 2`} keyLabel="2" onPick={pickShapes}>
-              <Svg html={borrowed[shapeIcon]?.svg} />
+        groups.map((g) => (
+          <div key={g.id} className="sk-group" data-group={g.id} ref={(el) => void (buttons.current[g.id] = el)}>
+            <ToolButton checked={g.checked} title={g.title} keyLabel={g.key} onPick={g.pick}>
+              {g.icon}
             </ToolButton>
           </div>
-          <div className="sk-group" data-group="picture" ref={(el) => void (buttons.current.picture = el)}>
-            <ToolButton checked={shown === 'picture' || finding || active === 'image'} title={`${t('picture')} — 7`} keyLabel="7" onPick={pickPicture}>
-              <Svg html={borrowed.image?.svg} />
-            </ToolButton>
-          </div>
-          <div className="sk-group" data-group="erase" ref={(el) => void (buttons.current.erase = el)}>
-            <ToolButton checked={erasing} title={`${t('eraser')} — 8`} keyLabel="8" onPick={pickEraser}>
-              {active === 'eraser' ? OBJECT_ERASER_ICON : <Svg html={borrowed.eraser?.svg} />}
-            </ToolButton>
-          </div>
-          <div className="sk-group" data-group="select" ref={(el) => void (buttons.current.select = el)}>
-            <ToolButton checked={!!picker} title={`${t('select')} — 9`} keyLabel="9" onPick={pickSelect}>
-              {PIXEL_ICONS[pixel]}
-            </ToolButton>
-          </div>
-        </>,
+        )),
         slot,
       )}
-      {shown &&
+      {open &&
         createPortal(
           <div
             ref={menu}
@@ -443,14 +448,7 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
             style={at ? { top: at.top, left: at.left } : { visibility: 'hidden' }}
           >
             {items.map((item, i) => (
-              <ToolButton
-                key={item.id}
-                checked={item.checked}
-                title={`${item.title} — ${i + 1}`}
-                label={item.label}
-                keyLabel={String(i + 1)}
-                onPick={item.pick}
-              >
+              <ToolButton key={item.id} checked={item.checked} title={item.title} label={item.label} keyLabel={String(i + 1)} onPick={item.pick}>
                 {item.icon}
               </ToolButton>
             ))}
