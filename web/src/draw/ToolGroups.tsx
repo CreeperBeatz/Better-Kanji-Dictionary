@@ -65,6 +65,16 @@ const BY_KEY: Record<string, keyof typeof RENUMBERED> = { 3: 'arrow', 4: 'line',
 
 type Group = 'shapes' | 'picture' | 'select'
 
+/** A choice in a group's row. */
+interface Item {
+  id: string
+  checked: boolean
+  title: string
+  label?: string
+  icon: React.ReactNode
+  pick: (pointer: string) => void
+}
+
 const icon = (d: string) => (
   <svg className="sk-own" viewBox="0 0 20 20" aria-hidden>
     <path d={d} />
@@ -165,7 +175,9 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
   })
   const [borrowed, setBorrowed] = useState<Partial<Record<Shape | 'image', Borrowed>>>({})
   const [active, setActive] = useState(() => api.getAppState().activeTool.type)
-  const [pictureOpen, setPictureOpen] = useState(false)
+  // The group whose row is open. While it is, the number keys pick in the
+  // row; a click anywhere else puts it away and gives them back to the toolbar.
+  const [open, setOpen] = useState<Group | null>(null)
   const container = host.querySelector<HTMLElement>('.excalidraw-container')
 
   // Excalidraw rebuilds its toolbar when it changes layout (a phone turned,
@@ -192,70 +204,125 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
     }
   }, [host, slot])
 
+  // A tool picked from outside a group (Excalidraw's letter keys, its own
+  // buttons) puts that group's row away.
   useEffect(
     () =>
       api.onChange((_, appState) => {
         const type = appState.activeTool.type
         setActive(type)
-        // Picking any other tool puts the picture row away.
-        if (type !== 'selection' && type !== 'image') setPictureOpen(false)
+        setOpen((o) =>
+          (o === 'shapes' && !(SHAPES as readonly string[]).includes(type)) ||
+          (o === 'picture' && type !== 'selection' && type !== 'image')
+            ? null
+            : o,
+        )
       }),
     [api],
   )
 
-  // A click on the drawing puts the picture row away too.
+  const menu = useRef<HTMLDivElement>(null)
+  const buttons = useRef<Record<Group, HTMLDivElement | null>>({ shapes: null, picture: null, select: null })
+
   useEffect(() => {
-    if (!container) return
+    if (!open) return
+    const group = open
     const down = (e: PointerEvent) => {
-      if (e.target instanceof HTMLCanvasElement) setPictureOpen(false)
+      const at = e.target as Node
+      if (!menu.current?.contains(at) && !buttons.current[group]?.contains(at)) setOpen(null)
     }
-    container.addEventListener('pointerdown', down, true)
-    return () => container.removeEventListener('pointerdown', down, true)
-  }, [container])
+    document.addEventListener('pointerdown', down, true)
+    return () => document.removeEventListener('pointerdown', down, true)
+  }, [open])
 
   const shape = (SHAPES as readonly string[]).includes(active) ? (active as Shape) : null
+  // The picture tools' row goes when the tool is put down (by Escape, or a
+  // cut piece handed back to Excalidraw's selection).
+  const shown = open === 'select' && !tool ? null : open
 
-  const pickShape = useCallback(
-    (s: Shape) => {
-      setPictureOpen(false)
-      api.setActiveTool({ type: s })
-    },
-    [api],
-  )
+  // Each group, taken up without picking, works as its first tool -- except
+  // Picture, whose first opens a file dialog, which should not come up unasked.
   const pickShapes = useCallback(() => {
-    if (!shape) pickShape(SHAPES[0])
-  }, [shape, pickShape])
-  // Picture only opens its row: uploading opens a file dialog, which should
-  // not come up unasked.
+    if (open === 'shapes') return setOpen(null)
+    if (!shape) api.setActiveTool({ type: SHAPES[0] })
+    setOpen('shapes')
+  }, [api, open, shape])
   const pickPicture = useCallback(() => {
-    if (pictureOpen || finding) {
-      setPictureOpen(false)
-      onFinding(false)
-      return
-    }
+    if (open === 'picture') return setOpen(null)
     onTool(null)
-    if (active !== 'selection') api.setActiveTool({ type: 'selection' })
-    setPictureOpen(true)
-  }, [api, active, pictureOpen, finding, onTool, onFinding])
+    if (active !== 'selection' && active !== 'image') api.setActiveTool({ type: 'selection' })
+    setOpen('picture')
+  }, [api, open, active, onTool])
   const pickSelect = useCallback(() => {
-    setPictureOpen(false)
+    if (shown === 'select') return setOpen(null)
     if (!tool) onTool(PIXELS[0])
-  }, [tool, onTool])
+    setOpen('select')
+  }, [shown, tool, onTool])
 
-  // The number keys, in the order the toolbar now stands.
+  const items: Item[] =
+    shown === 'shapes'
+      ? SHAPES.map((s) => ({
+          id: s,
+          checked: shape === s,
+          title: borrowed[s]?.label ?? s,
+          icon: <Svg html={borrowed[s]?.svg} />,
+          pick: () => api.setActiveTool({ type: s }),
+        }))
+      : shown === 'picture'
+        ? [
+            {
+              id: 'upload',
+              checked: active === 'image',
+              title: t('uploadTitle'),
+              label: t('upload'),
+              icon: <Svg html={borrowed.image?.svg} />,
+              pick: (pointer) => {
+                setOpen(null)
+                onFinding(false)
+                api.setActiveTool({ type: 'image', insertOnCanvasDirectly: pointer !== 'mouse' })
+              },
+            },
+            {
+              id: 'search',
+              checked: finding,
+              title: t('searchTitle'),
+              label: t('search'),
+              icon: SEARCH_ICON,
+              pick: () => {
+                setOpen(null)
+                onFinding(!finding)
+              },
+            },
+          ]
+        : shown === 'select'
+          ? PIXELS.map((p) => ({
+              id: p,
+              checked: tool === p,
+              title: t(`${p}Title`),
+              label: t(p),
+              icon: PIXEL_ICONS[p],
+              pick: () => onTool(p),
+            }))
+          : []
+
+  // The number keys: in an open row, its items; otherwise the toolbar, in
+  // the order it now stands.
+  const inRow = useRef(items)
+  useEffect(() => {
+    inRow.current = items
+  })
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target)) return
+      if (e.ctrlKey || e.metaKey || e.altKey || typing(e.target) || !/^[0-9]$/.test(e.key)) return
       const st = api.getAppState()
       if (st.openDialog || st.newElement || st.selectionElement || st.selectedElementsAreBeingDragged || st.editingTextElement) return
       const k = e.key
-      if (k === '2') pickShapes()
+      if (inRow.current.length) inRow.current[Number(k) - 1]?.pick('mouse')
+      else if (k === '2') pickShapes()
       else if (k === '7') pickPicture()
       else if (k === '9') pickSelect()
-      else if (BY_KEY[k]) {
-        setPictureOpen(false)
-        api.setActiveTool({ type: BY_KEY[k] })
-      } else if (k !== '0') return
+      else if (BY_KEY[k]) api.setActiveTool({ type: BY_KEY[k] })
+      else if (k !== '0') return
       e.preventDefault()
       e.stopPropagation()
     }
@@ -263,16 +330,12 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
     return () => window.removeEventListener('keydown', onKey, true)
   }, [api, pickShapes, pickPicture, pickSelect])
 
-  const open: Group | null = tool ? 'select' : pictureOpen || finding || active === 'image' ? 'picture' : shape ? 'shapes' : null
-
-  // The row of choices sits under the toolbar, below its group's button.
-  const buttons = useRef<Record<Group, HTMLDivElement | null>>({ shapes: null, picture: null, select: null })
-  const menu = useRef<HTMLDivElement>(null)
+  // The row sits under the toolbar, below its group's button.
   const [at, setAt] = useState<{ top: number; left: number } | null>(null)
   useLayoutEffect(() => {
-    if (!open || !container || !row) return
+    if (!shown || !container || !row) return
     function place() {
-      const button = buttons.current[open!]
+      const button = buttons.current[shown!]
       const island = row!.closest('.App-toolbar')
       if (!button || !island || !menu.current) return
       const box = container!.getBoundingClientRect()
@@ -289,11 +352,11 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
     place()
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
-  }, [open, container, row, shape, tool])
+  }, [shown, container, row, shape, tool])
 
   if (!row || !container) return null
 
-  const shown = shape ?? SHAPES[0]
+  const shapeIcon = shape ?? SHAPES[0]
   const pixel = tool ?? PIXELS[0]
 
   return (
@@ -302,11 +365,11 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
         <>
           <div className="sk-group" data-group="shapes" ref={(el) => void (buttons.current.shapes = el)}>
             <ToolButton checked={!!shape} title={`${t('shapes')} — 2`} keyLabel="2" onPick={pickShapes}>
-              <Svg html={borrowed[shown]?.svg} />
+              <Svg html={borrowed[shapeIcon]?.svg} />
             </ToolButton>
           </div>
           <div className="sk-group" data-group="picture" ref={(el) => void (buttons.current.picture = el)}>
-            <ToolButton checked={open === 'picture'} title={`${t('picture')} — 7`} keyLabel="7" onPick={pickPicture}>
+            <ToolButton checked={shown === 'picture' || finding || active === 'image'} title={`${t('picture')} — 7`} keyLabel="7" onPick={pickPicture}>
               <Svg html={borrowed.image?.svg} />
             </ToolButton>
           </div>
@@ -318,7 +381,7 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
         </>,
         slot,
       )}
-      {open &&
+      {shown &&
         createPortal(
           <div
             ref={menu}
@@ -326,45 +389,18 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
             role="toolbar"
             style={at ? { top: at.top, left: at.left } : { visibility: 'hidden' }}
           >
-            {open === 'shapes' &&
-              SHAPES.map((s) => (
-                <ToolButton key={s} checked={shape === s} title={borrowed[s]?.label ?? s} onPick={() => pickShape(s)}>
-                  <Svg html={borrowed[s]?.svg} />
-                </ToolButton>
-              ))}
-            {open === 'picture' && (
-              <>
-                <ToolButton
-                  checked={active === 'image'}
-                  title={t('uploadTitle')}
-                  label={t('upload')}
-                  onPick={(pointer) => {
-                    setPictureOpen(false)
-                    onFinding(false)
-                    api.setActiveTool({ type: 'image', insertOnCanvasDirectly: pointer !== 'mouse' })
-                  }}
-                >
-                  <Svg html={borrowed.image?.svg} />
-                </ToolButton>
-                <ToolButton
-                  checked={finding}
-                  title={t('searchTitle')}
-                  label={t('search')}
-                  onPick={() => {
-                    setPictureOpen(false)
-                    onFinding(!finding)
-                  }}
-                >
-                  {SEARCH_ICON}
-                </ToolButton>
-              </>
-            )}
-            {open === 'select' &&
-              PIXELS.map((p) => (
-                <ToolButton key={p} checked={tool === p} title={t(`${p}Title`)} label={t(p)} onPick={() => onTool(p)}>
-                  {PIXEL_ICONS[p]}
-                </ToolButton>
-              ))}
+            {items.map((item, i) => (
+              <ToolButton
+                key={item.id}
+                checked={item.checked}
+                title={`${item.title} — ${i + 1}`}
+                label={item.label}
+                keyLabel={String(i + 1)}
+                onPick={item.pick}
+              >
+                {item.icon}
+              </ToolButton>
+            ))}
           </div>,
           container,
         )}
