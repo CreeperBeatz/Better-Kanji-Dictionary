@@ -1,0 +1,455 @@
+/* Excalidraw in the app's own ink and paper.
+ *
+ * Its menus and dialogs are portalled to <body> as .excalidraw.theme--dark, so
+ * the overrides are global, and :root outranks its stylesheet, which loads
+ * after ours.
+ *
+ * The canvas itself is not styled here: dark mode draws the scene in light
+ * colours and inverts it through a CSS filter, so its colours are chosen
+ * through that filter in SketchEditor.tsx.
+ */
+
+:root .excalidraw.theme--dark {
+  --ui-font: var(--gothic);
+
+  --color-primary: var(--ai);
+  --color-primary-darker: var(--ai);
+  --color-primary-darkest: var(--ai);
+  --color-primary-hover: var(--ai);
+  --color-primary-light: var(--ai-wash);
+  --color-primary-light-darker: var(--ai-wash);
+  --color-brand-hover: var(--ai);
+  --color-brand-active: var(--ai);
+  --color-selection: var(--ai-deep);
+  --color-slider-track: var(--ai-deep);
+  --color-surface-primary-container: var(--ai-wash);
+  --color-on-primary-container: var(--paper);
+
+  --island-bg-color: var(--sumi-lift);
+  --popup-bg-color: var(--sumi-lift);
+  --sidebar-bg-color: var(--sumi-lift);
+  --popup-secondary-bg-color: var(--sumi);
+  --default-bg-color: var(--sumi);
+  --input-bg-color: var(--sumi-sunk);
+  --input-hover-bg-color: var(--sumi);
+  --color-surface-lowest: var(--sumi-sunk);
+  --color-surface-mid: var(--sumi);
+  --color-surface-low: var(--sumi-lift);
+  --color-surface-high: var(--rule);
+  --button-hover-bg: var(--rule);
+  --button-active-bg: var(--rule-bright);
+  --button-gray-1: var(--rule-bright);
+  --button-gray-2: var(--rule);
+  --button-gray-3: var(--sumi-lift);
+
+  --default-border-color: var(--rule-bright);
+  --input-border-color: var(--rule-bright);
+  --dialog-border-color: var(--rule-bright);
+  --sidebar-border-color: var(--rule);
+  --color-border-outline-variant: var(--rule-bright);
+  --color-border-outline: var(--muted);
+
+  --color-on-surface: var(--paper);
+  --text-primary-color: var(--paper);
+  --icon-fill-color: var(--paper);
+  --popup-text-color: var(--paper-dim);
+  --input-label-color: var(--paper);
+  --keybinding-color: var(--muted);
+  --color-muted: var(--muted);
+
+  --focus-highlight-color: var(--ai);
+  --select-highlight-color: var(--ai);
+  --link-color: var(--ai);
+  --color-danger: var(--shu);
+  --color-danger-dark: #5c1d12;
+  --color-danger-text: var(--paper);
+  --button-destructive-bg-color: #5c1d12;
+  --button-destructive-color: var(--paper);
+
+  --scrollbar-thumb: var(--rule-bright);
+  --scrollbar-thumb-hover: var(--muted);
+
+  --border-radius-md: 2px;
+  --border-radius-lg: 4px;
+  --shadow-island: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ------------------------------------------------ the toolbar, regrouped */
+
+/* No library: a drawing here is a mnemonic, not a diagram built from parts. */
+.sketch-canvas .default-sidebar-trigger {
+  display: none;
+}
+
+/* The tools that went into groups (ToolGroups.tsx). */
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-rectangle']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-diamond']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-ellipse']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-image']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-eraser']) {
+  display: none;
+}
+
+/* The groups are appended to the row; `order` puts them where the tools they
+   hold stood. Everything before the selection tool keeps order 0. */
+.sketch-canvas .sk-slot {
+  display: contents;
+}
+
+.sketch-canvas .sk-group[data-group='shapes'] {
+  order: 1;
+}
+
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-arrow']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-line']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-freedraw']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-text']) {
+  order: 2;
+}
+
+.sketch-canvas .sk-group[data-group='picture'] {
+  order: 3;
+}
+
+.sketch-canvas .sk-group[data-group='erase'] {
+  order: 4;
+}
+
+.sketch-canvas .sk-group[data-group='select'] {
+  order: 5;
+}
+
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-eraser']) ~ :not(.sk-slot) {
+  order: 6;
+}
+
+.sketch-canvas .sk-group {
+  display: flex;
+}
+
+.sketch-canvas .sk-svg {
+  display: contents;
+}
+
+/* Our own icons, drawn in Excalidraw's line. */
+.sketch-canvas svg.sk-own {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The row a group opens, under the toolbar. */
+.sketch-canvas .sk-menu {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sumi-lift);
+  border-radius: 4px;
+  box-shadow: var(--shadow-island);
+}
+
+.sketch-canvas .sk-menu .ToolIcon {
+  display: flex;
+  align-items: center;
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+}
+
+.sketch-canvas .sk-menu .ToolIcon:has(.sk-item-label):hover {
+  background: var(--button-hover-bg);
+}
+
+.sketch-canvas .sk-item-label {
+  padding: 0 10px 0 2px;
+  font-family: var(--gothic);
+  font-size: 13px;
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+
+.sketch-canvas .sk-menu .ToolIcon:has(> input:checked) .sk-item-label {
+  color: var(--paper);
+}
+
+/* Its hints would sit where the row does. */
+.sketch-canvas:has(.sk-menu) .HintViewer {
+  display: none;
+}
+
+@media (max-width: 730px) {
+  .sketch-canvas .sk-item-label {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------ selecting part of a picture */
+
+/* Over Excalidraw's canvases, under its menus -- and out of the filter dark
+   mode puts on every canvas in it. */
+.excalidraw canvas.px-overlay,
+:root .excalidraw.theme--dark canvas.px-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  filter: none;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.px-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  width: max-content;
+  margin-inline: auto;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 6px 8px;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  font-family: var(--gothic);
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.px-act {
+  font: inherit;
+  padding: 4px 10px;
+  background: none;
+  color: var(--paper);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.px-act:hover {
+  background: var(--rule);
+}
+
+.px-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--paper-dim);
+}
+
+.px-slider input {
+  width: 90px;
+  accent-color: var(--ai);
+}
+
+.px-hint {
+  padding: 0 6px;
+  color: var(--paper-dim);
+}
+
+@media (max-width: 730px) {
+  /* Excalidraw's phone layout keeps its tools along the bottom. */
+  .px-bar {
+    bottom: 72px;
+  }
+}
+
+/* ------------------------------------------------------ the pixel eraser */
+
+/* Painted over the scene while a stroke is under way, through the same
+   dark-mode filter as the scene's own canvases. */
+.excalidraw canvas.px-erase-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.excalidraw canvas.px-overlay[data-tool='erase'] {
+  cursor: none;
+}
+
+.px-erase-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 4;
+  display: none;
+  box-sizing: border-box;
+  border: 1px solid var(--paper);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+.px-size {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------ finding a picture */
+
+.imgsearch {
+  position: absolute;
+  top: 64px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--sumi-lift);
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-family: var(--gothic);
+  font-size: 13px;
+  color: var(--paper);
+}
+
+.imgsearch-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.imgsearch-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 9px;
+  background: var(--sumi-sunk);
+  color: var(--paper);
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  outline: none;
+}
+
+.imgsearch-input:focus {
+  border-color: var(--ai-deep);
+}
+
+.imgsearch-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.imgsearch-kinds {
+  align-self: flex-start;
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+}
+
+.imgsearch-kinds button {
+  font: inherit;
+  padding: 4px 10px;
+  background: none;
+  color: var(--paper-dim);
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.imgsearch-kinds button + button {
+  border-left: 1px solid var(--rule-bright);
+}
+
+.imgsearch-kinds button[data-on] {
+  background: var(--ai-wash);
+  color: var(--paper);
+}
+
+.imgsearch-kinds button:hover:not([data-on]) {
+  background: var(--rule);
+}
+
+.imgsearch-results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.imgsearch-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.imgsearch-grid button {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.imgsearch-grid button:hover:not(:disabled) {
+  border-color: var(--ai);
+}
+
+.imgsearch-grid button[data-adding] {
+  border-color: var(--ai);
+  opacity: 0.6;
+}
+
+.imgsearch-grid img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.imgsearch-note {
+  margin: 8px 2px;
+  color: var(--paper-dim);
+}
+
+.imgsearch-more {
+  display: block;
+  margin: 8px auto;
+}
+
+.imgsearch-credit {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.imgsearch-credit a {
+  color: var(--ai);
+}
+
+@media (max-width: 730px) {
+  .imgsearch {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    bottom: 76px;
+  }
+}

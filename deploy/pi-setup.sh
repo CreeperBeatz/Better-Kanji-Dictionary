@@ -32,6 +32,10 @@ BETTERRTK_OWNER_EMAIL=
 GOOGLE_CLIENT_ID=
 # Semantic search through OpenRouter (GPT-6 Luna); empty hides it.
 OPENROUTER_API_KEY=
+# Picture search in the drawing editor (pixabay.com/api/docs); empty turns it off.
+PIXABAY_API_KEY=
+# GIFs in notes (partner.klipy.com); empty turns the GIF button's search off.
+KLIPY_API_KEY=
 ENV
   echo "  wrote .env -- set RESEND_API_KEY and BETTERRTK_OWNER_EMAIL"
 fi

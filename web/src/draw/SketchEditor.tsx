@@ -2,8 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Excalidraw, exportToBlob, getSceneVersion, serializeAsJSON } from '@excalidraw/excalidraw'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import '@excalidraw/excalidraw/index.css'
+import './sketch-theme.css'
 import { getLang, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { isCtrlD, useCaptureKeys } from './keys'
+import { PixelTools } from './pixels/PixelTools'
+import { PixelEraser } from './pixels/PixelEraser'
+import { ImageSearch } from './ImageSearch'
+import { ToolGroups, type Tool } from './ToolGroups'
 
 const S = strings(
   {
@@ -44,6 +50,11 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
   const [excalidraw, setExcalidraw] = useState<ExcalidrawImperativeAPI | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tool, setTool] = useState<Tool | null>(null)
+  // Whether a picture's selection is held, which takes Escape and Ctrl+D first.
+  const [selecting, setSelecting] = useState(false)
+  const [host, setHost] = useState<HTMLDivElement | null>(null)
+  const [finding, setFinding] = useState(false)
   // What the scene looked like on opening, so closing only asks when
   // something would actually be lost.
   const openedAt = useRef<number | null>(null)
@@ -62,6 +73,34 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
       document.body.style.overflow = prev
     }
   }, [])
+
+  // Our tools share Excalidraw's custom tool slot: taking one up takes
+  // Excalidraw's out of hand, putting ours down gives its selection tool
+  // back, and picking one of its own (a click, a key) puts ours down.
+  useEffect(() => {
+    if (!excalidraw) return
+    const custom = excalidraw.getAppState().activeTool.type === 'custom'
+    if (tool && !custom) excalidraw.setActiveTool({ type: 'custom', customType: 'pixels' })
+    if (!tool && custom) excalidraw.setActiveTool({ type: 'selection' })
+  }, [excalidraw, tool])
+  useEffect(() => {
+    if (!excalidraw) return
+    let was = excalidraw.getAppState().activeTool.type
+    return excalidraw.onChange((_, appState) => {
+      const now = appState.activeTool.type
+      if (was === 'custom' && now !== 'custom') setTool(null)
+      was = now
+    })
+  }, [excalidraw])
+
+  // Ctrl+D deselects, as in paint programs, rather than duplicating (or
+  // bookmarking the page), and Escape puts our tool down.
+  useCaptureKeys(!!excalidraw && !selecting, (e) => {
+    if (isCtrlD(e)) excalidraw!.updateScene({ appState: { selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null } })
+    else if (e.key === 'Escape' && tool) setTool(null)
+    else return false
+    return true
+  })
 
   function changed() {
     if (!excalidraw) return false
@@ -119,10 +158,12 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
             {saving ? t('saving') : t('done')}
           </button>
         </header>
-        <div className="sketch-canvas">
+        <div className="sketch-canvas" ref={setHost}>
           <Excalidraw
             excalidrawAPI={setExcalidraw}
-            initialData={scene ?? { appState: { currentItemStrokeWidth: 2 } }}
+            // Dark mode shows the scene through an inverting filter, so this
+            // near-black is what shows as the app's paper colour.
+            initialData={scene ?? { appState: { currentItemStrokeWidth: 2, currentItemStrokeColor: '#0f0700' } }}
             theme="dark"
             langCode={lang === 'bg' ? 'bg-BG' : 'en'}
             autoFocus
@@ -130,6 +171,14 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
               canvasActions: { saveToActiveFile: false, export: false, toggleTheme: false },
             }}
           />
+          {excalidraw && host && (
+            <>
+              <ToolGroups api={excalidraw} host={host} tool={tool} onTool={setTool} finding={finding} onFinding={setFinding} />
+              {finding && <ImageSearch api={excalidraw} onClose={() => setFinding(false)} />}
+              <PixelTools api={excalidraw} host={host} tool={tool === 'erase' ? null : tool} onSelection={setSelecting} />
+              <PixelEraser api={excalidraw} host={host} on={tool === 'erase'} />
+            </>
+          )}
         </div>
       </div>
     </div>

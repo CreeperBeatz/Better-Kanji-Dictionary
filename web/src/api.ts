@@ -375,6 +375,35 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
 
 const similarCache = new Map<string, Promise<SimilarResponse>>()
 
+export type ImageKind = 'all' | 'photo' | 'illustration' | 'vector'
+
+export interface ImageHit {
+  id: number
+  thumb: string
+  preview: string
+  width: number
+  height: number
+  tags: string
+  user: string
+  page: string
+}
+
+export interface GifHit {
+  id: string
+  /** The GIF a note shows, on KLIPY's servers. */
+  url: string
+  thumb: string
+  width: number
+  height: number
+  title: string
+}
+
+/**
+ * A note's picture that is a GIF on KLIPY's servers, not a file of ours:
+ * KLIPY does not allow copies (server/routes/gifs.py).
+ */
+export const isGifUrl = (name: string) => /^https:\/\/([a-z0-9-]+\.)*klipy\.com\//.test(name)
+
 export const api = {
   kanji: kept((char: string) => get<GraphResponse>(`/api/kanji/${encodeURIComponent(char)}`)),
 
@@ -488,6 +517,30 @@ export const api = {
     return (await res.json()) as { name: string; url: string }
   },
 
+  /** Pictures to draw with, from Pixabay through the server. */
+  searchImages: (q: string, lang: string, kind: ImageKind, page: number) =>
+    get<{ total: number; page: number; hits: ImageHit[] }>('/api/images/search', [
+      ['q', q],
+      ['lang', lang],
+      ['kind', kind],
+      ['page', String(page)],
+    ]),
+
+  /** GIFs for a note, from KLIPY through the server; an empty query is what is popular. */
+  searchGifs: (q: string, lang: string, pos: string) =>
+    get<{ hits: GifHit[]; next: string }>('/api/gifs/search', [
+      ['q', q],
+      ['lang', lang],
+      ['pos', pos],
+    ]),
+
+  /** A picture from the search, full size, from our own origin so a canvas can read it. */
+  fetchImage: async (id: number) => {
+    const res = await fetch(`${BASE}/api/images/pixabay/${id}`, { headers: authHeaders() })
+    if (!res.ok) throw await refusal(res, { message: 'that picture could not be fetched', code: 'picture_unfetched' })
+    return res.blob()
+  },
+
   scene: (name: string) => get<Record<string, unknown>>(`/api/assoc/scene/${encodeURIComponent(name)}`),
 
   /** `lang` picks the language of the email. */
@@ -547,7 +600,8 @@ export const api = {
 
   logout: () => send<{ ok: boolean }>('/api/auth/logout', 'POST'),
 
-  imageUrl: (name: string) => `${BASE}/api/assoc/image/${encodeURIComponent(name)}`,
+  /** A note's picture: one of ours by name, or a GIF straight from KLIPY. */
+  imageUrl: (name: string) => (isGifUrl(name) ? name : `${BASE}/api/assoc/image/${encodeURIComponent(name)}`),
 
   reviewQueue: (limit = 40) =>
     get<{ total: number; fixed: number; items: ReviewItem[] }>('/api/decomp/review', [

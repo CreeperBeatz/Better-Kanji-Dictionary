@@ -5,6 +5,7 @@ import { getLang, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { getImage, isLocalImage, putImage } from '../localNotes'
 import { NoteImage } from './NoteContent'
+import { GifPicker } from './GifPicker'
 
 const S = strings(
   {
@@ -13,10 +14,11 @@ const S = strings(
     askKanji: 'What does {label} look like to you?',
     edit: 'edit',
     remove: 'remove',
-    attachTitle: 'Attach a picture (or paste or drop one)',
-    picture: 'picture',
+    attachTitle: 'Upload a picture (or paste or drop one)',
+    upload: 'upload',
     drawTitle: 'Draw it in Excalidraw',
     draw: 'draw',
+    gifTitle: 'Add a GIF from KLIPY',
     whoSees: 'Who can see this',
     private: 'private',
     public: 'public',
@@ -38,10 +40,11 @@ const S = strings(
     askKanji: 'На какво ви прилича {label}?',
     edit: 'редактирайте',
     remove: 'махнете',
-    attachTitle: 'Прикачете картинка (или я поставете, или я пуснете тук)',
-    picture: 'картинка',
+    attachTitle: 'Качете картинка (или я поставете, или я пуснете тук)',
+    upload: 'качване',
     drawTitle: 'Нарисувайте го в Excalidraw',
     draw: 'рисуване',
+    gifTitle: 'Добавете GIF от KLIPY',
     whoSees: 'Кой може да вижда това',
     private: 'лична',
     public: 'публична',
@@ -127,16 +130,25 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   // Which picture the drawing editor is open on: a new drawing, or one to replace.
   const [sketching, setSketching] = useState<{ replace: string | null; scene?: Record<string, unknown> } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const [gifs, setGifs] = useState(false)
 
   useEffect(() => {
     if (draftKey) drafts.set(draftKey, { text, attachments, visibility })
   }, [draftKey, text, attachments, visibility])
 
   const empty = !text.trim() && attachments.length === 0
-  const open = focused || !empty
+  // Typing in the GIF search takes the focus from the text, and must not fold it away.
+  const open = focused || !empty || gifs
 
   function add(blob: Blob, scene?: string) {
     setAttachments((as) => [...as, newAttachment(blob, scene)])
+  }
+
+  // A GIF is kept by its address on KLIPY, like a picture already saved.
+  function addGif(url: string) {
+    setAttachments((as) => [...as, { key: key(), kind: 'saved', name: url, drawing: false }])
+    setGifs(false)
+    setFocused(true)
   }
 
   function remove(k: string) {
@@ -292,7 +304,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             title={t('attachTitle')}
           >
             <PictureIcon />
-            <span>{t('picture')}</span>
+            <span>{t('upload')}</span>
           </button>
           <button
             type="button"
@@ -302,6 +314,17 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
           >
             <PenIcon />
             <span>{t('draw')}</span>
+          </button>
+          <button
+            type="button"
+            className="composer-tool"
+            data-on={gifs || undefined}
+            aria-pressed={gifs}
+            onClick={() => setGifs((g) => !g)}
+            title={t('gifTitle')}
+          >
+            <GifIcon />
+            <span>GIF</span>
           </button>
           <input
             ref={picker}
@@ -358,6 +381,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
           </span>
         </div>
       )}
+      {gifs && <GifPicker onPick={(h) => addGif(h.url)} onClose={() => setGifs(false)} />}
       {problem !== null && <p className="account-problem">{problem || t('postFailed')}</p>}
 
       {sketching && (
@@ -380,6 +404,22 @@ function PictureIcon() {
       <rect x="3" y="4.5" width="18" height="15" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
       <circle cx="9" cy="10" r="1.8" fill="currentColor" />
       <path d="M4 18l5.5-5.5 4 4 2.5-2.5L20 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function GifIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+      <rect x="2.5" y="5" width="19" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M10 10H8a1.5 1.5 0 00-1.5 1.5v1A1.5 1.5 0 008 14h1.5v-2H8.5M12.5 10v4M15 14v-4h3M15 12h2.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
