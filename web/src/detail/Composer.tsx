@@ -21,8 +21,6 @@ const S = strings(
     gifTitle: 'Add a GIF from KLIPY',
     kanjifyTitle: 'Leave [] after a word to have its kanji put in.',
     kanjifyWorking: 'kanjifying…',
-    kanjifyUndo: 'undo',
-    kanjifyUndoTitle: 'Back to your text as it was before Kanjify',
     whoSees: 'Who can see this',
     private: 'private',
     public: 'public',
@@ -50,8 +48,6 @@ const S = strings(
     gifTitle: 'Добавете GIF от KLIPY',
     kanjifyTitle: 'Оставете [] след дума, за да се попълни канджито ѝ.',
     kanjifyWorking: 'канджифициране…',
-    kanjifyUndo: 'отменете',
-    kanjifyUndoTitle: 'Обратно към текста ви отпреди Kanjify',
     whoSees: 'Кой може да вижда това',
     private: 'лична',
     public: 'публична',
@@ -138,9 +134,6 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   const picker = useRef<HTMLInputElement>(null)
   const [gifs, setGifs] = useState(false)
   const [kanjifying, setKanjifying] = useState(false)
-  // The text as it was before Kanjify, while it can still be put back: until
-  // the next keystroke.
-  const [unkanjified, setUnkanjified] = useState<string | null>(null)
 
   useEffect(() => {
     if (draftKey) drafts.set(draftKey, { text, attachments, visibility })
@@ -230,7 +223,6 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       await onSubmit(text.trim(), names, signedIn ? visibility : 'private')
       attachments.forEach(release)
       if (draftKey) drafts.delete(draftKey)
-      setUnkanjified(null)
       if (!initial) {
         setText('')
         setAttachments([])
@@ -245,15 +237,10 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
 
   async function kanjify() {
     if (!signedIn) return onSignIn()
-    const before = text
     setKanjifying(true)
     setProblem(null)
     try {
-      const { text: marked } = await api.kanjify(label, before)
-      if (marked !== before) {
-        setText(marked)
-        setUnkanjified(before)
-      }
+      setText((await api.kanjify(label, text)).text)
     } catch (err) {
       setProblem(err instanceof Error ? errorText(err, getLang()) : '')
     } finally {
@@ -277,10 +264,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
           placeholder={initial ? t('yourAssociation') : (placeholder ?? t('askKanji', { label }))}
           autoFocus={Boolean(initial)}
           rows={open ? Math.min(14, Math.max(3, text.split('\n').length + 1)) : 1}
-          onChange={(e) => {
-            setText(e.target.value)
-            setUnkanjified(null)
-          }}
+          onChange={(e) => setText(e.target.value)}
           readOnly={kanjifying}
           onFocus={() => setFocused(true)}
           onBlur={() => empty && !initial && setFocused(false)}
@@ -361,19 +345,6 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             <KanjifyIcon />
             <span>{kanjifying ? t('kanjifyWorking') : 'Kanjify'}</span>
           </button>
-          {unkanjified !== null && (
-            <button
-              type="button"
-              className="clear"
-              onClick={() => {
-                setText(unkanjified)
-                setUnkanjified(null)
-              }}
-              title={t('kanjifyUndoTitle')}
-            >
-              {t('kanjifyUndo')}
-            </button>
-          )}
           <input
             ref={picker}
             type="file"
