@@ -1,7 +1,7 @@
 /**
  * Excalidraw's toolbar, regrouped: its rectangle, diamond and ellipse become
  * one Shapes button, its image button becomes a Picture button (upload, or
- * search online), its eraser shares a button with the pixel eraser, and the
+ * search online), the pixel eraser shares a button with Excalidraw's, and the
  * picture-selection tools join them as a fourth. Each
  * group opens a row under the toolbar to pick from; a group taken up without
  * picking works as its first tool.
@@ -271,9 +271,9 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
   }, [api, open, active, onTool])
   const pickEraser = useCallback(() => {
     if (shown === 'erase') return setOpen(null)
-    if (!erasing) api.setActiveTool({ type: 'eraser' })
+    if (!erasing) onTool('erase')
     setOpen('erase')
-  }, [api, shown, erasing])
+  }, [shown, erasing, onTool])
   const pickSelect = useCallback(() => {
     if (shown === 'select') return setOpen(null)
     if (!picker) onTool(PIXELS[0])
@@ -318,20 +318,20 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
         : shown === 'erase'
           ? [
               {
-                id: 'object',
-                checked: active === 'eraser',
-                title: t('objectEraserTitle'),
-                label: t('objectEraser'),
-                icon: <Svg html={borrowed.eraser?.svg} />,
-                pick: () => api.setActiveTool({ type: 'eraser' }),
-              },
-              {
                 id: 'pixel',
                 checked: tool === 'erase',
                 title: t('pixelEraserTitle'),
                 label: t('pixelEraser'),
                 icon: PIXEL_ERASER_ICON,
                 pick: () => onTool('erase'),
+              },
+              {
+                id: 'object',
+                checked: active === 'eraser',
+                title: t('objectEraserTitle'),
+                label: t('objectEraser'),
+                icon: <Svg html={borrowed.eraser?.svg} />,
+                pick: () => api.setActiveTool({ type: 'eraser' }),
               },
             ]
           : shown === 'select'
@@ -345,8 +345,9 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
             }))
           : []
 
-  // The number keys: in an open row, its items; otherwise the toolbar, in
-  // the order it now stands.
+  // The number keys: in an open row, its items; otherwise, or for a number
+  // the row does not have (which leaves it), the toolbar, in the order it now
+  // stands.
   const inRow = useRef(items)
   useEffect(() => {
     inRow.current = items
@@ -357,13 +358,17 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
       const st = api.getAppState()
       if (st.openDialog || st.newElement || st.selectionElement || st.selectedElementsAreBeingDragged || st.editingTextElement) return
       const k = e.key
-      if (inRow.current.length) inRow.current[Number(k) - 1]?.pick('mouse')
-      else if (k === '2') pickShapes()
-      else if (k === '7') pickPicture()
-      else if (k === '8') pickEraser()
-      else if (k === '9') pickSelect()
-      else if (BY_KEY[k]) api.setActiveTool({ type: BY_KEY[k] })
-      else if (k !== '0') return
+      const item = inRow.current[Number(k) - 1]
+      if (item) item.pick('mouse')
+      else {
+        if (inRow.current.length) setOpen(null)
+        if (k === '2') pickShapes()
+        else if (k === '7') pickPicture()
+        else if (k === '8') pickEraser()
+        else if (k === '9') pickSelect()
+        else if (BY_KEY[k]) api.setActiveTool({ type: BY_KEY[k] })
+        else if (k !== '0') return
+      }
       e.preventDefault()
       e.stopPropagation()
     }
@@ -416,7 +421,7 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
           </div>
           <div className="sk-group" data-group="erase" ref={(el) => void (buttons.current.erase = el)}>
             <ToolButton checked={erasing} title={`${t('eraser')} — 8`} keyLabel="8" onPick={pickEraser}>
-              {tool === 'erase' ? PIXEL_ERASER_ICON : <Svg html={borrowed.eraser?.svg} />}
+              {active === 'eraser' ? <Svg html={borrowed.eraser?.svg} /> : PIXEL_ERASER_ICON}
             </ToolButton>
           </div>
           <div className="sk-group" data-group="select" ref={(el) => void (buttons.current.select = el)}>

@@ -387,18 +387,50 @@ export function PixelEraser({ api, host, on }: Props) {
     try {
       const { replace, files, pictured } = await eraseScene(api, circles, api.getAppState())
       if (replace.size) {
-        if (files.length) api.addFiles(files)
+        // A new picture shows as Excalidraw's placeholder until it has
+        // decoded it, so until then the preview holds the scene as it was,
+        // with the circles over it.
+        if (files.length) freeze(circles)
         const elements = api.getSceneElementsIncludingDeleted().flatMap((el) => (replace.get(el.id) ?? [el]).map((e) => unbound(e, pictured)))
         api.updateScene({ elements, captureUpdate: CaptureUpdateAction.IMMEDIATELY })
+        if (files.length) {
+          // After the scene has them: Excalidraw only loads the files its
+          // elements use.
+          api.addFiles(files)
+          await Promise.all(files.map((f) => loadImage(f.dataURL).catch(() => null)))
+        }
       }
     } finally {
       // Cleared once the scene has been drawn with the change, not before.
-      requestAnimationFrame(() => {
-        const cv = preview.current
-        cv?.getContext('2d')!.clearRect(0, 0, cv.width, cv.height)
-        setBusy(false)
-      })
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          const cv = preview.current
+          cv?.getContext('2d')!.clearRect(0, 0, cv.width, cv.height)
+          setBusy(false)
+        }),
+      )
     }
+  }
+
+  /** The scene as Excalidraw last drew it, copied into the preview, and the circles over it. */
+  function freeze(circles: Circle[]) {
+    const scene = container!.querySelector<HTMLCanvasElement>('canvas.excalidraw__canvas.static')
+    const cv = preview.current
+    if (!scene || !cv) return
+    const g = cv.getContext('2d')!
+    g.clearRect(0, 0, cv.width, cv.height)
+    g.drawImage(scene, 0, 0, cv.width, cv.height)
+    const st = api.getAppState()
+    const k = st.zoom.value * (cv.width / container!.clientWidth)
+    g.fillStyle = st.viewBackgroundColor === 'transparent' ? '#ffffff' : st.viewBackgroundColor
+    g.beginPath()
+    for (const c of circles) {
+      const x = (c.x + st.scrollX) * k
+      const y = (c.y + st.scrollY) * k
+      g.moveTo(x + c.r * k, y)
+      g.arc(x, y, c.r * k, 0, Math.PI * 2)
+    }
+    g.fill()
   }
 
   return createPortal(
