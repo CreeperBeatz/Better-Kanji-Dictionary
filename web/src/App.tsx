@@ -900,7 +900,7 @@ export function App() {
     return (
       <section className="rail-section word-panel">
         {shownWord ? (
-          <WordHead word={shownWord} onPick={openKanji} />
+          <WordHead word={shownWord} onPick={openKanji} rank={false} />
         ) : (
           <h2 className="entry-head">{subject?.label}</h2>
         )}

@@ -3262,6 +3262,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0 0 0 20px;
 }
 
+/* On a phone, first in the entry, the head being above the tabs. */
+.entry-rank-line {
+  margin: 0;
+}
+
+.entry-rank-line + .entry-senses {
+  margin-top: 10px;
+}
+
 .entry-senses li {
   padding-left: 2px;
   font-size: 12px;

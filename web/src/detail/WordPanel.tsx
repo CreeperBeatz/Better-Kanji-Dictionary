@@ -85,11 +85,23 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
   )
 }
 
-/** The word, its reading and accent, and how common it is: the top of its page, on either tab. */
-export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: string) => void }) {
+/**
+ * The word, its reading and accent, and how common it is: the top of its
+ * page. On a phone, where it stays above both tabs, how common the word is
+ * goes with the dictionary entry instead (`rank` false).
+ */
+export function WordHead({
+  word: w,
+  onPick,
+  rank: ranked = true,
+}: {
+  word: Word
+  onPick: (char: string) => void
+  rank?: boolean
+}) {
   const lang = useLang()
   const t = S(lang)
-  const rank = rankOf(w, lang)
+  const rank = ranked ? rankOf(w, lang) : null
   return (
     <>
       <h2 className="entry-head">
@@ -148,10 +160,12 @@ export function WordPanel({ id, word, from, onPick, head = true }: Props) {
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
   const glosses = w.senses.map((s) => glossOf(s, lang))
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
+  const rank = head ? null : rankOf(w, lang)
 
   return (
     <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
       {head && <WordHead word={w} onPick={onPick} />}
+      {rank && <p className="entry-rank entry-rank-line">{rank}</p>}
 
       <ol className="entry-senses">
         {w.senses.map((s, i) => (
