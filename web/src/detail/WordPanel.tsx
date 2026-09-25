@@ -53,6 +53,8 @@ interface Props {
   /** The kanji the word was opened from, if it was, to mark among its kanji. */
   from?: string
   onPick: (char: string) => void
+  /** False where the head is drawn above the tabs instead, as on a phone. */
+  head?: boolean
 }
 
 const KANJI = /[㐀-䶿一-鿿]/
@@ -83,7 +85,34 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
   )
 }
 
-export function WordPanel({ id, word, from, onPick }: Props) {
+/** The word, its reading and accent, and how common it is: the top of its page, on either tab. */
+export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: string) => void }) {
+  const lang = useLang()
+  const t = S(lang)
+  const rank = rankOf(w, lang)
+  return (
+    <>
+      <h2 className="entry-head">
+        {[...w.headword].map((ch, i) =>
+          KANJI.test(ch) ? (
+            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
+              {ch}
+            </button>
+          ) : (
+            <span key={i}>{ch}</span>
+          ),
+        )}
+      </h2>
+      <p className="entry-reading">
+        {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
+        <Valency word={w} alone />
+        {rank && <span className="entry-rank">{rank}</span>}
+      </p>
+    </>
+  )
+}
+
+export function WordPanel({ id, word, from, onPick, head = true }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [entry, setEntry] = useState<WordEntry | null>(null)
@@ -116,30 +145,13 @@ export function WordPanel({ id, word, from, onPick }: Props) {
       </section>
     )
   }
-  const rank = rankOf(w, lang)
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
   const glosses = w.senses.map((s) => glossOf(s, lang))
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
 
   return (
     <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
-
-      <h2 className="entry-head">
-        {[...w.headword].map((ch, i) =>
-          KANJI.test(ch) ? (
-            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
-              {ch}
-            </button>
-          ) : (
-            <span key={i}>{ch}</span>
-          ),
-        )}
-      </h2>
-      <p className="entry-reading">
-        {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
-        <Valency word={w} alone />
-        {rank && <span className="entry-rank">{rank}</span>}
-      </p>
+      {head && <WordHead word={w} onPick={onPick} />}
 
       <ol className="entry-senses">
         {w.senses.map((s, i) => (

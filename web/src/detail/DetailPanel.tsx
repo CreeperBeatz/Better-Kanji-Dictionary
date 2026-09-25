@@ -73,6 +73,8 @@ interface Props {
   onKanji: (char: string) => void
   /** Shows the focus graph, from the map or on a phone; left out when it is already on screen. */
   onComponents?: () => void
+  /** False where the head is drawn above the tabs instead, as on a phone. */
+  head?: boolean
 }
 
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
@@ -102,7 +104,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, head = true }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -167,7 +169,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
 
   return (
     <section className="rail-section">
-      <KanjiHead node={n} />
+      {head && <KanjiHead node={n} />}
 
       {onComponents && !isPreview && (
         <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>

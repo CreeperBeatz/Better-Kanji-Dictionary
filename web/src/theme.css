@@ -4374,7 +4374,23 @@ html {
 @media (max-width: 900px) {
   .rail-body {
     scrollbar-gutter: auto;
+    /* The tabs slide across under the head, and are not scrolled to. */
+    overflow-x: hidden;
   }
+}
+
+/* On a phone the page's head is above both tabs, and what is under it turns. */
+.page-head > .rail-section {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.page-head + .tab-pane > .rail-section:first-child {
+  padding-top: 0;
+}
+
+.page-head + .tab-pane .assoc-tab {
+  padding-top: 18px;
 }
 
 /* A phone's page tabs, along the bottom: Dictionary, Associations, Components. */
