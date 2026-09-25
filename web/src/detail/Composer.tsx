@@ -20,7 +20,6 @@ const S = strings(
     draw: 'draw',
     gifTitle: 'Add a GIF from KLIPY',
     kanjifyTitle: 'Leave [] after a word to have its kanji put in.',
-    kanjifyWorking: 'kanjifying…',
     whoSees: 'Who can see this',
     private: 'private',
     public: 'public',
@@ -47,7 +46,6 @@ const S = strings(
     draw: 'рисуване',
     gifTitle: 'Добавете GIF от KLIPY',
     kanjifyTitle: 'Оставете [] след дума, за да се попълни канджито ѝ.',
-    kanjifyWorking: 'канджифициране…',
     whoSees: 'Кой може да вижда това',
     private: 'лична',
     public: 'публична',
@@ -354,7 +352,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             title={t('kanjifyTitle')}
           >
             <KanjifyIcon />
-            <span>{kanjifying ? t('kanjifyWorking') : 'Kanjify'}</span>
+            <span>Kanjify</span>
           </button>
           <input
             ref={picker}
