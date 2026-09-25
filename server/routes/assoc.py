@@ -17,7 +17,8 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from .. import store
+from .. import kanjify as kanjifier
+from .. import semantic, store
 from ..errors import AppError
 from ..db import query, query_one
 from .auth import optional_user, require_user
@@ -115,7 +116,28 @@ def post_for(char: str, payload: dict = Body(...), user: dict = Depends(require_
     """Post a new note on this subject; it joins any you already have."""
     char = subject_or_400(char)
     text, images = _content(payload)
-    return store.create(char, text, images, user["id"], _visibility(payload, "private"))
+    return store.create(char, text, images, user["id"], _visibility(payload, "public"))
+
+
+@router.post("/kanjify")
+def kanjify(payload: dict = Body(...), user: dict = Depends(require_user)) -> dict:
+    """An association with the characters of its subject marked after the
+    words that stand for them (server/kanjify.py). The subject is how the
+    kanji or word is written."""
+    subject = str(payload.get("subject") or "").strip()
+    text = str(payload.get("text") or "")
+    if not subject or len(subject) > 20 or not text.strip():
+        raise HTTPException(400, "a subject and a text are needed")
+    if len(text) > kanjifier.MAX_TEXT:
+        raise AppError(400, "kanjify_too_long", f"Kanjify takes at most {kanjifier.MAX_TEXT} characters",
+                       max=kanjifier.MAX_TEXT)
+    try:
+        return {"text": kanjifier.kanjify(subject, text)}
+    except semantic.Off:
+        raise AppError(503, "kanjify_off", "Kanjify is not set up on this server")
+    except (semantic.Unavailable, kanjifier.Garbled) as e:
+        print(f"[kanjify] {subject} {text[:80]!r}: {e}", flush=True)
+        raise AppError(503, "kanjify_unavailable", "Kanjify could not do this one right now")
 
 
 @router.patch("/{assoc_id}")

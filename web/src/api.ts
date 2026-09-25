@@ -494,6 +494,9 @@ export const api = {
   postAssociation: (char: string, text: string, images: string[], visibility: Visibility) =>
     send<Association>(`/api/assoc/for/${encodeURIComponent(char)}`, 'POST', { text, images, visibility }),
 
+  /** The text with the characters of `subject` (the kanji or word as written) marked after the words standing for them. */
+  kanjify: (subject: string, text: string) => send<{ text: string }>('/api/assoc/kanjify', 'POST', { subject, text }),
+
   editAssociation: (id: string, patch: { text?: string; images?: string[]; visibility?: Visibility }) =>
     send<Association>(`/api/assoc/${encodeURIComponent(id)}`, 'PATCH', patch),
 

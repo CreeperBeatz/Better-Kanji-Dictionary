@@ -4251,7 +4251,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 12px;
-  margin: 10px 0 0 38px;
+  margin: 10px 0 0 0;
   padding-top: 9px;
   border-top: 1px solid var(--rule);
 }
@@ -4271,7 +4271,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: pointer;
 }
 
-.composer-tool:hover {
+.composer-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.composer-tool:hover:not(:disabled) {
   color: var(--paper);
   background: var(--sumi-lift);
 }

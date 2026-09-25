@@ -265,7 +265,7 @@ def _record(char: str, author: str, text: str, images: list[str], visibility: st
     }
 
 
-def create(char: str, text: str, images: list[str], author: str, visibility: str = "private") -> dict:
+def create(char: str, text: str, images: list[str], author: str, visibility: str = "public") -> dict:
     """Post a new note. Several per character are fine, like comments."""
     with _lock:
         data = load()

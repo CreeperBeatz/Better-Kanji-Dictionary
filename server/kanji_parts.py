@@ -60,6 +60,31 @@ def _descendants(char: str, seen: frozenset[str] = frozenset()) -> frozenset[str
     return _below[char]
 
 
+def parts_of(char: str) -> list[str]:
+    """Every part of `char` at any depth, the ones it is drawn with first and
+    what those are made of after; single strokes left out."""
+    _load()
+    out: list[str] = []
+    seen = {char} | STROKES
+    level = [char]
+    while level:
+        below = []
+        for c in level:
+            for child in sorted(_children.get(c, ())):
+                if child not in seen:
+                    seen.add(child)
+                    out.append(child)
+                    below.append(child)
+        level = below
+    return out
+
+
+def known(char: str) -> bool:
+    """Whether the dictionary has `char`, as a kanji or as a part of one."""
+    _load()
+    return char in _info or char in _children
+
+
 def forms(part: str) -> set[str]:
     return FORMS.get(part, {part})
 

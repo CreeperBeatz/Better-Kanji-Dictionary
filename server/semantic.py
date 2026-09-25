@@ -221,7 +221,9 @@ def _replay(answer: dict) -> Iterator[tuple[str, object]]:
     yield "answer", answer
 
 
-def _start(q: str, lang: str) -> requests.Response:
+def post(body: dict, tag: str, stream: bool = False) -> requests.Response:
+    """A chat completion from OpenRouter, for semantic search and Kanjify alike.
+    Raises Off with no key and Unavailable when it cannot be had."""
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise Off()
@@ -233,25 +235,33 @@ def _start(q: str, lang: str) -> requests.Response:
                 "HTTP-Referer": os.environ.get("APP_URL", "https://betterkanjidictionary.org"),
                 "X-Title": "Better Kanji Dictionary",
             },
-            json={
-                "model": MODEL,
-                "max_tokens": MAX_TOKENS,
-                "reasoning": REASONING,
-                "temperature": 0.2,
-                "stream": True,
-                "messages": [{"role": "system", "content": prompt(lang)}, {"role": "user", "content": q}],
-            },
+            json=body,
             timeout=TIMEOUT,
-            stream=True,
+            stream=stream,
         )
     except requests.RequestException as e:
         raise Unavailable(str(e)) from e
     if not res.ok:
         # 402 is the spend cap; anything else is OpenRouter or the model being down.
-        print(f"[semantic] OpenRouter {res.status_code}: {res.text[:300]}", flush=True)
+        print(f"[{tag}] OpenRouter {res.status_code}: {res.text[:300]}", flush=True)
         res.close()
         raise Unavailable(f"OpenRouter answered {res.status_code}")
     return res
+
+
+def _start(q: str, lang: str) -> requests.Response:
+    return post(
+        {
+            "model": MODEL,
+            "max_tokens": MAX_TOKENS,
+            "reasoning": REASONING,
+            "temperature": 0.2,
+            "stream": True,
+            "messages": [{"role": "system", "content": prompt(lang)}, {"role": "user", "content": q}],
+        },
+        "semantic",
+        stream=True,
+    )
 
 
 def _events(res: requests.Response, key: tuple[str, str]) -> Iterator[tuple[str, object]]:

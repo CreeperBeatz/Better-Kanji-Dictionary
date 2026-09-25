@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { api, type Author, type Visibility } from '../api'
 import { Avatar } from '../account/Avatar'
 import { getLang, strings, useLang } from '../i18n'
@@ -19,6 +20,7 @@ const S = strings(
     drawTitle: 'Draw it in Excalidraw',
     draw: 'draw',
     gifTitle: 'Add a GIF from KLIPY',
+    kanjifyTitle: 'Leave [] after a word to have its kanji put in.',
     whoSees: 'Who can see this',
     private: 'private',
     public: 'public',
@@ -28,7 +30,6 @@ const S = strings(
     inBrowser: 'in this browser',
     logIn: 'log in',
     cancel: 'cancel',
-    discard: 'discard',
     saving: 'saving',
     posting: 'posting',
     save: 'save',
@@ -45,6 +46,7 @@ const S = strings(
     drawTitle: 'Нарисувайте го в Excalidraw',
     draw: 'рисуване',
     gifTitle: 'Добавете GIF от KLIPY',
+    kanjifyTitle: 'Оставете [] след дума, за да се попълни канджито ѝ.',
     whoSees: 'Кой може да вижда това',
     private: 'лична',
     public: 'публична',
@@ -54,7 +56,6 @@ const S = strings(
     inBrowser: 'в този браузър',
     logIn: 'влезте',
     cancel: 'откажете',
-    discard: 'изхвърлете',
     saving: 'запазване',
     posting: 'публикуване',
     save: 'запазете',
@@ -114,7 +115,7 @@ function release(a: Attachment) {
   if (a.kind === 'new') URL.revokeObjectURL(a.url)
 }
 
-const EMPTY: Draft = { text: '', attachments: [], visibility: 'private' }
+const EMPTY: Draft = { text: '', attachments: [], visibility: 'public' }
 
 export function Composer({ label, placeholder, author, initial, draftKey, onSubmit, onCancel, onSignIn }: Props) {
   const t = S(useLang())
@@ -130,7 +131,9 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   // Which picture the drawing editor is open on: a new drawing, or one to replace.
   const [sketching, setSketching] = useState<{ replace: string | null; scene?: Record<string, unknown> } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
   const [gifs, setGifs] = useState(false)
+  const [kanjifying, setKanjifying] = useState(false)
 
   useEffect(() => {
     if (draftKey) drafts.set(draftKey, { text, attachments, visibility })
@@ -232,12 +235,26 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
     }
   }
 
-  function discard() {
-    attachments.forEach(release)
-    setAttachments([])
-    setText('')
-    setFocused(false)
-    if (draftKey) drafts.delete(draftKey)
+  async function kanjify() {
+    if (!signedIn) return onSignIn()
+    setKanjifying(true)
+    setProblem(null)
+    try {
+      const { text: marked } = await api.kanjify(label, text)
+      // The text box takes typing again first: what comes next is typed into it.
+      flushSync(() => setKanjifying(false))
+      // Put in as if typed, so that Ctrl+Z takes it back: a value set from
+      // React is not on the text box's undo stack.
+      const el = box.current
+      if (el && marked !== text) {
+        el.focus()
+        el.select()
+        if (!document.execCommand('insertText', false, marked)) setText(marked)
+      }
+    } catch (err) {
+      setKanjifying(false)
+      setProblem(err instanceof Error ? errorText(err, getLang()) : '')
+    }
   }
 
   return (
@@ -251,12 +268,14 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       <div className="composer-main">
         <Avatar author={author} size={28} />
         <textarea
+          ref={box}
           className="composer-text"
           value={text}
           placeholder={initial ? t('yourAssociation') : (placeholder ?? t('askKanji', { label }))}
           autoFocus={Boolean(initial)}
           rows={open ? Math.min(14, Math.max(3, text.split('\n').length + 1)) : 1}
           onChange={(e) => setText(e.target.value)}
+          readOnly={kanjifying}
           onFocus={() => setFocused(true)}
           onBlur={() => empty && !initial && setFocused(false)}
           onPaste={onPaste}
@@ -326,6 +345,16 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             <GifIcon />
             <span>GIF</span>
           </button>
+          <button
+            type="button"
+            className="composer-tool"
+            disabled={!text.trim() || kanjifying}
+            onClick={kanjify}
+            title={t('kanjifyTitle')}
+          >
+            <KanjifyIcon />
+            <span>Kanjify</span>
+          </button>
           <input
             ref={picker}
             type="file"
@@ -364,16 +393,10 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
               </span>
             )}
 
-            {onCancel ? (
+            {onCancel && (
               <button type="button" className="clear" onClick={onCancel}>
                 {t('cancel')}
               </button>
-            ) : (
-              !empty && (
-                <button type="button" className="clear" onClick={discard}>
-                  {t('discard')}
-                </button>
-              )
             )}
             <button className="composer-post" disabled={empty || sending}>
               {t(sending ? (initial ? 'saving' : 'posting') : initial ? 'save' : 'post')}
@@ -420,6 +443,17 @@ function GifIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+function KanjifyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+      <path d="M6 4H3.5v16H6M18 4h2.5v16H18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <text x="12" y="16.2" fontSize="11" textAnchor="middle" fill="currentColor">
+        字
+      </text>
     </svg>
   )
 }
