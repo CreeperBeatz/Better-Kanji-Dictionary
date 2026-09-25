@@ -87,22 +87,15 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
 
 /**
  * The word, its reading and accent, and how common it is: the top of its
- * page. On a phone, where it stays above both tabs, how common the word is
- * goes with the dictionary entry instead (`rank` false).
+ * page. On a phone, where it stays above both tabs, it is `brief`: how common
+ * the word is goes with the dictionary entry, and its first sense sits beside
+ * it, as a kanji's meanings do.
  */
-export function WordHead({
-  word: w,
-  onPick,
-  rank: ranked = true,
-}: {
-  word: Word
-  onPick: (char: string) => void
-  rank?: boolean
-}) {
+export function WordHead({ word: w, onPick, brief }: { word: Word; onPick: (char: string) => void; brief?: boolean }) {
   const lang = useLang()
   const t = S(lang)
-  const rank = ranked ? rankOf(w, lang) : null
-  return (
+  const rank = brief ? null : rankOf(w, lang)
+  const head = (
     <>
       <h2 className="entry-head">
         {[...w.headword].map((ch, i) =>
@@ -121,6 +114,19 @@ export function WordHead({
         {rank && <span className="entry-rank">{rank}</span>}
       </p>
     </>
+  )
+  if (!brief) return head
+  const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], lang).value.split(';').map((g) => g.trim()) : []
+  return (
+    <div className="word-head">
+      <div>{head}</div>
+      {lead && (
+        <p className="detail-meanings">
+          {lead}
+          {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}
+        </p>
+      )}
+    </div>
   )
 }
 
