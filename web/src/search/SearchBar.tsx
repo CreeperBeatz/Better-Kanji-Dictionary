@@ -46,8 +46,8 @@ interface Props {
   q: string
   onType: (q: string) => void
   /**
-   * Focusing the box goes to the search page. True when that meant leaving
-   * another page, in which case the text is selected, ready to be replaced.
+   * Focusing the box. True when another page is up, in which case the text is
+   * selected, ready to be replaced.
    */
   onFocus: () => boolean
   /** Enter, or the search key on a phone's keyboard. */

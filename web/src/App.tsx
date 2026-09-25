@@ -8,11 +8,10 @@ import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
 import { strings, useLang, type Translate } from './i18n'
-import { glossOf } from './i18n/content'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
-import { WordPanel } from './detail/WordPanel'
+import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
@@ -184,10 +183,15 @@ function slide(el: HTMLElement, from: number, to: number, ms: number) {
 /**
  * A still copy of a pane laid over it, for it to leave the screen by while
  * the pane itself already shows what replaces it. It sits beside the pane, so
- * the same rules style it, and stays visible when the pane is hidden.
+ * the same rules style it, and stays visible when the pane is hidden. A pane
+ * inside a box that scrolls is copied as far as the box shows it.
  */
-function ghostOf(el: HTMLElement): HTMLElement {
-  const r = el.getBoundingClientRect()
+function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
+  const whole = el.getBoundingClientRect()
+  const box = within?.getBoundingClientRect()
+  const top = box ? Math.max(whole.top, box.top) : whole.top
+  const bottom = box ? Math.min(whole.bottom, box.bottom) : whole.bottom
+  const r = { left: whole.left, top, width: whole.width, height: Math.max(0, bottom - top) }
   const g = el.cloneNode(true) as HTMLElement
   g.removeAttribute('id')
   g.dataset.ghost = ''
@@ -211,7 +215,7 @@ function ghostOf(el: HTMLElement): HTMLElement {
   const at = g.getBoundingClientRect()
   g.style.left = `${2 * r.left - at.left}px`
   g.style.top = `${2 * r.top - at.top}px`
-  g.scrollTop = el.scrollTop
+  g.scrollTop = el.scrollTop + (top - whole.top)
   return g
 }
 
@@ -703,14 +707,18 @@ export function App() {
     [split, stack, replaceTop, reset, rebase, toDictionary],
   )
 
-  // Going into the box goes to the search it holds, back down the stack if
-  // that is where it is.
-  const focusSearch = useCallback(() => {
+  // Going into the box leaves the page up, so a slip of the finger costs
+  // nothing: only typing starts a search. Off the search, what it holds is
+  // selected, for a new one to replace.
+  const focusSearch = useCallback(() => !split && top.kind !== 'search', [split, top])
+
+  // Enter on what the box already holds goes to that search, back down the
+  // stack if that is where it is.
+  const toSearch = useCallback(() => {
+    if (split || top.kind === 'search') return
     toDictionary()
-    if (split || top.kind === 'search') return false
     if (root.kind === 'search' && root.q === q) pop(stack.length - 1)
     else reset({ kind: 'search', q })
-    return true
   }, [split, top, root, q, stack.length, pop, reset, toDictionary])
 
   useEffect(() => {
@@ -812,13 +820,7 @@ export function App() {
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
           />
-        ) : (
-          <section className="rail-section">
-            <div className="detail-head">
-              <span className="detail-glyph">{p.char}</span>
-            </div>
-          </section>
-        )
+        ) : null
       }
     }
   }
@@ -845,12 +847,16 @@ export function App() {
     )
   }
 
-  // Both tabs start the same way: the page's character as it looks and what
-  // it means. Associations are fetched for the page, not for what is hovered
-  // on the graph, so here the head stays the page's too.
+  const shownWord =
+    shownTop?.kind === 'word' ? (shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)) : undefined
+
+  // The page's head is one, above both tabs, and stays where it is as they
+  // turn beneath it: a kanji as it looks and what it means, a word with its
+  // reading and first sense. Associations are for the page, not for what is
+  // hovered on the graph, so only the dictionary's head previews that.
   function pageHead() {
     if (shownTop?.kind === 'kanji') {
-      const node = detailOf(shownTop.char)?.focus
+      const node = (tab === 'dictionary' && hoveredNode) || detailOf(shownTop.char)?.focus
       return (
         <section className="rail-section">
           {node ? (
@@ -864,15 +870,12 @@ export function App() {
       )
     }
     if (shownTop?.kind === 'word') {
-      const w = shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)
       return (
         <section className="rail-section word-panel">
-          <h2 className="entry-head">{w?.headword ?? subject?.label}</h2>
-          {w && (
-            <p className="entry-reading">
-              {w.reading}
-              {w.senses[0] && <span className="rest"> {glossOf(w.senses[0], t.lang).value}</span>}
-            </p>
+          {shownWord ? (
+            <WordHead word={shownWord} onPick={openKanji} />
+          ) : (
+            <h2 className="entry-head">{subject?.label}</h2>
           )}
         </section>
       )
@@ -898,9 +901,29 @@ export function App() {
 
   // Swiping across a page goes to the tab beside it: the page follows the
   // finger, and let go far enough or fast enough it carries on off the screen
-  // and the next tab slides in from the other side. On the graph a swipe
-  // moves the graph, so there it is the tabs, or back, that return.
+  // and the next tab slides in from the other side. Between Dictionary and
+  // Associations only what is under the head moves; to or from the graph,
+  // the whole screen. On the graph a swipe moves the graph, so there it is
+  // the tabs, or back, that return.
   const stageRef = useRef<HTMLElement>(null)
+  const paneRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLElement>(null)
+  /** The tabs' mark, drawn `by` of a tab from its place: it follows a swipe. */
+  function dragMark(by: number | null) {
+    const nav = tabsRef.current
+    if (!nav) return
+    nav.toggleAttribute('data-dragging', by !== null)
+    if (by === null) nav.style.removeProperty('--drag')
+    else nav.style.setProperty('--drag', String(by))
+  }
+  /** Whether turning to this tab moves the whole screen, not just the pane. */
+  function wholeTo(to: PhoneTab | undefined) {
+    return to === 'components' || phoneTab === 'components' || !paneRef.current
+  }
+  function moverTo(to: PhoneTab | undefined): HTMLElement | null {
+    if (phoneTab === 'components') return stageRef.current
+    return wholeTo(to) ? scroller.current : paneRef.current
+  }
   const swipe = useRef<{
     x: number
     y: number
@@ -916,18 +939,22 @@ export function App() {
     last: { x: number; at: number }
     /** Sideways speed, px/ms. */
     v: number
+    /** What follows the finger: the pane, or the whole page. */
+    moved: HTMLElement | null
   } | null>(null)
   // The tab turned from, as a still copy, and where it goes as the tab turned
   // to comes in beside it: for the effect below, once that one is showing.
   // Side by side all the way, so there is never an empty screen between them.
-  const turning = useRef<{ ghost: HTMLElement; at: number; to: number; ms: number } | null>(null)
+  const turning = useRef<{ ghost: HTMLElement; at: number; to: number; ms: number; whole: boolean } | null>(null)
   function turn(to: PhoneTab, at: number, ms: number) {
-    const from = phoneTab === 'components' ? stageRef.current : scroller.current
+    const whole = wholeTo(to)
+    const from = moverTo(to)
     if (!from) return toPhoneTab(to)
     turning.current?.ghost.remove()
     from.style.transform = ''
     const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? -1 : 1
-    const how = { ghost: ghostOf(from), at, to: side * from.clientWidth, ms }
+    const ghost = whole ? ghostOf(from) : ghostOf(from, scroller.current ?? undefined)
+    const how = { ghost, at, to: side * from.clientWidth, ms, whole }
     // Where the finger left it, until the turn starts.
     how.ghost.style.transform = `translateX(${at}px)`
     turning.current = how
@@ -947,7 +974,7 @@ export function App() {
     if (!mobile || e.touches.length !== 1) return
     if (movesItself(e.target as Element, e.currentTarget)) return
     // A page still sliding in is where it is going.
-    scroller.current?.getAnimations().forEach((a) => a.finish())
+    scroller.current?.getAnimations({ subtree: true }).forEach((a) => a.finish())
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const touch = e.touches[0]
     swipe.current = {
@@ -955,15 +982,16 @@ export function App() {
       y: touch.clientY,
       mode: null,
       turns: subject !== null,
-      atTop: e.currentTarget.scrollTop <= 0,
+      // The tabs along the bottom turn too, but do not pull.
+      atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop <= 0,
       last: { x: touch.clientX, at: e.timeStamp },
       v: 0,
+      moved: null,
     }
   }
   function swipeMove(e: React.TouchEvent) {
     const s = swipe.current
-    const el = scroller.current
-    if (!s || !el) return
+    if (!s || !scroller.current) return
     if (e.touches.length !== 1) return swipeCancel()
     const touch = e.touches[0]
     const dx = touch.clientX - s.x
@@ -987,18 +1015,25 @@ export function App() {
     if (dt > 0) s.v = 0.7 * ((touch.clientX - s.last.x) / dt) + 0.3 * s.v
     s.last = { x: touch.clientX, at: e.timeStamp }
     // Past the last tab the page gives a little, and comes back.
-    el.style.transform = `translateX(${besideTab(dx) ? dx : dx / 4}px)`
+    const next = besideTab(dx)
+    const el = moverTo(next)
+    if (!el) return
+    if (s.moved && s.moved !== el) s.moved.style.transform = ''
+    s.moved = el
+    el.style.transform = `translateX(${next ? dx : dx / 4}px)`
+    dragMark(next ? Math.max(-1, Math.min(1, -dx / el.clientWidth)) : 0)
   }
   function swipeEnd(e: React.TouchEvent) {
     const s = swipe.current
     swipe.current = null
-    const el = scroller.current
+    const el = s?.moved
     if (s?.mode === 'pull') {
       searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
       if (e.changedTouches[0].clientY - s.y > PULL) typeOver()
       return
     }
     if (s?.mode !== 'turn' || !el) return
+    dragMark(null)
     const dx = e.changedTouches[0].clientX - s.x
     const next = besideTab(dx)
     const at = next ? dx : dx / 4
@@ -1015,17 +1050,19 @@ export function App() {
   function swipeCancel() {
     const s = swipe.current
     swipe.current = null
-    const el = scroller.current
+    const el = s?.moved
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     if (s?.mode !== 'turn' || !el) return
+    dragMark(null)
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
   }
-  // Pulled down, the page gives way to the search: the keyboard comes up with
-  // what was searched last selected, so typing starts a new search and a tap
-  // in the box carries on with the old one. Called from the touch itself, as
-  // phones only raise the keyboard for focus given in answer to a touch.
+  // Pulled down, the page brings up the search: the keyboard comes up with
+  // what was searched last selected, so typing starts a new search, Enter
+  // goes back to the old one, and putting the keyboard away leaves the page as
+  // it was. Called from the touch itself, as phones only raise the keyboard
+  // for focus given in answer to a touch.
   function typeOver() {
     const input = inputRef.current
     if (!input) return
@@ -1040,7 +1077,14 @@ export function App() {
     const how = turning.current
     turning.current = null
     if (!how) return
-    const el = phoneTab === 'components' ? stageRef.current : scroller.current
+    const el = phoneTab === 'components' ? stageRef.current : how.whole ? scroller.current : paneRef.current
+    // The tab turned to starts at its top, under the head, if the page was
+    // scrolled past it.
+    const sc = scroller.current
+    if (!how.whole && el && sc) {
+      const under = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop
+      if (sc.scrollTop > under) sc.scrollTop = under
+    }
     if (el) slide(el, how.at - how.to, 0, how.ms)
     slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
   }, [phoneTab])
@@ -1051,6 +1095,7 @@ export function App() {
       onType={type}
       onFocus={focusSearch}
       onSubmit={() => {
+        toSearch()
         setAsked(q.trim())
         rememberSearch(q)
       }}
@@ -1153,23 +1198,36 @@ export function App() {
                 </button>
               </div>
             )}
-            {tab === 'dictionary' &&
-              (shownTop ? (
-                page(shownTop)
-              ) : (
-                <p className="hint rail-section">{t('pickResult')}</p>
-              ))}
-            {/* Kept mounted while hidden, so the count on its tab is there
-                before the tab is opened. */}
-            {subject && (
-              <div hidden={tab !== 'associations'}>
-                {tab === 'associations' && pageHead()}
-                {associations(subject)}
-              </div>
-            )}
+            {subject && <div className="page-head">{pageHead()}</div>}
+            <div className="tab-pane" ref={paneRef}>
+              {tab === 'dictionary' &&
+                (shownTop ? (
+                  page(shownTop)
+                ) : (
+                  <p className="hint rail-section">{t('pickResult')}</p>
+                ))}
+              {/* Kept mounted while hidden, so the count on its tab is there
+                  before the tab is opened. */}
+              {subject && (
+                <div hidden={tab !== 'associations'}>
+                  {associations(subject)}
+                </div>
+              )}
+            </div>
           </div>
           {mobile && subject && !(onStage && view === 'map') && (
-            <nav className="phone-tabs" role="tablist" aria-label={t('sidePanel')}>
+            <nav
+              className="phone-tabs"
+              role="tablist"
+              aria-label={t('sidePanel')}
+              ref={tabsRef}
+              style={{ '--n': phoneTabs.length, '--at': phoneTabs.indexOf(phoneTab) } as React.CSSProperties}
+              onTouchStart={swipeStart}
+              onTouchMove={swipeMove}
+              onTouchEnd={swipeEnd}
+              onTouchCancel={swipeCancel}
+            >
+              <span className="phone-tab-mark" aria-hidden />
               {phoneTabs.map((p) => (
                 <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
                   {t(p === 'components' ? 'focus' : p)}

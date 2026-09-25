@@ -84,7 +84,7 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
-/** A character as it looks, and what it means: the top of its page, on either tab. */
+/** A character as it looks, and what it means: the top of its page, above both tabs. */
 export function KanjiHead({ node }: { node: KanjiNode }) {
   const lang = useLang()
   const t = S(lang)
@@ -167,8 +167,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
 
   return (
     <section className="rail-section">
-      <KanjiHead node={n} />
-
       {onComponents && !isPreview && (
         <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>
           {t('seeComponents')}

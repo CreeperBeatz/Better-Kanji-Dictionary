@@ -38,12 +38,14 @@ function transitivity(w: Word): Transitivity | null {
  * が for an intransitive verb, を for a transitive one, and before them する
  * for a noun that is a verb with する -- where its が or を comes from. The
  * particles' slot is there on every row, empty for words that are not verbs,
- * so a column of them lines up; する only takes room to its left.
+ * so a column of them lines up; する only takes room to its left. `alone`,
+ * out of a column, a word that is not a verb has nothing.
  */
-export function Valency({ word }: { word: Word }) {
+export function Valency({ word, alone }: { word: Word; alone?: boolean }) {
   const t = S(useLang())
   const kind = transitivity(word)
   const suru = word.senses.some((s) => s.pos.includes('vs'))
+  if (alone && !kind && !suru) return null
   return (
     <span className="verb-marks">
       {suru && (

@@ -11,6 +11,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { tagLabel } from '../i18n/grammar'
 import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
+import { Valency } from '../search/Valency'
 
 const S = strings(
   {
@@ -82,6 +83,44 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
   )
 }
 
+/**
+ * The word, its reading, accent and が/を, and its first sense beside it, as
+ * a kanji's meanings are: the top of its page, above both tabs. How common
+ * the word is goes with the dictionary entry.
+ */
+export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: string) => void }) {
+  const lang = useLang()
+  const t = S(lang)
+  const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], lang).value.split(';').map((g) => g.trim()) : []
+  return (
+    <div className="word-head">
+      <div>
+        <h2 className="entry-head">
+          {[...w.headword].map((ch, i) =>
+            KANJI.test(ch) ? (
+              <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
+                {ch}
+              </button>
+            ) : (
+              <span key={i}>{ch}</span>
+            ),
+          )}
+        </h2>
+        <p className="entry-reading">
+          {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
+          <Valency word={w} alone />
+        </p>
+      </div>
+      {lead && (
+        <p className="detail-meanings">
+          {lead}
+          {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function WordPanel({ id, word, from, onPick }: Props) {
   const lang = useLang()
   const t = S(lang)
@@ -115,29 +154,14 @@ export function WordPanel({ id, word, from, onPick }: Props) {
       </section>
     )
   }
-  const rank = rankOf(w, lang)
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
   const glosses = w.senses.map((s) => glossOf(s, lang))
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
+  const rank = rankOf(w, lang)
 
   return (
     <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
-
-      <h2 className="entry-head">
-        {[...w.headword].map((ch, i) =>
-          KANJI.test(ch) ? (
-            <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
-              {ch}
-            </button>
-          ) : (
-            <span key={i}>{ch}</span>
-          ),
-        )}
-      </h2>
-      <p className="entry-reading">
-        {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
-        {rank && <span className="entry-rank">{rank}</span>}
-      </p>
+      {rank && <p className="entry-rank entry-rank-line">{rank}</p>}
 
       <ol className="entry-senses">
         {w.senses.map((s, i) => (
