@@ -8,7 +8,6 @@ import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton } from './account/Account'
 import { strings, useLang, type Translate } from './i18n'
-import { glossOf } from './i18n/content'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
@@ -809,7 +808,6 @@ export function App() {
             word={p.word}
             from={under?.kind === 'kanji' ? under.char : undefined}
             onPick={openKanji}
-            head={!mobile}
           />
         )
       case 'kanji': {
@@ -821,15 +819,8 @@ export function App() {
             onWord={openWord}
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
-            head={!mobile}
           />
-        ) : mobile ? null : (
-          <section className="rail-section">
-            <div className="detail-head">
-              <span className="detail-glyph">{p.char}</span>
-            </div>
-          </section>
-        )
+        ) : null
       }
     }
   }
@@ -856,12 +847,16 @@ export function App() {
     )
   }
 
-  // Both tabs start the same way: the page's character as it looks and what
-  // it means. Associations are fetched for the page, not for what is hovered
-  // on the graph, so here the head stays the page's too.
+  const shownWord =
+    shownTop?.kind === 'word' ? (shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)) : undefined
+
+  // The page's head is one, above both tabs, and stays where it is as they
+  // turn beneath it: a kanji as it looks and what it means, a word with its
+  // reading and first sense. Associations are for the page, not for what is
+  // hovered on the graph, so only the dictionary's head previews that.
   function pageHead() {
     if (shownTop?.kind === 'kanji') {
-      const node = detailOf(shownTop.char)?.focus
+      const node = (tab === 'dictionary' && hoveredNode) || detailOf(shownTop.char)?.focus
       return (
         <section className="rail-section">
           {node ? (
@@ -875,37 +870,17 @@ export function App() {
       )
     }
     if (shownTop?.kind === 'word') {
-      const w = shownWord
       return (
         <section className="rail-section word-panel">
-          <h2 className="entry-head">{w?.headword ?? subject?.label}</h2>
-          {w && (
-            <p className="entry-reading">
-              {w.reading}
-              {w.senses[0] && <span className="rest"> {glossOf(w.senses[0], t.lang).value}</span>}
-            </p>
+          {shownWord ? (
+            <WordHead word={shownWord} onPick={openKanji} />
+          ) : (
+            <h2 className="entry-head">{subject?.label}</h2>
           )}
         </section>
       )
     }
     return null
-  }
-  const shownWord =
-    shownTop?.kind === 'word' ? (shownTop.word ?? (pageWord?.id === shownTop.id ? pageWord : undefined)) : undefined
-
-  // On a phone the head is one, above both tabs, and stays where it is as
-  // they turn beneath it: a word's is its dictionary entry's.
-  function phoneHead() {
-    if (shownTop?.kind !== 'word') return pageHead()
-    return (
-      <section className="rail-section word-panel">
-        {shownWord ? (
-          <WordHead word={shownWord} onPick={openKanji} brief />
-        ) : (
-          <h2 className="entry-head">{subject?.label}</h2>
-        )}
-      </section>
-    )
   }
 
   // On a phone a page's tabs are Dictionary, Associations and Components:
@@ -1223,7 +1198,7 @@ export function App() {
                 </button>
               </div>
             )}
-            {mobile && subject && <div className="page-head">{phoneHead()}</div>}
+            {subject && <div className="page-head">{pageHead()}</div>}
             <div className="tab-pane" ref={paneRef}>
               {tab === 'dictionary' &&
                 (shownTop ? (
@@ -1235,7 +1210,6 @@ export function App() {
                   before the tab is opened. */}
               {subject && (
                 <div hidden={tab !== 'associations'}>
-                  {!mobile && tab === 'associations' && pageHead()}
                   {associations(subject)}
                 </div>
               )}
