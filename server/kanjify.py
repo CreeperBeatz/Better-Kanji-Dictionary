@@ -8,9 +8,14 @@ their parts.
 
 The model only picks the places. What comes back is the learner's own text
 with the brackets put in here: an answer that changed a single letter of the
-text is refused, a character that is not one of the parts is dropped (or
-taken as the form of it the list has -- 氺 for 氵), and a part is marked once
-however often, and in however many of its forms, the model marked it.
+text is refused, a new bracket for a character that is not one of the parts
+is dropped (or taken as the form of it the list has -- 氺 for 氵), and a part
+is marked once however often, and in however many of its forms, the model
+marked it.
+
+Where the learner left an empty bracket -- [] or 「」 -- they are asking, and
+the model puts its best guess there: any kanji the dictionary knows, not only
+a part.
 
 The model is GPT-6 Luna at low effort, by a trial of twenty associations in
 English, Bulgarian and Japanese: nineteen came back clean, in about three
@@ -50,24 +55,28 @@ def enabled() -> bool:
 
 _PROMPT = """You help a learner of Japanese annotate their own mnemonic. They wrote an \
 association -- a little story or picture -- for a kanji or a word. Mark, in their text, \
-the words that stand for the kanji and for its parts, by writing the character in square \
-brackets straight after them:
+the words that stand for kanji, by writing the kanji in square brackets straight after them:
 
   a person [亻] leans on a tree [木] to rest [休]
 
 Rules:
 - Copy the text exactly. Only add brackets; do not fix, reword, translate or add anything else.
-- Only use the characters listed below. Never invent one that is not in the list.
-- Put a bracket after the word or short phrase that stands for that character, in the \
-language the text is written in. The meaning can be loose (a "guy" is 亻, "sunlight" is 日), \
-but it must really be that thing in the story.
+- Put a bracket after the word or short phrase that stands for a kanji, in the language the \
+text is written in. The meaning can be loose (a "guy" is 亻, "sunlight" is 日), but it must \
+really be that thing in the story.
 - The kanji itself (or each kanji of the word) goes after the words that give its meaning.
+- For the brackets you add, only use the characters listed below. Never invent one that \
+is not in the list.
 - A character that nothing in the text stands for is left out. Leaving one out is better \
 than a forced guess.
-- Mark each character once, at its clearest place, and put one bracket after a word at most.
 - A part can be listed in more than one form (水 and 氵, 人 and 亻). Use the form listed \
 first in its kanji's list: that is the one written in it.
-- Leave text already in square brackets as it is, and do not mark a character twice.
+- Where the learner left an empty bracket, [] or 「」, they are asking which kanji the word \
+just before it is: put that kanji inside it. Here any kanji may go, listed or not -- "dark []" \
+is "dark [暗]", "friend []" is "friend [友]". Always fill it with one kanji, keep their kind \
+of bracket, and add no other bracket after that word.
+- Mark each kanji once, at its clearest place, and put one bracket after a word at most.
+- Leave text already in square brackets as it is, and do not mark a kanji twice.
 - Answer with the annotated text and nothing else."""
 
 
@@ -88,68 +97,101 @@ def _meaning(char: str, seen: frozenset[str] = frozenset()) -> str:
     return ""
 
 
-def _kanji_of(subject: str) -> list[str]:
-    known = {r["char"] for r in query(
-        f"SELECT char FROM kanji WHERE char IN ({','.join('?' * len(subject))})", tuple(subject))}
-    return list(dict.fromkeys(c for c in subject if c in known or kanji_parts.parts_of(c)))
+_known: set[str] | None = None
+
+
+def _is_kanji(char: str) -> bool:
+    """A kanji or a part the dictionary knows: what a bracket may hold."""
+    global _known
+    if _known is None:
+        known = {r["char"] for r in query("SELECT char FROM kanji")}
+        for r in query("SELECT parent, child FROM edge"):
+            known.update((r["parent"], r["child"]))
+        _known = known
+    return char in _known
 
 
 def context(subject: str) -> tuple[str, list[str]]:
-    """What the model is told about the subject, and the characters it may use,
-    each kanji before its parts."""
-    lines, allowed = [], []
+    """What the model is told about the subject, and the characters it may add
+    brackets for: each kanji, then its parts."""
+    lines, listed = [], []
     if len(subject) > 1:
         lines.append(f"The note is about the word {subject}.")
-    for k in _kanji_of(subject):
-        allowed.append(k)
+    for k in dict.fromkeys(c for c in subject if _is_kanji(c)):
+        listed.append(k)
         lines.append(f"{k} ({_meaning(k)}) is made of:")
         for p in kanji_parts.parts_of(k):
-            allowed.append(p)
+            listed.append(p)
             lines.append(f"  {p} ({_meaning(p) or 'no common name'})")
-    return "\n".join(lines), list(dict.fromkeys(allowed))
+    return "\n".join(lines), list(dict.fromkeys(listed))
 
 
-# A bracket holding one character; anything longer is the learner's own.
-_TAG = re.compile(r"\[(.)\]")
-_CJK = re.compile(r"[　-鿿豈-﫿\U00020000-\U0003ffff]")
+# A bracket of a few characters at most, or an empty one to be filled -- [],
+# 「」 or the full-width ［］ of a Japanese keyboard; anything longer is the
+# learner's own writing.
+_TAG = re.compile(r"\[\s*([^\[\]\s]{0,4})\s*\]|「\s*([^「」\s]{0,4})\s*」|［\s*([^［］\s]{0,4})\s*］")
+_CJK = re.compile("[\\u3000-\\u9fff\\uf900-\\ufaff\\U00020000-\\U0003ffff]")
 
 
 def _read(text: str) -> tuple[str, list[tuple[int, str]]]:
-    """The text without whitespace or single-character brackets, and each
-    bracket's character with how many of those characters come before it."""
+    """The text without whitespace or brackets, and each bracket's contents
+    with how many of those characters come before it."""
     plain: list[str] = []
     tags: list[tuple[int, str]] = []
     at = 0
     for m in _TAG.finditer(text):
         plain.extend(c for c in text[at:m.start()] if not c.isspace())
-        tags.append((len(plain), m.group(1)))
+        tags.append((len(plain), next((g for g in m.groups() if g is not None), "")))
         at = m.end()
     plain.extend(c for c in text[at:] if not c.isspace())
     return "".join(plain), tags
 
 
-def merge(text: str, answer: str, allowed: list[str]) -> str:
-    """The learner's text with the brackets the model put in, checked.
+def merge(text: str, answer: str, listed: list[str]) -> str:
+    """The learner's text with the brackets the model put in, checked: the
+    empty ones they left filled, and new ones added.
 
-    The model's spacing is not trusted; a bracket goes straight after the
+    An empty bracket may be filled with any kanji the dictionary knows; a new
+    one only with a listed character (or the listed form of one: 氺 is 氵).
+    The model's spacing is not trusted; a new bracket goes straight after the
     character it followed, with a space before it after a letter and none
     after a kanji or kana."""
-    ok = set(allowed)
     plain, had = _read(text)
     got, tags = _read(answer.strip())
     if got != plain:
         raise Garbled("the answer is not the text")
-    marked = {c for _, c in had}
-    inserts: dict[int, list[str]] = {}
+    # What the model put at each place, less copies of the learner's own.
+    offered: dict[int, list[str]] = {}
     for pos, c in tags:
-        if c not in ok:
-            c = next((f for f in allowed if f in kanji_parts.forms(c)), "")
-        # One part once, in whichever form: "water [氵][水]" says it twice.
-        if not c or kanji_parts.forms(c) & marked or pos == 0:
-            continue
-        marked.add(c)
-        inserts.setdefault(pos, []).append(c)
-    if not inserts:
+        if c and all(_is_kanji(ch) for ch in c):
+            offered.setdefault(pos, []).append(c)
+    for pos, c in had:
+        if c and c in offered.get(pos, ()):
+            offered[pos].remove(c)
+    # The learner's own marks count as marked; a quote of theirs does not
+    # (「休む」 says nothing about where 休 is).
+    marked = {ch for _, c in had if all(_is_kanji(ch) for ch in c) for ch in c}
+    fills: list[str | None] = []
+    for pos, c in had:
+        fill = None
+        if not c and offered.get(pos):
+            # The word before an empty bracket gets what is put in it, and
+            # nothing more.
+            fill = offered.pop(pos)[0]
+            marked.update(fill)
+        fills.append(fill)
+    ok = set(listed)
+    inserts: dict[int, list[str]] = {}
+    for pos, cs in offered.items():
+        for c in cs:
+            if c not in ok:
+                c = next((f for f in listed if f in kanji_parts.forms(c)), "")
+            # One part once, in whichever form: "water [氵][水]" says it twice.
+            if not c or pos == 0 or kanji_parts.forms(c) & marked:
+                continue
+            marked.add(c)
+            inserts.setdefault(pos, []).append(c)
+    if not inserts and not any(fills):
         return text
     out: list[str] = []
     seen = 0
@@ -165,11 +207,12 @@ def merge(text: str, answer: str, allowed: list[str]) -> str:
                 gap = "" if _CJK.match(ch) else " "
                 out.append(gap + "".join(f"[{c}]" for c in inserts[seen]))
 
-    # The learner's own brackets go through whole: _read did not count them.
+    # The learner's own brackets go through whole, _read did not count them,
+    # and an empty one gets what the model put in it.
     at = 0
-    for m in _TAG.finditer(text):
+    for m, fill in zip(_TAG.finditer(text), fills):
         copy(text[at:m.start()])
-        out.append(m.group(0))
+        out.append(m.group(0)[0] + fill + m.group(0)[-1] if fill else m.group(0))
         at = m.end()
     copy(text[at:])
     return "".join(out)
@@ -192,9 +235,7 @@ def kanjify(subject: str, text: str) -> str:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise Off()
-    ctx, allowed = context(subject)
-    if not allowed:
-        return text
+    ctx, listed = context(subject)
     try:
         res = requests.post(
             URL,
@@ -225,7 +266,7 @@ def kanjify(subject: str, text: str) -> str:
         answer = res.json()["choices"][0]["message"].get("content") or ""
     except (ValueError, KeyError, IndexError) as e:
         raise Unavailable(f"an answer without text: {e}") from e
-    result = merge(text, answer, allowed)
+    result = merge(text, answer, listed)
     with _cache_lock:
         _cache[key] = result
         while len(_cache) > _CACHE_SIZE:
