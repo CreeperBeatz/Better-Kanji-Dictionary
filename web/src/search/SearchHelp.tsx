@@ -20,9 +20,10 @@ const S = strings(
     describe: 'A feeling, a situation, something you half remember: it finds the words for it.',
     describeEx1: 'the feeling of missing the old days',
     describeEx2: 'a gift you bring back from a trip',
-    apartTitle: 'Tell close kanji apart',
-    apart: 'Ask which one fits, and a short note explains the difference.',
-    apartEx: 'atsui for weather or for tea?',
+    apartTitle: 'Compare similar kanji',
+    apart: 'Ask how two look-alike or same-sounding kanji differ, or which one fits, and a short note explains.',
+    apartEx1: "what's the difference between the two kanji for hot?",
+    apartEx2: 'atsui for weather or for tea?',
     explainTitle: 'Ask for explanations',
     explain: 'Wonder why a word is written with the kanji it is? Ask, and it explains what they bring to it.',
     explainEx1: 'why is tegami written with hand and paper?',
@@ -50,9 +51,10 @@ const S = strings(
     describe: 'Чувство, ситуация, нещо полузабравено: тя намира думите за него.',
     describeEx1: 'чувството, че ти липсват старите дни',
     describeEx2: 'подарък, който носиш от пътуване',
-    apartTitle: 'Различете близки йероглифи',
-    apart: 'Попитайте кой пасва и кратка бележка обяснява разликата.',
-    apartEx: 'атсуи за времето или за чая?',
+    apartTitle: 'Сравнете сходни йероглифи',
+    apart: 'Попитайте с какво се различават два еднакво изглеждащи или звучащи йероглифа, или кой пасва, и кратка бележка ще обясни.',
+    apartEx1: 'каква е разликата между двата йероглифа за горещо?',
+    apartEx2: 'атсуи за времето или за чая?',
     explainTitle: 'Питайте за обяснения',
     explain: 'Чудите се защо една дума се пише с точно тези йероглифи? Попитайте и тя ще обясни какво носи всеки от тях.',
     explainEx1: 'защо тегами се пише с ръка и хартия?',
@@ -178,7 +180,7 @@ function HelpPopup({ t, onClose, onTry }: { t: T; onClose: () => void; onTry: (q
         </button>
         <div className="help-body">
           {feature(t('describeTitle'), t('describe'), [t('describeEx1'), t('describeEx2')])}
-          {feature(t('apartTitle'), t('apart'), [t('apartEx')])}
+          {feature(t('apartTitle'), t('apart'), [t('apartEx1'), t('apartEx2')])}
           {feature(t('explainTitle'), t('explain'), [t('explainEx1'), t('explainEx2')])}
           {feature(t('partsTitle'), t('parts'), [t('partsEx1'), t('partsEx2')])}
           <section className="help-feature help-bg" lang="bg">
