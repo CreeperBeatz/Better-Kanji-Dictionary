@@ -74,49 +74,118 @@
   --shadow-island: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
-/* ------------------------------------------------ selecting part of a picture */
+/* ------------------------------------------------ the toolbar, regrouped */
 
-.px-tools {
+/* No library: a drawing here is a mnemonic, not a diagram built from parts. */
+.sketch-canvas .default-sidebar-trigger {
+  display: none;
+}
+
+/* The tools that went into groups (ToolGroups.tsx). */
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-rectangle']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-diamond']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-ellipse']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-image']) {
+  display: none;
+}
+
+/* The groups are appended to the row; `order` puts them where the tools they
+   hold stood. Everything before the selection tool keeps order 0. */
+.sketch-canvas .sk-slot {
+  display: contents;
+}
+
+.sketch-canvas .sk-group[data-group='shapes'] {
+  order: 1;
+}
+
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-arrow']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-line']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-freedraw']),
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-text']) {
+  order: 2;
+}
+
+.sketch-canvas .sk-group[data-group='picture'] {
+  order: 3;
+}
+
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-eraser']) {
+  order: 4;
+}
+
+.sketch-canvas .sk-group[data-group='select'] {
+  order: 5;
+}
+
+.sketch-canvas .ToolIcon:has(> input[data-testid='toolbar-eraser']) ~ :not(.sk-slot) {
+  order: 6;
+}
+
+.sketch-canvas .sk-group {
   display: flex;
-  gap: 2px;
-  padding: 4px;
-  background: var(--sumi-lift);
-  border-radius: 4px;
-  box-shadow: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
-  pointer-events: auto;
 }
 
-.px-tool {
-  width: 2.25rem;
-  height: 2.25rem;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  background: none;
-  border: 0;
-  border-radius: 2px;
-  color: var(--paper);
-  cursor: pointer;
+.sketch-canvas .sk-svg {
+  display: contents;
 }
 
-.px-tool:hover {
-  background: var(--rule);
-}
-
-.px-tool[data-on] {
-  background: var(--ai-wash);
-  color: var(--ai);
-}
-
-.px-tool svg {
-  width: 18px;
-  height: 18px;
+/* Our own icons, drawn in Excalidraw's line. */
+.sketch-canvas svg.sk-own {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* The row a group opens, under the toolbar. */
+.sketch-canvas .sk-menu {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sumi-lift);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--rule), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.sketch-canvas .sk-menu .ToolIcon {
+  display: flex;
+  align-items: center;
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+}
+
+.sketch-canvas .sk-menu .ToolIcon:has(.sk-item-label):hover {
+  background: var(--button-hover-bg);
+}
+
+.sketch-canvas .sk-item-label {
+  padding: 0 10px 0 2px;
+  font-family: var(--gothic);
+  font-size: 13px;
+  color: var(--paper-dim);
+  white-space: nowrap;
+}
+
+.sketch-canvas .sk-menu .ToolIcon:has(> input:checked) .sk-item-label {
+  color: var(--paper);
+}
+
+/* Its hints would sit where the row does. */
+.sketch-canvas:has(.sk-menu) .HintViewer {
+  display: none;
+}
+
+@media (max-width: 730px) {
+  .sketch-canvas .sk-item-label {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------ selecting part of a picture */
 
 /* Over Excalidraw's canvases, under its menus -- and out of the filter dark
    mode puts on every canvas in it. */
@@ -156,14 +225,6 @@
   color: var(--paper);
 }
 
-.px-seg {
-  display: flex;
-  border: 1px solid var(--rule-bright);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.px-seg button,
 .px-act {
   font: inherit;
   padding: 4px 10px;
@@ -174,22 +235,12 @@
   white-space: nowrap;
 }
 
-.px-seg button + button {
-  border-left: 1px solid var(--rule-bright);
-}
-
-.px-seg button[data-on] {
-  background: var(--ai-wash);
-  color: var(--paper);
-}
-
 .px-act {
   color: var(--paper);
   border: 1px solid transparent;
   border-radius: 2px;
 }
 
-.px-seg button:hover:not([data-on]),
 .px-act:hover {
   background: var(--rule);
 }
@@ -216,29 +267,6 @@
   .px-bar {
     bottom: 72px;
   }
-}
-
-.px-tools-side {
-  position: absolute;
-  left: 12px;
-  top: 72px;
-  z-index: 5;
-}
-
-.px-tools-side .px-tools {
-  flex-direction: column;
-}
-
-.px-tools-rule {
-  width: 1px;
-  margin: 6px 3px;
-  background: var(--rule-bright);
-}
-
-.px-tools-side .px-tools-rule {
-  width: auto;
-  height: 1px;
-  margin: 3px 6px;
 }
 
 /* ------------------------------------------------------ finding a picture */

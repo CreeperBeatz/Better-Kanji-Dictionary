@@ -7,6 +7,7 @@ import { getLang, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { PixelTools, type PixelTool } from './pixels/PixelTools'
 import { ImageSearch } from './ImageSearch'
+import { ToolGroups } from './ToolGroups'
 
 const S = strings(
   {
@@ -16,12 +17,6 @@ const S = strings(
     saving: 'saving',
     cancel: 'cancel',
     done: 'done',
-    pictureTools: 'Picture tools',
-    lasso: 'Lasso: select part of a picture by drawing around it',
-    box: 'Box select: select a rectangle of a picture',
-    wand: 'Magic wand: select a colour in a picture',
-    subject: 'Select the subject: a picture without its background',
-    findPicture: 'Find a picture to draw with',
   },
   {
     drawingFor: 'Рисунка за {c}',
@@ -30,36 +25,8 @@ const S = strings(
     saving: 'запазване',
     cancel: 'откажете',
     done: 'готово',
-    pictureTools: 'Инструменти за картини',
-    lasso: 'Ласо: изберете част от картина, като я оградите',
-    box: 'Правоъгълна селекция: изберете правоъгълник от картина',
-    wand: 'Магическа пръчка: изберете цвят в картина',
-    subject: 'Изберете обекта: картина без фона ѝ',
-    findPicture: 'Намерете картина, с която да рисувате',
   },
 )
-
-const icon = (d: string) => (
-  <svg viewBox="0 0 20 20" aria-hidden>
-    <path d={d} />
-  </svg>
-)
-
-const TOOLS: [PixelTool, React.ReactNode][] = [
-  ['lasso', icon('M10 4c4 0 7 1.8 7 4.2S14 12.5 10 12.5 3 10.6 3 8.2 6 4 10 4Zm-5.6 7.3C3.5 13 4 15.4 6.2 16.3')],
-  ['box', icon('M3 3h3M9 3h2M14 3h3v3M17 9v2M17 14v3h-3M11 17H9M6 17H3v-3M3 11V9M3 6V3')],
-  ['wand', icon('M3.5 16.5l9-9M11 6l3 3M14.5 2.5v2M17.5 5.5h-2M16.6 3.4l-1.4 1.4M9 3.5v1.5M4 9h1.5')],
-  ['subject', icon('M10 3.5a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2ZM5 16.5c0-3.3 2.2-5.6 5-5.6s5 2.3 5 5.6M2.5 6V2.5H6M14 2.5h3.5V6M17.5 14v3.5H14M6 17.5H2.5V14')],
-]
-
-/** Tells the editor Excalidraw is in its phone layout, for as long as it is. */
-function Mobile({ on }: { on: (m: boolean) => void }) {
-  useEffect(() => {
-    on(true)
-    return () => on(false)
-  }, [on])
-  return null
-}
 
 interface Props {
   char: string
@@ -83,7 +50,6 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [tool, setTool] = useState<PixelTool | null>(null)
   const [host, setHost] = useState<HTMLDivElement | null>(null)
-  const [mobile, setMobile] = useState(false)
   const [finding, setFinding] = useState(false)
   // What the scene looked like on opening, so closing only asks when
   // something would actually be lost.
@@ -103,6 +69,24 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
       document.body.style.overflow = prev
     }
   }, [])
+
+  // Ctrl+D deselects, as in paint programs, rather than duplicating (or
+  // bookmarking the page). With a picture tool in hand, PixelTools takes it
+  // for the picture's selection.
+  useEffect(() => {
+    if (!excalidraw || tool) return
+    const api = excalidraw
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== 'd') return
+      const at = e.target as HTMLElement | null
+      if (at && (at.tagName === 'INPUT' || at.tagName === 'TEXTAREA' || at.isContentEditable)) return
+      e.preventDefault()
+      e.stopPropagation()
+      api.updateScene({ appState: { selectedElementIds: {}, selectedGroupIds: {}, editingGroupId: null } })
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [excalidraw, tool])
 
   function changed() {
     if (!excalidraw) return false
@@ -147,35 +131,6 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
     }
   }
 
-  const tools = (
-    <div className="px-tools" role="group" aria-label={t('pictureTools')}>
-      {TOOLS.map(([id, icon]) => (
-        <button
-          key={id}
-          className="px-tool"
-          data-on={tool === id || undefined}
-          aria-pressed={tool === id}
-          onClick={() => setTool((cur) => (cur === id ? null : id))}
-          title={t(id)}
-          aria-label={t(id)}
-        >
-          {icon}
-        </button>
-      ))}
-      <span className="px-tools-rule" aria-hidden />
-      <button
-        className="px-tool"
-        data-on={finding || undefined}
-        aria-pressed={finding}
-        onClick={() => setFinding((f) => !f)}
-        title={t('findPicture')}
-        aria-label={t('findPicture')}
-      >
-        {icon('M8.5 3a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11ZM12.6 12.6 17 17M6 10l1.6-2 1.4 1.5 1-1 1.5 1.5')}
-      </button>
-    </div>
-  )
-
   return (
     <div className="sketch-overlay" role="dialog" aria-modal="true" aria-label={t('drawingFor', { c: char })}>
       <div className="sketch-panel">
@@ -201,11 +156,10 @@ export default function SketchEditor({ char, scene, onSave, onClose }: Props) {
             UIOptions={{
               canvasActions: { saveToActiveFile: false, export: false, toggleTheme: false },
             }}
-            // Beside the library button on a desktop; on a phone that row is
-            // full already, so they stand down the left edge instead.
-            renderTopRightUI={(isMobile) => (isMobile ? <Mobile on={setMobile} /> : tools)}
           />
-          {mobile && <div className="px-tools-side">{tools}</div>}
+          {excalidraw && host && (
+            <ToolGroups api={excalidraw} host={host} tool={tool} onTool={setTool} finding={finding} onFinding={setFinding} />
+          )}
           {excalidraw && finding && <ImageSearch api={excalidraw} onClose={() => setFinding(false)} />}
           {excalidraw && host && <PixelTools api={excalidraw} host={host} tool={tool} onTool={setTool} />}
         </div>

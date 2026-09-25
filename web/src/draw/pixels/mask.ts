@@ -1,12 +1,10 @@
 /**
  * A selection of a picture's pixels, kept as a canvas the size of the picture
  * whose alpha is how much of each pixel is selected -- so a lasso's edge can
- * be soft, and adding, taking away and inverting are compositing.
+ * be soft, and inverting is compositing.
  */
 
 import type { Pt } from './geometry'
-
-export type Combine = 'replace' | 'add' | 'subtract'
 
 export interface Rect {
   x: number
@@ -102,17 +100,6 @@ export function wandMask(src: ImageData, at: Pt, tolerance: number, within: Rect
     }
   }
   ctx(c).putImageData(out, 0, 0)
-  return c
-}
-
-/** A new selection made with the one before it, as the modifier keys ask. */
-export function combine(before: HTMLCanvasElement | null, next: HTMLCanvasElement, how: Combine): HTMLCanvasElement | null {
-  if (!before || how === 'replace') return next
-  const c = blank(before.width, before.height)
-  const g = ctx(c)
-  g.drawImage(before, 0, 0)
-  g.globalCompositeOperation = how === 'add' ? 'source-over' : 'destination-out'
-  g.drawImage(next, 0, 0)
   return c
 }
 

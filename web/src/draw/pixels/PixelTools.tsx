@@ -18,7 +18,7 @@ import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalid
 import type { BinaryFileData, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import { strings, useLang } from '../../i18n'
 import { cropOf, onImage, pixelMatrix, pixelToScene, sceneToPixel, type Pt } from './geometry'
-import { bounds, combine, erase, extract, invert, pixelsOf, polygonMask, wandMask, type Combine } from './mask'
+import { bounds, erase, extract, invert, pixelsOf, polygonMask, wandMask } from './mask'
 import { onSubjectProgress, subjectMask, warmSubject } from './subject'
 
 export type PixelTool = 'lasso' | 'box' | 'wand' | 'subject'
@@ -33,12 +33,6 @@ const S = strings(
     fetchingModel: 'Fetching the model, the first time only: {n}%',
     finding: 'Finding the subject…',
     subjectFailed: 'The subject could not be found: {why}',
-    replace: 'New',
-    replaceTitle: 'A new selection each time',
-    add: 'Add',
-    addTitle: 'Add to the selection (hold Shift)',
-    subtract: 'Take away',
-    subtractTitle: 'Take away from the selection (hold Alt)',
     tolerance: 'Tolerance',
     toleranceTitle: 'How different a colour can be and still be picked up',
     erase: 'Erase',
@@ -52,7 +46,7 @@ const S = strings(
     invert: 'Invert',
     invertTitle: 'Select everything else instead',
     deselect: 'Deselect',
-    deselectTitle: 'Clear the selection (Esc)',
+    deselectTitle: 'Clear the selection (Ctrl+D)',
   },
   {
     lassoHint: 'Оградете част от картина',
@@ -63,12 +57,6 @@ const S = strings(
     fetchingModel: 'Изтегляне на модела, само първия път: {n}%',
     finding: 'Търсене на обекта…',
     subjectFailed: 'Обектът не можа да бъде намерен: {why}',
-    replace: 'Нова',
-    replaceTitle: 'Нова селекция всеки път',
-    add: 'Добавяне',
-    addTitle: 'Добавете към селекцията (задръжте Shift)',
-    subtract: 'Изваждане',
-    subtractTitle: 'Извадете от селекцията (задръжте Alt)',
     tolerance: 'Допуск',
     toleranceTitle: 'Колко може да се различава цветът и пак да бъде избран',
     erase: 'Изтриване',
@@ -82,7 +70,7 @@ const S = strings(
     invert: 'Обръщане',
     invertTitle: 'Изберете всичко останало',
     deselect: 'Без селекция',
-    deselectTitle: 'Премахнете селекцията (Esc)',
+    deselectTitle: 'Премахнете селекцията (Ctrl+D)',
   },
 )
 
@@ -100,9 +88,7 @@ interface Selection {
   mask: HTMLCanvasElement
 }
 
-type Drag =
-  | { kind: 'lasso'; pts: Pt[]; how: Combine }
-  | { kind: 'box'; a: Pt; b: Pt; how: Combine }
+type Drag = { kind: 'lasso'; pts: Pt[] } | { kind: 'box'; a: Pt; b: Pt }
 
 interface Props {
   api: ExcalidrawImperativeAPI
@@ -167,7 +153,6 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
   const [sel, setSel] = useState<Selection | null>(null)
   const selRef = useRef(sel)
   selRef.current = sel
-  const [how, setHow] = useState<Combine>('replace')
   const [tolerance, setTolerance] = useState(32)
   const [note, setNote] = useState<string | null>(null)
   const drag = useRef<Drag | null>(null)
@@ -340,17 +325,9 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     return { x: (e.clientX - r.left) / st.zoom.value - st.scrollX, y: (e.clientY - r.top) / st.zoom.value - st.scrollY }
   }
 
-  function howFor(e: React.PointerEvent): Combine {
-    return e.shiftKey ? 'add' : e.altKey ? 'subtract' : how
-  }
-
-  /** The new selection, made with the one before if it was on the same picture. */
-  function select(pic: Picture, next: HTMLCanvasElement, c: Combine) {
-    const s = selRef.current
-    const before = s && s.pic.id === pic.id && s.pic.fileId === pic.fileId ? s.mask : null
-    if (!before && c === 'subtract') return
-    const mask = combine(before, next, c)
-    setSel(mask && bounds(mask) ? { pic, mask } : null)
+  /** Each selection replaces the one before; an empty one is none. */
+  function select(pic: Picture, mask: HTMLCanvasElement) {
+    setSel(bounds(mask) ? { pic, mask } : null)
   }
 
   async function down(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -364,7 +341,6 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         setNote(t('notOnPicture'))
         return
       }
-      const c = howFor(e)
       const pic = await pictureOf(el)
       if (!pic) return
       let data = pixels.current.get(pic.fileId)
@@ -372,7 +348,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         data = pixelsOf(pic.img, pic.w, pic.h)
         pixels.current.set(pic.fileId, data)
       }
-      select(pic, wandMask(data, sceneToPixel(el, pic.w, pic.h, p), tolerance, cropOf(el, pic.w, pic.h)), c)
+      select(pic, wandMask(data, sceneToPixel(el, pic.w, pic.h, p), tolerance, cropOf(el, pic.w, pic.h)))
       return
     }
     if (tool === 'subject') {
@@ -382,7 +358,6 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         return
       }
       if (busy) return
-      const c = howFor(e)
       const pic = await pictureOf(el)
       if (!pic) return
       let found = subjects.current.get(pic.fileId)
@@ -407,7 +382,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         g.globalCompositeOperation = 'destination-in'
         g.drawImage(mask, 0, 0)
         setNote(null)
-        select(pic, kept, c)
+        select(pic, kept)
       } catch (err) {
         setNote(t('subjectFailed', { why: err instanceof Error ? err.message : String(err) }))
       } finally {
@@ -416,7 +391,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
       return
     }
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = tool === 'lasso' ? { kind: 'lasso', pts: [p], how: howFor(e) } : { kind: 'box', a: p, b: p, how: howFor(e) }
+    drag.current = tool === 'lasso' ? { kind: 'lasso', pts: [p] } : { kind: 'box', a: p, b: p }
   }
 
   function move(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -448,15 +423,13 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) * zoom
     // A click rather than a drag: deselect, as paint programs do.
     if (span < 4) {
-      if (dr.how === 'replace') setSel(null)
+      setSel(null)
       return
     }
-    // The picture: the one being added to or taken from, or else the top one
-    // under the middle of the shape, or under any point of it.
-    const s = selRef.current
-    let el = dr.how !== 'replace' && s ? elementOf(api, s.pic.id) : null
+    // The picture: the top one under the middle of the shape, or under any
+    // point of it.
     const mid = { x: xs.reduce((a, b) => a + b) / xs.length, y: ys.reduce((a, b) => a + b) / ys.length }
-    el ??= imageAt(api, mid)
+    let el = imageAt(api, mid)
     for (const p of shape) el ??= imageAt(api, p)
     if (!el) {
       setNote(t('notOnPicture'))
@@ -465,7 +438,7 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     const pic = await pictureOf(el)
     if (!pic) return
     const pts = shape.map((p) => sceneToPixel(el, pic.w, pic.h, p))
-    select(pic, polygonMask(pic.w, pic.h, pts, cropOf(el, pic.w, pic.h)), dr.how)
+    select(pic, polygonMask(pic.w, pic.h, pts, cropOf(el, pic.w, pic.h)))
   }
 
   // --- what can be done with a selection ---------------------------------
@@ -535,8 +508,8 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
     setSel(bounds(mask) ? { pic: s.pic, mask } : null)
   }
 
-  // Delete erases and Escape deselects, before Excalidraw can take them for
-  // its own elements.
+  // Delete erases, and Ctrl+D and Escape deselect, before Excalidraw (or the
+  // browser, for Ctrl+D) can take them.
   useEffect(() => {
     if (!tool) return
     function onKey(e: KeyboardEvent) {
@@ -546,6 +519,10 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         e.preventDefault()
         e.stopPropagation()
         apply('erase')
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        setSel(null)
       } else if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
@@ -578,13 +555,6 @@ export function PixelTools({ api, host, tool, onTool }: Props) {
         }}
       />
       <div className="px-bar" role="toolbar">
-        <div className="px-seg">
-          {(['replace', 'add', 'subtract'] as const).map((c) => (
-            <button key={c} data-on={how === c || undefined} aria-pressed={how === c} onClick={() => setHow(c)} title={t(`${c}Title`)}>
-              {t(c)}
-            </button>
-          ))}
-        </div>
         {tool === 'wand' && (
           <label className="px-tolerance" title={t('toleranceTitle')}>
             <span>{t('tolerance')}</span>
