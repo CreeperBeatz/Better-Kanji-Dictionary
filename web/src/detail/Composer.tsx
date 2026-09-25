@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { api, type Author, type Visibility } from '../api'
 import { Avatar } from '../account/Avatar'
 import { getLang, strings, useLang } from '../i18n'
@@ -240,19 +241,19 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
     setProblem(null)
     try {
       const { text: marked } = await api.kanjify(label, text)
+      // The text box takes typing again first: what comes next is typed into it.
+      flushSync(() => setKanjifying(false))
       // Put in as if typed, so that Ctrl+Z takes it back: a value set from
       // React is not on the text box's undo stack.
       const el = box.current
       if (el && marked !== text) {
-        el.readOnly = false
         el.focus()
         el.select()
         if (!document.execCommand('insertText', false, marked)) setText(marked)
       }
     } catch (err) {
-      setProblem(err instanceof Error ? errorText(err, getLang()) : '')
-    } finally {
       setKanjifying(false)
+      setProblem(err instanceof Error ? errorText(err, getLang()) : '')
     }
   }
 

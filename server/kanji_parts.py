@@ -65,16 +65,24 @@ def parts_of(char: str) -> list[str]:
     what those are made of after; single strokes left out."""
     _load()
     out: list[str] = []
+    seen = {char} | STROKES
     level = [char]
     while level:
         below = []
         for c in level:
             for child in sorted(_children.get(c, ())):
-                if child != char and child not in out and child not in STROKES:
+                if child not in seen:
+                    seen.add(child)
                     out.append(child)
                     below.append(child)
         level = below
     return out
+
+
+def known(char: str) -> bool:
+    """Whether the dictionary has `char`, as a kanji or as a part of one."""
+    _load()
+    return char in _info or char in _children
 
 
 def forms(part: str) -> set[str]:

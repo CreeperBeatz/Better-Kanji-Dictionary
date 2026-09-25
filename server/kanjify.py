@@ -28,29 +28,19 @@ three times over, "I" as 心); medium was no better than low.
 from __future__ import annotations
 
 import json
-import os
 import re
-import threading
-from collections import OrderedDict
+from functools import lru_cache
 
-import requests
-
-from . import kanji_parts
-from .db import query, query_one
-from .semantic import URL, Off, Unavailable
+from . import kanji_parts, semantic
+from .db import query_one
 
 MODEL = "openai/gpt-6-luna"
 REASONING = {"effort": "low"}
-TIMEOUT = 60
 MAX_TEXT = 3000
 
 
 class Garbled(Exception):
     """The model's answer was not the learner's text with brackets put in."""
-
-
-def enabled() -> bool:
-    return bool(os.environ.get("OPENROUTER_API_KEY"))
 
 
 _PROMPT = """You help a learner of Japanese annotate their own mnemonic. They wrote an \
@@ -97,18 +87,9 @@ def _meaning(char: str, seen: frozenset[str] = frozenset()) -> str:
     return ""
 
 
-_known: set[str] | None = None
-
-
-def _is_kanji(char: str) -> bool:
-    """A kanji or a part the dictionary knows: what a bracket may hold."""
-    global _known
-    if _known is None:
-        known = {r["char"] for r in query("SELECT char FROM kanji")}
-        for r in query("SELECT parent, child FROM edge"):
-            known.update((r["parent"], r["child"]))
-        _known = known
-    return char in _known
+def _all_kanji(s: str) -> bool:
+    """Only kanji and parts the dictionary knows: what a bracket may hold."""
+    return all(kanji_parts.known(c) for c in s)
 
 
 def context(subject: str) -> tuple[str, list[str]]:
@@ -117,7 +98,7 @@ def context(subject: str) -> tuple[str, list[str]]:
     lines, listed = [], []
     if len(subject) > 1:
         lines.append(f"The note is about the word {subject}.")
-    for k in dict.fromkeys(c for c in subject if _is_kanji(c)):
+    for k in dict.fromkeys(c for c in subject if kanji_parts.known(c)):
         listed.append(k)
         lines.append(f"{k} ({_meaning(k)}) is made of:")
         for p in kanji_parts.parts_of(k):
@@ -141,7 +122,7 @@ def _read(text: str) -> tuple[str, list[tuple[int, str]]]:
     at = 0
     for m in _TAG.finditer(text):
         plain.extend(c for c in text[at:m.start()] if not c.isspace())
-        tags.append((len(plain), next((g for g in m.groups() if g is not None), "")))
+        tags.append((len(plain), m[1] or m[2] or m[3] or ""))
         at = m.end()
     plain.extend(c for c in text[at:] if not c.isspace())
     return "".join(plain), tags
@@ -163,22 +144,22 @@ def merge(text: str, answer: str, listed: list[str]) -> str:
     # What the model put at each place, less copies of the learner's own.
     offered: dict[int, list[str]] = {}
     for pos, c in tags:
-        if c and all(_is_kanji(ch) for ch in c):
+        if c:
             offered.setdefault(pos, []).append(c)
     for pos, c in had:
         if c and c in offered.get(pos, ()):
             offered[pos].remove(c)
     # The learner's own marks count as marked; a quote of theirs does not
     # (「休む」 says nothing about where 休 is).
-    marked = {ch for _, c in had if all(_is_kanji(ch) for ch in c) for ch in c}
+    marked = {ch for _, c in had if _all_kanji(c) for ch in c}
     fills: list[str | None] = []
     for pos, c in had:
         fill = None
-        if not c and offered.get(pos):
+        if not c and pos in offered:
             # The word before an empty bracket gets what is put in it, and
             # nothing more.
-            fill = offered.pop(pos)[0]
-            marked.update(fill)
+            fill = next((f for f in offered.pop(pos) if _all_kanji(f)), None)
+            marked.update(fill or "")
         fills.append(fill)
     ok = set(listed)
     inserts: dict[int, list[str]] = {}
@@ -191,8 +172,6 @@ def merge(text: str, answer: str, listed: list[str]) -> str:
                 continue
             marked.add(c)
             inserts.setdefault(pos, []).append(c)
-    if not inserts and not any(fills):
-        return text
     out: list[str] = []
     seen = 0
 
@@ -218,57 +197,29 @@ def merge(text: str, answer: str, listed: list[str]) -> str:
     return "".join(out)
 
 
-_cache: OrderedDict[tuple[str, str], str] = OrderedDict()
-_cache_lock = threading.Lock()
-_CACHE_SIZE = 256
-
-
+# The same story gets the same marks, and every call costs money.
+@lru_cache(maxsize=256)
 def kanjify(subject: str, text: str) -> str:
     """`text` with the characters of `subject` marked in it. Raises Off with no
     key, Unavailable when the model cannot be reached, Garbled when it did not
     keep to the text."""
-    key = (subject, text)
-    with _cache_lock:
-        if key in _cache:
-            _cache.move_to_end(key)
-            return _cache[key]
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        raise Off()
     ctx, listed = context(subject)
-    try:
-        res = requests.post(
-            URL,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "HTTP-Referer": os.environ.get("APP_URL", "https://betterkanjidictionary.org"),
-                "X-Title": "Better Kanji Dictionary",
-            },
-            json={
-                "model": MODEL,
-                "reasoning": REASONING,
-                # Thinking counts against the cap, and the answer is the text again.
-                "max_tokens": 3000 + 2 * len(text),
-                "temperature": 0.2,
-                "messages": [
-                    {"role": "system", "content": _PROMPT + "\n\n" + ctx},
-                    {"role": "user", "content": text},
-                ],
-            },
-            timeout=TIMEOUT,
-        )
-    except requests.RequestException as e:
-        raise Unavailable(str(e)) from e
-    if not res.ok:
-        print(f"[kanjify] OpenRouter {res.status_code}: {res.text[:300]}", flush=True)
-        raise Unavailable(f"OpenRouter answered {res.status_code}")
+    res = semantic.post(
+        {
+            "model": MODEL,
+            "reasoning": REASONING,
+            # Thinking counts against the cap, and the answer is the text again.
+            "max_tokens": 3000 + 2 * len(text),
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": _PROMPT + "\n\n" + ctx},
+                {"role": "user", "content": text},
+            ],
+        },
+        "kanjify",
+    )
     try:
         answer = res.json()["choices"][0]["message"].get("content") or ""
     except (ValueError, KeyError, IndexError) as e:
-        raise Unavailable(f"an answer without text: {e}") from e
-    result = merge(text, answer, listed)
-    with _cache_lock:
-        _cache[key] = result
-        while len(_cache) > _CACHE_SIZE:
-            _cache.popitem(last=False)
-    return result
+        raise semantic.Unavailable(f"an answer without text: {e}") from e
+    return merge(text, answer, listed)
