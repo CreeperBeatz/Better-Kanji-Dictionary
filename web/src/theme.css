@@ -4271,7 +4271,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   cursor: pointer;
 }
 
-.composer-tool:hover {
+.composer-tool:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.composer-tool:hover:not(:disabled) {
   color: var(--paper);
   background: var(--sumi-lift);
 }

@@ -19,6 +19,10 @@ const S = strings(
     drawTitle: 'Draw it in Excalidraw',
     draw: 'draw',
     gifTitle: 'Add a GIF from KLIPY',
+    kanjifyTitle: 'Mark the kanji and parts your story mentions: a person [亻] leans on a tree [木] to rest [休]',
+    kanjifyWorking: 'kanjifying…',
+    kanjifyUndo: 'undo',
+    kanjifyUndoTitle: 'Back to your text as it was before Kanjify',
     whoSees: 'Who can see this',
     private: 'private',
     public: 'public',
@@ -44,6 +48,10 @@ const S = strings(
     drawTitle: 'Нарисувайте го в Excalidraw',
     draw: 'рисуване',
     gifTitle: 'Добавете GIF от KLIPY',
+    kanjifyTitle: 'Отбелязва кандзито и частите, които историята ви споменава: човек [亻] се облегнал на дърво [木], за да си почине [休]',
+    kanjifyWorking: 'кандзифициране…',
+    kanjifyUndo: 'отменете',
+    kanjifyUndoTitle: 'Обратно към текста ви отпреди Kanjify',
     whoSees: 'Кой може да вижда това',
     private: 'лична',
     public: 'публична',
@@ -129,6 +137,10 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   const [sketching, setSketching] = useState<{ replace: string | null; scene?: Record<string, unknown> } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
   const [gifs, setGifs] = useState(false)
+  const [kanjifying, setKanjifying] = useState(false)
+  // The text as it was before Kanjify, while it can still be put back: until
+  // the next keystroke.
+  const [unkanjified, setUnkanjified] = useState<string | null>(null)
 
   useEffect(() => {
     if (draftKey) drafts.set(draftKey, { text, attachments, visibility })
@@ -218,6 +230,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       await onSubmit(text.trim(), names, signedIn ? visibility : 'private')
       attachments.forEach(release)
       if (draftKey) drafts.delete(draftKey)
+      setUnkanjified(null)
       if (!initial) {
         setText('')
         setAttachments([])
@@ -227,6 +240,24 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       setProblem(err instanceof Error ? errorText(err, getLang()) : '')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function kanjify() {
+    if (!signedIn) return onSignIn()
+    const before = text
+    setKanjifying(true)
+    setProblem(null)
+    try {
+      const { text: marked } = await api.kanjify(label, before)
+      if (marked !== before) {
+        setText(marked)
+        setUnkanjified(before)
+      }
+    } catch (err) {
+      setProblem(err instanceof Error ? errorText(err, getLang()) : '')
+    } finally {
+      setKanjifying(false)
     }
   }
 
@@ -246,7 +277,11 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
           placeholder={initial ? t('yourAssociation') : (placeholder ?? t('askKanji', { label }))}
           autoFocus={Boolean(initial)}
           rows={open ? Math.min(14, Math.max(3, text.split('\n').length + 1)) : 1}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value)
+            setUnkanjified(null)
+          }}
+          readOnly={kanjifying}
           onFocus={() => setFocused(true)}
           onBlur={() => empty && !initial && setFocused(false)}
           onPaste={onPaste}
@@ -316,6 +351,29 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             <GifIcon />
             <span>GIF</span>
           </button>
+          <button
+            type="button"
+            className="composer-tool"
+            disabled={!text.trim() || kanjifying}
+            onClick={kanjify}
+            title={t('kanjifyTitle')}
+          >
+            <KanjifyIcon />
+            <span>{kanjifying ? t('kanjifyWorking') : 'Kanjify'}</span>
+          </button>
+          {unkanjified !== null && (
+            <button
+              type="button"
+              className="clear"
+              onClick={() => {
+                setText(unkanjified)
+                setUnkanjified(null)
+              }}
+              title={t('kanjifyUndoTitle')}
+            >
+              {t('kanjifyUndo')}
+            </button>
+          )}
           <input
             ref={picker}
             type="file"
@@ -404,6 +462,17 @@ function GifIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+function KanjifyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+      <path d="M6 4H3.5v16H6M18 4h2.5v16H18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      <text x="12" y="16.2" fontSize="11" textAnchor="middle" fill="currentColor">
+        字
+      </text>
     </svg>
   )
 }

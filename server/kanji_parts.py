@@ -60,6 +60,23 @@ def _descendants(char: str, seen: frozenset[str] = frozenset()) -> frozenset[str
     return _below[char]
 
 
+def parts_of(char: str) -> list[str]:
+    """Every part of `char` at any depth, the ones it is drawn with first and
+    what those are made of after; single strokes left out."""
+    _load()
+    out: list[str] = []
+    level = [char]
+    while level:
+        below = []
+        for c in level:
+            for child in sorted(_children.get(c, ())):
+                if child != char and child not in out and child not in STROKES:
+                    out.append(child)
+                    below.append(child)
+        level = below
+    return out
+
+
 def forms(part: str) -> set[str]:
     return FORMS.get(part, {part})
 
