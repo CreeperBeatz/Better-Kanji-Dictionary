@@ -116,7 +116,7 @@ def post_for(char: str, payload: dict = Body(...), user: dict = Depends(require_
     """Post a new note on this subject; it joins any you already have."""
     char = subject_or_400(char)
     text, images = _content(payload)
-    return store.create(char, text, images, user["id"], _visibility(payload, "private"))
+    return store.create(char, text, images, user["id"], _visibility(payload, "public"))
 
 
 @router.post("/kanjify")
