@@ -132,6 +132,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   // Which picture the drawing editor is open on: a new drawing, or one to replace.
   const [sketching, setSketching] = useState<{ replace: string | null; scene?: Record<string, unknown> } | null>(null)
   const picker = useRef<HTMLInputElement>(null)
+  const box = useRef<HTMLTextAreaElement>(null)
   const [gifs, setGifs] = useState(false)
   const [kanjifying, setKanjifying] = useState(false)
 
@@ -240,7 +241,16 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
     setKanjifying(true)
     setProblem(null)
     try {
-      setText((await api.kanjify(label, text)).text)
+      const { text: marked } = await api.kanjify(label, text)
+      // Put in as if typed, so that Ctrl+Z takes it back: a value set from
+      // React is not on the text box's undo stack.
+      const el = box.current
+      if (el && marked !== text) {
+        el.readOnly = false
+        el.focus()
+        el.select()
+        if (!document.execCommand('insertText', false, marked)) setText(marked)
+      }
     } catch (err) {
       setProblem(err instanceof Error ? errorText(err, getLang()) : '')
     } finally {
@@ -259,6 +269,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       <div className="composer-main">
         <Avatar author={author} size={28} />
         <textarea
+          ref={box}
           className="composer-text"
           value={text}
           placeholder={initial ? t('yourAssociation') : (placeholder ?? t('askKanji', { label }))}
