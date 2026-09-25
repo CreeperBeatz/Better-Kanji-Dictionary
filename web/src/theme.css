@@ -4394,6 +4394,46 @@ html {
   margin-top: 0;
 }
 
+/* Kept small, as it stays on the screen: a word's reading and が/を sit
+   beside it, not under it. */
+.page-head > .rail-section {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.page-head .detail-head {
+  align-items: center;
+  gap: 16px;
+}
+
+.page-head .detail-glyph {
+  font-size: 56px;
+}
+
+.page-head .detail-meanings {
+  font-size: 17px;
+  margin: 0;
+}
+
+.page-head .detail-meanings .rest {
+  font-size: 14px;
+}
+
+.page-head > .word-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+.page-head .rail-section .entry-head {
+  font-size: 36px;
+}
+
+.page-head .entry-reading {
+  margin: 0;
+}
+
 /* A phone's page tabs, along the bottom: Dictionary, Associations, Components. */
 .phone-tabs {
   position: relative;
