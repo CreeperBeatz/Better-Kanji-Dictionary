@@ -124,9 +124,9 @@ function isStack(s: unknown): s is Stack {
 
 /**
  * Where the app opens: the entry a reload left in history, else the page the
- * URL names, else an empty search -- on `fresh`, when that is on a stage view.
+ * URL names, else an empty search.
  */
-function opening(fresh?: StageView): Entry {
+function opening(): Entry {
   const state = window.history.state as Entry | null
   const linked = pageInUrl()
   if (state && isStack(state.stack) && (!linked || samePage(linked, state.stack[state.stack.length - 1]))) {
@@ -139,7 +139,7 @@ function opening(fresh?: StageView): Entry {
     }
   }
   if (linked) return { stack: [linked], depth: 0, n: 0 }
-  return { stack: [HOME], depth: 0, stage: fresh, n: 0 }
+  return { stack: [HOME], depth: 0, n: 0 }
 }
 
 function write(entry: Entry, how: 'push' | 'replace') {
@@ -161,9 +161,8 @@ function restoreScroll(el: HTMLElement | null, to: number) {
   setTimeout(() => (el.scrollTop = to), 120)
 }
 
-/** `fresh` is the stage view an empty search opens on, on a phone. */
-export function useNav(scroller: React.RefObject<HTMLElement | null>, fresh?: StageView) {
-  const [entry, setEntry] = useState<Entry>(() => opening(fresh))
+export function useNav(scroller: React.RefObject<HTMLElement | null>) {
+  const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
   current.current = entry
   // Typing replaces the entry on every key; the URL catches up after a pause.
