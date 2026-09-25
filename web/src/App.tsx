@@ -216,8 +216,9 @@ function ghostOf(el: HTMLElement): HTMLElement {
 }
 
 // Opening the app afresh lands on the whole common map, to wander in, on a
-// phone as on a desktop. A link to a character or a word opens on its focus
-// view; a link to anything else, on a desktop, beside the map.
+// desktop; on a phone, on the search, with the map a tap away. A link to a
+// character or a word opens on its focus view; a link to anything else, on a
+// desktop, beside the map.
 // Picking a character, on the map or from a list, goes to its focus view.
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linkedPage = pageInUrl()
@@ -225,7 +226,7 @@ const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
 function initialView(): StageView {
   if (linked || linkedPage?.kind === 'word') return 'focus'
-  return linkedPage && openedOnPhone ? 'focus' : 'map'
+  return openedOnPhone ? 'focus' : 'map'
 }
 
 /**
@@ -263,10 +264,7 @@ export function App() {
   const t = S(useLang())
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
-    scroller,
-    openedOnPhone && !linkedPage ? 'map' : undefined,
-  )
+  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(scroller)
   const top = stack[stack.length - 1]
   const root = stack[0]
   const under = stack.length > 1 ? stack[stack.length - 2] : null
