@@ -11,6 +11,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { tagLabel } from '../i18n/grammar'
 import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
+import { Valency } from '../search/Valency'
 
 const S = strings(
   {
@@ -136,6 +137,7 @@ export function WordPanel({ id, word, from, onPick }: Props) {
       </h2>
       <p className="entry-reading">
         {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
+        <Valency word={w} alone />
         {rank && <span className="entry-rank">{rank}</span>}
       </p>
 

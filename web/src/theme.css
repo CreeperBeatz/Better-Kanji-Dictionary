@@ -3247,6 +3247,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-size: 17px;
 }
 
+.entry-reading .verb-marks {
+  min-width: 0;
+}
+
 .entry-rank {
   font-family: var(--gothic);
   font-size: 11.5px;

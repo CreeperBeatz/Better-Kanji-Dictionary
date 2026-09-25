@@ -703,14 +703,18 @@ export function App() {
     [split, stack, replaceTop, reset, rebase, toDictionary],
   )
 
-  // Going into the box goes to the search it holds, back down the stack if
-  // that is where it is.
-  const focusSearch = useCallback(() => {
+  // Going into the box leaves the page up, so a slip of the finger costs
+  // nothing: only typing starts a search. Off the search, what it holds is
+  // selected, for a new one to replace.
+  const focusSearch = useCallback(() => !split && top.kind !== 'search', [split, top])
+
+  // Enter on what the box already holds goes to that search, back down the
+  // stack if that is where it is.
+  const toSearch = useCallback(() => {
+    if (split || top.kind === 'search') return
     toDictionary()
-    if (split || top.kind === 'search') return false
     if (root.kind === 'search' && root.q === q) pop(stack.length - 1)
     else reset({ kind: 'search', q })
-    return true
   }, [split, top, root, q, stack.length, pop, reset, toDictionary])
 
   useEffect(() => {
@@ -1022,10 +1026,11 @@ export function App() {
     el.style.transform = ''
     slide(el, at, 0, 220)
   }
-  // Pulled down, the page gives way to the search: the keyboard comes up with
-  // what was searched last selected, so typing starts a new search and a tap
-  // in the box carries on with the old one. Called from the touch itself, as
-  // phones only raise the keyboard for focus given in answer to a touch.
+  // Pulled down, the page brings up the search: the keyboard comes up with
+  // what was searched last selected, so typing starts a new search, Enter
+  // goes back to the old one, and putting the keyboard away leaves the page as
+  // it was. Called from the touch itself, as phones only raise the keyboard
+  // for focus given in answer to a touch.
   function typeOver() {
     const input = inputRef.current
     if (!input) return
@@ -1051,6 +1056,7 @@ export function App() {
       onType={type}
       onFocus={focusSearch}
       onSubmit={() => {
+        toSearch()
         setAsked(q.trim())
         rememberSearch(q)
       }}
