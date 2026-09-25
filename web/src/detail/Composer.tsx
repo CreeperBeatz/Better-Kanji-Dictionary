@@ -14,8 +14,8 @@ const S = strings(
     askKanji: 'What does {label} look like to you?',
     edit: 'edit',
     remove: 'remove',
-    attachTitle: 'Attach a picture (or paste or drop one)',
-    picture: 'picture',
+    attachTitle: 'Upload a picture (or paste or drop one)',
+    upload: 'upload',
     drawTitle: 'Draw it in Excalidraw',
     draw: 'draw',
     gifTitle: 'Add a GIF from KLIPY',
@@ -40,8 +40,8 @@ const S = strings(
     askKanji: 'На какво ви прилича {label}?',
     edit: 'редактирайте',
     remove: 'махнете',
-    attachTitle: 'Прикачете картинка (или я поставете, или я пуснете тук)',
-    picture: 'картинка',
+    attachTitle: 'Качете картинка (или я поставете, или я пуснете тук)',
+    upload: 'качване',
     drawTitle: 'Нарисувайте го в Excalidraw',
     draw: 'рисуване',
     gifTitle: 'Добавете GIF от KLIPY',
@@ -304,7 +304,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
             title={t('attachTitle')}
           >
             <PictureIcon />
-            <span>{t('picture')}</span>
+            <span>{t('upload')}</span>
           </button>
           <button
             type="button"

@@ -99,7 +99,9 @@ const PIXEL_ICONS: Record<Picker, React.ReactNode> = {
   wand: icon('M3.5 16.5l9-9M11 6l3 3M14.5 2.5v2M17.5 5.5h-2M16.6 3.4l-1.4 1.4M9 3.5v1.5M4 9h1.5'),
   subject: icon('M10 3.5a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2ZM5 16.5c0-3.3 2.2-5.6 5-5.6s5 2.3 5 5.6M2.5 6V2.5H6M14 2.5h3.5V6M17.5 14v3.5H14M6 17.5H2.5V14'),
 }
-const PIXEL_ERASER_ICON = icon('M10 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM7.5 7.5h1.5V9H7.5ZM11 7.5h1.5V9H11ZM9.2 11h1.5v1.5H9.2Z')
+// Excalidraw's own eraser icon goes to the pixel eraser, the default; this
+// one, whole elements, to its own.
+const OBJECT_ERASER_ICON = icon('M10 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14ZM7.5 7.5h1.5V9H7.5ZM11 7.5h1.5V9H11ZM9.2 11h1.5v1.5H9.2Z')
 const SEARCH_ICON = icon('M8.5 3a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11ZM12.6 12.6 17 17M6 10l1.6-2 1.4 1.5 1-1 1.5 1.5')
 
 /** Excalidraw's own icon and name for a tool it has hidden, read off its markup. */
@@ -322,7 +324,7 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
                 checked: tool === 'erase',
                 title: t('pixelEraserTitle'),
                 label: t('pixelEraser'),
-                icon: PIXEL_ERASER_ICON,
+                icon: <Svg html={borrowed.eraser?.svg} />,
                 pick: () => onTool('erase'),
               },
               {
@@ -330,7 +332,7 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
                 checked: active === 'eraser',
                 title: t('objectEraserTitle'),
                 label: t('objectEraser'),
-                icon: <Svg html={borrowed.eraser?.svg} />,
+                icon: OBJECT_ERASER_ICON,
                 pick: () => api.setActiveTool({ type: 'eraser' }),
               },
             ]
@@ -421,7 +423,7 @@ export function ToolGroups({ api, host, tool, onTool, finding, onFinding }: Prop
           </div>
           <div className="sk-group" data-group="erase" ref={(el) => void (buttons.current.erase = el)}>
             <ToolButton checked={erasing} title={`${t('eraser')} — 8`} keyLabel="8" onPick={pickEraser}>
-              {active === 'eraser' ? <Svg html={borrowed.eraser?.svg} /> : PIXEL_ERASER_ICON}
+              {active === 'eraser' ? OBJECT_ERASER_ICON : <Svg html={borrowed.eraser?.svg} />}
             </ToolButton>
           </div>
           <div className="sk-group" data-group="select" ref={(el) => void (buttons.current.select = el)}>
