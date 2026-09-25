@@ -4251,7 +4251,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 12px;
-  margin: 10px 0 0 38px;
+  margin: 10px 0 0 0;
   padding-top: 9px;
   border-top: 1px solid var(--rule);
 }

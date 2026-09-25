@@ -28,7 +28,6 @@ const S = strings(
     inBrowser: 'in this browser',
     logIn: 'log in',
     cancel: 'cancel',
-    discard: 'discard',
     saving: 'saving',
     posting: 'posting',
     save: 'save',
@@ -54,7 +53,6 @@ const S = strings(
     inBrowser: 'в този браузър',
     logIn: 'влезте',
     cancel: 'откажете',
-    discard: 'изхвърлете',
     saving: 'запазване',
     posting: 'публикуване',
     save: 'запазете',
@@ -232,14 +230,6 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
     }
   }
 
-  function discard() {
-    attachments.forEach(release)
-    setAttachments([])
-    setText('')
-    setFocused(false)
-    if (draftKey) drafts.delete(draftKey)
-  }
-
   return (
     <form
       className="composer"
@@ -364,16 +354,10 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
               </span>
             )}
 
-            {onCancel ? (
+            {onCancel && (
               <button type="button" className="clear" onClick={onCancel}>
                 {t('cancel')}
               </button>
-            ) : (
-              !empty && (
-                <button type="button" className="clear" onClick={discard}>
-                  {t('discard')}
-                </button>
-              )
             )}
             <button className="composer-post" disabled={empty || sending}>
               {t(sending ? (initial ? 'saving' : 'posting') : initial ? 'save' : 'post')}
