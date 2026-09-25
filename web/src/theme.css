@@ -4379,22 +4379,15 @@ html {
   }
 }
 
-/* On a phone the page's head is above both tabs, and what is under it turns. */
-.page-head > .rail-section {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.page-head + .tab-pane > .rail-section:first-child {
-  padding-top: 0;
-}
-
-.page-head + .tab-pane .assoc-tab {
-  padding-top: 18px;
+/* On a phone the page's head is above both tabs, and what is under it turns;
+   a rule between them marks where. */
+.page-head + .tab-pane > .rail-section:first-child > :first-child {
+  margin-top: 0;
 }
 
 /* A phone's page tabs, along the bottom: Dictionary, Associations, Components. */
 .phone-tabs {
+  position: relative;
   display: flex;
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: var(--sumi-sunk);
@@ -4422,15 +4415,27 @@ html {
   color: var(--paper);
 }
 
-/* The vermilion mark on the edge it faces the page from. */
-.phone-tabs button[aria-selected='true']::after {
-  content: '';
+/* The vermilion mark on the edge it faces the page from, over the tab that is
+   up. It slides to the next one as the tabs turn, and follows a swipe. */
+.phone-tab-mark {
   position: absolute;
   top: -1px;
-  left: 22%;
-  right: 22%;
+  left: calc(100% / var(--n) * (var(--at) + var(--drag, 0) + 0.22));
+  width: calc(100% / var(--n) * 0.56);
   height: 2px;
   background: var(--shu);
+  pointer-events: none;
+  transition: left 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.phone-tabs[data-dragging] .phone-tab-mark {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-tab-mark {
+    transition: none;
+  }
 }
 
 /* ---------------------------------------------------------------- press and hold (touch) */

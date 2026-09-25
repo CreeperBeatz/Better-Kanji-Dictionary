@@ -932,6 +932,15 @@ export function App() {
   // the tabs, or back, that return.
   const stageRef = useRef<HTMLElement>(null)
   const paneRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLElement>(null)
+  /** The tabs' mark, drawn `by` of a tab from its place: it follows a swipe. */
+  function dragMark(by: number | null) {
+    const nav = tabsRef.current
+    if (!nav) return
+    nav.toggleAttribute('data-dragging', by !== null)
+    if (by === null) nav.style.removeProperty('--drag')
+    else nav.style.setProperty('--drag', String(by))
+  }
   /** Whether turning to this tab moves the whole screen, not just the pane. */
   function wholeTo(to: PhoneTab | undefined) {
     return to === 'components' || phoneTab === 'components' || !paneRef.current
@@ -998,7 +1007,8 @@ export function App() {
       y: touch.clientY,
       mode: null,
       turns: subject !== null,
-      atTop: e.currentTarget.scrollTop <= 0,
+      // The tabs along the bottom turn too, but do not pull.
+      atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop <= 0,
       last: { x: touch.clientX, at: e.timeStamp },
       v: 0,
       moved: null,
@@ -1036,6 +1046,7 @@ export function App() {
     if (s.moved && s.moved !== el) s.moved.style.transform = ''
     s.moved = el
     el.style.transform = `translateX(${next ? dx : dx / 4}px)`
+    dragMark(next ? Math.max(-1, Math.min(1, -dx / el.clientWidth)) : 0)
   }
   function swipeEnd(e: React.TouchEvent) {
     const s = swipe.current
@@ -1047,6 +1058,7 @@ export function App() {
       return
     }
     if (s?.mode !== 'turn' || !el) return
+    dragMark(null)
     const dx = e.changedTouches[0].clientX - s.x
     const next = besideTab(dx)
     const at = next ? dx : dx / 4
@@ -1066,6 +1078,7 @@ export function App() {
     const el = s?.moved
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     if (s?.mode !== 'turn' || !el) return
+    dragMark(null)
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
@@ -1229,7 +1242,18 @@ export function App() {
             </div>
           </div>
           {mobile && subject && !(onStage && view === 'map') && (
-            <nav className="phone-tabs" role="tablist" aria-label={t('sidePanel')}>
+            <nav
+              className="phone-tabs"
+              role="tablist"
+              aria-label={t('sidePanel')}
+              ref={tabsRef}
+              style={{ '--n': phoneTabs.length, '--at': phoneTabs.indexOf(phoneTab) } as React.CSSProperties}
+              onTouchStart={swipeStart}
+              onTouchMove={swipeMove}
+              onTouchEnd={swipeEnd}
+              onTouchCancel={swipeCancel}
+            >
+              <span className="phone-tab-mark" aria-hidden />
               {phoneTabs.map((p) => (
                 <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
                   {t(p === 'components' ? 'focus' : p)}
