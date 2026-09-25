@@ -112,7 +112,7 @@ function release(a: Attachment) {
   if (a.kind === 'new') URL.revokeObjectURL(a.url)
 }
 
-const EMPTY: Draft = { text: '', attachments: [], visibility: 'private' }
+const EMPTY: Draft = { text: '', attachments: [], visibility: 'public' }
 
 export function Composer({ label, placeholder, author, initial, draftKey, onSubmit, onCancel, onSignIn }: Props) {
   const t = S(useLang())
