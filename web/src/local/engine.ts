@@ -54,10 +54,10 @@ export interface KanjiPack {
   wordsFor: Record<string, number[]>
 }
 
-/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt */
+/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt, verb pair ids */
 export type RawWord = [
   number, string, string, number, number | null, string | null,
-  [string | null, string | null, string, (string | null)?][], [string, number, number][], (number | null)?,
+  [string | null, string | null, string, (string | null)?][], [string, number, number][], (number | null)?, number[]?,
 ]
 
 /** Where the entries and stroke paths are kept: IndexedDB in the app, memory in tests. */
@@ -652,16 +652,18 @@ export class Engine {
 
   /** A dictionary entry without its example sentences, which stay on the server. */
   async wordEntry(id: number): Promise<WordEntry | null> {
-    const i = this.indexOfId(id)
-    if (i < 0) return null
-    const [word] = await this.fetchWords([i])
-    if (!word) return null
+    if (this.indexOfId(id) < 0) return null
+    const raw = (await this.store.words([id])).get(id)
+    if (!raw) return null
+    const word = toWord(raw)
     const chars = [...new Set([...word.headword])].filter((c) => isCjk(c) || (c >= '㐀' && c <= '䶿'))
     const kanji = chars.flatMap((c) => {
       const r = this.row(c)
       return r ? [{ ...toNode(r), curated: r[11] }] : []
     })
-    return { word, kanji, examples: [] }
+    // Absent from rows stored before words carried their verb pairs.
+    const pairs = await this.fetchWords((raw[9] ?? []).map((p) => this.indexOfId(p)).filter((p) => p >= 0))
+    return { word, kanji, examples: [], pairs }
   }
 
   byLevel(level: number): LevelResponse | null {

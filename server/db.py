@@ -35,7 +35,11 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     # Tables added after the first deploy, and the stage that builds each: the
     # database is copied by hand, so an old one must fail here, not on a page.
-    for table, what, stage in (("sense_bg", "the Bulgarian tables", "bg"), ("similar", "similar kanji", "similar")):
+    for table, what, stage in (
+        ("sense_bg", "the Bulgarian tables", "bg"),
+        ("similar", "similar kanji", "similar"),
+        ("verb_pair", "verb pairs", "pairs"),
+    ):
         if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (table,)).fetchone():
             conn.close()
             raise DatabaseMissing(

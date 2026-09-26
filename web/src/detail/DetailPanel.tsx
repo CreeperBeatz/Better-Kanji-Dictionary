@@ -5,7 +5,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
-import { Valency } from '../search/Valency'
+import { Valency, ValencyMark } from '../search/Valency'
 
 const S = strings(
   {
@@ -143,7 +143,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
   const formed = byReading?.char === n.char ? byReading.words : {}
   // Every reading, since the verbs tend to come last; one for a prefix or
   // suffix form and the plain one -- うえ, -うえ -- linked to whichever forms a word.
-  const readings = (list: string[]) => {
+  // A kun reading that is a verb says whether it takes が or を: あ.く, あ.ける.
+  const readings = (list: string[], kun = false) => {
     const plain = new Map<string, Word | undefined>()
     for (const r of list) {
       const p = r.replace(/^-+|-+$/g, '')
@@ -158,6 +159,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
         ) : (
           r
         )}
+        {kun && w && <ValencyMark word={w} />}
       </span>
     ))
   }
@@ -183,7 +185,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
         {n.kunYomi.length > 0 && (
           <>
             <dt>{t('kun')}</dt>
-            <dd className="yomi">{readings(n.kunYomi)}</dd>
+            <dd className="yomi">{readings(n.kunYomi, true)}</dd>
           </>
         )}
         {n.strokes != null && (

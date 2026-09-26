@@ -808,6 +808,7 @@ export function App() {
             word={p.word}
             from={under?.kind === 'kanji' ? under.char : undefined}
             onPick={openKanji}
+            onWord={openWord}
           />
         )
       case 'kanji': {

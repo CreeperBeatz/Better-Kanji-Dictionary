@@ -346,17 +346,21 @@ def build(force: bool = False) -> dict:
     for r in conn.execute("SELECT word_id, text, kana, rare FROM word_form ORDER BY word_id, kana, ord"):
         forms.setdefault(r[0], []).append([r[1], r[2], r[3]])
 
+    pairs: dict[int, list] = {}
+    for r in conn.execute("SELECT word_id, other_id FROM verb_pair ORDER BY word_id, rank"):
+        pairs.setdefault(r[0], []).append(r[1])
+
     for n, lo in enumerate(range(0, len(words), WORD_CHUNK)):
         chunk = [
             [
                 w["id"], w["headword"], w["reading"], w["common"], w["nf"],
                 pitch.get((w["headword"], w["reading"])),
-                senses.get(w["id"], []), forms.get(w["id"], []), w["jlpt"],
+                senses.get(w["id"], []), forms.get(w["id"], []), w["jlpt"], pairs.get(w["id"], []),
             ]
             for w in words[lo : lo + WORD_CHUNK]
         ]
         files[f"words-{n:02d}.json"] = _json(chunk)
-    del senses, forms
+    del senses, forms, pairs
 
     sec = Sections()
     sec.add("word.id", "d32", [w["id"] for w in words])

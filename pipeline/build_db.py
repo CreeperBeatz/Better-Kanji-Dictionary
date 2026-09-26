@@ -504,6 +504,27 @@ def build_vocab(db: sqlite3.Connection) -> None:
           + (f" ({len(level) - len(rows)} ids not in JMdict)" if len(level) > len(rows) else ""))
 
 
+@stage("pairs", "JMdict vi/vt -> each verb's が/を counterpart: 開く/開ける")
+def build_pairs(db: sqlite3.Connection) -> None:
+    """See pipeline/verb_pairs.py. Needs the dict and vocab stages."""
+    import verb_pairs
+
+    db.executescript("""
+        DROP TABLE IF EXISTS verb_pair;
+        CREATE TABLE verb_pair (
+            word_id  INTEGER NOT NULL,
+            other_id INTEGER NOT NULL,  -- goes the other way: が for を, を for が
+            rank     INTEGER NOT NULL,  -- 0 = the likeliest, within word_id
+            PRIMARY KEY (word_id, other_id)
+        );
+    """)
+    rows = verb_pairs.pairs(db)
+    db.executemany("INSERT INTO verb_pair VALUES (?,?,?)", rows)
+    common = {r[0] for r in db.execute("SELECT id FROM word WHERE common = 1")}
+    print(f"  verb pairs    {len({a for a, _, _ in rows}):>7,} verbs with a counterpart"
+          f" ({len({a for a, _, _ in rows} & common):,} common)")
+
+
 @stage("meanings", "Kanji Alive -> curated meaning overlay")
 def build_meanings(db: sqlite3.Connection) -> None:
     import csv

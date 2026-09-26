@@ -96,6 +96,8 @@ export interface WordEntry {
   kanji: (KanjiNode & { curated: string | null })[]
   /** `hit` is the [start, end) of the word itself, inflected as it appears. */
   examples: { text: string; hit: [number, number] | null }[]
+  /** The verb going the other way, が for を: 開ける for 開く; likeliest first. */
+  pairs: Word[]
 }
 
 export interface RadicalGroup {
