@@ -719,7 +719,19 @@ def word_entry(word_id: int) -> dict:
         "WHERE sw.headword = ? ORDER BY LENGTH(s.text) LIMIT 6",
         (w["headword"],),
     )
-    return {"word": w, "kanji": kanji, "examples": [_sentence(r["text"], w["headword"]) for r in rows]}
+    return {
+        "word": w,
+        "kanji": kanji,
+        "examples": [_sentence(r["text"], w["headword"]) for r in rows],
+        "pairs": verb_pairs(word_id),
+    }
+
+
+def verb_pairs(word_id: int) -> list[dict]:
+    """The verb going the other way, が for を: 開ける for 開く (pipeline/verb_pairs.py)."""
+    ids = [r[0] for r in query("SELECT other_id FROM verb_pair WHERE word_id = ? ORDER BY rank", (word_id,))]
+    words = _fetch_words(ids)
+    return [words[i] for i in ids if i in words]
 
 
 _ANNOTATION = re.compile(r"\(.*?\)|\[.*?\]|~")

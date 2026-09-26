@@ -11,7 +11,9 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { tagLabel } from '../i18n/grammar'
 import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
+import { transitivity } from '../search/transitivity'
 import { Valency } from '../search/Valency'
+import { WordMeta } from './HeadMeta'
 
 const S = strings(
   {
@@ -28,6 +30,9 @@ const S = strings(
     inSentence: 'In a sentence',
     needsConnection: 'Example sentences need a connection.',
     restFailed: 'The rest of this entry could not be loaded.',
+    pairVt: 'Transitive pair',
+    pairVi: 'Intransitive pair',
+    pairTitle: 'Open {word}',
   },
   {
     amongFrequent: 'сред {n}-те най-чести думи',
@@ -43,6 +48,9 @@ const S = strings(
     inSentence: 'В изречение',
     needsConnection: 'Примерните изречения изискват връзка с интернет.',
     restFailed: 'Останалата част от статията не можа да се зареди.',
+    pairVt: 'Преходен вариант',
+    pairVi: 'Непреходен вариант',
+    pairTitle: 'Отворете {word}',
   },
 )
 
@@ -53,6 +61,7 @@ interface Props {
   /** The kanji the word was opened from, if it was, to mark among its kanji. */
   from?: string
   onPick: (char: string) => void
+  onWord: (w: Word) => void
 }
 
 const KANJI = /[㐀-䶿一-鿿]/
@@ -117,11 +126,12 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
           {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}
         </p>
       )}
+      <WordMeta word={w} />
     </div>
   )
 }
 
-export function WordPanel({ id, word, from, onPick }: Props) {
+export function WordPanel({ id, word, from, onPick, onWord }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [entry, setEntry] = useState<WordEntry | null>(null)
@@ -162,6 +172,20 @@ export function WordPanel({ id, word, from, onPick }: Props) {
   return (
     <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
       {rank && <p className="entry-rank entry-rank-line">{rank}</p>}
+
+      {/* The verb's other half: 開ける for 開く, and the other way. */}
+      {entry && entry.pairs.length > 0 && (
+        <p className="entry-pairs">
+          <span>{t(transitivity(entry.pairs[0]) === 'vt' ? 'pairVt' : 'pairVi')}</span>
+          {entry.pairs.map((p) => (
+            <button key={p.id} className="entry-pair" onClick={() => onWord(p)} title={t('pairTitle', { word: p.headword })}>
+              <span className="entry-pair-word">{p.headword}</span>
+              <span className="entry-pair-reading">{p.reading}</span>
+              <Valency word={p} alone />
+            </button>
+          ))}
+        </p>
+      )}
 
       <ol className="entry-senses">
         {w.senses.map((s, i) => (

@@ -1,5 +1,6 @@
 import type { Word } from '../api'
 import { strings, useLang } from '../i18n'
+import { transitivity, type Transitivity } from './transitivity'
 
 const S = strings(
   {
@@ -15,24 +16,6 @@ const S = strings(
     suru: 'Съществително, което става глагол със する: {word}する',
   },
 )
-
-type Transitivity = 'vi' | 'vt' | 'both'
-
-/**
- * Whether a verb takes が or を, as its first sense that says so has it: a
- * handful of later senses going the other way -- 上げる, used of vomiting --
- * is not what the verb is learned as.
- */
-function transitivity(w: Word): Transitivity | null {
-  for (const s of w.senses) {
-    const vi = s.pos.includes('vi')
-    const vt = s.pos.includes('vt')
-    if (vi && vt) return 'both'
-    if (vi) return 'vi'
-    if (vt) return 'vt'
-  }
-  return null
-}
 
 /**
  * が for an intransitive verb, を for a transitive one, and before them する
@@ -53,15 +36,31 @@ export function Valency({ word, alone }: { word: Word; alone?: boolean }) {
           する
         </span>
       )}
-      <span
-        className="valency"
-        role={kind ? 'img' : undefined}
-        title={kind ? t(kind) : undefined}
-        aria-label={kind ? t(kind) : undefined}
-      >
-        {(kind === 'vi' || kind === 'both') && <span data-v="vi">が</span>}
-        {(kind === 'vt' || kind === 'both') && <span data-v="vt">を</span>}
-      </span>
+      <Particles kind={kind} />
+    </span>
+  )
+}
+
+/**
+ * Just the が or を, smaller, for beside a reading in running text -- あ.く が,
+ * あ.ける を on 開 -- where a word that is not a verb simply has none.
+ */
+export function ValencyMark({ word }: { word: Word }) {
+  const kind = transitivity(word)
+  return kind ? <Particles kind={kind} small /> : null
+}
+
+function Particles({ kind, small }: { kind: Transitivity | null; small?: boolean }) {
+  const t = S(useLang())
+  return (
+    <span
+      className={small ? 'valency valency-small' : 'valency'}
+      role={kind ? 'img' : undefined}
+      title={kind ? t(kind) : undefined}
+      aria-label={kind ? t(kind) : undefined}
+    >
+      {(kind === 'vi' || kind === 'both') && <span data-v="vi">が</span>}
+      {(kind === 'vt' || kind === 'both') && <span data-v="vt">を</span>}
     </span>
   )
 }

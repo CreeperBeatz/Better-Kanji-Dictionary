@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
+import { KanjiMeta } from './HeadMeta'
 import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
-import { Valency } from '../search/Valency'
+import { Valency, ValencyMark } from '../search/Valency'
 
 const S = strings(
   {
@@ -98,6 +99,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
           {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
         </p>
       </div>
+      <KanjiMeta node={node} />
     </div>
   )
 }
@@ -143,7 +145,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
   const formed = byReading?.char === n.char ? byReading.words : {}
   // Every reading, since the verbs tend to come last; one for a prefix or
   // suffix form and the plain one -- うえ, -うえ -- linked to whichever forms a word.
-  const readings = (list: string[]) => {
+  // A kun reading that is a verb says whether it takes が or を: あ.く, あ.ける.
+  const readings = (list: string[], kun = false) => {
     const plain = new Map<string, Word | undefined>()
     for (const r of list) {
       const p = r.replace(/^-+|-+$/g, '')
@@ -158,6 +161,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
         ) : (
           r
         )}
+        {kun && w && <ValencyMark word={w} />}
       </span>
     ))
   }
@@ -183,7 +187,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
         {n.kunYomi.length > 0 && (
           <>
             <dt>{t('kun')}</dt>
-            <dd className="yomi">{readings(n.kunYomi)}</dd>
+            <dd className="yomi">{readings(n.kunYomi, true)}</dd>
           </>
         )}
         {n.strokes != null && (
