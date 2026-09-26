@@ -425,6 +425,38 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-size: 15px;
 }
 
+/* JLPT level, common, newspaper rank: under the meanings on a kanji's head,
+   under the whole head on a word's. */
+.head-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 10px 0 0;
+}
+
+.head-tag {
+  padding: 1px 7px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  font-family: var(--gothic);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.head-tag[data-kind='jlpt'] {
+  border-color: var(--ai-deep);
+  color: var(--ai);
+  font-weight: 600;
+}
+
+.head-tag[data-kind='off'] {
+  border-style: dashed;
+  color: var(--muted);
+}
+
 .see-components {
   display: inline-flex;
   align-items: center;
@@ -3279,24 +3311,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   min-width: 0;
 }
 
-.entry-rank {
-  font-family: var(--gothic);
-  font-size: 11.5px;
-  color: var(--muted);
-}
-
 .entry-senses {
   margin: 18px 0 0;
   padding: 0 0 0 20px;
-}
-
-/* On a phone, first in the entry, the head being above the tabs. */
-.entry-rank-line {
-  margin: 0;
-}
-
-.entry-rank-line + .entry-senses {
-  margin-top: 10px;
 }
 
 /* The verb's other half, 開ける for 開く: under the rank, above the senses,

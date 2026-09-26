@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
+import { KanjiTags } from './HeadTags'
 import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
@@ -19,9 +20,6 @@ const S = strings(
     on: 'On',
     kun: 'Kun',
     strokes: 'Strokes',
-    frequency: 'Frequency',
-    inNewspapers: '{n} in newspapers',
-    level: 'Level',
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
@@ -43,9 +41,6 @@ const S = strings(
     on: 'Он',
     kun: 'Кун',
     strokes: 'Черти',
-    frequency: 'Честота',
-    inNewspapers: 'място {n} във вестниците',
-    level: 'Ниво',
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
@@ -84,7 +79,10 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   return t('outside')
 }
 
-/** A character as it looks, and what it means: the top of its page, above both tabs. */
+/**
+ * A character as it looks, what it means, and how much it is worth learning:
+ * the top of its page, above both tabs.
+ */
 export function KanjiHead({ node }: { node: KanjiNode }) {
   const lang = useLang()
   const t = S(lang)
@@ -97,6 +95,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
           {lead ?? t('noMeaning')}
           {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
         </p>
+        <KanjiTags node={node} />
       </div>
     </div>
   )
@@ -164,7 +163,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
     ))
   }
 
-  const level = levelOf(n, lang)
   const counts = data.counts
 
   return (
@@ -192,18 +190,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
           <>
             <dt>{t('strokes')}</dt>
             <dd>{n.strokes}</dd>
-          </>
-        )}
-        {n.freq != null && (
-          <>
-            <dt>{t('frequency')}</dt>
-            <dd>{t('inNewspapers', { n: n.freq })}</dd>
-          </>
-        )}
-        {level && (
-          <>
-            <dt>{t('level')}</dt>
-            <dd>{level}</dd>
           </>
         )}
       </dl>

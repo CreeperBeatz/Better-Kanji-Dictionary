@@ -13,11 +13,10 @@ import { local } from '../local/local'
 import { Pitch } from '../search/Pitch'
 import { transitivity } from '../search/transitivity'
 import { Valency } from '../search/Valency'
+import { WordTags } from './HeadTags'
 
 const S = strings(
   {
-    amongFrequent: 'among the {n} most frequent words',
-    common: 'common word',
     failed: 'This entry could not be loaded.',
     looking: 'looking',
     entryFor: 'Dictionary entry for {word}',
@@ -34,8 +33,6 @@ const S = strings(
     pairTitle: 'Open {word}',
   },
   {
-    amongFrequent: 'сред {n}-те най-чести думи',
-    common: 'честа дума',
     failed: 'Тази статия не можа да се зареди.',
     looking: 'зареждане',
     entryFor: 'Речникова статия за {word}',
@@ -65,13 +62,6 @@ interface Props {
 
 const KANJI = /[㐀-䶿一-鿿]/
 
-/** JMdict nf buckets are 500 words wide. */
-function rankOf(w: Word, lang: Lang): string | null {
-  const t = S(lang)
-  if (w.nf) return t('amongFrequent', { n: (w.nf * 500).toLocaleString(lang) })
-  return w.common ? t('common') : null
-}
-
 /** A kanji's meaning in one line: Bulgarian when there is one, else the curated English. */
 function kanjiMeaning(k: WordEntry['kanji'][number], lang: Lang): string {
   const m = meaningsOf(k, lang)
@@ -93,39 +83,42 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
 
 /**
  * The word, its reading, accent and が/を, and its first sense beside it, as
- * a kanji's meanings are: the top of its page, above both tabs. How common
- * the word is goes with the dictionary entry.
+ * a kanji's meanings are, over how much it is worth learning: the top of its
+ * page, above both tabs.
  */
 export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: string) => void }) {
   const lang = useLang()
   const t = S(lang)
   const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], lang).value.split(';').map((g) => g.trim()) : []
   return (
-    <div className="word-head">
-      <div>
-        <h2 className="entry-head">
-          {[...w.headword].map((ch, i) =>
-            KANJI.test(ch) ? (
-              <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
-                {ch}
-              </button>
-            ) : (
-              <span key={i}>{ch}</span>
-            ),
-          )}
-        </h2>
-        <p className="entry-reading">
-          {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
-          <Valency word={w} alone />
-        </p>
+    <>
+      <div className="word-head">
+        <div>
+          <h2 className="entry-head">
+            {[...w.headword].map((ch, i) =>
+              KANJI.test(ch) ? (
+                <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
+                  {ch}
+                </button>
+              ) : (
+                <span key={i}>{ch}</span>
+              ),
+            )}
+          </h2>
+          <p className="entry-reading">
+            {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : w.reading}
+            <Valency word={w} alone />
+          </p>
+        </div>
+        {lead && (
+          <p className="detail-meanings">
+            {lead}
+            {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}
+          </p>
+        )}
       </div>
-      {lead && (
-        <p className="detail-meanings">
-          {lead}
-          {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}
-        </p>
-      )}
-    </div>
+      <WordTags word={w} />
+    </>
   )
 }
 
@@ -165,13 +158,11 @@ export function WordPanel({ id, word, from, onPick, onWord }: Props) {
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
   const glosses = w.senses.map((s) => glossOf(s, lang))
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
-  const rank = rankOf(w, lang)
 
   return (
     <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
-      {rank && <p className="entry-rank entry-rank-line">{rank}</p>}
-
-      {/* The verb's other half: 開ける for 開く, and the other way. */}
+      {/* The verb's other half, 開ける for 開く, and the other way: first,
+          as a verb like 開く has senses enough to bury it. */}
       {entry && entry.pairs.length > 0 && (
         <p className="entry-pairs">
           <span>{t(transitivity(entry.pairs[0]) === 'vt' ? 'pairVt' : 'pairVi')}</span>
