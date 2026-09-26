@@ -3612,6 +3612,40 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+/* The pair as one button, for a composer short of room (see fitBar). */
+.assoc-visibility-toggle {
+  display: none;
+  background: var(--ai-wash);
+  border: 1px solid var(--ai-deep);
+  border-radius: 2px;
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.assoc-visibility-toggle:hover {
+  border-color: var(--ai);
+}
+
+/* Both words in one cell, so the button is as wide as the longer. */
+.assoc-visibility-toggle span {
+  grid-area: 1 / 1;
+}
+
+.assoc-visibility-toggle span:not([data-on]) {
+  visibility: hidden;
+}
+
+.composer-bar:is([data-squeeze='1'], [data-squeeze='2'], [data-squeeze='3']) .assoc-visibility {
+  display: none;
+}
+
+.composer-bar:is([data-squeeze='1'], [data-squeeze='2'], [data-squeeze='3']) .assoc-visibility-toggle {
+  display: inline-grid;
+}
+
 .assoc-actions .tally {
   margin-left: auto;
 }
@@ -4246,11 +4280,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 2px;
 }
 
+/* One line always: fitBar folds things away rather than let it wrap. */
 .composer-bar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 12px;
+  gap: 12px;
+  white-space: nowrap;
   margin: 10px 0 0 0;
   padding-top: 9px;
   border-top: 1px solid var(--rule);
@@ -4283,6 +4318,27 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .composer-tool[data-on] {
   color: var(--ai);
+}
+
+.composer-bar > * {
+  flex-shrink: 0;
+}
+
+.composer-bar:is([data-squeeze='2'], [data-squeeze='3']) .composer-tool span {
+  display: none;
+}
+
+.composer-bar[data-squeeze='3'],
+.composer-bar[data-squeeze='3'] .composer-send {
+  gap: 8px;
+}
+
+.composer-bar[data-squeeze='3'] .composer-post {
+  padding: 4px 10px;
+}
+
+.composer-bar[data-squeeze='3'] .composer-local-where {
+  display: none;
 }
 
 /* ------------------------------------------------------- GIFs from KLIPY */
@@ -4408,7 +4464,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   pointer-events: none;
 }
 
-/* Who sees it, and sending it: kept together at the right, wrapping as one. */
+/* Who sees it, and sending it: kept together at the right. */
 .composer-send {
   display: inline-flex;
   align-items: center;

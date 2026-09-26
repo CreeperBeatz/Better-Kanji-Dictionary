@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { api, type Author, type Visibility } from '../api'
 import { Avatar } from '../account/Avatar'
@@ -134,6 +134,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   const box = useRef<HTMLTextAreaElement>(null)
   const [gifs, setGifs] = useState(false)
   const [kanjifying, setKanjifying] = useState(false)
+  const bar = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (draftKey) drafts.set(draftKey, { text, attachments, visibility })
@@ -142,6 +143,20 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
   const empty = !text.trim() && attachments.length === 0
   // Typing in the GIF search takes the focus from the text, and must not fold it away.
   const open = focused || !empty || gifs
+
+  // The bar stays on one line (see fitBar). Fitted on every render, as a
+  // label may have changed (language, "posting", …); the observer covers the
+  // box itself growing or shrinking.
+  useLayoutEffect(() => {
+    if (bar.current) fitBar(bar.current)
+  })
+  useEffect(() => {
+    const el = bar.current
+    if (!el) return
+    const watch = new ResizeObserver(() => fitBar(el))
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [open])
 
   function add(blob: Blob, scene?: string) {
     setAttachments((as) => [...as, newAttachment(blob, scene)])
@@ -315,7 +330,7 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       {open && (
         // Pressing a button here must not blur the text first: an empty
         // composer folds away on blur, taking the button with it.
-        <div className="composer-bar" onMouseDown={(e) => e.preventDefault()}>
+        <div ref={bar} className="composer-bar" onMouseDown={(e) => e.preventDefault()}>
           <button
             type="button"
             className="composer-tool"
@@ -369,24 +384,41 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
 
           <span className="composer-send">
             {signedIn ? (
-              <span className="assoc-visibility" role="radiogroup" aria-label={t('whoSees')}>
-                {(['private', 'public'] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    role="radio"
-                    aria-checked={visibility === v}
-                    data-on={visibility === v || undefined}
-                    onClick={() => setVisibility(v)}
-                    title={t(v === 'private' ? 'privateTitle' : 'publicTitle')}
-                  >
-                    {t(v)}
-                  </button>
-                ))}
-              </span>
+              <>
+                <span className="assoc-visibility" role="radiogroup" aria-label={t('whoSees')}>
+                  {(['private', 'public'] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={visibility === v}
+                      data-on={visibility === v || undefined}
+                      onClick={() => setVisibility(v)}
+                      title={t(v === 'private' ? 'privateTitle' : 'publicTitle')}
+                    >
+                      {t(v)}
+                    </button>
+                  ))}
+                </span>
+                {/* The same choice when room is short: one button naming the
+                    current one. Both words are laid over each other so it
+                    keeps the width of the longer. */}
+                <button
+                  type="button"
+                  className="assoc-visibility-toggle"
+                  onClick={() => setVisibility((v) => (v === 'private' ? 'public' : 'private'))}
+                  title={`${t('whoSees')}: ${t(visibility === 'private' ? 'privateTitle' : 'publicTitle')}`}
+                >
+                  {(['private', 'public'] as const).map((v) => (
+                    <span key={v} data-on={visibility === v || undefined} aria-hidden={visibility !== v}>
+                      {t(v)}
+                    </span>
+                  ))}
+                </button>
+              </>
             ) : (
               <span className="composer-local" title={t('localTitle')}>
-                {t('inBrowser')} ·{' '}
+                <span className="composer-local-where">{t('inBrowser')} · </span>
                 <button type="button" className="clear" onClick={onSignIn}>
                   {t('logIn')}
                 </button>
@@ -419,6 +451,20 @@ export function Composer({ label, placeholder, author, initial, draftKey, onSubm
       )}
     </form>
   )
+}
+
+/**
+ * Keeps the composer's bar on one line: the roomiest layout that fits, of
+ * 0: everything; 1: private/public as one toggle; 2: the tools as bare icons;
+ * 3: tighter still, and signed out, only "log in".
+ * Measured rather than set by breakpoints, since the Bulgarian labels run
+ * much longer than the English.
+ */
+function fitBar(bar: HTMLElement) {
+  for (let squeeze = 0; squeeze <= 3; squeeze++) {
+    bar.dataset.squeeze = String(squeeze)
+    if (bar.scrollWidth <= bar.clientWidth) return
+  }
 }
 
 function PictureIcon() {
