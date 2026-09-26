@@ -4328,9 +4328,26 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   display: none;
 }
 
-.composer-bar[data-squeeze='3'],
+/* Bare icons share out the room left of the send group between them, edge
+   to edge, so each is a wide target rather than a 23px one. */
+.composer-bar:is([data-squeeze='2'], [data-squeeze='3']) {
+  gap: 0;
+}
+
+.composer-bar:is([data-squeeze='2'], [data-squeeze='3']) .composer-tool {
+  flex-grow: 1;
+  justify-content: center;
+  margin-left: 0;
+  padding: 4px;
+}
+
+.composer-bar[data-squeeze='2'] .composer-send {
+  margin-left: 12px;
+}
+
 .composer-bar[data-squeeze='3'] .composer-send {
   gap: 8px;
+  margin-left: 8px;
 }
 
 .composer-bar[data-squeeze='3'] .composer-post {
