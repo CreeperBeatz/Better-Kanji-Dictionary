@@ -8,7 +8,7 @@
  * read but not type is built up the same way as one you can.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { DrawPad } from '../draw/DrawPad'
 import { strings, useLang } from '../i18n'
 import { RadicalPicker } from './RadicalPicker'
@@ -18,6 +18,7 @@ type Tool = 'draw' | 'radicals'
 const S = strings(
   {
     placeholder: 'English, Japanese or romaji',
+    placeholderPhone: 'English, 日本語 or romaji',
     search: 'Search',
     clearSearch: 'Clear the search',
     clear: 'Clear',
@@ -30,6 +31,7 @@ const S = strings(
   },
   {
     placeholder: 'японски, български или ромаджи',
+    placeholderPhone: 'японски или български',
     search: 'Търсене',
     clearSearch: 'Изчистете търсенето',
     clear: 'Изчистете',
@@ -59,9 +61,23 @@ interface Props {
 
 const coarse = () => window.matchMedia('(pointer: coarse)').matches
 
+// The phone's box is narrower than the full placeholder; a shorter one there.
+const PHONE = '(max-width: 900px)'
+function usePhone(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const m = window.matchMedia(PHONE)
+      m.addEventListener('change', onChange)
+      return () => m.removeEventListener('change', onChange)
+    },
+    () => window.matchMedia(PHONE).matches,
+  )
+}
+
 export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Props) {
   const [tool, setTool] = useState<Tool | null>(null)
   const t = S(useLang())
+  const phone = usePhone()
   const drawRef = useRef<HTMLDivElement>(null)
   const drawButton = useRef<HTMLButtonElement>(null)
 
@@ -125,7 +141,7 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
                 if (coarse()) e.currentTarget.blur()
               }
             }}
-            placeholder={t('placeholder')}
+            placeholder={t(phone ? 'placeholderPhone' : 'placeholder')}
             aria-label={t('search')}
             autoComplete="off"
             autoCorrect="off"

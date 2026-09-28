@@ -863,6 +863,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: center;
   gap: 8px;
   padding: 4px 9px 4px 5px;
+  /* A button brings its own font (Arial) and colour unless told otherwise. */
+  font: inherit;
+  color: inherit;
   border: 1px solid var(--rule);
   border-radius: 2px;
   background: transparent;
@@ -5036,4 +5039,277 @@ html {
   margin: 14px 0 0;
   font-size: 12.5px;
   color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- phone type and touch */
+
+/* Held in the hand, the rail's desktop sizes read small, and its quieter
+   tiers vanish on a dim screen outdoors. So on a phone everything under the
+   headline goes one step up, the muted tiers lift a step, and the gutters
+   narrow to give the words the room. The desktop keeps its own sizes. */
+@media (max-width: 900px) {
+  :root {
+    --paper-dim: #a69d91;
+    --muted: #7d746a;
+    --faint: #5a534b;
+  }
+
+  body {
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .rail-section {
+    padding: 18px 16px;
+  }
+
+  .rail-head {
+    padding: 0 16px;
+  }
+
+  .rail-crumb {
+    padding-right: 16px;
+  }
+
+  /* A page ends where its words end, not on a rule hanging mid-screen. */
+  .tab-pane .rail-section:last-child {
+    border-bottom: 0;
+  }
+
+  .hint,
+  .rail-section h2,
+  .strokes h3,
+  .entry-kanji h3,
+  .entry-examples h3,
+  .assoc-parts h3,
+  .overlay-group,
+  .drawpop-head h2 {
+    font-size: 14px;
+  }
+
+  /* Search results. */
+  .sort-pill-button,
+  .search-filter {
+    font-size: 13px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+
+  /* Two rows that scroll sideways, in place of a ragged wall six rows deep
+     that the words had to wait under. The likeliest characters come first,
+     so the ones in view are the ones wanted; the cut edge says there are more. */
+  .kanji-hits {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: auto auto;
+    grid-auto-columns: max-content;
+    gap: 6px;
+    margin: 14px -16px 0;
+    padding: 0 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    scroll-padding-left: 16px;
+  }
+
+  .kanji-hits::-webkit-scrollbar {
+    display: none;
+  }
+
+  .kanji-hit {
+    padding: 6px 12px 6px 8px;
+    scroll-snap-align: start;
+  }
+
+  .kanji-hit-meaning {
+    max-width: 150px;
+    font-size: 13.5px;
+  }
+
+  .kanji-hit-fanout {
+    font-size: 12px;
+  }
+
+  .word-forms {
+    font-size: 23px;
+  }
+
+  .word-gloss {
+    font-size: 15px;
+  }
+
+  .sense b {
+    font-size: 12px;
+  }
+
+  .word-news,
+  .word-common {
+    font-size: 12px;
+  }
+
+  .word-jlpt {
+    font-size: 12.5px;
+  }
+
+  .semantic-note {
+    font-size: 15px;
+  }
+
+  .level-links button {
+    padding: 7px 14px;
+    font-size: 14px;
+  }
+
+  /* A kanji's page. */
+  .page-head .detail-meanings {
+    font-size: 16px;
+  }
+
+  .page-head .detail-meanings .rest {
+    font-size: 14px;
+  }
+
+  .facts,
+  .fanout-line {
+    font-size: 15px;
+  }
+
+  .vocab-row {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    font-size: 14px;
+  }
+
+  .vocab-word {
+    font-size: 18px;
+  }
+
+  .vocab-reading {
+    color: var(--paper-dim);
+  }
+
+  .suru {
+    font-size: 13.5px;
+  }
+
+  .similar-why {
+    font-size: 12.5px;
+  }
+
+  .similar-why:lang(ja) {
+    font-size: 13.5px;
+  }
+
+  .similar-forms {
+    font-size: 13.5px;
+  }
+
+  /* A word's page. */
+  .entry-rank {
+    font-size: 12.5px;
+  }
+
+  .entry-pos {
+    font-size: 12px;
+  }
+
+  .entry-gloss {
+    font-size: 16px;
+  }
+
+  .entry-senses li {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .entry-kanji-meaning,
+  .entry-kanji-yomi {
+    font-size: 15px;
+  }
+
+  .entry-examples li {
+    font-size: 16px;
+  }
+
+  /* Associations. */
+  .composer-text,
+  .md {
+    font-size: 15px;
+  }
+
+  .comment-head {
+    font-size: 13.5px;
+  }
+
+  .assoc-part p {
+    font-size: 14px;
+  }
+
+  /* The tabs along the bottom are read by the thumb, at a glance. */
+  .phone-tabs button {
+    padding: 14px 4px 15px;
+    font-size: 14px;
+    color: var(--paper-dim);
+  }
+
+  .phone-tabs button[aria-selected='true'] {
+    color: var(--paper);
+  }
+}
+
+/* A finger leaves no hover behind: on a phone whatever was tapped last would
+   stay lit as if it were the chosen one. */
+@media (hover: none) {
+  .kanji-hit:hover {
+    background: transparent;
+    border-color: var(--rule);
+  }
+
+  .word-card:hover,
+  .vocab-row:hover {
+    background: none;
+  }
+
+  .word-card:hover .word-gloss {
+    color: var(--paper-dim);
+  }
+
+  .vocab-row:hover .vocab-word {
+    color: var(--paper);
+  }
+
+  .result:hover {
+    background: transparent;
+  }
+
+  .similar-glyph:hover {
+    background: var(--sumi);
+    border-color: var(--rule);
+  }
+
+  .level-links button:hover:not([data-on]) {
+    background: none;
+    border-color: var(--rule);
+    color: var(--paper-dim);
+  }
+
+  .search-filter:hover:not([data-on]) {
+    color: var(--muted);
+    border-color: var(--rule);
+  }
+
+  .sort-pill-button:hover:not([aria-expanded='true']) {
+    color: var(--muted);
+    border-color: var(--rule);
+  }
+
+  .yomi-link:hover {
+    color: var(--paper);
+    border-bottom-color: var(--faint);
+  }
+
+  .entry-char:hover {
+    color: inherit;
+    border-bottom-color: var(--ai-deep);
+  }
 }
