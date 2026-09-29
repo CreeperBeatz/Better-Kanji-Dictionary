@@ -34,6 +34,7 @@ const S = strings(
     startServer: 'Start the server with',
     selectKanji: 'Select a kanji',
     sidePanel: 'Side panel',
+    searchTab: 'Search',
     dictionary: 'Dictionary',
     associations: 'Associations',
     showSearch: 'Show the search beside the dictionary',
@@ -56,6 +57,7 @@ const S = strings(
     startServer: 'Стартирайте сървъра с',
     selectKanji: 'Изберете йероглиф',
     sidePanel: 'Страничен панел',
+    searchTab: 'Търсене',
     dictionary: 'Речник',
     associations: 'Асоциации',
     showSearch: 'Покажете търсенето до речника',
@@ -190,6 +192,16 @@ function movesItself(el: Element | null, within: Element): boolean {
     if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
   }
   return false
+}
+
+/**
+ * Focuses the search box so a phone raises its keyboard. Put away by hand,
+ * the keyboard leaves the box focused, and focusing it again does nothing;
+ * a blur first makes it a new focus, which does.
+ */
+function raiseKeyboard(input: HTMLInputElement) {
+  if (document.activeElement === input) input.blur()
+  input.focus({ preventScroll: true })
 }
 
 function searchBarOf(input: HTMLInputElement | null): HTMLElement | null {
@@ -1031,13 +1043,18 @@ export function App() {
     setRailTab('dictionary')
     setView('focus')
   }
-  type PhoneTab = RailTab | 'components'
+  // Search is a tab too, left of Dictionary: back down the stack to the search.
+  type PhoneTab = RailTab | 'components' | 'search'
   const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : tab
-  const phoneTabs: PhoneTab[] = componentsOf ? ['dictionary', 'associations', 'components'] : ['dictionary', 'associations']
+  const phoneTabs: PhoneTab[] = componentsOf
+    ? ['search', 'dictionary', 'associations', 'components']
+    : ['search', 'dictionary', 'associations']
   function toPhoneTab(to: PhoneTab) {
     if (to === 'components') showComponents()
-    else chooseRailTab(to)
+    else if (to !== 'search') chooseRailTab(to)
   }
+  // The search page itself: a swipe from the left there raises the keyboard.
+  const onSearchPage = mobile && !onStage && top.kind === 'search'
 
   // Swiping across a page goes to the tab beside it: the page follows the
   // finger, and let go far enough or fast enough it carries on off the screen
@@ -1058,7 +1075,7 @@ export function App() {
   }
   /** Whether turning to this tab moves the whole screen, not just the pane. */
   function wholeTo(to: PhoneTab | undefined) {
-    return to === 'components' || phoneTab === 'components' || !paneRef.current
+    return to === 'components' || to === 'search' || phoneTab === 'components' || !paneRef.current
   }
   function moverTo(to: PhoneTab | undefined): HTMLElement | null {
     if (phoneTab === 'components') return stageRef.current
@@ -1087,6 +1104,7 @@ export function App() {
   // Side by side all the way, so there is never an empty screen between them.
   const turning = useRef<{ ghost: HTMLElement; at: number; to: number; ms: number; whole: boolean } | null>(null)
   function turn(to: PhoneTab, at: number, ms: number) {
+    if (to === 'search') return backToSearch(at, ms)
     const whole = wholeTo(to)
     const from = moverTo(to)
     if (!from) return toPhoneTab(to)
@@ -1117,12 +1135,26 @@ export function App() {
     }, 800)
   }
   function besideTab(dx: number): PhoneTab | undefined {
+    if (onSearchPage) return undefined
     return phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
   }
-  // Dictionary has no tab to its left: a swipe that way opens the search, as
-  // a pull down does.
+  // The search has nothing to its left: a swipe that way opens the box, as a
+  // pull down does.
   function searchBy(dx: number) {
-    return dx > 0 && phoneTab === 'dictionary'
+    return dx > 0 && onSearchPage
+  }
+  /** The tabs follow the page when it goes back to the search. */
+  function dragTabs(by: number | null) {
+    const nav = tabsRef.current
+    if (nav) nav.style.transform = by === null ? '' : `translateX(${by}px)`
+  }
+  // To the search: the page, tabs and all, slides off to the right from
+  // where the finger left it, as a step back does.
+  function backToSearch(at: number, ms: number) {
+    cameBack.current = performance.now()
+    leaveBy('back', at, ms)
+    if (root.kind === 'search') pop(stack.length - 1)
+    else reset({ kind: 'search', q })
   }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
@@ -1138,7 +1170,7 @@ export function App() {
       x: touch.clientX,
       y: touch.clientY,
       mode: null,
-      turns: subject !== null,
+      turns: subject !== null || onSearchPage,
       // The tabs along the bottom turn too, but do not pull.
       atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop <= 0,
       last: { x: touch.clientX, at: e.timeStamp },
@@ -1178,6 +1210,7 @@ export function App() {
     if (s.moved && s.moved !== el) s.moved.style.transform = ''
     s.moved = el
     el.style.transform = `translateX(${next ? dx : dx / 4}px)`
+    dragTabs(next === 'search' ? dx : null)
     dragMark(next ? Math.max(-1, Math.min(1, -dx / el.clientWidth)) : 0)
     searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', searchBy(dx) && dx > PULL)
   }
@@ -1197,9 +1230,11 @@ export function App() {
     const next = besideTab(dx)
     const at = next ? dx : dx / 4
     el.style.transform = ''
+    dragTabs(null)
     const flung = Math.abs(s.v) > 0.4 && Math.sign(s.v) === Math.sign(dx) && Math.abs(dx) > SWIPE
     if (!next || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
       slide(el, at, 0, 220)
+      if (next === 'search' && tabsRef.current) slide(tabsRef.current, at, 0, 220)
       if (searchBy(dx) && (flung || dx > PULL)) typeOver()
       return
     }
@@ -1217,6 +1252,11 @@ export function App() {
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
+    const nav = tabsRef.current
+    if (nav?.style.transform) {
+      dragTabs(null)
+      slide(nav, at, 0, 220)
+    }
   }
   // Pulled down, the page brings up the search: the keyboard comes up with
   // what was searched last selected, so typing starts a new search, Enter
@@ -1226,7 +1266,7 @@ export function App() {
   function typeOver() {
     const input = inputRef.current
     if (!input) return
-    input.focus()
+    raiseKeyboard(input)
     input.setSelectionRange(0, input.value.length)
   }
   // A tab tapped turns the same way, from where the page stands.
@@ -1256,7 +1296,14 @@ export function App() {
   // slides off to the right and the one under it comes back from the left.
   // The tabs along the bottom come and go with the page they belong to. The
   // pane being left is copied before it changes, as a tab turn is.
-  const navAnim = useRef<{ ghosts: HTMLElement[]; tabs: HTMLElement | null; dir: 'forward' | 'back' } | null>(null)
+  const navAnim = useRef<{
+    ghosts: HTMLElement[]
+    tabs: HTMLElement | null
+    dir: 'forward' | 'back'
+    /** Where a swipe let the page go, and how fast it carries on. */
+    at: number
+    ms: number
+  } | null>(null)
   const lastN = useRef<number | undefined>(undefined)
   useEffect(() => {
     lastN.current = (window.history.state as { n?: number } | null)?.n
@@ -1298,14 +1345,14 @@ export function App() {
     if (kind === 'forward' || kind === 'back') leaveBy(kind)
     go()
   }
-  function leaveBy(dir: 'forward' | 'back') {
+  function leaveBy(dir: 'forward' | 'back', at = 0, ms = PAGE_MS) {
     if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const from = onStageRef.current ? stageRef.current : scroller.current
     const ghosts: HTMLElement[] = []
     if (from) ghosts.push(ghostOf(from))
     const tabs = tabsRef.current ? ghostOf(tabsRef.current) : null
-    const how = { ghosts, tabs, dir }
+    const how = { ghosts, tabs, dir, at, ms }
     navAnim.current = how
     // Should nothing change after all, the copies do not stay over the page.
     window.setTimeout(() => {
@@ -1322,7 +1369,9 @@ export function App() {
     const to = onStage ? stageRef.current : scroller.current
     const w = to?.clientWidth ?? window.innerWidth
     const fwd = how.dir === 'forward'
-    startSliding(PAGE_MS)
+    // Swiped back part of the way, the page under is that much further in.
+    const below = -w * 0.3 * Math.max(0, 1 - how.at / w)
+    startSliding(how.ms)
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
@@ -1330,23 +1379,23 @@ export function App() {
       for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
-      slide(to, fwd ? w : -w * 0.3, 0, PAGE_MS).onfinish = () => to.style.removeProperty('z-index')
+      slide(to, fwd ? w : below, 0, how.ms).onfinish = () => to.style.removeProperty('z-index')
     }
     // The tabs stay put between two pages that both have them; they come in
     // with a page that has them, and leave with one that had.
     const nav = tabsRef.current
     if (nav && how.tabs) how.tabs.remove()
-    else if (nav) slide(nav, w, 0, PAGE_MS)
+    else if (nav) slide(nav, w, 0, how.ms)
     else if (how.tabs) how.ghosts.push(how.tabs)
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
       const a = g.animate(
         [
-          { transform: 'translateX(0)', opacity: 1 },
+          { transform: `translateX(${how.at}px)`, opacity: 1 },
           { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
         ],
-        { duration: still ? 0 : PAGE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+        { duration: still ? 0 : how.ms, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
       )
       a.onfinish = () => g.remove()
     }
@@ -1377,7 +1426,7 @@ export function App() {
   useEffect(() => {
     if (!cameBack.current || performance.now() - cameBack.current > 400) return
     cameBack.current = 0
-    if (mobile && !onStage && top.kind === 'search') inputRef.current?.focus({ preventScroll: true })
+    if (mobile && !onStage && top.kind === 'search' && inputRef.current) raiseKeyboard(inputRef.current)
   }, [top, onStage, mobile])
 
   const searchBar = (
@@ -1526,7 +1575,7 @@ export function App() {
               <span className="phone-tab-mark" aria-hidden />
               {phoneTabs.map((p) => (
                 <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
-                  {t(p === 'components' ? 'focus' : p)}
+                  {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
                   {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
               ))}
