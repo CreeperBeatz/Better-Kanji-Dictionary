@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { flushSync } from 'react-dom'
 import { api, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
-import { KanjiMap } from './map/KanjiMap'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
-import { AccountDialog, ProfileButton } from './account/Account'
+import { ProfileButton } from './account/Account'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
@@ -18,6 +18,10 @@ import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, useNav, type Page, type Stack } from './nav'
+
+// Wanted only once the map or the account dialog is opened, so loaded then.
+const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
+const AccountDialog = lazy(() => import('./account/Account').then((m) => ({ default: m.AccountDialog })))
 
 // What a failed graph fetch says when the network, not the server, is why:
 // a marker, shown in the interface language.
@@ -74,25 +78,49 @@ type T = Translate<Parameters<ReturnType<typeof S>>[0]>
 // Matches the narrow layout in theme.css.
 const MOBILE = '(max-width: 900px)'
 
+// Read once per resize, not once per render: asking the window its width
+// while the page is mid-change makes the browser lay it all out to answer.
+let windowWidth = window.innerWidth
 function useWindowWidth(): number {
   return useSyncExternalStore(
     (onChange) => {
-      window.addEventListener('resize', onChange)
-      return () => window.removeEventListener('resize', onChange)
+      const onResize = () => {
+        windowWidth = window.innerWidth
+        onChange()
+      }
+      window.addEventListener('resize', onResize)
+      return () => window.removeEventListener('resize', onResize)
     },
-    () => window.innerWidth,
+    () => windowWidth,
   )
 }
 
+const queries = new Map<string, MediaQueryList>()
+function mediaQuery(query: string): MediaQueryList {
+  let m = queries.get(query)
+  if (!m) queries.set(query, (m = window.matchMedia(query)))
+  return m
+}
 function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (onChange) => {
-      const m = window.matchMedia(query)
+      const m = mediaQuery(query)
       m.addEventListener('change', onChange)
       return () => m.removeEventListener('change', onChange)
     },
-    () => window.matchMedia(query).matches,
+    () => mediaQuery(query).matches,
   )
+}
+
+/**
+ * A function whose identity never changes but which always does what the
+ * latest render says. Children that are memoised keep still while the App
+ * re-renders around them -- as it does on every keystroke of a search.
+ */
+function useStable<A extends unknown[], R>(fn: (...a: A) => R): (...a: A) => R {
+  const ref = useRef(fn)
+  ref.current = fn
+  return useCallback((...a: A) => ref.current(...a), [])
 }
 
 /**
@@ -209,6 +237,22 @@ function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
       // a tainted or lost canvas stays blank
     }
   })
+  // Rows out of sight are not copied: below, they are left out; above, a
+  // blank of their height stands in, so the copy scrolls to the same place.
+  const rows = '.rail-section, .word, .comment, .vocab-row'
+  const from = el.querySelectorAll(rows)
+  const into = g.querySelectorAll(rows)
+  from.forEach((row, i) => {
+    const b = row.getBoundingClientRect()
+    const copy = into[i]
+    if (!copy || !copy.parentNode) return
+    if (b.top > r.top + r.height + 24) copy.remove()
+    else if (b.bottom < r.top - 24) {
+      const blank = document.createElement('div')
+      blank.style.height = `${b.height}px`
+      copy.replaceWith(blank)
+    }
+  })
   g.removeAttribute('id')
   g.dataset.ghost = ''
   g.setAttribute('aria-hidden', 'true')
@@ -243,6 +287,10 @@ function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
 const openedOnPhone = window.matchMedia(MOBILE).matches
 const linkedPage = pageInUrl()
 const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
+
+// A desktop opens on the map, so its code is fetched alongside the app's
+// first render rather than after it.
+if (!openedOnPhone && !linked && linkedPage?.kind !== 'word') void import('./map/KanjiMap')
 
 function initialView(): StageView {
   if (linked || linkedPage?.kind === 'word') return 'focus'
@@ -285,7 +333,7 @@ export function App() {
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // Filled in below: what to do as back or forward arrives, before the page changes.
-  const beforePop = useRef<((e: PopStateEvent) => void) | null>(null)
+  const beforePop = useRef<((e: PopStateEvent, apply: () => void) => boolean) | null>(null)
   const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
     scroller,
     beforePop,
@@ -310,6 +358,27 @@ export function App() {
   useEffect(() => {
     if (root.kind === 'search') setQ(root.q)
   }, [root])
+
+  // While a page slides in, nothing heavy lands on it: what arrives mid-slide
+  // -- the character's details, its graph -- waits for the end, so the slide
+  // itself keeps every frame. `slideEnd` is when the current one is over.
+  const slideEnd = useRef(0)
+  const heldUp = useRef<(() => void)[]>([])
+  const afterSlide = useCallback((fn: () => void) => {
+    if (performance.now() >= slideEnd.current) fn()
+    else heldUp.current.push(fn)
+  }, [])
+  function startSliding(ms: number) {
+    const until = performance.now() + ms + 40
+    if (until <= slideEnd.current) return
+    slideEnd.current = until
+    window.setTimeout(() => {
+      if (performance.now() < slideEnd.current) return
+      const fns = heldUp.current
+      heldUp.current = []
+      fns.forEach((f) => f())
+    }, ms + 50)
+  }
 
   const [data, setData] = useState<GraphResponse | null>(null)
   // The character's own details from the offline pack, which arrive before the graph.
@@ -468,22 +537,23 @@ export function App() {
     if (!focus) return
     let stale = false
     local.kanji(focus)?.then(
-      (d) => !stale && setOnDevice(d),
+      (d) => afterSlide(() => !stale && setOnDevice(d)),
       () => {},
     )
     api.kanji(focus).then(
-      (d) => {
-        if (stale) return
-        setData(d)
-        setError(null)
-      },
+      (d) =>
+        afterSlide(() => {
+          if (stale) return
+          setData(d)
+          setError(null)
+        }),
       // fetch rejects with a TypeError only when the request never got an answer.
       (e) => !stale && setError(e instanceof TypeError ? OFFLINE : String(e.message ?? e)),
     )
     return () => {
       stale = true
     }
-  }, [focus])
+  }, [focus, afterSlide])
 
   // The rail shows the graph's data once it is for this character, and the
   // device's until then -- or instead, when there is no connection.
@@ -499,17 +569,17 @@ export function App() {
     if (!pageKanji || pageKanji === focus) return
     let stale = false
     local.kanji(pageKanji)?.then(
-      (d) => !stale && setPageOnDevice(d),
+      (d) => afterSlide(() => !stale && setPageOnDevice(d)),
       () => {},
     )
     api.kanji(pageKanji).then(
-      (d) => !stale && setPageData(d),
+      (d) => afterSlide(() => !stale && setPageData(d)),
       () => {},
     )
     return () => {
       stale = true
     }
-  }, [pageKanji, focus])
+  }, [pageKanji, focus, afterSlide])
 
   // A word opened from a link comes with nothing but its id; the head above
   // its associations wants what it is.
@@ -581,13 +651,12 @@ export function App() {
           : null
 
   // A character seen in the dictionary from the map starts the stack again from it.
-  const drill = useCallback(
+  const drill = useStable(
     (char: string) => {
       setHovered(null)
       setFocus(char)
       reset({ kind: 'kanji', char })
     },
-    [reset],
   )
 
   // What is on top goes into the history the empty search lists. A search
@@ -615,32 +684,35 @@ export function App() {
   // Opening a character from a page puts it on top -- unless it is the page
   // just below, as when a word's kanji is the one it was opened from. The tab
   // stays, so a part opened from the associations shows its associations.
-  const openKanji = useCallback(
+  const openKanji = useStable(
     (char: string) => {
       setHovered(null)
-      const back = under?.kind === 'kanji' && under.char === char
-      leaveBy(back ? 'back' : 'forward')
-      leaveStage('replace')
-      setViewState('focus')
       keepSearch()
-      if (back) pop()
-      else push({ kind: 'kanji', char })
+      // Back through history animates from the popstate it causes.
+      if (under?.kind === 'kanji' && under.char === char) {
+        leaveStage('replace')
+        setViewState('focus')
+        pop()
+        return
+      }
+      animateNav('forward', () => {
+        leaveStage('replace')
+        setViewState('focus')
+        push({ kind: 'kanji', char })
+      })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [under, push, pop, keepSearch, leaveStage],
   )
 
   // A word, like a character, goes to its graph -- of its kanji -- when it has one.
-  const openWord = useCallback(
+  const openWord = useStable(
     (w: Word) => {
-      leaveBy('forward')
-      toDictionary()
       keepSearch()
-      if (HAN.test(w.headword)) setViewState('focus')
-      push({ kind: 'word', id: w.id, word: w })
+      animateNav('forward', () => {
+        toDictionary()
+        if (HAN.test(w.headword)) setViewState('focus')
+        push({ kind: 'word', id: w.id, word: w })
+      })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [push, toDictionary, keepSearch],
   )
 
   // A pick on the decomposition graph opens on top of the page, and the graph
@@ -648,7 +720,7 @@ export function App() {
   // back from any of them is the character in the middle, and back from that
   // is wherever it was come to from. `via` is the container a peek skipped
   // through, which counts as visited.
-  const graphOpen = useCallback(
+  const graphOpen = useStable(
     (char: string, via?: string) => {
       setHovered(null)
       if (via && via !== char) rememberKanji(via)
@@ -657,12 +729,18 @@ export function App() {
         // in the dictionary makes it the graph's centre too: back on
         // Components, the graph is of the character whose page this is.
         const back = under?.kind === 'kanji' && under.char === char && !under.centre
-        leaveBy(back ? 'back' : 'forward')
-        leaveStage('replace')
-        setFocus(char)
-        if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
-        else if (back) pop()
-        else push({ kind: 'kanji', char })
+        if (back) {
+          leaveStage('replace')
+          setFocus(char)
+          pop()
+          return
+        }
+        animateNav('forward', () => {
+          leaveStage('replace')
+          setFocus(char)
+          if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
+          else push({ kind: 'kanji', char })
+        })
         return
       }
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
@@ -675,13 +753,11 @@ export function App() {
         if (scroller.current) scroller.current.scrollTop = 0
       } else push(page)
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [top, under, push, pop, replaceTop, focus, leaveStage, mobile],
   )
 
   // Recentring on a character on the graph opens it too, or takes the
   // centre it was opened with off it when it is open already.
-  const graphRecentre = useCallback(
+  const graphRecentre = useStable(
     (char: string, via?: string) => {
       setHovered(null)
       if (via && via !== char) rememberKanji(via)
@@ -691,23 +767,21 @@ export function App() {
       // On a phone the graph stays up: this was done on it.
       else push({ kind: 'kanji', char }, true)
     },
-    [top, under, push, pop, replaceTop],
   )
 
   // From the map's card: the character in the dictionary, and its graph.
-  const seeInDictionary = useCallback(
+  const seeInDictionary = useStable(
     (char: string) => {
       setMapCard(null)
-      leaveBy('forward')
-      // Opening it puts the page up, on a phone.
-      drill(char)
-      if (mobile) {
-        setViewState('focus')
-        leaveStage('replace')
-      } else setView('focus')
+      animateNav('forward', () => {
+        // Opening it puts the page up, on a phone.
+        drill(char)
+        if (mobile) {
+          setViewState('focus')
+          leaveStage('replace')
+        } else setView('focus')
+      })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [drill, mobile, setView, leaveStage],
   )
 
   // Out to the map from the search, with the search column folded away for it.
@@ -717,29 +791,27 @@ export function App() {
   }, [setView])
 
   // A pick from the search column replaces what is open beside it.
-  const listKanji = useCallback(
+  const listKanji = useStable(
     (char: string) => {
       setHovered(null)
       setViewState('focus')
       rememberSearch(q)
       openOver({ kind: 'search', q }, { kind: 'kanji', char })
     },
-    [q, openOver],
   )
-  const listWord = useCallback(
+  const listWord = useStable(
     (w: Word) => {
       if (HAN.test(w.headword)) setViewState('focus')
       rememberSearch(q)
       openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
     },
-    [q, openOver],
   )
 
-  const deselect = useCallback(() => {
+  const deselect = useStable(() => {
     setHovered(null)
     setFocus(null)
     if (top.kind === 'kanji') reset({ kind: 'search', q })
-  }, [top, q, reset])
+  })
 
   // Typing is a search: the first key starts a new stack, the rest change it.
   const type = useCallback(
@@ -884,6 +956,15 @@ export function App() {
         ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
         : null
   const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
+  // The tab not showing is mounted for its count, but only once the page has
+  // come to rest: comments rendered behind a page sliding in cost it frames.
+  const subjectKey = subject?.key ?? null
+  const [settled, setSettled] = useState<string | null>(null)
+  useEffect(() => {
+    if (!subjectKey) return
+    const t = window.setTimeout(() => setSettled(subjectKey), mobile ? PAGE_MS + 160 : 0)
+    return () => clearTimeout(t)
+  }, [subjectKey, mobile])
   function associations(s: { key: string; label: string }) {
     return (
       <Associations
@@ -1137,8 +1218,10 @@ export function App() {
       const under = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop
       if (sc.scrollTop > under) sc.scrollTop = under
     }
+    startSliding(how.ms)
     if (el) slide(el, how.at - how.to, 0, how.ms)
     slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneTab])
 
   // Going to a page slides it in from the right over the one it was opened
@@ -1155,6 +1238,24 @@ export function App() {
   // renders, and the pane showing may have changed since.
   const onStageRef = useRef(onStage)
   onStageRef.current = onStage
+  /**
+   * Make the change `go` with the page sliding: as a view transition where
+   * the browser has them -- it photographs the old page itself, which costs
+   * nothing next to copying it -- and by a copy of the page elsewhere.
+   */
+  function animateNav(dir: 'forward' | 'back', go: () => void) {
+    if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return go()
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return go()
+    if (typeof document.startViewTransition === 'function') {
+      document.documentElement.dataset.nav = dir
+      startSliding(PAGE_MS)
+      const t = document.startViewTransition(() => flushSync(go))
+      t.finished.finally(() => delete document.documentElement.dataset.nav)
+      return
+    }
+    leaveBy(dir)
+    go()
+  }
   function leaveBy(dir: 'forward' | 'back') {
     if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
@@ -1179,6 +1280,7 @@ export function App() {
     const to = onStage ? stageRef.current : scroller.current
     const w = to?.clientWidth ?? window.innerWidth
     const fwd = how.dir === 'forward'
+    startSliding(PAGE_MS)
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
@@ -1206,6 +1308,7 @@ export function App() {
       )
       a.onfinish = () => g.remove()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top, pane, onStage])
 
   // Back -- the browser's, or the app's -- to the search brings the keyboard
@@ -1213,15 +1316,15 @@ export function App() {
   // given as a gesture is answered, so it is asked at once.
   const cameBack = useRef(0)
   function goBack() {
-    leaveBy('back')
     cameBack.current = performance.now()
     pop()
   }
-  beforePop.current = (e: PopStateEvent) => {
+  beforePop.current = (e: PopStateEvent, apply: () => void) => {
     cameBack.current = performance.now()
-    if (turning.current) return
+    if (turning.current) return false
     const n = (e.state as { n?: number } | null)?.n
-    leaveBy(n !== undefined && lastN.current !== undefined && n > lastN.current ? 'forward' : 'back')
+    animateNav(n !== undefined && lastN.current !== undefined && n > lastN.current ? 'forward' : 'back', apply)
+    return true
   }
   useEffect(() => {
     if (!cameBack.current || performance.now() - cameBack.current > 400) return
@@ -1348,7 +1451,7 @@ export function App() {
                 ))}
               {/* Kept mounted while hidden, so the count on its tab is there
                   before the tab is opened. */}
-              {subject && (
+              {subject && (tab === 'associations' || settled === subject.key) && (
                 <div hidden={tab !== 'associations'}>
                   {associations(subject)}
                 </div>
@@ -1430,6 +1533,7 @@ export function App() {
 
           {!error && mapOpened && (
             <div className="map-host" hidden={view !== 'map'}>
+              <Suspense fallback={null}>
               <KanjiMap
                 scope={scopeOf(filter)}
                 focus={mapCard ?? focus}
@@ -1449,6 +1553,7 @@ export function App() {
                 onScope={setFilter}
                 legend={legendOpen && view === 'map'}
               />
+              </Suspense>
             </div>
           )}
 
@@ -1479,7 +1584,11 @@ export function App() {
         </main>
       </div>
 
-      {accountShown && <AccountDialog onClose={closeAccount} />}
+      {accountShown && (
+        <Suspense fallback={null}>
+          <AccountDialog onClose={closeAccount} />
+        </Suspense>
+      )}
     </div>
   )
 }

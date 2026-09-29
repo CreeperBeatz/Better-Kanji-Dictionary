@@ -8,10 +8,12 @@
  * read but not type is built up the same way as one you can.
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { DrawPad } from '../draw/DrawPad'
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { strings, useLang } from '../i18n'
-import { RadicalPicker } from './RadicalPicker'
+
+// Neither tool is needed until its button is pressed.
+const DrawPad = lazy(() => import('../draw/DrawPad').then((m) => ({ default: m.DrawPad })))
+const RadicalPicker = lazy(() => import('./RadicalPicker').then((m) => ({ default: m.RadicalPicker })))
 
 type Tool = 'draw' | 'radicals'
 
@@ -199,13 +201,17 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
               ×
             </button>
           </div>
-          <DrawPad onPick={pick} />
+          <Suspense fallback={null}>
+            <DrawPad onPick={pick} />
+          </Suspense>
         </div>
       )}
 
       {tool === 'radicals' && (
         <div className="searchtools">
-          <RadicalPicker onPick={pick} />
+          <Suspense fallback={null}>
+            <RadicalPicker onPick={pick} />
+          </Suspense>
           <button className="searchtools-close clear" onClick={() => setTool(null)}>
             {t('done')}
           </button>

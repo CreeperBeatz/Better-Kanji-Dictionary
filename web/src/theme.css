@@ -9,7 +9,7 @@
  *   vermilion the seal on the focused character, and nothing else
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
+/* The fonts are linked from index.html, so they load beside the script rather than after this file. */
 
 :root {
   --sumi: #12100e;
@@ -5590,5 +5590,165 @@ html {
 
   .lock-shackle {
     transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- phone speed */
+
+@media (max-width: 900px) {
+  /* Sideways, a finger on a page or its tabs is the app's (a tab turn), never
+     the browser's: Chrome otherwise starts a scroll gesture that has nowhere
+     to go, and the tap that follows it can be spent stopping that instead. */
+  .rail-body,
+  .phone-tabs {
+    touch-action: pan-y pinch-zoom;
+  }
+
+  /* Rows that scroll across still do. */
+  .kanji-hits {
+    touch-action: pan-x pan-y;
+  }
+
+  /* Blurring the whole screen behind a dialog is the costliest thing a phone
+     GPU is asked for here; dimming says the same. */
+  .shell-grid {
+    transition: opacity 180ms var(--ease);
+  }
+
+  .shell-grid[data-dimmed] {
+    filter: none;
+    opacity: 0.35;
+  }
+
+  /* Only the rows that show are laid out and painted; the rest wait until
+     scrolled to. The size remembered keeps the scrollbar honest. */
+  .word,
+  .comment,
+  .assoc-group > li {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
+  }
+
+  /* Rows below the first screen arrive with a scroll, not an animation. */
+  .words > :nth-child(n + 8),
+  .kanji-hits > :nth-child(n + 9),
+  .comment:nth-child(n + 6),
+  .entry-kanji li:nth-child(n + 6) {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------- page slides (view transitions) */
+
+/* On a phone, going to a page or back is a view transition where the browser
+   has them (App.tsx sets data-nav on <html> for its direction): the pane
+   showing is the "page", the tabs along the bottom are the "tabs", and
+   nothing else moves. Old browsers get the same slide by a copy of the page. */
+@media (max-width: 900px) {
+  html[data-nav] .shell-grid[data-pane='rail'] .rail-body,
+  html[data-nav] .shell-grid[data-pane='stage'] .stage {
+    view-transition-name: page;
+  }
+
+  html[data-nav] .phone-tabs {
+    view-transition-name: tabs;
+  }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(page),
+::view-transition-group(tabs) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+::view-transition-image-pair(page),
+::view-transition-image-pair(tabs) {
+  isolation: auto;
+}
+
+::view-transition-old(page),
+::view-transition-new(page),
+::view-transition-old(tabs),
+::view-transition-new(tabs) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+  mix-blend-mode: normal;
+}
+
+/* Forward: the new page slides in over the old, which slips left and dims. */
+html[data-nav='forward']::view-transition-old(page) {
+  animation-name: vt-slip-left;
+}
+
+html[data-nav='forward']::view-transition-new(page) {
+  animation-name: vt-in-right;
+}
+
+/* Back: the old page slides off to the right over the one under it. */
+html[data-nav='back']::view-transition-old(page) {
+  animation-name: vt-out-right;
+  z-index: 1;
+}
+
+html[data-nav='back']::view-transition-new(page) {
+  animation-name: vt-in-left;
+}
+
+/* Tabs: still when both pages have them; in with a page that has, off with one that had. */
+html[data-nav]::view-transition-old(tabs),
+html[data-nav]::view-transition-new(tabs) {
+  animation-name: none;
+}
+
+html[data-nav]::view-transition-new(tabs):only-child {
+  animation-name: vt-in-right;
+}
+
+html[data-nav]::view-transition-old(tabs):only-child {
+  animation-name: vt-out-right;
+}
+
+@keyframes vt-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes vt-in-left {
+  from {
+    transform: translateX(-30%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes vt-out-right {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes vt-slip-left {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-30%);
+    opacity: 0.5;
   }
 }

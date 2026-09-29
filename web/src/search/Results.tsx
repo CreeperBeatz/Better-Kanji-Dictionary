@@ -3,7 +3,7 @@
  * found, a whole JLPT level, and -- with nothing typed -- the way in to both.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode, memo, startTransition } from 'react'
 import { useAuth } from '../account/auth'
 import {
   api,
@@ -238,7 +238,10 @@ function remember(key: string, r: SearchResponse) {
   if (found.size > 60) found.delete(found.keys().next().value!)
 }
 
-function WordRow({
+/** Memoised: while a new search is on its way the old rows stay as they are. */
+const WordRow = memo(WordRowView)
+
+function WordRowView({
   w,
   onWord,
   why,
@@ -313,7 +316,9 @@ interface ChipKanji {
   fanout?: number | null
 }
 
-function KanjiChip({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
+const KanjiChip = memo(KanjiChipView)
+
+function KanjiChipView({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
   const lang = useLang()
   const t = S(lang)
   const m = meaningsOf(k, lang)
@@ -349,6 +354,9 @@ interface SearchProps {
   onMap: () => void
 }
 
+/** How many words a result shows before the rest are added. */
+const FIRST_ROWS = 10
+
 export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
@@ -377,7 +385,13 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       api.search(term, lang, { common, sort, order }).then(
         (d) => {
           remember(key, d)
-          if (!stale) (setResult(d), setBusy(false))
+          // As a transition: the rows are rendered between keystrokes, and a
+          // key pressed meanwhile is answered first.
+          if (!stale)
+            startTransition(() => {
+              setResult(d)
+              setBusy(false)
+            })
         },
         () => !stale && setBusy(false),
       )
@@ -387,6 +401,18 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       clearTimeout(timer)
     }
   }, [term, lang, common, sort, order, key])
+
+  // The first screen of words is put up at once; the rest follow in a spare
+  // moment, so a result never costs a keystroke more than a screenful.
+  const [allRows, setAllRows] = useState(false)
+  useEffect(() => {
+    setAllRows(false)
+    if (!result || result.words.length <= FIRST_ROWS) return
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 120))
+    const cancel = window.cancelIdleCallback ?? window.clearTimeout
+    const id = idle(() => startTransition(() => setAllRows(true)), { timeout: 600 })
+    return () => cancel(id)
+  }, [result])
 
   function pickSort(next: SearchSort, nextOrder: SearchOrder) {
     localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
@@ -454,7 +480,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       )}
       {result && result.words.length > 0 && (
         <ol className="words">
-          {result.words.map((w) => (
+          {(allRows ? result.words : result.words.slice(0, FIRST_ROWS)).map((w) => (
             <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} />
           ))}
         </ol>

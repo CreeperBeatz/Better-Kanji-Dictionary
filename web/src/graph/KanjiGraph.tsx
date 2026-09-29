@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo, useLayoutEffect } from 'react'
 import { api, type GraphResponse, type KanjiNode } from '../api'
 import { strings, useLang, type Translate } from '../i18n'
 import { meaningsOf } from '../i18n/content'
@@ -182,7 +182,14 @@ interface Spot {
   height: number
 }
 
-export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock }: Props) {
+/**
+ * Memoised: the App re-renders on every keystroke of a search while the
+ * graph stands hidden behind the results on a phone, and none of that is
+ * the graph's business.
+ */
+export const KanjiGraph = memo(KanjiGraphView)
+
+function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
@@ -193,7 +200,33 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
     [data, shown, via],
   )
   const svgRef = useRef<SVGSVGElement>(null)
+  // Where the graph stands. A drag, pinch or wheel moves the <g> directly,
+  // frame by frame, without a render of every node; React is told where it
+  // came to rest once the gesture pauses, for what depends on the scale.
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
+  const viewRef = useRef(view)
+  const gRef = useRef<SVGGElement>(null)
+  const settle = useRef<number | undefined>(undefined)
+  const transformOf = (v: View) => `translate(${v.x} ${v.y}) scale(${v.scale})`
+  /** Put the graph here now, and tell React shortly. */
+  function moveView(v: View) {
+    viewRef.current = v
+    gRef.current?.setAttribute('transform', transformOf(v))
+    clearTimeout(settle.current)
+    settle.current = window.setTimeout(() => setView(v), 100)
+  }
+  /** Put the graph here, with a render. */
+  function placeView(next: View | ((v: View) => View)) {
+    const v = typeof next === 'function' ? next(viewRef.current) : next
+    viewRef.current = v
+    clearTimeout(settle.current)
+    setView(v)
+  }
+  // After every render the <g> is where the last gesture left it, not where
+  // React last heard.
+  useLayoutEffect(() => {
+    gRef.current?.setAttribute('transform', transformOf(viewRef.current))
+  })
   const [over, setOver] = useState<string | null>(null)
   const [peek, setPeek] = useState<Peek | null>(null)
   // Bumped when a prefetch lands, so the "more above" marks redraw.
@@ -229,7 +262,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
     // Cap generously so a sparse graph (few containers) still fills the canvas
     // instead of floating as a small diagram in a large void.
     const scale = Math.min(width / (b.maxX - b.minX), height / (b.maxY - b.minY), 1.7)
-    setView({
+    placeView({
       x: width / 2 - ((b.minX + b.maxX) / 2) * scale,
       y: height / 2 - ((b.minY + b.maxY) / 2) * scale,
       scale,
@@ -239,6 +272,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   // Refit whenever the focus changes: the component tree below and the number of
   // container rings above both vary a lot between characters.
   useEffect(fit, [fit, data.focus.char, filter])
+  useEffect(() => () => clearTimeout(settle.current), [])
 
   /** The svg's middle, which the buttons zoom about. */
   function middle(): [number, number] {
@@ -249,7 +283,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   /** Put the focused character, which the layout keeps at its origin, in the middle. */
   function recentre() {
     const [mx, my] = middle()
-    setView((v) => ({ ...v, x: mx, y: my }))
+    placeView((v) => ({ ...v, x: mx, y: my }))
   }
 
   // Keep the graph where it was relative to the middle as the stage changes
@@ -263,7 +297,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
       const dx = (now.width - last.width) / 2
       const dy = (now.height - last.height) / 2
       last = now
-      if (dx || dy) setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+      if (dx || dy) placeView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
     })
     ro.observe(svg)
     return () => ro.disconnect()
@@ -370,11 +404,10 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
 
   /** Zoom by `factor` about a point in the svg, then move by (dx, dy). */
   function zoomAt(factor: number, px: number, py: number, dx = 0, dy = 0) {
-    setView((v) => {
-      const scale = Math.min(Math.max(v.scale * factor, 0.12), 6)
-      const k = scale / v.scale
-      return { scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy }
-    })
+    const v = viewRef.current
+    const scale = Math.min(Math.max(v.scale * factor, 0.12), 6)
+    const k = scale / v.scale
+    moveView({ scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy })
   }
 
   function onWheel(e: React.WheelEvent) {
@@ -399,7 +432,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
       // and a swipe is the page's, to turn its tab. The press is still
       // followed, so a moving finger does not count as a hold.
       pinched.current = false
-      drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
+      drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
       return
     }
     if (e.pointerType === 'touch') {
@@ -418,7 +451,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
         return
       }
     }
-    drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
+    drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
   }
 
   /** Where a pointer event is, in the svg's own pixels. */
@@ -481,7 +514,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
       setPeek(null)
       unpop()
     }
-    if (d.moved) setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
+    if (d.moved) moveView({ ...viewRef.current, x: d.vx + dx, y: d.vy + dy })
   }
 
   function onPointerUp(e: React.PointerEvent) {
@@ -647,7 +680,7 @@ ${t('via')}`}
         // A long press would otherwise open the browser's own menu.
         onContextMenu={(e) => e.preventDefault()}
       >
-        <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+        <g ref={gRef} transform={transformOf(view)}>
           <g className="graph-main" data-peek={peek ? true : undefined}>
             {layout.edges.map((e) => (
               <path

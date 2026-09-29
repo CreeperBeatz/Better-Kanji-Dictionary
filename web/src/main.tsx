@@ -18,4 +18,6 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {})
   })
 }
-startOffline()
+// After the first frame is on the screen: the worker's start and its first
+// messages would otherwise share the task that draws the page.
+requestAnimationFrame(() => setTimeout(startOffline, 0))

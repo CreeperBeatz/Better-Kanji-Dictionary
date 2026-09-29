@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { api, isGifUrl } from '../api'
 import { strings, useLang } from '../i18n'
 import { getImage, isLocalImage } from '../localNotes'
@@ -11,16 +9,28 @@ const S = strings(
   { zoom: 'Покажете изображението по-голямо', close: 'Затворете' },
 )
 
+// The markdown renderer is a fifth of the app's code and is wanted only once
+// a note is on the screen, so it loads then; the note reads as plain text
+// for the moment it takes.
+const Markdown = lazy(() => import('./Markdown'))
+
 export function Note({ text }: { text: string }) {
   return (
     <div className="md">
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        components={{ a: (props) => <a {...props} target="_blank" rel="noreferrer" /> }}
-      >
-        {text}
-      </Markdown>
+      <Suspense fallback={<Plain text={text} />}>
+        <Markdown text={text} />
+      </Suspense>
     </div>
+  )
+}
+
+function Plain({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/\n{2,}/).map((para, i) => (
+        <p key={i}>{para}</p>
+      ))}
+    </>
   )
 }
 
