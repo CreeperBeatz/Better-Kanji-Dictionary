@@ -156,6 +156,11 @@ const OPEN_DELAY = 120
 const CLOSE_DELAY = 200
 /** Press this long on a touch screen for the menu a right click opens. */
 const HOLD_DELAY = 450
+/** Two taps this close in time and place are a double tap. */
+const DOUBLE_TAP_MS = 300
+const DOUBLE_TAP_PX = 40
+/** Zoom per pixel dragged after a double tap: e^(rate * px). */
+const TAP_ZOOM_RATE = 0.006
 
 async function fetchAbove(chars: string[]): Promise<void> {
   const missing = chars.filter((c) => !aboveCache.has(c))
@@ -238,6 +243,14 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null)
   // A pinch ends with fingers lifting over nodes, which must not open them.
   const pinched = useRef(false)
+  // One-handed zoom, as on a map: tap twice, keep the finger down the second
+  // time, and drag down to zoom in, up to zoom out, about where it tapped. A
+  // plain double tap zooms in a step. `lastTap` is the first tap, for the
+  // second to be told from a fresh press.
+  const lastTap = useRef<{ x: number; y: number; at: number } | null>(null)
+  const tapZoom = useRef<{ y: number; px: number; py: number; from: View; moved: boolean } | null>(null)
+  // The click that ends the second tap must not open a card.
+  const zoomTapped = useRef(false)
   // Touch has no hover or right click: a tap shows a character's card, and
   // pressing and holding opens the menu a right click does.
   const [card, setCard] = useState<Spot | null>(null)
@@ -439,6 +452,28 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       const rect = svgRef.current?.getBoundingClientRect()
       touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
       if (touches.current.size === 1) pinched.current = false
+      // The second tap of a double tap, still down: from here the finger zooms.
+      const prev = lastTap.current
+      if (
+        touches.current.size === 1 &&
+        prev &&
+        e.timeStamp - prev.at < DOUBLE_TAP_MS &&
+        Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < DOUBLE_TAP_PX
+      ) {
+        lastTap.current = null
+        clearTimeout(hold.current.timer)
+        setPeek(null)
+        unpop()
+        tapZoom.current = {
+          y: e.clientY,
+          px: e.clientX - (rect?.left ?? 0),
+          py: e.clientY - (rect?.top ?? 0),
+          from: viewRef.current,
+          moved: false,
+        }
+        svgRef.current?.setPointerCapture?.(e.pointerId)
+        return
+      }
       if (touches.current.size === 2) {
         // A second finger turns the drag into a pinch.
         for (const id of touches.current.keys()) svgRef.current?.setPointerCapture?.(id)
@@ -483,6 +518,17 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    const z = tapZoom.current
+    if (z) {
+      const dy = e.clientY - z.y
+      if (!z.moved && Math.abs(dy) < 3) return
+      z.moved = true
+      // Down zooms in, up out: a screen's height is about three doublings.
+      const scale = Math.min(Math.max(z.from.scale * Math.exp(dy * TAP_ZOOM_RATE), 0.12), 6)
+      const k = scale / z.from.scale
+      moveView({ scale, x: z.px - (z.px - z.from.x) * k, y: z.py - (z.py - z.from.y) * k })
+      return
+    }
     if (touches.current.has(e.pointerId)) {
       const rect = svgRef.current?.getBoundingClientRect()
       touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
@@ -518,6 +564,18 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    const z = tapZoom.current
+    if (z) {
+      tapZoom.current = null
+      zoomTapped.current = true
+      // Tapped twice and let go: a step in, about the taps.
+      if (!z.moved) zoomAt(1.6, z.px, z.py)
+    } else if (e.pointerType === 'touch' && e.type !== 'pointercancel' && !locked) {
+      // A tap -- a press that did not move -- may be the first of two.
+      const d = drag.current
+      const still = !d || !d.moved
+      lastTap.current = still && touches.current.size <= 1 ? { x: e.clientX, y: e.clientY, at: e.timeStamp } : null
+    }
     touches.current.delete(e.pointerId)
     if (touches.current.size < 2) pinch.current = null
     drag.current = null
@@ -534,6 +592,10 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       return
     }
     if (pinched.current) return
+    if (zoomTapped.current) {
+      zoomTapped.current = false
+      return
+    }
     if ('clientX' in e && pointer.current === 'touch') {
       const spot = spotOf(e, char, via)
       if (spot) setCard(spot)

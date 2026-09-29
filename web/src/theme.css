@@ -5645,8 +5645,13 @@ html {
    showing is the "page", the tabs along the bottom are the "tabs", and
    nothing else moves. Old browsers get the same slide by a copy of the page. */
 @media (max-width: 900px) {
-  html[data-nav] .shell-grid[data-pane='rail'] .rail-body,
-  html[data-nav] .shell-grid[data-pane='stage'] .stage {
+  html[data-nav]:not([data-turn='pane']) .shell-grid[data-pane='rail'] .rail-body,
+  html[data-nav]:not([data-turn='pane']) .shell-grid[data-pane='stage'] .stage {
+    view-transition-name: page;
+  }
+
+  /* Between Dictionary and Associations only what is under the head turns. */
+  html[data-nav][data-turn='pane'] .tab-pane {
     view-transition-name: page;
   }
 
@@ -5701,6 +5706,24 @@ html[data-nav='back']::view-transition-new(page) {
   animation-name: vt-in-left;
 }
 
+/* A tab turn is a carousel: the old tab goes off one side as the new one
+   comes in from the other, side by side all the way. */
+html[data-nav='tab-forward']::view-transition-old(page) {
+  animation-name: vt-out-left;
+}
+
+html[data-nav='tab-forward']::view-transition-new(page) {
+  animation-name: vt-in-right;
+}
+
+html[data-nav='tab-back']::view-transition-old(page) {
+  animation-name: vt-out-right;
+}
+
+html[data-nav='tab-back']::view-transition-new(page) {
+  animation-name: vt-in-left-full;
+}
+
 /* Tabs: still when both pages have them; in with a page that has, off with one that had. */
 html[data-nav]::view-transition-old(tabs),
 html[data-nav]::view-transition-new(tabs) {
@@ -5718,6 +5741,24 @@ html[data-nav]::view-transition-old(tabs):only-child {
 @keyframes vt-in-right {
   from {
     transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes vt-out-left {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes vt-in-left-full {
+  from {
+    transform: translateX(-100%);
   }
   to {
     transform: none;

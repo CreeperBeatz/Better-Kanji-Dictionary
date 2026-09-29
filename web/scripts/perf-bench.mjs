@@ -88,6 +88,21 @@ await measure('tab: associations', async () => {
 await measure('tab: components', async () => {
   await tapEl(page.locator('.phone-tabs button', { hasText: 'Components' }))
 })
+await measure('graph: recentre by hold menu', async () => {
+  const node = page.locator('.graph-svg .node:not([data-kind="focus"]) .plate').first()
+  const b = await node.boundingBox()
+  await touch('touchStart', b.x + b.width / 2, b.y + b.height / 2)
+  await wait(700)
+  await touch('touchEnd')
+  await page.locator('.graph-menu button').first().waitFor({ timeout: 3000 })
+  await wait(300)
+  await tapEl(page.locator('.graph-menu button').first())
+}, 1200)
+await measure('graph: back to page, then components again', async () => {
+  await tapEl(page.locator('.phone-tabs button', { hasText: 'Dictionary' }))
+  await wait(700)
+  await tapEl(page.locator('.phone-tabs button', { hasText: 'Components' }))
+})
 await measure('unlock + pan graph', async () => {
   await tapEl(page.locator('.graph-lock'))
   await wait(300)

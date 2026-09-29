@@ -1081,9 +1081,19 @@ export function App() {
     const whole = wholeTo(to)
     const from = moverTo(to)
     if (!from) return toPhoneTab(to)
+    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? -1 : 1
+    // From a standstill -- a tap on a tab -- the turn is a view transition
+    // where there are any, with nothing to copy. Leaving the graph goes
+    // through history, so the popstate is where that transition starts.
+    if (at === 0 && hasViewTransitions()) {
+      const kind = side < 0 ? 'tab-forward' : 'tab-back'
+      const scope = whole ? 'whole' : 'pane'
+      if (phoneTab === 'components') pendingTurn.current = { kind, scope }
+      else return animateNav(kind, () => toPhoneTab(to), scope)
+      return toPhoneTab(to)
+    }
     turning.current?.ghost.remove()
     from.style.transform = ''
-    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? -1 : 1
     const ghost = whole ? ghostOf(from) : ghostOf(from, scroller.current ?? undefined)
     const how = { ghost, at, to: side * from.clientWidth, ms, whole }
     // Where the finger left it, until the turn starts.
@@ -1243,17 +1253,32 @@ export function App() {
    * the browser has them -- it photographs the old page itself, which costs
    * nothing next to copying it -- and by a copy of the page elsewhere.
    */
-  function animateNav(dir: 'forward' | 'back', go: () => void) {
+  type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
+  function hasViewTransitions() {
+    return (
+      window.matchMedia(MOBILE).matches &&
+      typeof document.startViewTransition === 'function' &&
+      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    )
+  }
+  // A tab turn away from the graph, waiting for the popstate that makes it.
+  const pendingTurn = useRef<{ kind: NavKind; scope: 'pane' | 'whole' } | null>(null)
+  function animateNav(kind: NavKind, go: () => void, scope: 'pane' | 'whole' = 'whole') {
     if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return go()
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return go()
     if (typeof document.startViewTransition === 'function') {
-      document.documentElement.dataset.nav = dir
+      const html = document.documentElement
+      html.dataset.nav = kind
+      html.dataset.turn = scope
       startSliding(PAGE_MS)
       const t = document.startViewTransition(() => flushSync(go))
-      t.finished.finally(() => delete document.documentElement.dataset.nav)
+      t.finished.finally(() => {
+        delete html.dataset.nav
+        delete html.dataset.turn
+      })
       return
     }
-    leaveBy(dir)
+    if (kind === 'forward' || kind === 'back') leaveBy(kind)
     go()
   }
   function leaveBy(dir: 'forward' | 'back') {
@@ -1322,6 +1347,12 @@ export function App() {
   beforePop.current = (e: PopStateEvent, apply: () => void) => {
     cameBack.current = performance.now()
     if (turning.current) return false
+    const turn = pendingTurn.current
+    pendingTurn.current = null
+    if (turn) {
+      animateNav(turn.kind, apply, turn.scope)
+      return true
+    }
     const n = (e.state as { n?: number } | null)?.n
     animateNav(n !== undefined && lastN.current !== undefined && n > lastN.current ? 'forward' : 'back', apply)
     return true
@@ -1443,7 +1474,11 @@ export function App() {
             )}
             {subject && <div className="page-head">{pageHead()}</div>}
             <div className="tab-pane" ref={paneRef}>
+              {/* Behind the graph on a phone the page is not on the screen, and
+                  is not rendered: laid out unseen, it would cost the graph
+                  frames each time its centre moved. */}
               {tab === 'dictionary' &&
+                !onStage &&
                 (shownTop ? (
                   page(shownTop)
                 ) : (
