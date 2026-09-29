@@ -1119,6 +1119,21 @@ export function App() {
   function besideTab(dx: number): PhoneTab | undefined {
     return phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
   }
+  // Dictionary has no tab to its left: a swipe that way takes the page, tabs
+  // and all, back off to the search, as back would.
+  function backBy(dx: number) {
+    return dx > 0 && phoneTab === 'dictionary'
+  }
+  function dragTabs(by: number | null) {
+    const nav = tabsRef.current
+    if (nav) nav.style.transform = by === null ? '' : `translateX(${by}px)`
+  }
+  function swipeToSearch(at: number, ms: number) {
+    cameBack.current = performance.now()
+    leaveBy('back', at, ms)
+    if (root.kind === 'search') pop(stack.length - 1)
+    else reset({ kind: 'search', q })
+  }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
     if (!mobile || e.touches.length !== 1) return
@@ -1168,11 +1183,13 @@ export function App() {
     s.last = { x: touch.clientX, at: e.timeStamp }
     // Past the last tab the page gives a little, and comes back.
     const next = besideTab(dx)
-    const el = moverTo(next)
+    const back = backBy(dx)
+    const el = back ? scroller.current : moverTo(next)
     if (!el) return
     if (s.moved && s.moved !== el) s.moved.style.transform = ''
     s.moved = el
-    el.style.transform = `translateX(${next ? dx : dx / 4}px)`
+    el.style.transform = `translateX(${next || back ? dx : dx / 4}px)`
+    dragTabs(back ? dx : null)
     dragMark(next ? Math.max(-1, Math.min(1, -dx / el.clientWidth)) : 0)
   }
   function swipeEnd(e: React.TouchEvent) {
@@ -1188,16 +1205,21 @@ export function App() {
     dragMark(null)
     const dx = e.changedTouches[0].clientX - s.x
     const next = besideTab(dx)
-    const at = next ? dx : dx / 4
+    const back = backBy(dx)
+    const at = next || back ? dx : dx / 4
     el.style.transform = ''
+    dragTabs(null)
     const flung = Math.abs(s.v) > 0.4 && Math.sign(s.v) === Math.sign(dx) && Math.abs(dx) > SWIPE
-    if (!next || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
+    if (!(next || back) || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
       slide(el, at, 0, 220)
+      if (back && tabsRef.current) slide(tabsRef.current, at, 0, 220)
       return
     }
     // Off the screen at the speed it was thrown, the next tab right behind it.
     const out = dx < 0 ? -el.clientWidth : el.clientWidth
-    turn(next, at, Math.min(280, Math.max(140, Math.abs(out - at) / Math.max(Math.abs(s.v), 1.5))))
+    const ms = Math.min(280, Math.max(140, Math.abs(out - at) / Math.max(Math.abs(s.v), 1.5)))
+    if (back) swipeToSearch(at, ms)
+    else if (next) turn(next, at, ms)
   }
   function swipeCancel() {
     const s = swipe.current
@@ -1209,6 +1231,11 @@ export function App() {
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
+    const nav = tabsRef.current
+    if (nav?.style.transform) {
+      dragTabs(null)
+      slide(nav, at, 0, 220)
+    }
   }
   // Pulled down, the page brings up the search: the keyboard comes up with
   // what was searched last selected, so typing starts a new search, Enter
@@ -1248,7 +1275,14 @@ export function App() {
   // slides off to the right and the one under it comes back from the left.
   // The tabs along the bottom come and go with the page they belong to. The
   // pane being left is copied before it changes, as a tab turn is.
-  const navAnim = useRef<{ ghosts: HTMLElement[]; tabs: HTMLElement | null; dir: 'forward' | 'back' } | null>(null)
+  const navAnim = useRef<{
+    ghosts: HTMLElement[]
+    tabs: HTMLElement | null
+    dir: 'forward' | 'back'
+    /** Where a swipe let the page go, and how fast it carries on. */
+    at: number
+    ms: number
+  } | null>(null)
   const lastN = useRef<number | undefined>(undefined)
   useEffect(() => {
     lastN.current = (window.history.state as { n?: number } | null)?.n
@@ -1290,14 +1324,14 @@ export function App() {
     if (kind === 'forward' || kind === 'back') leaveBy(kind)
     go()
   }
-  function leaveBy(dir: 'forward' | 'back') {
+  function leaveBy(dir: 'forward' | 'back', at = 0, ms = PAGE_MS) {
     if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const from = onStageRef.current ? stageRef.current : scroller.current
     const ghosts: HTMLElement[] = []
     if (from) ghosts.push(ghostOf(from))
     const tabs = tabsRef.current ? ghostOf(tabsRef.current) : null
-    const how = { ghosts, tabs, dir }
+    const how = { ghosts, tabs, dir, at, ms }
     navAnim.current = how
     // Should nothing change after all, the copies do not stay over the page.
     window.setTimeout(() => {
@@ -1314,7 +1348,9 @@ export function App() {
     const to = onStage ? stageRef.current : scroller.current
     const w = to?.clientWidth ?? window.innerWidth
     const fwd = how.dir === 'forward'
-    startSliding(PAGE_MS)
+    // Swiped back part of the way, the page under is that much further in.
+    const below = -w * 0.3 * Math.max(0, 1 - how.at / w)
+    startSliding(how.ms)
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
@@ -1322,23 +1358,23 @@ export function App() {
       for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
-      slide(to, fwd ? w : -w * 0.3, 0, PAGE_MS).onfinish = () => to.style.removeProperty('z-index')
+      slide(to, fwd ? w : below, 0, how.ms).onfinish = () => to.style.removeProperty('z-index')
     }
     // The tabs stay put between two pages that both have them; they come in
     // with a page that has them, and leave with one that had.
     const nav = tabsRef.current
     if (nav && how.tabs) how.tabs.remove()
-    else if (nav) slide(nav, w, 0, PAGE_MS)
+    else if (nav) slide(nav, w, 0, how.ms)
     else if (how.tabs) how.ghosts.push(how.tabs)
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
       const a = g.animate(
         [
-          { transform: 'translateX(0)', opacity: 1 },
+          { transform: `translateX(${how.at}px)`, opacity: 1 },
           { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
         ],
-        { duration: still ? 0 : PAGE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+        { duration: still ? 0 : how.ms, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
       )
       a.onfinish = () => g.remove()
     }
