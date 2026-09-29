@@ -180,6 +180,9 @@ function slide(el: HTMLElement, from: number, to: number, ms: number) {
   })
 }
 
+/** How long a page takes to slide in or out. */
+const PAGE_MS = 300
+
 /**
  * A still copy of a pane laid over it, for it to leave the screen by while
  * the pane itself already shows what replaces it. It sits beside the pane, so
@@ -193,6 +196,19 @@ function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
   const bottom = box ? Math.min(whole.bottom, box.bottom) : whole.bottom
   const r = { left: whole.left, top, width: whole.width, height: Math.max(0, bottom - top) }
   const g = el.cloneNode(true) as HTMLElement
+  // A canvas clones blank: the map is painted over into its copy.
+  const canvases = el.querySelectorAll('canvas')
+  g.querySelectorAll('canvas').forEach((c, i) => {
+    const from = canvases[i]
+    if (!from || !from.width || !from.height) return
+    c.width = from.width
+    c.height = from.height
+    try {
+      c.getContext('2d')?.drawImage(from, 0, 0)
+    } catch {
+      // a tainted or lost canvas stays blank
+    }
+  })
   g.removeAttribute('id')
   g.dataset.ghost = ''
   g.setAttribute('aria-hidden', 'true')
@@ -268,7 +284,12 @@ export function App() {
   const t = S(useLang())
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(scroller)
+  // Filled in below: what to do as back or forward arrives, before the page changes.
+  const beforePop = useRef<((e: PopStateEvent) => void) | null>(null)
+  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
+    scroller,
+    beforePop,
+  )
   const top = stack[stack.length - 1]
   const root = stack[0]
   const under = stack.length > 1 ? stack[stack.length - 2] : null
@@ -312,6 +333,9 @@ export function App() {
   }, [])
   // How to read the graph or map, behind the (i) rather than always on screen.
   const [legendOpen, setLegendOpen] = useState(false)
+  // On a phone the graph is locked until asked: it neither pans nor zooms, so
+  // a swipe across it turns the tab. Every visit to Components starts locked.
+  const [graphLocked, setGraphLocked] = useState(true)
   const [accountOpen, setAccountOpen] = useState(false)
   const { error: authError } = useAuth()
   // A sign-in link that did not work says why, where you would try again.
@@ -340,6 +364,9 @@ export function App() {
     if (stage === 'map') setMapOpened(true)
   }, [mobile, stage])
   useVisibleHeight(mobile)
+  useEffect(() => {
+    if (!onStage) setGraphLocked(true)
+  }, [onStage])
 
   const windowWidth = useWindowWidth()
   const [splitPref, setSplitPref] = useState(() => {
@@ -591,23 +618,28 @@ export function App() {
   const openKanji = useCallback(
     (char: string) => {
       setHovered(null)
+      const back = under?.kind === 'kanji' && under.char === char
+      leaveBy(back ? 'back' : 'forward')
       leaveStage('replace')
       setViewState('focus')
       keepSearch()
-      if (under?.kind === 'kanji' && under.char === char) pop()
+      if (back) pop()
       else push({ kind: 'kanji', char })
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [under, push, pop, keepSearch, leaveStage],
   )
 
   // A word, like a character, goes to its graph -- of its kanji -- when it has one.
   const openWord = useCallback(
     (w: Word) => {
+      leaveBy('forward')
       toDictionary()
       keepSearch()
       if (HAN.test(w.headword)) setViewState('focus')
       push({ kind: 'word', id: w.id, word: w })
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [push, toDictionary, keepSearch],
   )
 
@@ -619,10 +651,23 @@ export function App() {
   const graphOpen = useCallback(
     (char: string, via?: string) => {
       setHovered(null)
-      leaveStage('replace')
       if (via && via !== char) rememberKanji(via)
+      if (mobile) {
+        // On a phone the graph is not beside the page, so seeing a character
+        // in the dictionary makes it the graph's centre too: back on
+        // Components, the graph is of the character whose page this is.
+        const back = under?.kind === 'kanji' && under.char === char && !under.centre
+        leaveBy(back ? 'back' : 'forward')
+        leaveStage('replace')
+        setFocus(char)
+        if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
+        else if (back) pop()
+        else push({ kind: 'kanji', char })
+        return
+      }
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
       const picked = top.kind === 'kanji' && top.centre !== undefined && top.centre === focus
+      leaveStage('replace')
       if (under?.kind === 'kanji' && under.char === char && (under.centre ?? under.char) === focus) pop()
       else if (picked) {
         if (top.char === char) return
@@ -630,7 +675,8 @@ export function App() {
         if (scroller.current) scroller.current.scrollTop = 0
       } else push(page)
     },
-    [top, under, push, pop, replaceTop, focus, leaveStage],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [top, under, push, pop, replaceTop, focus, leaveStage, mobile],
   )
 
   // Recentring on a character on the graph opens it too, or takes the
@@ -652,6 +698,7 @@ export function App() {
   const seeInDictionary = useCallback(
     (char: string) => {
       setMapCard(null)
+      leaveBy('forward')
       // Opening it puts the page up, on a phone.
       drill(char)
       if (mobile) {
@@ -659,6 +706,7 @@ export function App() {
         leaveStage('replace')
       } else setView('focus')
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [drill, mobile, setView, leaveStage],
   )
 
@@ -740,11 +788,12 @@ export function App() {
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
         e.preventDefault()
-        pop()
+        goBack()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setView, pop])
 
   const closeAccount = useCallback(() => {
@@ -973,6 +1022,8 @@ export function App() {
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
     if (!mobile || e.touches.length !== 1) return
+    // On the graph only while it is locked: free, a finger moves the graph.
+    if (e.currentTarget === stageRef.current && (view !== 'focus' || !graphLocked)) return
     if (movesItself(e.target as Element, e.currentTarget)) return
     // A page still sliding in is where it is going.
     scroller.current?.getAnimations({ subtree: true }).forEach((a) => a.finish())
@@ -1090,6 +1141,94 @@ export function App() {
     slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
   }, [phoneTab])
 
+  // Going to a page slides it in from the right over the one it was opened
+  // from, which slips a little to the left beneath it; going back, the page
+  // slides off to the right and the one under it comes back from the left.
+  // The tabs along the bottom come and go with the page they belong to. The
+  // pane being left is copied before it changes, as a tab turn is.
+  const navAnim = useRef<{ ghosts: HTMLElement[]; tabs: HTMLElement | null; dir: 'forward' | 'back' } | null>(null)
+  const lastN = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    lastN.current = (window.history.state as { n?: number } | null)?.n
+  })
+  // Read through a ref: the callbacks that call this were made on earlier
+  // renders, and the pane showing may have changed since.
+  const onStageRef = useRef(onStage)
+  onStageRef.current = onStage
+  function leaveBy(dir: 'forward' | 'back') {
+    if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return
+    document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
+    const from = onStageRef.current ? stageRef.current : scroller.current
+    const ghosts: HTMLElement[] = []
+    if (from) ghosts.push(ghostOf(from))
+    const tabs = tabsRef.current ? ghostOf(tabsRef.current) : null
+    const how = { ghosts, tabs, dir }
+    navAnim.current = how
+    // Should nothing change after all, the copies do not stay over the page.
+    window.setTimeout(() => {
+      if (navAnim.current !== how) return
+      navAnim.current = null
+      how.ghosts.forEach((g) => g.remove())
+      how.tabs?.remove()
+    }, 800)
+  }
+  useLayoutEffect(() => {
+    const how = navAnim.current
+    if (!how) return
+    navAnim.current = null
+    const to = onStage ? stageRef.current : scroller.current
+    const w = to?.clientWidth ?? window.innerWidth
+    const fwd = how.dir === 'forward'
+    if (to) {
+      // The page going was taller when the tabs are arriving with this one:
+      // no more of it shows than the room this one has.
+      const room = to.getBoundingClientRect().height
+      for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
+      // The page coming in is over the one going, forward; under it, back.
+      to.style.zIndex = fwd ? '5' : ''
+      slide(to, fwd ? w : -w * 0.3, 0, PAGE_MS).onfinish = () => to.style.removeProperty('z-index')
+    }
+    // The tabs stay put between two pages that both have them; they come in
+    // with a page that has them, and leave with one that had.
+    const nav = tabsRef.current
+    if (nav && how.tabs) how.tabs.remove()
+    else if (nav) slide(nav, w, 0, PAGE_MS)
+    else if (how.tabs) how.ghosts.push(how.tabs)
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    for (const g of how.ghosts) {
+      g.style.zIndex = fwd ? '1' : '6'
+      const a = g.animate(
+        [
+          { transform: 'translateX(0)', opacity: 1 },
+          { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
+        ],
+        { duration: still ? 0 : PAGE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+      )
+      a.onfinish = () => g.remove()
+    }
+  }, [top, pane, onStage])
+
+  // Back -- the browser's, or the app's -- to the search brings the keyboard
+  // up with it, ready for the next word. Phones raise the keyboard for focus
+  // given as a gesture is answered, so it is asked at once.
+  const cameBack = useRef(0)
+  function goBack() {
+    leaveBy('back')
+    cameBack.current = performance.now()
+    pop()
+  }
+  beforePop.current = (e: PopStateEvent) => {
+    cameBack.current = performance.now()
+    if (turning.current) return
+    const n = (e.state as { n?: number } | null)?.n
+    leaveBy(n !== undefined && lastN.current !== undefined && n > lastN.current ? 'forward' : 'back')
+  }
+  useEffect(() => {
+    if (!cameBack.current || performance.now() - cameBack.current > 400) return
+    cameBack.current = 0
+    if (mobile && !onStage && top.kind === 'search') inputRef.current?.focus({ preventScroll: true })
+  }, [top, onStage, mobile])
+
   const searchBar = (
     <SearchBar
       q={q}
@@ -1194,7 +1333,7 @@ export function App() {
           >
             {shownUnder && (
               <div className="rail-crumb">
-                <button className="back-link rail-back" onClick={() => pop()} title={t('back')}>
+                <button className="back-link rail-back" onClick={goBack} title={t('back')}>
                   <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
                 </button>
               </div>
@@ -1244,7 +1383,14 @@ export function App() {
         {split && <SplitResizer share={searchShare} total={2 * railShown} onShare={setSearchShare} />}
         <RailResizer width={railShown} onWidth={setRailWidth} columns={split ? 2 : 1} />
 
-        <main className="stage" ref={stageRef}>
+        <main
+          className="stage"
+          ref={stageRef}
+          onTouchStart={swipeStart}
+          onTouchMove={swipeMove}
+          onTouchEnd={swipeEnd}
+          onTouchCancel={swipeCancel}
+        >
           {error && selected && (
             <div className="stage-empty">
               <p>
@@ -1277,6 +1423,8 @@ export function App() {
               onRecentre={graphRecentre}
               onHover={hoverGraph}
               legend={legendOpen}
+              locked={mobile && graphLocked}
+              onLock={mobile ? setGraphLocked : undefined}
             />
           )}
 

@@ -20,6 +20,13 @@ interface Props {
   onHover: (char: string | null) => void
   /** Show how to read the graph, opened from the (i). */
   legend: boolean
+  /**
+   * On a phone the graph starts locked: it neither pans nor zooms, so a
+   * swipe across it turns the page's tab and a stray finger cannot lose the
+   * graph. The lock button (shown when `onLock` is given) frees it.
+   */
+  locked?: boolean
+  onLock?: (locked: boolean) => void
 }
 
 const S = strings(
@@ -33,6 +40,8 @@ const S = strings(
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     whole: 'Show the whole graph',
+    lock: 'Lock the graph',
+    unlock: 'Unlock the graph to move and zoom it',
     legendAbove: 'above, characters that contain it, nearest first by frequency',
     legendBelow: 'below, what it is made of, down to atoms',
     legendHover: 'hover one above to see what contains it in turn',
@@ -49,6 +58,8 @@ const S = strings(
     zoomIn: 'Приближете',
     zoomOut: 'Отдалечете',
     whole: 'Покажете целия граф',
+    lock: 'Заключете графа',
+    unlock: 'Отключете графа, за да го местите и мащабирате',
     legendAbove: 'отгоре - йероглифите, които го съдържат, най-честите най-близо',
     legendBelow: 'отдолу - от какво е съставен, чак до най-простите части',
     legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
@@ -171,7 +182,7 @@ interface Spot {
   height: number
 }
 
-export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, legend }: Props) {
+export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
@@ -368,6 +379,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
 
   function onWheel(e: React.WheelEvent) {
     e.preventDefault()
+    if (locked) return
     const rect = svgRef.current?.getBoundingClientRect()
     if (!rect) return
     unpop()
@@ -382,6 +394,14 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   function onPointerDown(e: React.PointerEvent) {
     pointer.current = e.pointerType
     if (e.button !== 0) return
+    if (locked) {
+      // Locked, a finger neither drags nor pinches; it only taps and holds,
+      // and a swipe is the page's, to turn its tab. The press is still
+      // followed, so a moving finger does not count as a hold.
+      pinched.current = false
+      drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
+      return
+    }
     if (e.pointerType === 'touch') {
       const rect = svgRef.current?.getBoundingClientRect()
       touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
@@ -445,6 +465,13 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
     if (!d) return
     const dx = e.clientX - d.x
     const dy = e.clientY - d.y
+    if (locked) {
+      if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+        clearTimeout(hold.current.timer)
+        d.moved = true
+      }
+      return
+    }
     // Capture only once it is really a drag, or the click lands on the svg
     // instead of the node under the pointer.
     if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
@@ -610,6 +637,7 @@ ${t('via')}`}
       <svg
         ref={svgRef}
         className="graph-svg"
+        data-locked={locked || undefined}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -651,24 +679,39 @@ ${t('via')}`}
         </g>
       </svg>
 
-      {/* The same corner and buttons as the map's. */}
-      <div className="map-zoom" role="group" aria-label={t('zoom')}>
-        <button
-          onClick={recentre}
-          aria-label={t('recentre', { c: data.focus.char })}
-          title={t('recentre', { c: data.focus.char })}
-        >
-          ◎
-        </button>
-        <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
-          +
-        </button>
-        <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
-          −
-        </button>
-        <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
-          ⤢
-        </button>
+      {/* The same corner and buttons as the map's. Locked, only the lock shows. */}
+      <div className="map-zoom" role="group" aria-label={t('zoom')} data-locked={locked || undefined}>
+        {onLock && (
+          <button
+            className="graph-lock"
+            onClick={() => onLock(!locked)}
+            aria-pressed={locked}
+            aria-label={t(locked ? 'unlock' : 'lock')}
+            title={t(locked ? 'unlock' : 'lock')}
+          >
+            <LockIcon locked={locked} />
+          </button>
+        )}
+        {!locked && (
+          <>
+            <button
+              onClick={recentre}
+              aria-label={t('recentre', { c: data.focus.char })}
+              title={t('recentre', { c: data.focus.char })}
+            >
+              ◎
+            </button>
+            <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
+              +
+            </button>
+            <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
+              −
+            </button>
+            <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
+              ⤢
+            </button>
+          </>
+        )}
       </div>
 
       {card && cardNode && (
@@ -707,6 +750,16 @@ ${t('via')}`}
         </p>
       )}
     </>
+  )
+}
+
+/** A padlock; its shackle lifts as it unlocks. */
+function LockIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg className="lock-icon" viewBox="0 0 16 16" aria-hidden>
+      <rect x="3" y="7.5" width="10" height="6.5" rx="1.3" />
+      <path className="lock-shackle" d={locked ? 'M5 7.5V5a3 3 0 0 1 6 0v2.5' : 'M5 7.5V3.5a3 3 0 0 1 6 0v1'} />
+    </svg>
   )
 }
 

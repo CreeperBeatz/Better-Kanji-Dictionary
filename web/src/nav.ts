@@ -161,7 +161,14 @@ function restoreScroll(el: HTMLElement | null, to: number) {
   setTimeout(() => (el.scrollTop = to), 120)
 }
 
-export function useNav(scroller: React.RefObject<HTMLElement | null>) {
+/**
+ * `beforePop` is told of back and forward before the page changes for
+ * them, while what is on the screen is still the page being left.
+ */
+export function useNav(
+  scroller: React.RefObject<HTMLElement | null>,
+  beforePop?: React.RefObject<((e: PopStateEvent) => void) | null>,
+) {
   const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
   current.current = entry
@@ -332,6 +339,7 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
   // Back and forward, from the app or the browser.
   useEffect(() => {
     function onPop(e: PopStateEvent) {
+      beforePop?.current?.(e)
       if (pendingReplace.current !== null) {
         clearTimeout(pendingReplace.current)
         pendingReplace.current = null
@@ -356,7 +364,7 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [scroller])
+  }, [scroller, beforePop])
 
   return { stack: entry.stack, stage: entry.stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage }
 }
