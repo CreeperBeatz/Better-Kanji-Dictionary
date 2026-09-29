@@ -5085,7 +5085,7 @@ html {
   }
 
   body {
-    font-size: 14.5px;
+    font-size: 13.5px;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -5114,13 +5114,13 @@ html {
   .assoc-parts h3,
   .overlay-group,
   .drawpop-head h2 {
-    font-size: 12.5px;
+    font-size: 12px;
   }
 
   /* Search results. */
   .sort-pill-button,
   .search-filter {
-    font-size: 11.5px;
+    font-size: 11px;
     padding-top: 4px;
     padding-bottom: 4px;
   }
@@ -5153,7 +5153,7 @@ html {
 
   .kanji-hit-meaning {
     max-width: 150px;
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   .kanji-hit-fanout {
@@ -5161,11 +5161,11 @@ html {
   }
 
   .word-forms {
-    font-size: 20.5px;
+    font-size: 19.5px;
   }
 
   .word-gloss {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .sense b {
@@ -5182,36 +5182,36 @@ html {
   }
 
   .semantic-note {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .level-links button {
     padding: 7px 14px;
-    font-size: 12.5px;
+    font-size: 12px;
   }
 
   /* A kanji's page. */
   .page-head .detail-meanings {
-    font-size: 14.5px;
+    font-size: 13.5px;
   }
 
   .page-head .detail-meanings .rest {
-    font-size: 12.5px;
+    font-size: 12px;
   }
 
   .facts,
   .fanout-line {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .vocab-row {
     padding-top: 5px;
     padding-bottom: 5px;
-    font-size: 12.5px;
+    font-size: 12px;
   }
 
   .vocab-word {
-    font-size: 16px;
+    font-size: 15.5px;
   }
 
   .vocab-reading {
@@ -5219,7 +5219,7 @@ html {
   }
 
   .suru {
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   .similar-why {
@@ -5227,11 +5227,11 @@ html {
   }
 
   .similar-why:lang(ja) {
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   .similar-forms {
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   /* A word's page. */
@@ -5244,41 +5244,41 @@ html {
   }
 
   .entry-gloss {
-    font-size: 14.5px;
+    font-size: 13.5px;
   }
 
   .entry-senses li {
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--muted);
   }
 
   .entry-kanji-meaning,
   .entry-kanji-yomi {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .entry-examples li {
-    font-size: 14.5px;
+    font-size: 13.5px;
   }
 
   /* Associations. */
   .composer-text,
   .md {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .comment-head {
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
   .assoc-part p {
-    font-size: 12.5px;
+    font-size: 12px;
   }
 
   /* The tabs along the bottom are read by the thumb, at a glance. */
   .phone-tabs button {
     padding: 14px 4px 15px;
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--paper-dim);
   }
 
