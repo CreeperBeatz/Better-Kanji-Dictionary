@@ -1,4 +1,4 @@
-"""The offline lookup pack: what search, drawing and the radical picker need,
+"""The offline lookup pack: what search and drawing need,
 built from the database for an installed app to keep on the device.
 
     python -m server.offline          # build now, if the database changed
@@ -18,8 +18,8 @@ objects, so the pack is split in two:
                straight onto it instead of parsing.
   words-NN     the entries themselves, in chunks, which the client files away
                in IndexedDB and reads back only for the results it shows.
-  kanji.json   the character table, the handwriting references, radicals,
-               levels and each kanji's common words. Small enough to hold.
+  kanji.json   the character table, the handwriting references, levels
+               and each kanji's common words. Small enough to hold.
   strokes.json stroke paths, for the stroke-order diagram.
 
 The full-text indexes are read back out of the database's own FTS5 tables
@@ -46,7 +46,8 @@ from .db import DB_PATH
 # Bump when the pack's layout changes, so every client fetches a new one.
 # 2: Bulgarian glosses, kanji meanings and their indexes.
 # 3: the English index one row per gloss, with n and place; word levels.
-FORMAT = 3
+# 4: no radicals (the radical picker is gone).
+FORMAT = 4
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -315,7 +316,6 @@ def build(force: bool = False) -> dict:
 
     from . import recognize
     from .routes.graph import by_level
-    from .routes.radicals import list_radicals
 
     started = time.time()
     key = source_key()
@@ -464,10 +464,6 @@ def build(force: bool = False) -> dict:
         for m in range(1, most + 1)
     ]
 
-    kanji_radicals: dict[str, list[str]] = {}
-    for k, r in conn.execute("SELECT kanji, radical FROM kanji_radical ORDER BY kanji, radical"):
-        kanji_radicals.setdefault(k, []).append(r)
-
     words_for: dict[str, list[int]] = {}
     for char, word_id in conn.execute(
         "SELECT wc.char, w.id FROM word_char wc JOIN word w ON w.id = wc.word_id "
@@ -493,8 +489,6 @@ def build(force: bool = False) -> dict:
             ],
             "glyphs": glyphs,
             "strokePower": {"size": most, "values": power},
-            "radicals": list_radicals(),
-            "kanjiRadicals": kanji_radicals,
             "levels": {str(n): by_level(n) for n in (1, 2, 3, 4, 5)},
             "wordsFor": words_for,
         }

@@ -39,11 +39,6 @@ def main() -> int:
     one = lambda sql, *p: db.execute(sql, p).fetchone()[0]  # noqa: E731
 
     print("row counts")
-    check("radicals = 253", one("SELECT COUNT(*) FROM radical") == 253)
-    check(
-        "kradfile kanji = 12,156",
-        one("SELECT COUNT(DISTINCT kanji) FROM kanji_radical") == 12156,
-    )
     check("joyo = 2,136", one("SELECT COUNT(*) FROM kanji WHERE joyo = 1") == 2136)
     check(
         "kanjidic characters = 13,108",

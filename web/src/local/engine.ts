@@ -1,5 +1,5 @@
 /**
- * Search, handwriting, radicals and levels, answered on the device from the
+ * Search, handwriting and levels, answered on the device from the
  * offline pack -- the same questions the server's routes answer, in the same
  * shapes, so the UI cannot tell which one it asked.
  *
@@ -15,8 +15,6 @@ import type {
   DrawCandidate,
   KanjiHit,
   KanjiNode,
-  RadicalGroup,
-  RadicalSearchResponse,
   SearchResponse,
   Word,
   WordEntry,
@@ -48,8 +46,6 @@ export interface KanjiPack {
   glyphs: [string, number[], number[], number[]][]
   /** (fewer / more strokes) ** LENGTH_POWER for every pair of counts, as the server computes it. */
   strokePower: { size: number; values: number[] }
-  radicals: { groups: RadicalGroup[]; total: number }
-  kanjiRadicals: Record<string, string[]>
   levels: Record<string, LevelResponse>
   wordsFor: Record<string, number[]>
 }
@@ -197,7 +193,6 @@ export class Engine {
   private readonly kanjiAt = new Map<string, number>()
   /** reading -> char -> how it is read that way; see `kanjiByReading`. */
   private readonly readings = new Map<string, Map<string, number>>()
-  private readonly byRadical = new Map<string, Set<string>>()
   private recognizer: Recognizer | null = null
 
   constructor(index: ArrayBuffer, pack: KanjiPack, store: EntryStore) {
@@ -257,13 +252,6 @@ export class Engine {
         if (kun.includes('.')) addReading(kun.split('.')[0], r[0], 1)
       }
       for (const on of r[8]) addReading(katakanaToHiragana(on.replaceAll('-', '')), r[0], 2)
-    }
-    for (const [kanji, radicals] of Object.entries(pack.kanjiRadicals)) {
-      for (const r of radicals) {
-        let set = this.byRadical.get(r)
-        if (!set) this.byRadical.set(r, (set = new Set()))
-        set.add(kanji)
-      }
     }
   }
 
@@ -668,61 +656,6 @@ export class Engine {
 
   byLevel(level: number): LevelResponse | null {
     return this.pack.levels[String(level)] ?? null
-  }
-
-  radicals(): { groups: RadicalGroup[]; total: number } {
-    return this.pack.radicals
-  }
-
-  searchByRadicals(r: string[], limit = 400): RadicalSearchResponse {
-    if (!r.length) return { selected: [], kanji: [], available: [], total: 0 }
-    const radicals = [...new Set(r)]
-
-    let found: string[] | null = null
-    for (const rad of radicals) {
-      const set = this.byRadical.get(rad)
-      if (!set) {
-        found = []
-        break
-      }
-      found = found === null ? [...set] : found.filter((k) => set.has(k))
-    }
-    if (!found || !found.length) return { selected: radicals, kanji: [], available: [], total: 0 }
-
-    // ORDER BY joyo IS NULL, joyo DESC, freq IS NULL, freq, strokes, kanji --
-    // where NULL is "not in the kanji table", and sorts first in ASC.
-    const key = (k: string) => {
-      const row = this.row(k)
-      return {
-        missing: row ? 0 : 1,
-        joyo: row ? row[5] : 0,
-        noFreq: row && row[3] !== null ? 0 : 1,
-        freq: row?.[3] ?? 0,
-        strokes: row?.[1] ?? -Infinity,
-      }
-    }
-    const keyed = found.map((k) => [k, key(k)] as const)
-    keyed.sort(
-      ([a, x], [b, y]) =>
-        x.missing - y.missing ||
-        y.joyo - x.joyo ||
-        x.noFreq - y.noFreq ||
-        x.freq - y.freq ||
-        (x.strokes === y.strokes ? 0 : x.strokes < y.strokes ? -1 : 1) ||
-        compareCodePoints(a, b),
-    )
-    const candidates = keyed.map(([k]) => k)
-
-    const available = new Set<string>()
-    for (const k of candidates) for (const rad of this.pack.kanjiRadicals[k] ?? []) available.add(rad)
-
-    return {
-      selected: radicals,
-      kanji: candidates.slice(0, limit),
-      available: [...available].sort(compareCodePoints),
-      total: candidates.length,
-      truncated: candidates.length > limit,
-    }
   }
 
   recognize(strokes: number[][][], window = STROKE_WINDOW, limit = MAX_RESULTS): DrawCandidate[] {

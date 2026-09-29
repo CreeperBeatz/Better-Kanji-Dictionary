@@ -4,18 +4,17 @@
  * opens one, because a phone only raises its keyboard for a tap that lands on
  * an input.
  *
- * Drawing and radicals type into it, a character at a time, so a word you can
- * read but not type is built up the same way as one you can.
+ * Drawing types into it, a character at a time, so a word you can read but
+ * not type is built up the same way as one you can.
  */
 
 import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { strings, useLang } from '../i18n'
 
-// Neither tool is needed until its button is pressed.
+// Not needed until its button is pressed.
 const DrawPad = lazy(() => import('../draw/DrawPad').then((m) => ({ default: m.DrawPad })))
-const RadicalPicker = lazy(() => import('./RadicalPicker').then((m) => ({ default: m.RadicalPicker })))
 
-type Tool = 'draw' | 'radicals'
+type Tool = 'draw'
 
 const S = strings(
   {
@@ -26,9 +25,6 @@ const S = strings(
     clear: 'Clear',
     drawTitle: 'Draw a character',
     draw: 'Draw',
-    radicalsTitle: 'Pick a character by its parts',
-    radicals: 'Radicals',
-    done: 'done',
     close: 'Close',
   },
   {
@@ -39,9 +35,6 @@ const S = strings(
     clear: 'Изчистете',
     drawTitle: 'Нарисувайте йероглиф',
     draw: 'Рисуване',
-    radicalsTitle: 'Изберете йероглиф по частите му',
-    radicals: 'Радикали',
-    done: 'готово',
     close: 'Затворете',
   },
 )
@@ -178,18 +171,6 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
           </svg>
           <span>{t('draw')}</span>
         </button>
-        <button
-          className="searchbar-tool"
-          data-on={tool === 'radicals' || undefined}
-          aria-pressed={tool === 'radicals'}
-          onClick={() => toggle('radicals')}
-          title={t('radicalsTitle')}
-        >
-          <span className="searchbar-tool-glyph" aria-hidden>
-            部
-          </span>
-          <span>{t('radicals')}</span>
-        </button>
         {after}
       </div>
 
@@ -204,17 +185,6 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
           <Suspense fallback={null}>
             <DrawPad onPick={pick} />
           </Suspense>
-        </div>
-      )}
-
-      {tool === 'radicals' && (
-        <div className="searchtools">
-          <Suspense fallback={null}>
-            <RadicalPicker onPick={pick} />
-          </Suspense>
-          <button className="searchtools-close clear" onClick={() => setTool(null)}>
-            {t('done')}
-          </button>
         </div>
       )}
     </div>

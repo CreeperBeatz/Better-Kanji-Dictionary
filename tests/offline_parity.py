@@ -4,8 +4,8 @@
     python tests/offline_parity.py --quick    # a few hundred
     python tests/offline_parity.py --keep DIR # and leave the answers in DIR
 
-Asks the server's own route functions -- search, recognise, the radical
-picker, words-for, reading-words -- then has web/scripts/parity.ts put the same questions to
+Asks the server's own route functions -- search, recognise, words-for,
+reading-words -- then has web/scripts/parity.ts put the same questions to
 the TypeScript engine over the built offline pack, and lists every answer
 that differs. Queries are the hand-picked hard cases below plus a seeded
 random sample of real headwords, readings, glosses and their prefixes, each
@@ -31,7 +31,6 @@ sys.path.insert(0, str(ROOT))
 from server import bulgarian, offline, recognize  # noqa: E402
 from server.db import query  # noqa: E402
 from server.japanese import katakana_to_hiragana  # noqa: E402
-from server.routes.radicals import search_by_radicals  # noqa: E402
 from server.routes.search import reading_words, search, words_for_kanji  # noqa: E402
 
 HARD = [
@@ -181,7 +180,7 @@ def main() -> int:
         asked += [(q, "en", True, how) for q in HARD + queries[: 50 if quick else 300]]
         asked += [(q, "bg", False, how) for q in HARD_BG]
     print(f"asking the server {len(asked)} searches")
-    golden: dict = {"search": [], "bulgarian": [], "draw": [], "radicals": [], "wordsFor": [], "readingWords": []}
+    golden: dict = {"search": [], "bulgarian": [], "draw": [], "wordsFor": [], "readingWords": []}
     for q, lang, common, (sort, order) in asked:
         out = search(q=q[:64], limit=30, lang=lang, common=common, sort=sort, order=order)
         golden["search"].append({"q": q[:64], "lang": lang, "common": common, "sort": sort, "order": order, "out": out})
@@ -208,15 +207,6 @@ def main() -> int:
     # components and characters the dictionary lacks mixed in.
     also = rng.sample(common, 40) + list("氵亻扌艹辶填頬塡頰") + ["x", "あ", "𠮟"]
     golden["describe"] = {"chars": also, "out": recognize.describe(also)}
-
-    kr: dict[str, list[str]] = {}
-    for r in query("SELECT kanji, radical FROM kanji_radical"):
-        kr.setdefault(r["kanji"], []).append(r["radical"])
-    kanji_list = sorted(kr)
-    for _ in range(80 if quick else 500):
-        rads = kr[kanji_list[rng.randrange(len(kanji_list))]]
-        pick = rng.sample(rads, min(len(rads), rng.randint(1, 3)))
-        golden["radicals"].append({"r": pick, "out": search_by_radicals(r=pick, limit=400)})
 
     for char in rng.sample(common, 60 if quick else 300):
         golden["wordsFor"].append({"char": char, "out": [w["id"] for w in words_for_kanji(char, limit=12)["words"]]})

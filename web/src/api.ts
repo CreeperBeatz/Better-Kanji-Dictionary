@@ -1,7 +1,7 @@
 /**
  * Typed client for the Better Kanji Dictionary server.
  *
- * Lookups -- search, drawing, radicals, levels -- are answered on the device
+ * Lookups -- search, drawing, levels -- are answered on the device
  * instead when the offline pack is there (see local/), and fall back to the
  * server when it is not, or when the device's answer fails.
  */
@@ -98,19 +98,6 @@ export interface WordEntry {
   examples: { text: string; hit: [number, number] | null }[]
   /** The verb going the other way, が for を: 開ける for 開く; likeliest first. */
   pairs: Word[]
-}
-
-export interface RadicalGroup {
-  strokeCount: number
-  radicals: { radical: string; kanjiCount: number }[]
-}
-
-export interface RadicalSearchResponse {
-  selected: string[]
-  kanji: string[]
-  available: string[]
-  total: number
-  truncated?: boolean
 }
 
 export interface Sense {
@@ -431,9 +418,6 @@ export const api = {
 
   word: kept((id: number) => get<WordEntry>(`/api/search/word/${id}`)),
 
-  radicals: () =>
-    localFirst(local.radicals(), () => get<{ groups: RadicalGroup[]; total: number }>('/api/radicals')),
-
   search: (q: string, lang: string, o: SearchOptions) =>
     localFirst(local.search(q, lang, o), () =>
       get<SearchResponse>('/api/search', [
@@ -632,14 +616,6 @@ export const api = {
   /** Builds the reference index ahead of time, so the first stroke is not slow. */
   recognizerReady: () =>
     localFirst(local.recognizerReady(), () => get<{ chars: number; buckets: number }>('/api/recognize/ready')),
-
-  searchByRadicals: (radicals: string[]) =>
-    localFirst(local.searchByRadicals(radicals), () =>
-      get<RadicalSearchResponse>(
-        '/api/radicals/search',
-        radicals.map((r) => ['r', r] as [string, string]),
-      ),
-    ),
 }
 
 export { ApiError }

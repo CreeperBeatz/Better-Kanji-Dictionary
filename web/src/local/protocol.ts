@@ -41,8 +41,6 @@ export type Method =
   | 'search'
   | 'recognize'
   | 'recognizerReady'
-  | 'radicals'
-  | 'searchByRadicals'
   | 'byLevel'
   | 'wordsFor'
   | 'readingWords'

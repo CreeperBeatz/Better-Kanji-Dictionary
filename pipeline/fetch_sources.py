@@ -47,7 +47,6 @@ SOURCES = {
     ),
     # --- new for the explorer
     "kradfile": ("kradfile.json.zip", "@jmdict-simplified:kradfile", "kanji -> components"),
-    "radkfile": ("radkfile.json.zip", "@jmdict-simplified:radkfile", "radical -> kanji, for the picker"),
     "kanjidic2": (
         "kanjidic2.xml.gz",
         "http://www.edrdg.org/kanjidic/kanjidic2.xml.gz",

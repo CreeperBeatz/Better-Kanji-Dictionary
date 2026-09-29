@@ -13,8 +13,6 @@ import { cacheClassifier } from '../draw/classifier'
 import type {
   RecognizeResponse,
   KanjiNode,
-  RadicalGroup,
-  RadicalSearchResponse,
   SearchOptions,
   SearchResponse,
   Word,
@@ -200,8 +198,6 @@ export const local = {
   recognize: (strokes: [number, number][][], also: string[]) =>
     call<RecognizeResponse>('recognize', strokes, also),
   recognizerReady: () => call<{ chars: number; buckets: number }>('recognizerReady'),
-  radicals: () => call<{ groups: RadicalGroup[]; total: number }>('radicals'),
-  searchByRadicals: (radicals: string[]) => call<RadicalSearchResponse>('searchByRadicals', radicals),
   byLevel: (level: number) => call<LevelResponse>('byLevel', level),
   wordsFor: (char: string) => call<{ char: string; words: Word[] }>('wordsFor', char),
   readingWords: (char: string) => call<{ char: string; words: Record<string, Word> }>('readingWords', char),

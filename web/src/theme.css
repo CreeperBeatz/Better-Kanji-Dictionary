@@ -285,66 +285,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 0;
 }
 
-/* ---------------------------------------------------------------- radical picker */
-
-.radical-strokes {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 14px 0 6px;
-}
-
-.radical-strokes:first-of-type {
-  margin-top: 4px;
-}
-
-.radical-strokes .count {
-  flex: none;
-  width: 14px;
-  font-size: 11.5px;
-  color: var(--faint);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.radical-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-
-.radical {
-  font-family: var(--mincho);
-  font-size: 18px;
-  line-height: 1;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 1px solid transparent;
-  border-radius: 2px;
-  background: transparent;
-  color: var(--paper-dim);
-  cursor: pointer;
-  transition: background 120ms var(--ease), color 120ms var(--ease);
-}
-
-.radical:hover:not(:disabled) {
-  background: var(--sumi-lift);
-  color: var(--paper);
-}
-
-.radical[data-on='true'] {
-  background: var(--ai-wash);
-  border-color: var(--ai-deep);
-  color: var(--paper);
-}
-
-.radical:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-
 .results {
   display: flex;
   flex-wrap: wrap;
@@ -2186,32 +2126,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   stroke-linejoin: round;
 }
 
-.searchbar-tool-glyph {
-  font-family: var(--mincho);
-  font-size: 18px;
-  line-height: 1;
-}
-
 /* The labels are for screen readers; the buttons show their icons. */
-.searchbar-tool > span:not(.searchbar-tool-glyph) {
+.searchbar-tool > span {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-
-.searchtools {
-  margin-top: 12px;
-  max-height: 62vh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.searchtools-close {
-  display: block;
-  margin: 10px 0 0 auto;
 }
 
 /* The draw pad, a popup under the search box. Every
@@ -2295,17 +2217,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-overflow: ellipsis;
 }
 
-.searchtools .results {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  margin-top: 0;
-  scrollbar-width: none;
-}
-
-.searchtools .result {
-  flex: none;
-}
-
 .search-page > :first-child {
   margin-top: 0;
 }
@@ -2364,10 +2275,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   .searchbar-tool {
     width: 42px;
     height: 42px;
-  }
-
-  .searchtools {
-    max-height: 52vh;
   }
 
   .drawpop {
@@ -5386,8 +5293,7 @@ html {
   }
 
   /* Popups under the search bar drop from it. */
-  .drawpop,
-  .searchtools {
+  .drawpop {
     animation: phone-drop 220ms var(--ease) backwards;
   }
 
@@ -5566,7 +5472,6 @@ html {
 
 @media (prefers-reduced-motion: reduce) {
   .drawpop,
-  .searchtools,
   .overlay,
   .overlay-panel,
   .map-card,
