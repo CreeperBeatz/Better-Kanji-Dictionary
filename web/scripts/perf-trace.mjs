@@ -1,4 +1,4 @@
-// Usage: node scripts/perf-trace.mjs [base] [load|type|open|recentre] [cpuThrottle]
+// Usage: node scripts/perf-trace.mjs [base] [load|type|open|components|recentre] [cpuThrottle]
 // DevTools trace of one phone interaction: where the browser's time goes (style, layout, paint, script).
 import { chromium, devices } from 'playwright'
 
@@ -69,6 +69,15 @@ if (STEP === 'open') {
   await traced(async () => {
     await tapEl(page.locator('.kanji-hit').first())
   })
+}
+if (STEP === 'components') {
+  await page.goto(BASE + '/kanji/%E6%B0%B8', { waitUntil: 'networkidle' })
+  await wait(1000)
+  await tapEl(page.locator('.phone-tabs button', { hasText: 'Associations' }))
+  await wait(1200)
+  await traced(async () => {
+    await tapEl(page.locator('.phone-tabs button', { hasText: 'Components' }))
+  }, 1000)
 }
 if (STEP === 'recentre') {
   await page.goto(BASE + '/kanji/%E6%B0%B8', { waitUntil: 'networkidle' })

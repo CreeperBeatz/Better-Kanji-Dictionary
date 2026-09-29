@@ -1,4 +1,4 @@
-// Usage: node scripts/perf-profile.mjs [base] [load|type|open|tab|map] [cpuThrottle]
+// Usage: node scripts/perf-profile.mjs [base] [load|type|open|tab|components|map] [cpuThrottle]
 // CPU-profile one interaction on the phone layout and print the hottest functions by self time.
 import { chromium, devices } from 'playwright'
 
@@ -83,6 +83,15 @@ if (STEP === 'open' || STEP === 'tab') {
       await tapEl(page.locator('.phone-tabs button', { hasText: 'Associations' }))
     }, 800)
   }
+}
+if (STEP === 'components') {
+  await page.goto(BASE + '/kanji/%E6%B0%B8', { waitUntil: 'networkidle' })
+  await wait(1000)
+  await tapEl(page.locator('.phone-tabs button', { hasText: 'Associations' }))
+  await wait(1200)
+  await profile(async () => {
+    await tapEl(page.locator('.phone-tabs button', { hasText: 'Components' }))
+  }, 800)
 }
 if (STEP === 'map') {
   await profile(async () => {

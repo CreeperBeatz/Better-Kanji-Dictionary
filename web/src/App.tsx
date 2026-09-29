@@ -436,6 +436,15 @@ export function App() {
   useEffect(() => {
     if (!onStage) setGraphLocked(true)
   }, [onStage])
+  // The pane turned from is off the screen, not invisible, so what had the
+  // focus in it -- the note being written, say -- would keep the keyboard up
+  // over the graph unless it is let go of.
+  useEffect(() => {
+    if (!mobile) return
+    const hidden = onStage ? scroller.current : stageRef.current
+    const active = document.activeElement
+    if (active instanceof HTMLElement && hidden?.contains(active)) active.blur()
+  }, [mobile, onStage])
 
   const windowWidth = useWindowWidth()
   const [splitPref, setSplitPref] = useState(() => {
@@ -1460,6 +1469,7 @@ export function App() {
           <div
             className="rail-body"
             ref={scroller}
+            aria-hidden={mobile && onStage ? true : undefined}
             onTouchStart={swipeStart}
             onTouchMove={swipeMove}
             onTouchEnd={swipeEnd}
@@ -1524,6 +1534,7 @@ export function App() {
         <main
           className="stage"
           ref={stageRef}
+          aria-hidden={mobile && !onStage ? true : undefined}
           onTouchStart={swipeStart}
           onTouchMove={swipeMove}
           onTouchEnd={swipeEnd}

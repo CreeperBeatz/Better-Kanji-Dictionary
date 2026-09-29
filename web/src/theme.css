@@ -805,10 +805,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     grid-area: tabs;
   }
 
-  .shell-grid[data-pane='rail'] .stage,
-  .shell-grid[data-pane='stage'] .rail-body {
-    visibility: hidden;
-    pointer-events: none;
+  /* The pane not showing is moved off the screen, not made invisible:
+     visibility and pointer-events are inherited, so switching them restyles
+     every element under the pane -- 750 of them for a big graph -- on each
+     turn, where a transform on the pane touches one. Off the screen it can
+     be neither seen nor touched, and its fixed overlays go with it. Copies
+     of a pane (data-ghost) place themselves. */
+  .shell-grid[data-pane='rail'] .stage:not([data-ghost]),
+  .shell-grid[data-pane='stage'] .rail-body:not([data-ghost]) {
+    transform: translateX(100%);
   }
 }
 
