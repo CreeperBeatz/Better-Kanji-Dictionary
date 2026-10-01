@@ -161,6 +161,16 @@ const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_PX = 40
 /** Zoom per pixel dragged after a double tap: e^(rate * px). */
 const TAP_ZOOM_RATE = 0.006
+/** How far the graph zooms out and in. */
+const MIN_SCALE = 0.12
+const MAX_SCALE = 6
+
+/** `from` zoomed by `factor` about the point (px, py) in the svg, as far as the graph zooms. */
+function zoomedAbout(from: View, factor: number, px: number, py: number): View {
+  const scale = Math.min(Math.max(from.scale * factor, MIN_SCALE), MAX_SCALE)
+  const k = scale / from.scale
+  return { scale, x: px - (px - from.x) * k, y: py - (py - from.y) * k }
+}
 
 async function fetchAbove(chars: string[]): Promise<void> {
   const missing = chars.filter((c) => !aboveCache.has(c))
@@ -417,10 +427,8 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
 
   /** Zoom by `factor` about a point in the svg, then move by (dx, dy). */
   function zoomAt(factor: number, px: number, py: number, dx = 0, dy = 0) {
-    const v = viewRef.current
-    const scale = Math.min(Math.max(v.scale * factor, 0.12), 6)
-    const k = scale / v.scale
-    moveView({ scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy })
+    const v = zoomedAbout(viewRef.current, factor, px, py)
+    moveView({ ...v, x: v.x + dx, y: v.y + dy })
   }
 
   function onWheel(e: React.WheelEvent) {
@@ -430,6 +438,24 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     if (!rect) return
     unpop()
     zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top)
+  }
+
+  /** Where a pointer is, in the svg's own pixels. */
+  function inSvg(e: { clientX: number; clientY: number }) {
+    const rect = svgRef.current?.getBoundingClientRect()
+    return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) }
+  }
+
+  /** A press that may become a drag, from where the graph stands now. */
+  function startDrag(e: React.PointerEvent) {
+    drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
+  }
+
+  /** A gesture has begun: no hold, peek, card or menu outlasts it. */
+  function interrupt() {
+    clearTimeout(hold.current.timer)
+    setPeek(null)
+    unpop()
   }
 
   function spread() {
@@ -445,12 +471,12 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       // and a swipe is the page's, to turn its tab. The press is still
       // followed, so a moving finger does not count as a hold.
       pinched.current = false
-      drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
+      startDrag(e)
       return
     }
     if (e.pointerType === 'touch') {
-      const rect = svgRef.current?.getBoundingClientRect()
-      touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
+      const at = inSvg(e)
+      touches.current.set(e.pointerId, at)
       if (touches.current.size === 1) pinched.current = false
       // The second tap of a double tap, still down: from here the finger zooms.
       const prev = lastTap.current
@@ -461,16 +487,8 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
         Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < DOUBLE_TAP_PX
       ) {
         lastTap.current = null
-        clearTimeout(hold.current.timer)
-        setPeek(null)
-        unpop()
-        tapZoom.current = {
-          y: e.clientY,
-          px: e.clientX - (rect?.left ?? 0),
-          py: e.clientY - (rect?.top ?? 0),
-          from: viewRef.current,
-          moved: false,
-        }
+        interrupt()
+        tapZoom.current = { y: e.clientY, px: at.x, py: at.y, from: viewRef.current, moved: false }
         svgRef.current?.setPointerCapture?.(e.pointerId)
         return
       }
@@ -479,14 +497,12 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
         for (const id of touches.current.keys()) svgRef.current?.setPointerCapture?.(id)
         drag.current = null
         pinched.current = true
-        clearTimeout(hold.current.timer)
-        setPeek(null)
-        unpop()
+        interrupt()
         pinch.current = spread()
         return
       }
     }
-    drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
+    startDrag(e)
   }
 
   /** Where a pointer event is, in the svg's own pixels. */
@@ -524,14 +540,11 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       if (!z.moved && Math.abs(dy) < 3) return
       z.moved = true
       // Down zooms in, up out: a screen's height is about three doublings.
-      const scale = Math.min(Math.max(z.from.scale * Math.exp(dy * TAP_ZOOM_RATE), 0.12), 6)
-      const k = scale / z.from.scale
-      moveView({ scale, x: z.px - (z.px - z.from.x) * k, y: z.py - (z.py - z.from.y) * k })
+      moveView(zoomedAbout(z.from, Math.exp(dy * TAP_ZOOM_RATE), z.px, z.py))
       return
     }
     if (touches.current.has(e.pointerId)) {
-      const rect = svgRef.current?.getBoundingClientRect()
-      touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
+      touches.current.set(e.pointerId, inSvg(e))
       const p = pinch.current
       if (p && touches.current.size >= 2) {
         const now = spread()
@@ -544,23 +557,18 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     if (!d) return
     const dx = e.clientX - d.x
     const dy = e.clientY - d.y
-    if (locked) {
-      if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
-        clearTimeout(hold.current.timer)
-        d.moved = true
-      }
-      return
-    }
-    // Capture only once it is really a drag, or the click lands on the svg
-    // instead of the node under the pointer.
     if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
-      clearTimeout(hold.current.timer)
       d.moved = true
-      svgRef.current?.setPointerCapture?.(e.pointerId)
-      setPeek(null)
-      unpop()
+      // Locked, the finger moving is no hold, and the rest is the page's.
+      if (locked) clearTimeout(hold.current.timer)
+      else {
+        // Capture only once it is really a drag, or the click lands on the
+        // svg instead of the node under the pointer.
+        svgRef.current?.setPointerCapture?.(e.pointerId)
+        interrupt()
+      }
     }
-    if (d.moved) moveView({ ...viewRef.current, x: d.vx + dx, y: d.vy + dy })
+    if (d.moved && !locked) moveView({ ...viewRef.current, x: d.vx + dx, y: d.vy + dy })
   }
 
   function onPointerUp(e: React.PointerEvent) {

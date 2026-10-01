@@ -6,7 +6,7 @@ import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
-import { ProfileButton } from './account/Account'
+import { AccountDialog, ProfileButton } from './account/Account'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
@@ -18,10 +18,10 @@ import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, useNav, type Page, type Stack } from './nav'
+import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 
-// Wanted only once the map or the account dialog is opened, so loaded then.
+// Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
-const AccountDialog = lazy(() => import('./account/Account').then((m) => ({ default: m.AccountDialog })))
 
 // What a failed graph fetch says when the network, not the server, is why:
 // a marker, shown in the interface language.
@@ -77,9 +77,6 @@ const S = strings(
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
 
-// Matches the narrow layout in theme.css.
-const MOBILE = '(max-width: 900px)'
-
 // Read once per resize, not once per render: asking the window its width
 // while the page is mid-change makes the browser lay it all out to answer.
 let windowWidth = window.innerWidth
@@ -94,23 +91,6 @@ function useWindowWidth(): number {
       return () => window.removeEventListener('resize', onResize)
     },
     () => windowWidth,
-  )
-}
-
-const queries = new Map<string, MediaQueryList>()
-function mediaQuery(query: string): MediaQueryList {
-  let m = queries.get(query)
-  if (!m) queries.set(query, (m = window.matchMedia(query)))
-  return m
-}
-function useMediaQuery(query: string): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const m = mediaQuery(query)
-      m.addEventListener('change', onChange)
-      return () => m.removeEventListener('change', onChange)
-    },
-    () => mediaQuery(query).matches,
   )
 }
 
@@ -160,6 +140,14 @@ const RAIL_TAB_KEY = 'betterrtk:railTab'
 const SPLIT_KEY = 'betterrtk:searchBeside'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
+// On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
+// is the search the page was opened from, and Components is the graph.
+type PhoneTab = 'search' | RailTab | 'components'
+const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'associations', 'components']
+/** How a page changes on a phone: to another page, or to another of its tabs. */
+type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
+/** What slides as a tab turns: the whole screen, or only what is under the page's head. */
+type TurnScope = 'whole' | 'pane'
 
 function initialRailTab(): RailTab {
   try {
@@ -229,20 +217,28 @@ function searchBarOf(input: HTMLInputElement | null): HTMLElement | null {
   return input?.closest('.searchbar') ?? null
 }
 
+const EASE = 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+
 /**
  * Slides a pane sideways from one offset to another. It ends back in its
  * place, since a transform left on it would trap the fixed overlays inside it.
  */
 function slide(el: HTMLElement, from: number, to: number, ms: number) {
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   return el.animate([{ transform: `translateX(${from}px)` }, { transform: `translateX(${to}px)` }], {
-    duration: still ? 0 : ms,
-    easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+    duration: reducedMotion() ? 0 : ms,
+    easing: EASE,
   })
 }
 
 /** How long a page takes to slide in or out. */
 const PAGE_MS = 300
+/** How long a tab tapped takes to turn. */
+const TAP_TURN_MS = 260
+
+/** Whether pages slide at all: on a phone, unless the system asks for less motion. */
+const pagesSlide = () => matches(MOBILE) && !reducedMotion()
+/** Whether the browser animates a change itself, photographing the page it leaves. */
+const hasViewTransitions = () => typeof document.startViewTransition === 'function'
 
 /**
  * A still copy of a pane laid over it, for it to leave the screen by while
@@ -317,7 +313,7 @@ function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
 // character or a word opens on its focus view; a link to anything else, on a
 // desktop, beside the map.
 // Picking a character, on the map or from a list, goes to its focus view.
-const openedOnPhone = window.matchMedia(MOBILE).matches
+const openedOnPhone = matches(MOBILE)
 const linkedPage = pageInUrl()
 const linked = linkedPage?.kind === 'kanji' ? linkedPage.char : null
 
@@ -351,6 +347,18 @@ function nameOf(p: Page, t: T) {
   if (p.kind === 'level') return <>N{p.level}</>
   if (!p.q) return <>{t('search')}</>
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
+}
+
+/** A kanji or a word, as picked from a list. */
+type Picked = { kind: 'kanji'; char: string } | { kind: 'word'; id: number; word: Word }
+const kanjiPage = (char: string): Picked => ({ kind: 'kanji', char })
+const wordPage = (w: Word): Picked => ({ kind: 'word', id: w.id, word: w })
+
+/** What a search's results mark as open: the page, if it is one of them. */
+function openIn(p: Page | undefined) {
+  if (p?.kind === 'kanji') return { kanji: p.char }
+  if (p?.kind === 'word') return { word: p.id }
+  return undefined
 }
 
 function titleOf(p: Page): string {
@@ -726,11 +734,14 @@ export function App() {
   // Where the search was scrolled to when it was last left, on the search
   // page or in a page's Search tab: the tab opens there again.
   const searchAt = useRef<{ q: string; top: number } | null>(null)
-  const keepSearch = useCallback(() => {
+  function keepSearchScroll(q: string) {
+    if (scroller.current) searchAt.current = { q, top: scroller.current.scrollTop }
+  }
+  function keepSearch() {
     if (top.kind !== 'search') return
     rememberSearch(top.q)
-    if (scroller.current) searchAt.current = { q: top.q, top: scroller.current.scrollTop }
-  }, [top])
+    keepSearchScroll(top.q)
+  }
 
   // Opening a character from a page puts it on top -- unless it is the page
   // just below, as when a word's kanji is the one it was opened from. The tab
@@ -739,18 +750,16 @@ export function App() {
     (char: string) => {
       setHovered(null)
       keepSearch()
-      // Back through history animates from the popstate it causes.
-      if (under?.kind === 'kanji' && under.char === char) {
+      const back = under?.kind === 'kanji' && under.char === char
+      const go = () => {
         leaveStage('replace')
         setViewState('focus')
-        pop()
-        return
+        if (back) pop()
+        else push({ kind: 'kanji', char })
       }
-      animateNav('forward', () => {
-        leaveStage('replace')
-        setViewState('focus')
-        push({ kind: 'kanji', char })
-      })
+      // Back through history animates from the popstate it causes.
+      if (back) go()
+      else animateNav('forward', go)
     },
   )
 
@@ -761,7 +770,7 @@ export function App() {
       animateNav('forward', () => {
         toDictionary()
         if (HAN.test(w.headword)) setViewState('focus')
-        push({ kind: 'word', id: w.id, word: w })
+        push(wordPage(w))
       })
     },
   )
@@ -780,18 +789,15 @@ export function App() {
         // in the dictionary makes it the graph's centre too: back on
         // Components, the graph is of the character whose page this is.
         const back = under?.kind === 'kanji' && under.char === char && !under.centre
-        if (back) {
+        const go = () => {
           leaveStage('replace')
           setFocus(char)
-          pop()
-          return
-        }
-        animateNav('forward', () => {
-          leaveStage('replace')
-          setFocus(char)
-          if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
+          if (back) pop()
+          else if (top.kind === 'kanji' && top.char === char) replaceTop({ kind: 'kanji', char })
           else push({ kind: 'kanji', char })
-        })
+        }
+        if (back) go()
+        else animateNav('forward', go)
         return
       }
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
@@ -842,21 +848,14 @@ export function App() {
   }, [setView])
 
   // A pick from the search column replaces what is open beside it.
-  const listKanji = useStable(
-    (char: string) => {
-      setHovered(null)
-      setViewState('focus')
-      rememberSearch(q)
-      openOver({ kind: 'search', q }, { kind: 'kanji', char })
-    },
-  )
-  const listWord = useStable(
-    (w: Word) => {
-      if (HAN.test(w.headword)) setViewState('focus')
-      rememberSearch(q)
-      openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
-    },
-  )
+  function openOverSearch(p: Picked) {
+    setHovered(null)
+    if (p.kind === 'kanji' || HAN.test(p.word.headword)) setViewState('focus')
+    rememberSearch(q)
+    openOver({ kind: 'search', q }, p)
+  }
+  const listKanji = useStable((char: string) => openOverSearch(kanjiPage(char)))
+  const listWord = useStable((w: Word) => openOverSearch(wordPage(w)))
 
   const deselect = useStable(() => {
     setHovered(null)
@@ -892,6 +891,15 @@ export function App() {
     else reset({ kind: 'search', q })
   }, [split, top, root, q, stack.length, pop, reset, toDictionary])
 
+  // Back -- the browser's, or the app's -- to the search brings the keyboard
+  // up with it, ready for the next word. Phones raise the keyboard for focus
+  // given as a gesture is answered, so it is asked at once.
+  const cameBack = useRef(0)
+  const goBack = useStable(() => {
+    cameBack.current = performance.now()
+    pop()
+  })
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName
@@ -916,8 +924,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setView, pop])
+  }, [setView, goBack])
 
   const closeAccount = useCallback(() => {
     setAccountOpen(false)
@@ -1065,29 +1072,25 @@ export function App() {
     return null
   }
 
-  // On a phone a page's tabs are Dictionary, Associations and Components:
-  // for a word, those of the kanji its graph is of.
+  // Components on a phone is the graph of the page's kanji: for a word, of
+  // the one its graph is on.
   const componentsOf = shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? wordCentre : null
   // Back from the graph is the dictionary, whichever tab it was gone to from.
   function showComponents() {
     setRailTab('dictionary')
     setView('focus')
   }
-  // Search is a tab too, left of Dictionary: the search the page was opened
-  // from, with the page marked in it, and the page still there to turn back to.
-  type PhoneTab = RailTab | 'components' | 'search'
+  // The Search tab shows the search with the page marked in it, and the page
+  // still there to turn back to.
   const searchShown = mobile && !onStage && subject !== null && searchOver !== null && samePage(searchOver, top)
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
     onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : tab
-  // A word with no kanji has no graph: its Components stays, greyed out, so
-  // the tabs never move about.
-  const phoneTabs: PhoneTab[] = ['search', 'dictionary', 'associations', 'components']
   // Where the page was scrolled to, for coming back to it from the search.
   const pageAt = useRef(0)
   function leaveSearchTab() {
-    if (phoneTab === 'search' && scroller.current) searchAt.current = { q, top: scroller.current.scrollTop }
+    if (phoneTab === 'search') keepSearchScroll(q)
   }
   function toPhoneTab(to: PhoneTab) {
     leaveSearchTab()
@@ -1102,30 +1105,18 @@ export function App() {
     else chooseRailTab(to)
   }
   // A pick in the search tab: the page already open turns back to; another
-  // opens over the search, as a pick on the search page does.
-  const searchTabKanji = useStable((char: string) => {
-    if (top.kind === 'kanji' && top.char === char) return turn('dictionary', 0, 260)
-    setHovered(null)
-    rememberSearch(q)
+  // opens over the search, as a pick in the search column does.
+  function openFromSearchTab(p: Picked) {
+    if (samePage(p, top)) return tapPhoneTab('dictionary')
     leaveSearchTab()
     animateNav('forward', () => {
       setSearchOver(null)
       toDictionary()
-      setViewState('focus')
-      openOver({ kind: 'search', q }, { kind: 'kanji', char })
+      openOverSearch(p)
     })
-  })
-  const searchTabWord = useStable((w: Word) => {
-    if (top.kind === 'word' && top.id === w.id) return turn('dictionary', 0, 260)
-    rememberSearch(q)
-    leaveSearchTab()
-    animateNav('forward', () => {
-      setSearchOver(null)
-      toDictionary()
-      if (HAN.test(w.headword)) setViewState('focus')
-      openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
-    })
-  })
+  }
+  const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
+  const searchTabWord = useStable((w: Word) => openFromSearchTab(wordPage(w)))
   // The search page itself: a swipe from the left there raises the keyboard.
   const onSearchPage = mobile && !onStage && top.kind === 'search'
 
@@ -1146,9 +1137,13 @@ export function App() {
     if (by === null) nav.style.removeProperty('--drag')
     else nav.style.setProperty('--drag', String(by))
   }
-  /** Whether turning to this tab moves the whole screen, not just the pane. */
+  /**
+   * Whether turning to this tab moves the whole screen, not just the pane:
+   * the graph and the search have no page head to stay put above them.
+   */
   function wholeTo(to: PhoneTab | undefined) {
-    return to === 'components' || to === 'search' || phoneTab === 'components' || phoneTab === 'search' || !paneRef.current
+    const headless = (p: PhoneTab | undefined) => p === 'components' || p === 'search'
+    return headless(to) || headless(phoneTab) || !paneRef.current
   }
   function moverTo(to: PhoneTab | undefined): HTMLElement | null {
     if (phoneTab === 'components') return stageRef.current
@@ -1180,15 +1175,15 @@ export function App() {
     const whole = wholeTo(to)
     const from = moverTo(to)
     if (!from) return toPhoneTab(to)
-    const side = phoneTabs.indexOf(to) > phoneTabs.indexOf(phoneTab) ? -1 : 1
+    const side = PHONE_TABS.indexOf(to) > PHONE_TABS.indexOf(phoneTab) ? -1 : 1
     // From a standstill -- a tap on a tab -- the turn is a view transition
     // where there are any, with nothing to copy. Leaving the graph goes
     // through history, so the popstate is where that transition starts.
-    if (at === 0 && hasViewTransitions()) {
+    if (at === 0 && pagesSlide() && hasViewTransitions()) {
       const kind = side < 0 ? 'tab-forward' : 'tab-back'
       const scope = whole ? 'whole' : 'pane'
-      if (phoneTab === 'components') pendingTurn.current = { kind, scope }
-      else return animateNav(kind, () => toPhoneTab(to), scope)
+      if (phoneTab !== 'components') return animateNav(kind, () => toPhoneTab(to), scope)
+      pendingTurn.current = { kind, scope }
       return toPhoneTab(to)
     }
     turning.current?.ghost.remove()
@@ -1206,17 +1201,20 @@ export function App() {
       how.ghost.remove()
     }, 800)
   }
+  // A tab with nothing to show is greyed out, not taken away, so the tabs
+  // never move about: all but Search on the search itself or a level's list,
+  // Components for a word with no kanji.
   function tabOff(p: PhoneTab) {
     return p !== 'search' && (subject === null || (p === 'components' && !componentsOf))
   }
   function besideTab(dx: number): PhoneTab | undefined {
     if (onSearchPage) return undefined
-    const next = phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
+    const next = PHONE_TABS[PHONE_TABS.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
     return next && tabOff(next) ? undefined : next
   }
   // The search has nothing to its left: a swipe that way opens the box, as a
   // pull down does.
-  function searchBy(dx: number) {
+  function swipeOpensSearch(dx: number) {
     return dx > 0 && (onSearchPage || phoneTab === 'search')
   }
   function swipeStart(e: React.TouchEvent) {
@@ -1274,20 +1272,19 @@ export function App() {
     s.moved = el
     el.style.transform = `translateX(${next ? dx : dx / 4}px)`
     dragMark(next ? Math.max(-1, Math.min(1, -dx / el.clientWidth)) : 0)
-    searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', searchBy(dx) && dx > PULL)
+    searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', swipeOpensSearch(dx) && dx > PULL)
   }
   function swipeEnd(e: React.TouchEvent) {
     const s = swipe.current
     swipe.current = null
+    searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     const el = s?.moved
     if (s?.mode === 'pull') {
-      searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
       if (e.changedTouches[0].clientY - s.y > PULL) typeOver()
       return
     }
     if (s?.mode !== 'turn' || !el) return
     dragMark(null)
-    searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     const dx = e.changedTouches[0].clientX - s.x
     const next = besideTab(dx)
     const at = next ? dx : dx / 4
@@ -1295,7 +1292,7 @@ export function App() {
     const flung = Math.abs(s.v) > 0.4 && Math.sign(s.v) === Math.sign(dx) && Math.abs(dx) > SWIPE
     if (!next || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
       slide(el, at, 0, 220)
-      if (searchBy(dx) && (flung || dx > PULL)) typeOver()
+      if (swipeOpensSearch(dx) && (flung || dx > PULL)) typeOver()
       return
     }
     // Off the screen at the speed it was thrown, the next tab right behind it.
@@ -1326,7 +1323,7 @@ export function App() {
   }
   // A tab tapped turns the same way, from where the page stands.
   function tapPhoneTab(to: PhoneTab) {
-    if (to !== phoneTab) turn(to, 0, 260)
+    if (to !== phoneTab) turn(to, 0, TAP_TURN_MS)
   }
   useLayoutEffect(() => {
     const how = turning.current
@@ -1376,25 +1373,16 @@ export function App() {
   // renders, and the pane showing may have changed since.
   const onStageRef = useRef(onStage)
   onStageRef.current = onStage
+  // A tab turn away from the graph, waiting for the popstate that makes it.
+  const pendingTurn = useRef<{ kind: NavKind; scope: TurnScope } | null>(null)
   /**
    * Make the change `go` with the page sliding: as a view transition where
    * the browser has them -- it photographs the old page itself, which costs
    * nothing next to copying it -- and by a copy of the page elsewhere.
    */
-  type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
-  function hasViewTransitions() {
-    return (
-      window.matchMedia(MOBILE).matches &&
-      typeof document.startViewTransition === 'function' &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    )
-  }
-  // A tab turn away from the graph, waiting for the popstate that makes it.
-  const pendingTurn = useRef<{ kind: NavKind; scope: 'pane' | 'whole' } | null>(null)
-  function animateNav(kind: NavKind, go: () => void, scope: 'pane' | 'whole' = 'whole') {
-    if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return go()
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return go()
-    if (typeof document.startViewTransition === 'function') {
+  function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole') {
+    if (!pagesSlide() || navAnim.current || turning.current) return go()
+    if (hasViewTransitions()) {
       const html = document.documentElement
       html.dataset.nav = kind
       html.dataset.turn = scope
@@ -1410,7 +1398,6 @@ export function App() {
     go()
   }
   function leaveBy(dir: 'forward' | 'back') {
-    if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const from = onStageRef.current ? stageRef.current : scroller.current
     const ghosts: HTMLElement[] = []
@@ -1449,7 +1436,6 @@ export function App() {
     if (nav && how.tabs) how.tabs.remove()
     else if (nav) slide(nav, w, 0, PAGE_MS)
     else if (how.tabs) how.ghosts.push(how.tabs)
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
       const a = g.animate(
@@ -1457,34 +1443,27 @@ export function App() {
           { transform: 'translateX(0)', opacity: 1 },
           { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
         ],
-        { duration: still ? 0 : PAGE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+        { duration: PAGE_MS, easing: EASE },
       )
       a.onfinish = () => g.remove()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top, pane, onStage])
 
-  // Back -- the browser's, or the app's -- to the search brings the keyboard
-  // up with it, ready for the next word. Phones raise the keyboard for focus
-  // given as a gesture is answered, so it is asked at once.
-  const cameBack = useRef(0)
-  function goBack() {
-    cameBack.current = performance.now()
-    pop()
-  }
+  // Back and forward slide the page as the app's own steps do: a tab turn
+  // away from the graph as that turn, anything else the way history went.
   beforePop.current = (e: PopStateEvent, apply: () => void) => {
     cameBack.current = performance.now()
     if (turning.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
-    if (turn) {
-      animateNav(turn.kind, apply, turn.scope)
-      return true
-    }
     const n = (e.state as { n?: number } | null)?.n
-    animateNav(n !== undefined && lastN.current !== undefined && n > lastN.current ? 'forward' : 'back', apply)
+    const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
+    if (turn) animateNav(turn.kind, apply, turn.scope)
+    else animateNav(forward ? 'forward' : 'back', apply)
     return true
   }
+  // Back on the search, the keyboard comes up (see `cameBack`).
   useEffect(() => {
     if (!cameBack.current || performance.now() - cameBack.current > 400) return
     cameBack.current = 0
@@ -1554,13 +1533,7 @@ export function App() {
                 asked={asked}
                 onAsk={setAsked}
                 onMap={browseMap}
-                open={
-                  picked?.kind === 'kanji'
-                    ? { kanji: picked.char }
-                    : picked?.kind === 'word'
-                      ? { word: picked.id }
-                      : undefined
-                }
+                open={openIn(picked)}
               />
             </div>
           </aside>
@@ -1615,7 +1588,7 @@ export function App() {
                   asked={asked}
                   onAsk={setAsked}
                   onMap={browseMap}
-                  open={top.kind === 'kanji' ? { kanji: top.char } : top.kind === 'word' ? { word: top.id } : undefined}
+                  open={openIn(top)}
                 />
               )}
               {tab === 'dictionary' &&
@@ -1641,14 +1614,14 @@ export function App() {
               role="tablist"
               aria-label={t('sidePanel')}
               ref={tabsRef}
-              style={{ '--n': phoneTabs.length, '--at': phoneTabs.indexOf(phoneTab) } as React.CSSProperties}
+              style={{ '--n': PHONE_TABS.length, '--at': PHONE_TABS.indexOf(phoneTab) } as React.CSSProperties}
               onTouchStart={swipeStart}
               onTouchMove={swipeMove}
               onTouchEnd={swipeEnd}
               onTouchCancel={swipeCancel}
             >
               <span className="phone-tab-mark" aria-hidden />
-              {phoneTabs.map((p) => (
+              {PHONE_TABS.map((p) => (
                 <button
                   key={p}
                   role="tab"
@@ -1771,18 +1744,13 @@ export function App() {
         </main>
       </div>
 
-      {accountShown && (
-        <Suspense fallback={null}>
-          <AccountDialog onClose={closeAccount} />
-        </Suspense>
-      )}
+      {accountShown && <AccountDialog onClose={closeAccount} />}
     </div>
   )
 }
 
-/** A panel with its left column filled while the search has a column of its own. */
 /** The phone's bottom tabs, each over its name: the icons keep the tabs evenly spaced whatever the names' lengths. */
-function PhoneTabIcon({ tab }: { tab: 'search' | 'dictionary' | 'associations' | 'components' }) {
+function PhoneTabIcon({ tab }: { tab: PhoneTab }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden>
       {tab === 'search' && (
@@ -1810,6 +1778,7 @@ function PhoneTabIcon({ tab }: { tab: 'search' | 'dictionary' | 'associations' |
   )
 }
 
+/** A panel with its left column filled while the search has a column of its own. */
 function SplitIcon({ open }: { open: boolean }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden>

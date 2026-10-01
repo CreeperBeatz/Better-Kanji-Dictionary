@@ -8,13 +8,12 @@
  * not type is built up the same way as one you can.
  */
 
-import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { strings, useLang } from '../i18n'
+import { MOBILE, useMediaQuery } from '../media'
 
 // Not needed until its button is pressed.
 const DrawPad = lazy(() => import('../draw/DrawPad').then((m) => ({ default: m.DrawPad })))
-
-type Tool = 'draw'
 
 const S = strings(
   {
@@ -56,37 +55,25 @@ interface Props {
 
 const coarse = () => window.matchMedia('(pointer: coarse)').matches
 
-// The phone's box is narrower than the full placeholder; a shorter one there.
-const PHONE = '(max-width: 900px)'
-function usePhone(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      const m = window.matchMedia(PHONE)
-      m.addEventListener('change', onChange)
-      return () => m.removeEventListener('change', onChange)
-    },
-    () => window.matchMedia(PHONE).matches,
-  )
-}
-
 export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Props) {
-  const [tool, setTool] = useState<Tool | null>(null)
+  const [drawing, setDrawing] = useState(false)
   const t = S(useLang())
-  const phone = usePhone()
+  // The phone's box is narrower than the full placeholder; a shorter one there.
+  const phone = useMediaQuery(MOBILE)
   const drawRef = useRef<HTMLDivElement>(null)
   const drawButton = useRef<HTMLButtonElement>(null)
 
   // The draw pad is a popup: a press anywhere outside it, or Escape, puts it
   // away. Its own button is left to toggle it.
   useEffect(() => {
-    if (tool !== 'draw') return
+    if (!drawing) return
     function onDown(e: PointerEvent) {
       const at = e.target as Node
       if (drawRef.current?.contains(at) || drawButton.current?.contains(at)) return
-      setTool(null)
+      setDrawing(false)
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setTool(null)
+      if (e.key === 'Escape') setDrawing(false)
     }
     document.addEventListener('pointerdown', onDown, true)
     document.addEventListener('keydown', onKey)
@@ -94,22 +81,22 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
       document.removeEventListener('pointerdown', onDown, true)
       document.removeEventListener('keydown', onKey)
     }
-  }, [tool])
+  }, [drawing])
 
-  function toggle(which: Tool) {
-    setTool((cur) => (cur === which ? null : which))
+  function toggleDrawing() {
+    setDrawing((on) => !on)
     // The keyboard and the pad cannot share a phone screen.
     if (coarse()) inputRef.current?.blur()
   }
 
-  // A pick types the character and puts the tool away, so the results show.
+  // A pick types the character and puts the pad away, so the results show.
   function pick(ch: string) {
     onType(q + ch)
-    setTool(null)
+    setDrawing(false)
   }
 
   return (
-    <div className="searchbar" data-tool={tool ?? undefined}>
+    <div className="searchbar">
       <div className="searchbar-row">
         <div className="searchbar-field">
           <input
@@ -120,13 +107,13 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
             value={q}
             onChange={(e) => onType(e.target.value)}
             onFocus={(e) => {
-              if (coarse()) setTool(null)
+              if (coarse()) setDrawing(false)
               if (onFocus()) e.currentTarget.select()
             }}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault()
-                setTool(null)
+                setDrawing(false)
                 e.currentTarget.blur()
               }
               // Enter is done typing: put the keyboard away to show the results,
@@ -148,7 +135,7 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
               className="searchbar-clear"
               onClick={() => {
                 onType('')
-                if (!tool) inputRef.current?.focus()
+                if (!drawing) inputRef.current?.focus()
               }}
               aria-label={t('clearSearch')}
               title={t('clear')}
@@ -161,9 +148,9 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
         <button
           ref={drawButton}
           className="searchbar-tool"
-          data-on={tool === 'draw' || undefined}
-          aria-pressed={tool === 'draw'}
-          onClick={() => toggle('draw')}
+          data-on={drawing || undefined}
+          aria-pressed={drawing}
+          onClick={toggleDrawing}
           title={t('drawTitle')}
         >
           <svg viewBox="0 0 20 20" aria-hidden>
@@ -174,11 +161,11 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
         {after}
       </div>
 
-      {tool === 'draw' && (
+      {drawing && (
         <div ref={drawRef} className="drawpop" role="dialog" aria-label={t('drawTitle')}>
           <div className="drawpop-head">
             <h2>{t('drawTitle')}</h2>
-            <button className="account-x" onClick={() => setTool(null)} aria-label={t('close')} title={t('close')}>
+            <button className="account-x" onClick={() => setDrawing(false)} aria-label={t('close')} title={t('close')}>
               ×
             </button>
           </div>
