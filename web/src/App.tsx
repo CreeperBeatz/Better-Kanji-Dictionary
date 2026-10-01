@@ -1640,8 +1640,11 @@ export function App() {
               <span className="phone-tab-mark" aria-hidden />
               {phoneTabs.map((p) => (
                 <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
+                  <span className="phone-tab-icon">
+                    <PhoneTabIcon tab={p} />
+                    {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  </span>
                   {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
-                  {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                 </button>
               ))}
             </nav>
@@ -1762,6 +1765,35 @@ export function App() {
 }
 
 /** A panel with its left column filled while the search has a column of its own. */
+/** The phone's bottom tabs, each over its name: the icons keep the tabs evenly spaced whatever the names' lengths. */
+function PhoneTabIcon({ tab }: { tab: 'search' | 'dictionary' | 'associations' | 'components' }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden>
+      {tab === 'search' && (
+        <>
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="M10.3 10.3l3.7 3.7" />
+        </>
+      )}
+      {tab === 'dictionary' && (
+        <>
+          <path d="M8 4.2C6.6 3.2 4.6 2.8 2 3v9.5c2.6-.2 4.6.2 6 1.2 1.4-1 3.4-1.4 6-1.2V3c-2.6-.2-4.6.2-6 1.2z" />
+          <path d="M8 4.2v9.5" />
+        </>
+      )}
+      {tab === 'associations' && <path d="M3.5 2.75h9a1.75 1.75 0 0 1 1.75 1.75v5.5a1.75 1.75 0 0 1-1.75 1.75H7.5L4.5 14v-2.25h-1A1.75 1.75 0 0 1 1.75 10V4.5A1.75 1.75 0 0 1 3.5 2.75z" />}
+      {tab === 'components' && (
+        <>
+          <path d="M7.1 5.2 4.4 10.3M8.9 5.2l2.7 5.1" />
+          <circle cx="8" cy="3.6" r="1.85" />
+          <circle cx="3.6" cy="12" r="1.85" />
+          <circle cx="12.4" cy="12" r="1.85" />
+        </>
+      )}
+    </svg>
+  )
+}
+
 function SplitIcon({ open }: { open: boolean }) {
   return (
     <svg viewBox="0 0 16 16" aria-hidden>

@@ -4702,11 +4702,13 @@ html {
   position: relative;
   flex: 1;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 3px;
   min-width: 0;
-  padding: 13px 4px 14px;
+  padding: 8px 2px 9px;
+  white-space: nowrap;
   background: none;
   border: 0;
   color: var(--muted);
@@ -4717,6 +4719,34 @@ html {
 
 .phone-tabs button[aria-selected='true'] {
   color: var(--paper);
+}
+
+.phone-tab-icon {
+  position: relative;
+  display: block;
+  width: 21px;
+  height: 21px;
+}
+
+.phone-tab-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The count rides on the icon's shoulder, so the name stays centred. */
+.phone-tab-icon .rail-tab-count {
+  position: absolute;
+  bottom: 55%;
+  left: 75%;
+  padding: 0 5px;
+  background: var(--sumi-sunk);
+  font-size: 10px;
 }
 
 /* The vermilion mark on the edge it faces the page from, over the tab that is
@@ -5184,8 +5214,8 @@ html {
 
   /* The tabs along the bottom are read by the thumb, at a glance. */
   .phone-tabs button {
-    padding: 14px 4px 15px;
-    font-size: 12px;
+    padding: 8px 2px 9px;
+    font-size: 11px;
     color: var(--paper-dim);
   }
 
