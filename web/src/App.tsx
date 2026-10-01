@@ -204,6 +204,27 @@ function raiseKeyboard(input: HTMLInputElement) {
   input.focus({ preventScroll: true })
 }
 
+/**
+ * Scrolls `el` to `to` and holds it there while the page fills in beneath --
+ * a list's later rows come in a spare moment after the first -- until it gets
+ * there, a few seconds have gone by, or a finger takes over.
+ */
+function holdScroll(el: HTMLElement, to: number) {
+  const until = performance.now() + 3000
+  let stopped = false
+  const stop = () => (stopped = true)
+  el.addEventListener('touchstart', stop, { once: true, passive: true })
+  el.addEventListener('wheel', stop, { once: true, passive: true })
+  const step = () => {
+    if (stopped) return
+    el.scrollTop = to
+    if (Math.abs(el.scrollTop - to) > 1 && performance.now() < until) return requestAnimationFrame(step)
+    el.removeEventListener('touchstart', stop)
+    el.removeEventListener('wheel', stop)
+  }
+  step()
+}
+
 function searchBarOf(input: HTMLInputElement | null): HTMLElement | null {
   return input?.closest('.searchbar') ?? null
 }
@@ -701,8 +722,13 @@ export function App() {
   useEffect(() => {
     if (shown) rememberKanji(shown.char, shown)
   }, [shown])
+  // Where the search was scrolled to when it was last left, on the search
+  // page or in a page's Search tab: the tab opens there again.
+  const searchAt = useRef<{ q: string; top: number } | null>(null)
   const keepSearch = useCallback(() => {
-    if (top.kind === 'search') rememberSearch(top.q)
+    if (top.kind !== 'search') return
+    rememberSearch(top.q)
+    if (scroller.current) searchAt.current = { q: top.q, top: scroller.current.scrollTop }
   }, [top])
 
   // Opening a character from a page puts it on top -- unless it is the page
@@ -1056,7 +1082,11 @@ export function App() {
     : ['search', 'dictionary', 'associations']
   // Where the page was scrolled to, for coming back to it from the search.
   const pageAt = useRef(0)
+  function leaveSearchTab() {
+    if (phoneTab === 'search' && scroller.current) searchAt.current = { q, top: scroller.current.scrollTop }
+  }
   function toPhoneTab(to: PhoneTab) {
+    leaveSearchTab()
     if (to === 'search') {
       pageAt.current = scroller.current?.scrollTop ?? 0
       return setSearchOver(top)
@@ -1071,6 +1101,7 @@ export function App() {
     if (top.kind === 'kanji' && top.char === char) return turn('dictionary', 0, 260)
     setHovered(null)
     rememberSearch(q)
+    leaveSearchTab()
     animateNav('forward', () => {
       setSearchOver(null)
       toDictionary()
@@ -1081,6 +1112,7 @@ export function App() {
   const searchTabWord = useStable((w: Word) => {
     if (top.kind === 'word' && top.id === w.id) return turn('dictionary', 0, 260)
     rememberSearch(q)
+    leaveSearchTab()
     animateNav('forward', () => {
       setSearchOver(null)
       toDictionary()
@@ -1303,8 +1335,8 @@ export function App() {
     slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneTab])
-  // The search opens at its top, with the open page's entry in sight; back on
-  // the page, it is where it was left.
+  // The search opens where it was left, or else at its top with the open
+  // page's entry in sight; back on the page, it is where it was left too.
   const lastTab = useRef(phoneTab)
   useLayoutEffect(() => {
     const was = lastTab.current
@@ -1312,9 +1344,12 @@ export function App() {
     const sc = scroller.current
     if (!sc) return
     if (phoneTab === 'search') {
+      const left = searchAt.current
+      if (left && left.q === q) return holdScroll(sc, left.top)
       sc.scrollTop = 0
       sc.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
     } else if (was === 'search') sc.scrollTop = pageAt.current
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneTab])
 
   // Going to a page slides it in from the right over the one it was opened
