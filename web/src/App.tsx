@@ -1077,9 +1077,9 @@ export function App() {
   type PhoneTab = RailTab | 'components' | 'search'
   const searchShown = mobile && !onStage && subject !== null && searchOver === top
   const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : searchShown ? 'search' : tab
-  const phoneTabs: PhoneTab[] = componentsOf
-    ? ['search', 'dictionary', 'associations', 'components']
-    : ['search', 'dictionary', 'associations']
+  // A word with no kanji has no graph: its Components stays, greyed out, so
+  // the tabs never move about.
+  const phoneTabs: PhoneTab[] = ['search', 'dictionary', 'associations', 'components']
   // Where the page was scrolled to, for coming back to it from the search.
   const pageAt = useRef(0)
   function leaveSearchTab() {
@@ -1202,7 +1202,8 @@ export function App() {
   }
   function besideTab(dx: number): PhoneTab | undefined {
     if (onSearchPage) return undefined
-    return phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
+    const next = phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
+    return next === 'components' && !componentsOf ? undefined : next
   }
   // The search has nothing to its left: a swipe that way opens the box, as a
   // pull down does.
@@ -1639,7 +1640,13 @@ export function App() {
             >
               <span className="phone-tab-mark" aria-hidden />
               {phoneTabs.map((p) => (
-                <button key={p} role="tab" aria-selected={phoneTab === p} onClick={() => tapPhoneTab(p)}>
+                <button
+                  key={p}
+                  role="tab"
+                  aria-selected={phoneTab === p}
+                  disabled={p === 'components' && !componentsOf}
+                  onClick={() => tapPhoneTab(p)}
+                >
                   <span className="phone-tab-icon">
                     <PhoneTabIcon tab={p} />
                     {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
