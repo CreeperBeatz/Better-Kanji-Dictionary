@@ -4721,7 +4721,7 @@ html {
   color: var(--paper);
 }
 
-/* A word with no kanji has no graph to show. */
+/* A tab with nothing to show yet, or a word with no kanji for a graph. */
 .phone-tabs button:disabled {
   opacity: 0.35;
   cursor: default;

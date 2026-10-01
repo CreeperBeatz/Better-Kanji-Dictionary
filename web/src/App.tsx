@@ -1077,7 +1077,10 @@ export function App() {
   // from, with the page marked in it, and the page still there to turn back to.
   type PhoneTab = RailTab | 'components' | 'search'
   const searchShown = mobile && !onStage && subject !== null && searchOver !== null && samePage(searchOver, top)
-  const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : searchShown ? 'search' : tab
+  // The search itself, and a level's list, have the tabs too, with only Search
+  // to be had: they are there before a page is opened, not brought by it.
+  const phoneTab: PhoneTab =
+    onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : tab
   // A word with no kanji has no graph: its Components stays, greyed out, so
   // the tabs never move about.
   const phoneTabs: PhoneTab[] = ['search', 'dictionary', 'associations', 'components']
@@ -1203,10 +1206,13 @@ export function App() {
       how.ghost.remove()
     }, 800)
   }
+  function tabOff(p: PhoneTab) {
+    return p !== 'search' && (subject === null || (p === 'components' && !componentsOf))
+  }
   function besideTab(dx: number): PhoneTab | undefined {
     if (onSearchPage) return undefined
     const next = phoneTabs[phoneTabs.indexOf(phoneTab) + (dx < 0 ? 1 : -1)]
-    return next === 'components' && !componentsOf ? undefined : next
+    return next && tabOff(next) ? undefined : next
   }
   // The search has nothing to its left: a swipe that way opens the box, as a
   // pull down does.
@@ -1629,7 +1635,7 @@ export function App() {
               )}
             </div>
           </div>
-          {mobile && subject && !(onStage && view === 'map') && (
+          {mobile && !(onStage && view === 'map') && (
             <nav
               className="phone-tabs"
               role="tablist"
@@ -1647,12 +1653,12 @@ export function App() {
                   key={p}
                   role="tab"
                   aria-selected={phoneTab === p}
-                  disabled={p === 'components' && !componentsOf}
+                  disabled={tabOff(p)}
                   onClick={() => tapPhoneTab(p)}
                 >
                   <span className="phone-tab-icon">
                     <PhoneTabIcon tab={p} />
-                    {p === 'associations' && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                    {p === 'associations' && subject && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                   </span>
                   {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
                 </button>
