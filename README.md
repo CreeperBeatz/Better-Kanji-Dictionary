@@ -78,14 +78,13 @@ text every frame.
 | **Two languages** | The EN · БГ switch in the profile dialog turns the interface and the dictionary's glosses Bulgarian; a browser set to Bulgarian starts there. See [Bulgarian](#bulgarian). |
 | **Dictionary** | JMdict with real `nf01`–`nf48` frequency ranks, pitch accent contours, and Tatoeba examples linked by lemma rather than substring. Clicking a word opens its entry in the side panel: senses, other spellings, examples, and each kanji it is written with, any of which moves the graph there. |
 | **Draw** | Stroke matching against KanjiVG, server-side. One score, from shape plus a bonus for stroke order — writing it properly sharpens the answer, writing it any other way costs nothing, and the stroke count need not be exact. Picking a result opens it in the graph. |
-| **Radical picker** | KRADFILE's 253 radicals. After each pick, radicals present in no remaining candidate grey out, so you cannot build an empty result. |
 | **Associations** | Text, pasted or dropped images, and in-app sketches, on both kanji and components. A character's panel pulls in your notes on each of its parts, so the mnemonic assembles itself. Autosaves to disk. |
 | **GIFs** | A note can carry GIFs searched on KLIPY (Tenor's API closed in 2026). KLIPY's terms forbid keeping copies, so a note holds the GIF's address on KLIPY's servers and is shown from there, credited. Needs `KLIPY_API_KEY`. |
 | **Drawing** | Excalidraw in the app's colours, with picture tools it lacks: lasso, box and magic-wand selection of a picture's pixels, and the *background remover* (BRIA RMBG-1.4 run on the device -- on WebGPU at full size, otherwise on the CPU at whatever size it manages in about two seconds; 44 MB fetched on first use, built by `pipeline/rmbg_model.py` before `npm run build`) -- then erase, keep only, cut out or copy out. Pictures can be searched on Pixabay from inside the editor; needs `PIXABAY_API_KEY`. Beside Excalidraw's eraser, which takes whole elements, a *pixel eraser* takes only what is inside its circle: it cuts pen strokes and straight lines into pieces, deletes text it touches, erases pictures' pixels, and turns anything else into a picture before erasing it. |
 | **Similar kanji** | Under the words on each kanji's page: *Similar meaning* (near-synonyms: 家 → 宅 邸 室), *Looks like* (未 → 末 朱 来), *Same reading* (早 → 速, with 早い・速い as the reason), and other forms (会 → 會). All from open data, no language model: the lookalikes are what the handwriting model DaKanji confuses each glyph with when it is drawn from KanjiVG and in Noto Sans and Serif JP, fused with pixel and shared-part measures; readings and meanings come from JMdict words spelled with either kanji, Bunkacho's 異字同訓 list, Japanese WordNet and KANJIDIC, with Unihan's variant tables kept apart. Human lists (Yencken's, kanjium's) always show. Built by the `similar` stage (`pipeline/similar.py`, which needs numpy, pillow, onnx, onnxruntime and pyyaml); `tests/similar_eval.py` scores it against those human lists. |
 | **Stroke order** | A static diagram from KanjiVG: one small glyph per stroke, each adding the next, so the whole order reads at a glance. |
 | **Decomposition** | Fix a bad split from the graph and it redraws immediately. A review queue ranks what is worth fixing by how much a bad split actually costs. |
-| **Offline lookup** | Installed to a home screen or as a desktop app, it downloads the dictionary once (about 21 MB) and from then on search, drawing, radicals, levels and each character's details answer on the device, with or without a connection. See below. |
+| **Offline lookup** | Installed to a home screen or as a desktop app, it downloads the dictionary once (about 21 MB) and from then on search, drawing, levels and each character's details answer on the device, with or without a connection. See below. |
 
 ## Offline
 
@@ -105,7 +104,7 @@ sentences stay on the server.
 The device has to find what the server finds, so `web/src/local/` ports the
 server's search, deinflection and handwriting matcher line for line, and
 `tests/offline_parity.py` checks that they agree: a few thousand searches,
-drawings, radical picks and word lists, put to both.
+drawings and word lists, put to both.
 
     python tests/offline_parity.py            # ~2 minutes
     python tests/offline_parity.py --quick

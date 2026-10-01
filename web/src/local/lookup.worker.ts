@@ -264,10 +264,6 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
       const r = e.recognition()
       return { chars: r.count, buckets: r.bucketCount }
     }
-    case 'radicals':
-      return e.radicals()
-    case 'searchByRadicals':
-      return e.searchByRadicals(args[0] as string[])
     case 'byLevel': {
       const level = e.byLevel(args[0] as number)
       if (!level) throw new Error('no such level')

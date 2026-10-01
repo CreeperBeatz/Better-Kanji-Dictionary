@@ -23,7 +23,7 @@ from .errors import AppError, app_error_handler
 from . import auth as accounts
 from . import offline as offline_pack
 from . import store
-from .routes import assoc, atlas, auth, comments, decomp, gifs, graph, images, offline, radicals, recognize, search
+from .routes import assoc, atlas, auth, comments, decomp, gifs, graph, images, offline, recognize, search
 
 app = FastAPI(
     title="Better Kanji Dictionary",
@@ -53,7 +53,6 @@ async def db_missing_handler(request, exc: DatabaseMissing):
     return JSONResponse(status_code=503, content={"error": "database_missing", "detail": str(exc)})
 
 
-app.include_router(radicals.router)
 app.include_router(graph.router)
 app.include_router(atlas.router)
 app.include_router(search.router)
@@ -85,8 +84,8 @@ def build_offline_pack() -> None:
 def health() -> dict:
     from .db import query_one
 
-    row = query_one("SELECT COUNT(*) AS n FROM radical")
-    return {"status": "ok", "radicals": row["n"]}
+    row = query_one("SELECT COUNT(*) AS n FROM kanji")
+    return {"status": "ok", "kanji": row["n"]}
 
 
 # The built frontend (`npm run build` in web/), when present. Unknown non-API

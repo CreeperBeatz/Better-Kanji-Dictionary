@@ -12,7 +12,7 @@ const S = strings(
   {
     title: 'Offline lookup',
     readyHint:
-      'Search, drawing and radicals answer on this device, with or without a connection. The graph and notes still need one.',
+      'Search and drawing answer on this device, with or without a connection. The graph and notes still need one.',
     dictionaryOf: 'dictionary of {date}',
     updating: 'updating {percent}',
     remove: 'remove from this device',
@@ -20,7 +20,7 @@ const S = strings(
     downloading: 'Downloading the dictionary. Until it is done, lookups go to the server as usual.',
     downloadingSize: 'Downloading the dictionary, {size}. Until it is done, lookups go to the server as usual.',
     offHint:
-      'Keep the dictionary on this device, so search, drawing and radicals answer instantly and work without a connection.',
+      'Keep the dictionary on this device, so search and drawing answer instantly and work without a connection.',
     offSize: '{size}, downloaded once.',
     install: 'Installing the app to your home screen does this by itself.',
     stopped: 'The download stopped: {error}.',
@@ -36,7 +36,7 @@ const S = strings(
   {
     title: 'Търсене без връзка',
     readyHint:
-      'Търсенето, рисуването и радикалите работят на това устройство, със или без връзка. Графът и бележките все още имат нужда от нея.',
+      'Търсенето и рисуването работят на това устройство, със или без връзка. Графът и бележките все още имат нужда от нея.',
     dictionaryOf: 'речник от {date}',
     updating: 'обновяване {percent}',
     remove: 'премахнете от това устройство',
@@ -45,7 +45,7 @@ const S = strings(
     downloadingSize:
       'Речникът се изтегля, {size}. Докато не приключи, търсенето минава през сървъра както обикновено.',
     offHint:
-      'Запазете речника на това устройство, за да отговарят търсенето, рисуването и радикалите веднага и без връзка.',
+      'Запазете речника на това устройство, за да отговарят търсенето и рисуването веднага и без връзка.',
     offSize: '{size}, изтегля се веднъж.',
     install: 'Ако инсталирате приложението на началния екран, това става от само себе си.',
     stopped: 'Изтеглянето спря: {error}.',

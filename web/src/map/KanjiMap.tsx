@@ -18,7 +18,7 @@
 
 import { interpolateZoom } from 'd3-interpolate'
 import { quadtree, type Quadtree } from 'd3-quadtree'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import type { KanjiNode } from '../api'
 import type { ContainerFilter } from '../graph/KanjiGraph'
 import { strings, useLang, type Translate } from '../i18n'
@@ -510,7 +510,10 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   return s.anim !== null || atlas.pending > 0
 }
 
-export function KanjiMap({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend, card }: Props) {
+/** Memoised: the App re-renders far more often than anything here changes. */
+export const KanjiMap = memo(KanjiMapView)
+
+function KanjiMapView({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend, card }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)

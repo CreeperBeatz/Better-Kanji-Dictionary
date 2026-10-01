@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, memo, useLayoutEffect } from 'react'
 import { api, type GraphResponse, type KanjiNode } from '../api'
 import { strings, useLang, type Translate } from '../i18n'
 import { meaningsOf } from '../i18n/content'
@@ -20,6 +20,13 @@ interface Props {
   onHover: (char: string | null) => void
   /** Show how to read the graph, opened from the (i). */
   legend: boolean
+  /**
+   * On a phone the graph starts locked: it neither pans nor zooms, so a
+   * swipe across it turns the page's tab and a stray finger cannot lose the
+   * graph. The lock button (shown when `onLock` is given) frees it.
+   */
+  locked?: boolean
+  onLock?: (locked: boolean) => void
 }
 
 const S = strings(
@@ -33,6 +40,8 @@ const S = strings(
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     whole: 'Show the whole graph',
+    lock: 'Lock the graph',
+    unlock: 'Unlock the graph to move and zoom it',
     legendAbove: 'above, characters that contain it, nearest first by frequency',
     legendBelow: 'below, what it is made of, down to atoms',
     legendHover: 'hover one above to see what contains it in turn',
@@ -49,6 +58,8 @@ const S = strings(
     zoomIn: 'Приближете',
     zoomOut: 'Отдалечете',
     whole: 'Покажете целия граф',
+    lock: 'Заключете графа',
+    unlock: 'Отключете графа, за да го местите и мащабирате',
     legendAbove: 'отгоре - йероглифите, които го съдържат, най-честите най-близо',
     legendBelow: 'отдолу - от какво е съставен, чак до най-простите части',
     legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
@@ -145,6 +156,21 @@ const OPEN_DELAY = 120
 const CLOSE_DELAY = 200
 /** Press this long on a touch screen for the menu a right click opens. */
 const HOLD_DELAY = 450
+/** Two taps this close in time and place are a double tap. */
+const DOUBLE_TAP_MS = 300
+const DOUBLE_TAP_PX = 40
+/** Zoom per pixel dragged after a double tap: e^(rate * px). */
+const TAP_ZOOM_RATE = 0.006
+/** How far the graph zooms out and in. */
+const MIN_SCALE = 0.12
+const MAX_SCALE = 6
+
+/** `from` zoomed by `factor` about the point (px, py) in the svg, as far as the graph zooms. */
+function zoomedAbout(from: View, factor: number, px: number, py: number): View {
+  const scale = Math.min(Math.max(from.scale * factor, MIN_SCALE), MAX_SCALE)
+  const k = scale / from.scale
+  return { scale, x: px - (px - from.x) * k, y: py - (py - from.y) * k }
+}
 
 async function fetchAbove(chars: string[]): Promise<void> {
   const missing = chars.filter((c) => !aboveCache.has(c))
@@ -171,7 +197,14 @@ interface Spot {
   height: number
 }
 
-export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, legend }: Props) {
+/**
+ * Memoised: the App re-renders on every keystroke of a search while the
+ * graph stands hidden behind the results on a phone, and none of that is
+ * the graph's business.
+ */
+export const KanjiGraph = memo(KanjiGraphView)
+
+function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
@@ -182,7 +215,33 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
     [data, shown, via],
   )
   const svgRef = useRef<SVGSVGElement>(null)
+  // Where the graph stands. A drag, pinch or wheel moves the <g> directly,
+  // frame by frame, without a render of every node; React is told where it
+  // came to rest once the gesture pauses, for what depends on the scale.
   const [view, setView] = useState<View>({ x: 0, y: 0, scale: 1 })
+  const viewRef = useRef(view)
+  const gRef = useRef<SVGGElement>(null)
+  const settle = useRef<number | undefined>(undefined)
+  const transformOf = (v: View) => `translate(${v.x} ${v.y}) scale(${v.scale})`
+  /** Put the graph here now, and tell React shortly. */
+  function moveView(v: View) {
+    viewRef.current = v
+    gRef.current?.setAttribute('transform', transformOf(v))
+    clearTimeout(settle.current)
+    settle.current = window.setTimeout(() => setView(v), 100)
+  }
+  /** Put the graph here, with a render. */
+  function placeView(next: View | ((v: View) => View)) {
+    const v = typeof next === 'function' ? next(viewRef.current) : next
+    viewRef.current = v
+    clearTimeout(settle.current)
+    setView(v)
+  }
+  // After every render the <g> is where the last gesture left it, not where
+  // React last heard.
+  useLayoutEffect(() => {
+    gRef.current?.setAttribute('transform', transformOf(viewRef.current))
+  })
   const [over, setOver] = useState<string | null>(null)
   const [peek, setPeek] = useState<Peek | null>(null)
   // Bumped when a prefetch lands, so the "more above" marks redraw.
@@ -194,6 +253,14 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   const pinch = useRef<{ dist: number; mx: number; my: number } | null>(null)
   // A pinch ends with fingers lifting over nodes, which must not open them.
   const pinched = useRef(false)
+  // One-handed zoom, as on a map: tap twice, keep the finger down the second
+  // time, and drag down to zoom in, up to zoom out, about where it tapped. A
+  // plain double tap zooms in a step. `lastTap` is the first tap, for the
+  // second to be told from a fresh press.
+  const lastTap = useRef<{ x: number; y: number; at: number } | null>(null)
+  const tapZoom = useRef<{ y: number; px: number; py: number; from: View; moved: boolean } | null>(null)
+  // The click that ends the second tap must not open a card.
+  const zoomTapped = useRef(false)
   // Touch has no hover or right click: a tap shows a character's card, and
   // pressing and holding opens the menu a right click does.
   const [card, setCard] = useState<Spot | null>(null)
@@ -218,7 +285,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
     // Cap generously so a sparse graph (few containers) still fills the canvas
     // instead of floating as a small diagram in a large void.
     const scale = Math.min(width / (b.maxX - b.minX), height / (b.maxY - b.minY), 1.7)
-    setView({
+    placeView({
       x: width / 2 - ((b.minX + b.maxX) / 2) * scale,
       y: height / 2 - ((b.minY + b.maxY) / 2) * scale,
       scale,
@@ -228,6 +295,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   // Refit whenever the focus changes: the component tree below and the number of
   // container rings above both vary a lot between characters.
   useEffect(fit, [fit, data.focus.char, filter])
+  useEffect(() => () => clearTimeout(settle.current), [])
 
   /** The svg's middle, which the buttons zoom about. */
   function middle(): [number, number] {
@@ -238,7 +306,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   /** Put the focused character, which the layout keeps at its origin, in the middle. */
   function recentre() {
     const [mx, my] = middle()
-    setView((v) => ({ ...v, x: mx, y: my }))
+    placeView((v) => ({ ...v, x: mx, y: my }))
   }
 
   // Keep the graph where it was relative to the middle as the stage changes
@@ -252,7 +320,7 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
       const dx = (now.width - last.width) / 2
       const dy = (now.height - last.height) / 2
       last = now
-      if (dx || dy) setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+      if (dx || dy) placeView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
     })
     ro.observe(svg)
     return () => ro.disconnect()
@@ -359,19 +427,35 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
 
   /** Zoom by `factor` about a point in the svg, then move by (dx, dy). */
   function zoomAt(factor: number, px: number, py: number, dx = 0, dy = 0) {
-    setView((v) => {
-      const scale = Math.min(Math.max(v.scale * factor, 0.12), 6)
-      const k = scale / v.scale
-      return { scale, x: px - (px - v.x) * k + dx, y: py - (py - v.y) * k + dy }
-    })
+    const v = zoomedAbout(viewRef.current, factor, px, py)
+    moveView({ ...v, x: v.x + dx, y: v.y + dy })
   }
 
   function onWheel(e: React.WheelEvent) {
     e.preventDefault()
+    if (locked) return
     const rect = svgRef.current?.getBoundingClientRect()
     if (!rect) return
     unpop()
     zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top)
+  }
+
+  /** Where a pointer is, in the svg's own pixels. */
+  function inSvg(e: { clientX: number; clientY: number }) {
+    const rect = svgRef.current?.getBoundingClientRect()
+    return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) }
+  }
+
+  /** A press that may become a drag, from where the graph stands now. */
+  function startDrag(e: React.PointerEvent) {
+    drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
+  }
+
+  /** A gesture has begun: no hold, peek, card or menu outlasts it. */
+  function interrupt() {
+    clearTimeout(hold.current.timer)
+    setPeek(null)
+    unpop()
   }
 
   function spread() {
@@ -382,23 +466,43 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   function onPointerDown(e: React.PointerEvent) {
     pointer.current = e.pointerType
     if (e.button !== 0) return
+    if (locked) {
+      // Locked, a finger neither drags nor pinches; it only taps and holds,
+      // and a swipe is the page's, to turn its tab. The press is still
+      // followed, so a moving finger does not count as a hold.
+      pinched.current = false
+      startDrag(e)
+      return
+    }
     if (e.pointerType === 'touch') {
-      const rect = svgRef.current?.getBoundingClientRect()
-      touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
+      const at = inSvg(e)
+      touches.current.set(e.pointerId, at)
       if (touches.current.size === 1) pinched.current = false
+      // The second tap of a double tap, still down: from here the finger zooms.
+      const prev = lastTap.current
+      if (
+        touches.current.size === 1 &&
+        prev &&
+        e.timeStamp - prev.at < DOUBLE_TAP_MS &&
+        Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < DOUBLE_TAP_PX
+      ) {
+        lastTap.current = null
+        interrupt()
+        tapZoom.current = { y: e.clientY, px: at.x, py: at.y, from: viewRef.current, moved: false }
+        svgRef.current?.setPointerCapture?.(e.pointerId)
+        return
+      }
       if (touches.current.size === 2) {
         // A second finger turns the drag into a pinch.
         for (const id of touches.current.keys()) svgRef.current?.setPointerCapture?.(id)
         drag.current = null
         pinched.current = true
-        clearTimeout(hold.current.timer)
-        setPeek(null)
-        unpop()
+        interrupt()
         pinch.current = spread()
         return
       }
     }
-    drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }
+    startDrag(e)
   }
 
   /** Where a pointer event is, in the svg's own pixels. */
@@ -430,9 +534,17 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    const z = tapZoom.current
+    if (z) {
+      const dy = e.clientY - z.y
+      if (!z.moved && Math.abs(dy) < 3) return
+      z.moved = true
+      // Down zooms in, up out: a screen's height is about three doublings.
+      moveView(zoomedAbout(z.from, Math.exp(dy * TAP_ZOOM_RATE), z.px, z.py))
+      return
+    }
     if (touches.current.has(e.pointerId)) {
-      const rect = svgRef.current?.getBoundingClientRect()
-      touches.current.set(e.pointerId, { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) })
+      touches.current.set(e.pointerId, inSvg(e))
       const p = pinch.current
       if (p && touches.current.size >= 2) {
         const now = spread()
@@ -445,19 +557,33 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
     if (!d) return
     const dx = e.clientX - d.x
     const dy = e.clientY - d.y
-    // Capture only once it is really a drag, or the click lands on the svg
-    // instead of the node under the pointer.
     if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
-      clearTimeout(hold.current.timer)
       d.moved = true
-      svgRef.current?.setPointerCapture?.(e.pointerId)
-      setPeek(null)
-      unpop()
+      // Locked, the finger moving is no hold, and the rest is the page's.
+      if (locked) clearTimeout(hold.current.timer)
+      else {
+        // Capture only once it is really a drag, or the click lands on the
+        // svg instead of the node under the pointer.
+        svgRef.current?.setPointerCapture?.(e.pointerId)
+        interrupt()
+      }
     }
-    if (d.moved) setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
+    if (d.moved && !locked) moveView({ ...viewRef.current, x: d.vx + dx, y: d.vy + dy })
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    const z = tapZoom.current
+    if (z) {
+      tapZoom.current = null
+      zoomTapped.current = true
+      // Tapped twice and let go: a step in, about the taps.
+      if (!z.moved) zoomAt(1.6, z.px, z.py)
+    } else if (e.pointerType === 'touch' && e.type !== 'pointercancel' && !locked) {
+      // A tap -- a press that did not move -- may be the first of two.
+      const d = drag.current
+      const still = !d || !d.moved
+      lastTap.current = still && touches.current.size <= 1 ? { x: e.clientX, y: e.clientY, at: e.timeStamp } : null
+    }
     touches.current.delete(e.pointerId)
     if (touches.current.size < 2) pinch.current = null
     drag.current = null
@@ -474,6 +600,10 @@ export function KanjiGraph({ data, filter, open, onOpen, onRecentre, onHover, le
       return
     }
     if (pinched.current) return
+    if (zoomTapped.current) {
+      zoomTapped.current = false
+      return
+    }
     if ('clientX' in e && pointer.current === 'touch') {
       const spot = spotOf(e, char, via)
       if (spot) setCard(spot)
@@ -610,6 +740,7 @@ ${t('via')}`}
       <svg
         ref={svgRef}
         className="graph-svg"
+        data-locked={locked || undefined}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -619,7 +750,7 @@ ${t('via')}`}
         // A long press would otherwise open the browser's own menu.
         onContextMenu={(e) => e.preventDefault()}
       >
-        <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+        <g ref={gRef} transform={transformOf(view)}>
           <g className="graph-main" data-peek={peek ? true : undefined}>
             {layout.edges.map((e) => (
               <path
@@ -651,24 +782,39 @@ ${t('via')}`}
         </g>
       </svg>
 
-      {/* The same corner and buttons as the map's. */}
-      <div className="map-zoom" role="group" aria-label={t('zoom')}>
-        <button
-          onClick={recentre}
-          aria-label={t('recentre', { c: data.focus.char })}
-          title={t('recentre', { c: data.focus.char })}
-        >
-          ◎
-        </button>
-        <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
-          +
-        </button>
-        <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
-          −
-        </button>
-        <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
-          ⤢
-        </button>
+      {/* The same corner and buttons as the map's. Locked, only the lock shows. */}
+      <div className="map-zoom" role="group" aria-label={t('zoom')} data-locked={locked || undefined}>
+        {onLock && (
+          <button
+            className="graph-lock"
+            onClick={() => onLock(!locked)}
+            aria-pressed={locked}
+            aria-label={t(locked ? 'unlock' : 'lock')}
+            title={t(locked ? 'unlock' : 'lock')}
+          >
+            <LockIcon locked={locked} />
+          </button>
+        )}
+        {!locked && (
+          <>
+            <button
+              onClick={recentre}
+              aria-label={t('recentre', { c: data.focus.char })}
+              title={t('recentre', { c: data.focus.char })}
+            >
+              ◎
+            </button>
+            <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
+              +
+            </button>
+            <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
+              −
+            </button>
+            <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
+              ⤢
+            </button>
+          </>
+        )}
       </div>
 
       {card && cardNode && (
@@ -707,6 +853,16 @@ ${t('via')}`}
         </p>
       )}
     </>
+  )
+}
+
+/** A padlock; its shackle lifts as it unlocks. */
+function LockIcon({ locked }: { locked: boolean }) {
+  return (
+    <svg className="lock-icon" viewBox="0 0 16 16" aria-hidden>
+      <rect x="3" y="7.5" width="10" height="6.5" rx="1.3" />
+      <path className="lock-shackle" d={locked ? 'M5 7.5V5a3 3 0 0 1 6 0v2.5' : 'M5 7.5V3.5a3 3 0 0 1 6 0v1'} />
+    </svg>
   )
 }
 

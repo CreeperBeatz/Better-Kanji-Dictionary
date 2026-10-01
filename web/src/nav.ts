@@ -161,7 +161,16 @@ function restoreScroll(el: HTMLElement | null, to: number) {
   setTimeout(() => (el.scrollTop = to), 120)
 }
 
-export function useNav(scroller: React.RefObject<HTMLElement | null>) {
+/**
+ * `beforePop` is told of back and forward before the page changes for
+ * them, while what is on the screen is still the page being left. It is
+ * given `apply`, the change itself, and answers true to make it at a time
+ * of its own choosing -- inside a view transition, say.
+ */
+export function useNav(
+  scroller: React.RefObject<HTMLElement | null>,
+  beforePop?: React.RefObject<((e: PopStateEvent, apply: () => void) => boolean) | null>,
+) {
   const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
   current.current = entry
@@ -350,13 +359,16 @@ export function useNav(scroller: React.RefObject<HTMLElement | null>) {
         window.history.back()
         return
       }
-      current.current = next
-      setEntry(next)
-      restoreScroll(scroller.current, next.scroll ?? 0)
+      const apply = () => {
+        current.current = next
+        setEntry(next)
+        restoreScroll(scroller.current, next.scroll ?? 0)
+      }
+      if (!beforePop?.current?.(e, apply)) apply()
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [scroller])
+  }, [scroller, beforePop])
 
   return { stack: entry.stack, stage: entry.stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage }
 }

@@ -3,7 +3,7 @@
 Staged so each source can be rebuilt independently:
 
     python pipeline/build_db.py                  # every stage
-    python pipeline/build_db.py radicals         # just the radical picker tables
+    python pipeline/build_db.py graph            # just the graph tables
     python pipeline/build_db.py --list
 
 Run pipeline/fetch_sources.py first.
@@ -54,44 +54,6 @@ def read_zip_json(path: Path) -> dict:
 
 
 # ---------------------------------------------------------------- stages
-
-
-@stage("radicals", "KRADFILE/RADKFILE -> radical picker index")
-def build_radicals(db: sqlite3.Connection) -> None:
-    krad = read_zip_json(DATA / "kradfile.json.zip")["kanji"]
-    radk = read_zip_json(DATA / "radkfile.json.zip")["radicals"]
-
-    db.executescript("""
-        DROP TABLE IF EXISTS radical;
-        DROP TABLE IF EXISTS kanji_radical;
-        CREATE TABLE radical (
-            radical      TEXT PRIMARY KEY,
-            stroke_count INTEGER NOT NULL,
-            kanji_count  INTEGER NOT NULL
-        );
-        CREATE TABLE kanji_radical (
-            kanji   TEXT NOT NULL,
-            radical TEXT NOT NULL,
-            PRIMARY KEY (kanji, radical)
-        );
-        CREATE INDEX idx_kr_radical ON kanji_radical(radical);
-    """)
-
-    db.executemany(
-        "INSERT INTO radical (radical, stroke_count, kanji_count) VALUES (?, ?, ?)",
-        [(r, v["strokeCount"], len(v["kanji"])) for r, v in radk.items()],
-    )
-    # KRADFILE is the authoritative kanji->component direction; RADKFILE is its
-    # inversion. Build the join table from KRADFILE and keep only radicals that
-    # RADKFILE actually offers in the picker, so the grid and the index agree.
-    known = set(radk)
-    rows = [(k, r) for k, comps in krad.items() for r in comps if r in known]
-    db.executemany("INSERT OR IGNORE INTO kanji_radical (kanji, radical) VALUES (?, ?)", rows)
-
-    dropped = sum(len(c) for c in krad.values()) - len(rows)
-    print(f"  radicals      {len(radk):>7,} radicals")
-    print(f"  kanji         {len(krad):>7,} kanji")
-    print(f"  edges         {len(rows):>7,} kanji-radical pairs ({dropped} dropped, not in RADKFILE)")
 
 
 @stage("graph", "cjk-decomp + kanji.json -> characters, containment edges, fan-out")

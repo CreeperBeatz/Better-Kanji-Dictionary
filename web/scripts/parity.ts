@@ -18,7 +18,6 @@ interface Golden {
   search: { q: string; lang: string; common: boolean; sort: SearchSort; order: SearchOrder; out: SearchResponse }[]
   bulgarian: { text: string; normalized: string; terms: string[]; spelling: number; candidates: string[] }[]
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
-  radicals: { r: string[]; out: { kanji: string[]; available: string[]; total: number } }[]
   wordsFor: { char: string; out: number[] }[]
   readingWords: { char: string; out: Record<string, number> }[]
   describe: { chars: string[]; out: unknown[] }
@@ -118,15 +117,6 @@ console.log(
   if (!same(out, got)) note('describe', chars.join(''), out, got)
   console.log(`describe: ${same(out, got) ? 'identical' : 'DIFFERENT'} (${out.length} of ${chars.length} described)`)
 }
-
-let radOk = 0
-for (const { r, out } of golden.radicals) {
-  const got = engine.searchByRadicals(r)
-  const pick = (x: { kanji: string[]; available: string[]; total: number }) => [x.kanji, x.available, x.total]
-  if (same(pick(out), pick(got))) radOk++
-  else note('radicals', r.join(''), pick(out), pick(got))
-}
-console.log(`radicals: ${radOk}/${golden.radicals.length} identical`)
 
 let wfOk = 0
 for (const { char, out } of golden.wordsFor) {
