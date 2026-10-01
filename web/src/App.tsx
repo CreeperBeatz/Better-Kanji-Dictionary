@@ -429,6 +429,9 @@ export function App() {
   const [railWidth, setRailWidth] = useRailWidth()
   const [searchShare, setSearchShare] = useSearchShare()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
+  // On a phone the search is a tab of the page too: the page it was turned to
+  // from, so going anywhere else leaves it.
+  const [searchOver, setSearchOver] = useState<Page | null>(null)
   const [assocCount, setAssocCount] = useState(0)
 
   // On a phone the rail and the stage cannot both have room, so one fills the
@@ -1043,16 +1046,48 @@ export function App() {
     setRailTab('dictionary')
     setView('focus')
   }
-  // Search is a tab too, left of Dictionary: back down the stack to the search.
+  // Search is a tab too, left of Dictionary: the search the page was opened
+  // from, with the page marked in it, and the page still there to turn back to.
   type PhoneTab = RailTab | 'components' | 'search'
-  const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : tab
+  const searchShown = mobile && !onStage && subject !== null && searchOver === top
+  const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : searchShown ? 'search' : tab
   const phoneTabs: PhoneTab[] = componentsOf
     ? ['search', 'dictionary', 'associations', 'components']
     : ['search', 'dictionary', 'associations']
+  // Where the page was scrolled to, for coming back to it from the search.
+  const pageAt = useRef(0)
   function toPhoneTab(to: PhoneTab) {
+    if (to === 'search') {
+      pageAt.current = scroller.current?.scrollTop ?? 0
+      return setSearchOver(top)
+    }
+    setSearchOver(null)
     if (to === 'components') showComponents()
-    else if (to !== 'search') chooseRailTab(to)
+    else chooseRailTab(to)
   }
+  // A pick in the search tab: the page already open turns back to; another
+  // opens over the search, as a pick on the search page does.
+  const searchTabKanji = useStable((char: string) => {
+    if (top.kind === 'kanji' && top.char === char) return turn('dictionary', 0, 260)
+    setHovered(null)
+    rememberSearch(q)
+    animateNav('forward', () => {
+      setSearchOver(null)
+      toDictionary()
+      setViewState('focus')
+      openOver({ kind: 'search', q }, { kind: 'kanji', char })
+    })
+  })
+  const searchTabWord = useStable((w: Word) => {
+    if (top.kind === 'word' && top.id === w.id) return turn('dictionary', 0, 260)
+    rememberSearch(q)
+    animateNav('forward', () => {
+      setSearchOver(null)
+      toDictionary()
+      if (HAN.test(w.headword)) setViewState('focus')
+      openOver({ kind: 'search', q }, { kind: 'word', id: w.id, word: w })
+    })
+  })
   // The search page itself: a swipe from the left there raises the keyboard.
   const onSearchPage = mobile && !onStage && top.kind === 'search'
 
@@ -1075,7 +1110,7 @@ export function App() {
   }
   /** Whether turning to this tab moves the whole screen, not just the pane. */
   function wholeTo(to: PhoneTab | undefined) {
-    return to === 'components' || to === 'search' || phoneTab === 'components' || !paneRef.current
+    return to === 'components' || to === 'search' || phoneTab === 'components' || phoneTab === 'search' || !paneRef.current
   }
   function moverTo(to: PhoneTab | undefined): HTMLElement | null {
     if (phoneTab === 'components') return stageRef.current
@@ -1104,7 +1139,6 @@ export function App() {
   // Side by side all the way, so there is never an empty screen between them.
   const turning = useRef<{ ghost: HTMLElement; at: number; to: number; ms: number; whole: boolean } | null>(null)
   function turn(to: PhoneTab, at: number, ms: number) {
-    if (to === 'search') return backToSearch(at, ms)
     const whole = wholeTo(to)
     const from = moverTo(to)
     if (!from) return toPhoneTab(to)
@@ -1141,20 +1175,7 @@ export function App() {
   // The search has nothing to its left: a swipe that way opens the box, as a
   // pull down does.
   function searchBy(dx: number) {
-    return dx > 0 && onSearchPage
-  }
-  /** The tabs follow the page when it goes back to the search. */
-  function dragTabs(by: number | null) {
-    const nav = tabsRef.current
-    if (nav) nav.style.transform = by === null ? '' : `translateX(${by}px)`
-  }
-  // To the search: the page, tabs and all, slides off to the right from
-  // where the finger left it, as a step back does.
-  function backToSearch(at: number, ms: number) {
-    cameBack.current = performance.now()
-    leaveBy('back', at, ms)
-    if (root.kind === 'search') pop(stack.length - 1)
-    else reset({ kind: 'search', q })
+    return dx > 0 && (onSearchPage || phoneTab === 'search')
   }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
@@ -1210,7 +1231,6 @@ export function App() {
     if (s.moved && s.moved !== el) s.moved.style.transform = ''
     s.moved = el
     el.style.transform = `translateX(${next ? dx : dx / 4}px)`
-    dragTabs(next === 'search' ? dx : null)
     dragMark(next ? Math.max(-1, Math.min(1, -dx / el.clientWidth)) : 0)
     searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', searchBy(dx) && dx > PULL)
   }
@@ -1230,11 +1250,9 @@ export function App() {
     const next = besideTab(dx)
     const at = next ? dx : dx / 4
     el.style.transform = ''
-    dragTabs(null)
     const flung = Math.abs(s.v) > 0.4 && Math.sign(s.v) === Math.sign(dx) && Math.abs(dx) > SWIPE
     if (!next || !(flung || Math.abs(dx) > el.clientWidth / 3)) {
       slide(el, at, 0, 220)
-      if (next === 'search' && tabsRef.current) slide(tabsRef.current, at, 0, 220)
       if (searchBy(dx) && (flung || dx > PULL)) typeOver()
       return
     }
@@ -1252,11 +1270,6 @@ export function App() {
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
-    const nav = tabsRef.current
-    if (nav?.style.transform) {
-      dragTabs(null)
-      slide(nav, at, 0, 220)
-    }
   }
   // Pulled down, the page brings up the search: the keyboard comes up with
   // what was searched last selected, so typing starts a new search, Enter
@@ -1290,20 +1303,26 @@ export function App() {
     slide(how.ghost, how.at, how.to, how.ms).onfinish = () => how.ghost.remove()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneTab])
+  // The search opens at its top, with the open page's entry in sight; back on
+  // the page, it is where it was left.
+  const lastTab = useRef(phoneTab)
+  useLayoutEffect(() => {
+    const was = lastTab.current
+    lastTab.current = phoneTab
+    const sc = scroller.current
+    if (!sc) return
+    if (phoneTab === 'search') {
+      sc.scrollTop = 0
+      sc.querySelector('[aria-current="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    } else if (was === 'search') sc.scrollTop = pageAt.current
+  }, [phoneTab])
 
   // Going to a page slides it in from the right over the one it was opened
   // from, which slips a little to the left beneath it; going back, the page
   // slides off to the right and the one under it comes back from the left.
   // The tabs along the bottom come and go with the page they belong to. The
   // pane being left is copied before it changes, as a tab turn is.
-  const navAnim = useRef<{
-    ghosts: HTMLElement[]
-    tabs: HTMLElement | null
-    dir: 'forward' | 'back'
-    /** Where a swipe let the page go, and how fast it carries on. */
-    at: number
-    ms: number
-  } | null>(null)
+  const navAnim = useRef<{ ghosts: HTMLElement[]; tabs: HTMLElement | null; dir: 'forward' | 'back' } | null>(null)
   const lastN = useRef<number | undefined>(undefined)
   useEffect(() => {
     lastN.current = (window.history.state as { n?: number } | null)?.n
@@ -1345,14 +1364,14 @@ export function App() {
     if (kind === 'forward' || kind === 'back') leaveBy(kind)
     go()
   }
-  function leaveBy(dir: 'forward' | 'back', at = 0, ms = PAGE_MS) {
+  function leaveBy(dir: 'forward' | 'back') {
     if (!window.matchMedia(MOBILE).matches || navAnim.current || turning.current) return
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const from = onStageRef.current ? stageRef.current : scroller.current
     const ghosts: HTMLElement[] = []
     if (from) ghosts.push(ghostOf(from))
     const tabs = tabsRef.current ? ghostOf(tabsRef.current) : null
-    const how = { ghosts, tabs, dir, at, ms }
+    const how = { ghosts, tabs, dir }
     navAnim.current = how
     // Should nothing change after all, the copies do not stay over the page.
     window.setTimeout(() => {
@@ -1369,9 +1388,7 @@ export function App() {
     const to = onStage ? stageRef.current : scroller.current
     const w = to?.clientWidth ?? window.innerWidth
     const fwd = how.dir === 'forward'
-    // Swiped back part of the way, the page under is that much further in.
-    const below = -w * 0.3 * Math.max(0, 1 - how.at / w)
-    startSliding(how.ms)
+    startSliding(PAGE_MS)
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
@@ -1379,23 +1396,23 @@ export function App() {
       for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
-      slide(to, fwd ? w : below, 0, how.ms).onfinish = () => to.style.removeProperty('z-index')
+      slide(to, fwd ? w : -w * 0.3, 0, PAGE_MS).onfinish = () => to.style.removeProperty('z-index')
     }
     // The tabs stay put between two pages that both have them; they come in
     // with a page that has them, and leave with one that had.
     const nav = tabsRef.current
     if (nav && how.tabs) how.tabs.remove()
-    else if (nav) slide(nav, w, 0, how.ms)
+    else if (nav) slide(nav, w, 0, PAGE_MS)
     else if (how.tabs) how.ghosts.push(how.tabs)
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
       const a = g.animate(
         [
-          { transform: `translateX(${how.at}px)`, opacity: 1 },
+          { transform: 'translateX(0)', opacity: 1 },
           { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
         ],
-        { duration: still ? 0 : how.ms, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+        { duration: still ? 0 : PAGE_MS, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
       )
       a.onfinish = () => g.remove()
     }
@@ -1532,20 +1549,33 @@ export function App() {
             onTouchEnd={swipeEnd}
             onTouchCancel={swipeCancel}
           >
-            {shownUnder && (
+            {shownUnder && !searchShown && (
               <div className="rail-crumb">
                 <button className="back-link rail-back" onClick={goBack} title={t('back')}>
                   <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
                 </button>
               </div>
             )}
-            {subject && <div className="page-head">{pageHead()}</div>}
+            {subject && !searchShown && <div className="page-head">{pageHead()}</div>}
             <div className="tab-pane" ref={paneRef}>
               {/* Behind the graph on a phone the page is not on the screen, and
                   is not rendered: laid out unseen, it would cost the graph
                   frames each time its centre moved. */}
+              {searchShown && (
+                <SearchPage
+                  q={q}
+                  onKanji={searchTabKanji}
+                  onWord={searchTabWord}
+                  onSearch={type}
+                  asked={asked}
+                  onAsk={setAsked}
+                  onMap={browseMap}
+                  open={top.kind === 'kanji' ? { kanji: top.char } : top.kind === 'word' ? { word: top.id } : undefined}
+                />
+              )}
               {tab === 'dictionary' &&
                 !onStage &&
+                !searchShown &&
                 (shownTop ? (
                   page(shownTop)
                 ) : (
@@ -1554,7 +1584,7 @@ export function App() {
               {/* Kept mounted while hidden, so the count on its tab is there
                   before the tab is opened. */}
               {subject && (tab === 'associations' || settled === subject.key) && (
-                <div hidden={tab !== 'associations'}>
+                <div hidden={tab !== 'associations' || searchShown}>
                   {associations(subject)}
                 </div>
               )}
