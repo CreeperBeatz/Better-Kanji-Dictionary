@@ -17,7 +17,7 @@ import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
-import { pageInUrl, useNav, type Page, type Stack } from './nav'
+import { pageInUrl, samePage, useNav, type Page, type Stack } from './nav'
 
 // Wanted only once the map or the account dialog is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -451,7 +451,8 @@ export function App() {
   const [searchShare, setSearchShare] = useSearchShare()
   const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   // On a phone the search is a tab of the page too: the page it was turned to
-  // from, so going anywhere else leaves it.
+  // from, so going anywhere else leaves it. Compared as a page, not an object:
+  // leaving the graph for it comes back through history, as a copy.
   const [searchOver, setSearchOver] = useState<Page | null>(null)
   const [assocCount, setAssocCount] = useState(0)
 
@@ -1075,7 +1076,7 @@ export function App() {
   // Search is a tab too, left of Dictionary: the search the page was opened
   // from, with the page marked in it, and the page still there to turn back to.
   type PhoneTab = RailTab | 'components' | 'search'
-  const searchShown = mobile && !onStage && subject !== null && searchOver === top
+  const searchShown = mobile && !onStage && subject !== null && searchOver !== null && samePage(searchOver, top)
   const phoneTab: PhoneTab = onStage && view === 'focus' ? 'components' : searchShown ? 'search' : tab
   // A word with no kanji has no graph: its Components stays, greyed out, so
   // the tabs never move about.
@@ -1088,8 +1089,10 @@ export function App() {
   function toPhoneTab(to: PhoneTab) {
     leaveSearchTab()
     if (to === 'search') {
-      pageAt.current = scroller.current?.scrollTop ?? 0
-      return setSearchOver(top)
+      // From the graph, which the page is not drawn behind, it is at its top.
+      pageAt.current = phoneTab === 'components' ? 0 : (scroller.current?.scrollTop ?? 0)
+      setSearchOver(top)
+      return leaveStage('back')
     }
     setSearchOver(null)
     if (to === 'components') showComponents()
