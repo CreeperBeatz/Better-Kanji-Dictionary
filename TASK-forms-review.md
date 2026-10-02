@@ -76,13 +76,24 @@ infrastructure, all agreed with Dani:
   data source before using it.
 - Every UI string is in English *and* Bulgarian (`strings({...en}, {...bg})`
   pattern used throughout `web/src`).
+- **Two words, by where an item comes from** (Dani, 2026-10-02):
+  - a **proposal** is newly marked data that enters through the review queue:
+    an IDS/KanjiVG diff, an old-form diff, an AI draft.
+  - a **suggestion** is a change someone asks for after spotting a mistake
+    *on the page* (a "suggest a change" action on a kanji, part, form or word
+    group).
+
+  Both land in the same queue as items and are decided the same way. The
+  `origin` field (`proposal` | `suggestion`) drives the wording in the UI, and
+  the queue can filter on it.
 
 ### Still open — ask Dani
-1. **Part 0 deploy:** the decomposition write routes are open on production
-   today (§3). Dani hasn't yet said whether to ship the lock on its own first.
-   Recommend yes.
-2. **Wording in the queue:** "proposal / approve" or "suggestion / accept".
-   Settle it before building the UI.
+1. **Who may suggest?** Any signed-in user, or reviewers only? If any user can,
+   a reviewer's suggestion probably still goes through the queue rather than
+   applying directly. Confirm both.
+2. **Deploying Part 0** (see §4). It's merged into `main`, but `main` also
+   carries undeployed work, so shipping it means a full deploy or a hotfix
+   branch off the commit production runs.
 
 ---
 
@@ -91,7 +102,7 @@ infrastructure, all agreed with Dani:
 | Thing | Where | State |
 |---|---|---|
 | Decomposition editor + review queue UI | `web/src/review/DecompPanel.tsx` | Built, **hidden** (comment in `web/src/App.tsx` near the phone tab bar: "putting it back is one line") |
-| Override API + cost-ranked `/review` queue | `server/routes/decomp.py` | **Live on production, writes unauthenticated** |
+| Override API + cost-ranked `/review` queue | `server/routes/decomp.py` | Writes owner-only since Part 0 (`a6eef1f` on main). **Production still runs the old, unauthenticated version until it is deployed** |
 | Override storage | `server/store.py` `set_decomposition` → `data/associations/store.json` `["decomposition"]`, mirrored to `data/decomp_overrides.json` (tracked in git) | `{}` locally and on prod |
 | Overrides applied live | `server/routes/graph.py:41,54,82`, `server/routes/atlas.py:42` | Yes, no rebuild needed |
 | Pipeline reads overrides | `pipeline/decomp.py` `USER_OVERRIDES` | Top layer, beats both source files |
@@ -103,7 +114,7 @@ infrastructure, all agreed with Dani:
 | KANJIDIC meanings | `kanji.meanings` | Too coarse to group by: 生 = Life, Genuine, Birth |
 | Words for a kanji | `server/routes/search.py` `words_for_kanji` (top 12 common by nf), page shows 8 | Flat list |
 | Fonts | `web/src/theme.css:34-35` | `--mincho: 'Shippori Mincho'`, `--gothic: 'Zen Kaku Gothic New'` |
-| Accounts | `server/auth.py` (`data/auth/auth.json`), deps `optional_user` / `require_user` in `server/routes/auth.py` | No roles yet |
+| Accounts | `server/auth.py` (`data/auth/auth.json`), deps `optional_user` / `require_user` / `require_admin` in `server/routes/auth.py` | No roles yet; `require_admin` = the `BETTERRTK_OWNER_EMAIL` account |
 | Mail | `server/mail.py` (Resend) | Works on prod |
 | AI calls | `server/kanjify.py`, `server/semantic.py` via OpenRouter | **Key capped at $5/week, shared with the live site** |
 | Offline pack | `server/offline.py` | Includes kanji table and each kanji's common words; **version stamp includes the overrides file** (line ~81) |
@@ -118,13 +129,23 @@ Number 9", 罒 "Net Radical Variant (no. 122)".
 Order: **0 → 1 → 3 → 2 → 4 → 5 → 6.** Each part is usable on its own; commit
 each one separately.
 
-### Part 0 — Lock the decomposition write routes (tiny)
-- `PUT /api/decomp/{char}` and `DELETE /api/decomp/{char}` require reviewer or
-  admin. `GET /overrides` and `GET /review` can stay public.
-- Until Part 1 lands, "admin" = the account whose email matches an
-  `ADMIN_EMAIL` env var.
-- Done when an anonymous `PUT` returns 401 and a signed-in non-admin gets 403.
-  **Don't test this against production with a real write.**
+### Part 0 — Lock the decomposition write routes — DONE, not deployed
+- Branch `fix/decomp-write-auth` (5ced11d), merged into `main` as a6eef1f.
+- `PUT`/`DELETE /api/decomp/{char}` need `require_admin`
+  (`server/routes/auth.py`): the account whose email is
+  `BETTERRTK_OWNER_EMAIL`. If that's unset, **nobody** may write; it doesn't
+  fall back to "first to sign in" the way `store.claim_legacy` does. `GET`
+  routes stay public. Error code `admin_only` (en + bg in
+  `web/src/i18n/errors.ts`).
+- Check: `.venv/Scripts/python tests/decomp_auth.py`. It covers anonymous
+  (401), another user (403), the owner (200), an unset owner (403), and
+  writes nothing to `data/`. It fails 9 checks against the old routes.
+- **To deploy:** the Pi's `.env` must set `BETTERRTK_OWNER_EMAIL` to Dani's
+  account email, or Dani is locked out too (which is safe, since the panel is
+  hidden). As of 2026-10-02 the Pi was unreachable over SSH, and production was
+  older than the mobile-UX merge already on `origin/main`.
+- Part 1 replaces `require_admin` with `require_role("reviewer")` for review
+  writes, keeping `require_admin` for admin-only routes.
 
 ### Part 1 — Account roles (small)
 - Add `role` to the user record in `auth.json` (missing = `user`). Seed Dani as
@@ -192,6 +213,11 @@ The framework every task type in §5 runs on.
 - **Export:** a script writes accepted decisions to tracked files
   (`data/decomp_overrides.json`, plus new ones per type) for Dani to commit, so
   the research pipeline and rebuilds see them.
+- Each item also has `origin`: `proposal` (entered through the queue) or
+  `suggestion` (asked for from the page). See §2 for the wording rule.
+- **"Suggest a change"** on the kanji page, part page, Forms block and word
+  groups opens a small form prefilled with the current value. It creates a
+  `suggestion` item with the suggester's reason.
 - UI: put `DecompPanel` back as a general **Review** screen (reviewers and
   admin only):
   - a queue filtered by type, worst-cost first
