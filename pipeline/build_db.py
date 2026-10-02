@@ -752,6 +752,14 @@ def build_similar(db: sqlite3.Connection) -> None:
     print(f"  variants      {kinds['variant']:>7,} rows")
 
 
+@stage("forms", "curated forms + Unihan old forms -> positional forms, old forms, form-of, lookalikes")
+def build_forms(db: sqlite3.Connection) -> None:
+    """See pipeline/forms.py. Needs the graph stage. Never adds a containment edge."""
+    import forms
+
+    forms.build(db)
+
+
 @stage("fonts", "the font strip's four fonts -> which has each character, and old JIS shapes")
 def build_fonts(db: sqlite3.Connection) -> None:
     """See pipeline/fonts.py. Needs the graph stage and fonttools."""

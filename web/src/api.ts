@@ -78,6 +78,33 @@ export interface FontsResponse {
   old: { face: string; feature: 'jp78' | 'jp83' | 'jp90'; em: number; old: string }[]
 }
 
+/** A character linked to another as one of its forms (server/forms.py). */
+export interface FormItem {
+  char: string
+  /** Whether it has a page of its own; an old form like 靑 often does not. */
+  known: boolean
+  meanings: string[]
+  meaningsBg: string[] | null
+  note: string | null
+  /** unihan | curated | review:<decision id> */
+  source: string
+}
+
+/** Read as "the <row> of char": its old form, the forms it takes in other positions, ... */
+export interface FormsResponse {
+  char: string
+  /** A bound part with no meaning of its own borrows the meaning of what it is a form of. */
+  meaning: { from: string; meanings: string[]; meaningsBg: string[] | null } | null
+  old: FormItem[]
+  new: FormItem[]
+  positional: FormItem[]
+  formOf: FormItem[]
+  forms: FormItem[]
+  looksLike: FormItem[]
+  lookalikeOf: FormItem[]
+  variants: FormItem[]
+}
+
 /** One map scope, column-wise: index i across every array is one character. */
 export interface MapResponse {
   scope: string
@@ -440,6 +467,8 @@ export const api = {
     }
     return p
   },
+
+  forms: kept((char: string) => get<FormsResponse>(`/api/kanji/${encodeURIComponent(char)}/forms`)),
 
   fonts: kept((char: string) => get<FontsResponse>(`/api/kanji/${encodeURIComponent(char)}/fonts`)),
 

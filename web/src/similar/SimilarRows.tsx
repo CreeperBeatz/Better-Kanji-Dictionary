@@ -1,7 +1,8 @@
 /**
  * On the kanji page: what the character is easily confused with -- by
- * meaning, by shape, by reading -- and its other written forms. Reading and
- * meaning are kept apart because they are different mistakes: writing 速 for
+ * meaning, by shape, by reading; its other written forms are the Forms
+ * block's (detail/Forms.tsx). Reading and meaning are kept apart because
+ * they are different mistakes: writing 速 for
  * はやい when 早 was meant is not the same as mixing up 側 and 横.
  *
  * The page places each block itself (after the words that use the character),
@@ -19,13 +20,11 @@ const S = strings(
     looksLike: 'Looks like',
     readsLike: 'Same reading',
     meansLike: 'Similar meaning',
-    otherForms: 'Other forms',
   },
   {
     looksLike: 'Прилича на',
     readsLike: 'Същото четене',
     meansLike: 'Сходно значение',
-    otherForms: 'Други форми',
   },
 )
 
@@ -131,21 +130,5 @@ export function Related({
         })}
       </ul>
     </div>
-  )
-}
-
-export function OtherForms({ items, onKanji }: Block) {
-  const t = S(useLang())
-  const title = useTitle()
-  if (!items.length) return null
-  return (
-    <p className="similar-forms">
-      {t('otherForms')}{' '}
-      {items.map((n) => (
-        <button key={n.char} className="similar-glyph small" onClick={() => onKanji(n.char)} title={title(n)}>
-          {n.char}
-        </button>
-      ))}
-    </p>
   )
 }

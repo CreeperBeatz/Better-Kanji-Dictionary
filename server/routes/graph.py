@@ -18,7 +18,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .. import store
+from .. import forms, store
 from ..db import query, query_one
 
 router = APIRouter(prefix="/api/kanji", tags=["graph"])
@@ -281,6 +281,16 @@ def similar_to(char: str) -> dict:
             item["why"] = json.loads(r["note"]) if r["note"] else None
         out[r["kind"]].append(item)
     return {"char": char, **out}
+
+
+@router.get("/{char}/forms")
+def forms_of(char: str) -> dict:
+    """Positional forms, old and new forms, what a bound part is a form of
+    (lending it a meaning), lookalike mnemonics, and other Unihan variants.
+    Never containment: see server/forms.py."""
+    if len(char) != 1:
+        raise HTTPException(400, "expected a single character")
+    return forms.forms_of(char)
 
 
 @router.get("/{char}/fonts")

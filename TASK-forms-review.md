@@ -205,7 +205,21 @@ each one separately.
   (`web/scripts/perf-*.mjs`) must not regress.
 - Old forms like 靑 are **different code points**, so they belong in Part 2, not here.
 
-### Part 2 — Forms block (medium)
+### Part 2 — Forms block (medium) — DONE
+- Built: `pipeline/forms.py` (`build_db.py forms` → `char_form`; curated
+  lists + Unihan `kJapaneseOldVariant` + `data/form_overrides.json` on top),
+  `server/forms.py`, `GET /api/kanji/{char}/forms`, `web/src/detail/Forms.tsx`
+  (replaces "Other forms"; leftover Unihan variants show as "Other variants").
+  `_VARIANT_GROUPS` is gone: `server/kanji_parts.py` reads positional,
+  form_of and looks_like links from the DB. Check: `web/scripts/forms-check.mjs`.
+- `form_of` for a non-jōyō member of exactly one positional group is derived
+  (亻→人); 阝 is in two groups (阜, 邑), so it gets none. A part whose KANJIDIC
+  meanings are only radical names borrows the `form_of` meaning in the page
+  head ("a form of 人 · person"); see `realMeanings` / `real_meanings`.
+- Old forms not in our DB (靑) show as dashed, unclickable glyphs. Curated
+  notes are English only for now (data, like glosses).
+- Offline: the offline page shows no similar-kanji rows, so forms are not in
+  the pack either.
 - New table `char_form(char, other, kind, source, note)`, built in a new
   pipeline stage (`build_db.py` `@stage("forms", …)`). `kind` is one of:
   - `positional`: 人·亻, 水·氵·氺, 衣·衤·𧘇 … Move `_VARIANT_GROUPS` here and

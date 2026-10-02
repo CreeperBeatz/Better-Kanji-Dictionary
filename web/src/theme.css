@@ -5846,3 +5846,69 @@ html[data-nav]::view-transition-old(tabs):only-child {
   padding: 0;
   font-size: 13px;
 }
+
+/* ---------------------------------------------------------------- forms */
+
+.forms {
+  margin-top: 18px;
+}
+
+.forms h3 {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.forms dl {
+  margin: 0;
+}
+
+.forms-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 30%) 1fr;
+  gap: 8px;
+  padding: 5px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 12.5px;
+}
+
+.forms-row dt {
+  color: var(--muted);
+}
+
+.forms-hint {
+  color: var(--faint);
+}
+
+.forms-row dd {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.forms-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.forms-item .similar-glyph.small {
+  margin-left: 0;
+}
+
+.forms-unknown {
+  cursor: default;
+  border-style: dashed;
+}
+
+.forms-meaning {
+  color: var(--paper-dim);
+}
+
+.forms-note {
+  flex-basis: 100%;
+  color: var(--muted);
+}

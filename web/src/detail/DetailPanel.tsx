@@ -4,8 +4,9 @@ import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
 import { FontStrip } from './FontStrip'
+import { Forms, useForms } from './Forms'
 import { StrokeOrder } from './StrokeOrder'
-import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
+import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency, ValencyMark } from '../search/Valency'
 
@@ -27,6 +28,7 @@ const S = strings(
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
+    formOf: 'a form of {char}',
     openEntry: 'Open this entry',
     openReading: 'Open {word}, read {reading}',
     builtFrom_one: 'Built from {b} part',
@@ -51,6 +53,7 @@ const S = strings(
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
+    formOf: 'форма на {char}',
     openEntry: 'Отворете тази статия',
     openReading: 'Отворете {word}, четено {reading}',
     builtFrom_one: 'Изграден от {b} част',
@@ -77,6 +80,13 @@ interface Props {
   onComponents?: () => void
 }
 
+const PLACEHOLDER = /radical|variant of/i
+
+/** KANJIDIC's meanings without the radical names it files as meanings (server/forms.py does the same). */
+export function realMeanings(meanings: string[]): string[] {
+  return meanings.filter((m) => !PLACEHOLDER.test(m))
+}
+
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
   if (n.jlpt) return `JLPT N${n.jlpt}`
@@ -90,14 +100,29 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
 export function KanjiHead({ node }: { node: KanjiNode }) {
   const lang = useLang()
   const t = S(lang)
-  const [lead, ...rest] = meaningsOf(node, lang).value
+  // KANJIDIC files a radical's name where a meaning would be ("Radical Number 9");
+  // such a part borrows the meaning of the kanji it is a form of, when it is one.
+  const own = meaningsOf({ meanings: realMeanings(node.meanings), meaningsBg: node.meaningsBg }, lang).value
+  const forms = useForms(node.char, own.length === 0)
+  const [lead, ...rest] = own
+  const borrowed = own.length === 0 ? forms?.meaning : null
+  const lent = borrowed ? meaningsOf(borrowed, lang).value : []
   return (
     <div className="detail-head">
       <span className="detail-glyph">{node.char}</span>
       <div>
         <p className="detail-meanings">
-          {lead ?? t('noMeaning')}
-          {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
+          {borrowed ? (
+            <>
+              {t('formOf', { char: borrowed.from })}
+              {lent.length > 0 && <span className="rest"> {lent.slice(0, 3).join(', ')}</span>}
+            </>
+          ) : (
+            <>
+              {lead ?? t('noMeaning')}
+              {rest.length > 0 && <span className="rest"> {rest.slice(0, 5).join(', ')}</span>}
+            </>
+          )}
         </p>
       </div>
       <KanjiMeta node={node} />
@@ -111,6 +136,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
   const [words, setWords] = useState<Word[]>([])
   const [byReading, setByReading] = useState<{ char: string; words: Record<string, Word> } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
+  const forms = useForms(data.focus.char)
 
   // Vocabulary follows the focus, not the hover -- otherwise it would thrash
   // as the cursor crosses the graph.
@@ -245,9 +271,10 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
           <Related kind="mean" items={similar.mean} onKanji={onKanji} />
           <LooksLike items={similar.look} onKanji={onKanji} />
           <Related kind="read" items={similar.read} onKanji={onKanji} />
-          <OtherForms items={similar.variant} onKanji={onKanji} />
         </>
       )}
+
+      {!isPreview && forms && <Forms data={forms} onKanji={onKanji} />}
 
       {!isPreview && counts && (
         <p className="fanout-line">

@@ -16,18 +16,12 @@ from __future__ import annotations
 import threading
 
 from .db import query
+from .forms import shape_groups
 
-# The forms one part takes. A character may sit in more than one group:
-# 龶 is drawn like 王 and like the top of 生.
-_VARIANT_GROUPS = [
-    "人亻", "水氵氺", "心忄㣺", "手扌龵", "火灬", "犬犭", "糸糹", "食飠𩙿", "艹䒑",
-    "衣衤𧘇", "示礻", "刀刂", "肉月", "玉王龶", "生龶", "竹⺮", "足⻊", "阜邑阝",
-    "辵辶", "老耂", "网罒", "羊𦍌", "攴攵", "艸艹",
-]
+# The forms one part takes -- 衣 衤 𧘇, 王 玉 龶 -- from the forms table
+# (pipeline/forms.py): positional forms, what a bound part is a form of, and
+# what it is mistaken for, since a description names what a part looks like.
 FORMS: dict[str, set[str]] = {}
-for _group in _VARIANT_GROUPS:
-    for _c in _group:
-        FORMS.setdefault(_c, {_c}).update(_group)
 
 _children: dict[str, set[str]] | None = None
 _below: dict[str, frozenset[str]] = {}
@@ -45,6 +39,8 @@ def _load() -> None:
             children.setdefault(r["parent"], set()).add(r["child"])
         for r in query("SELECT char, joyo, strokes, freq FROM kanji"):
             _info[r["char"]] = (bool(r["joyo"]), r["strokes"] or 99, r["freq"] or 9999)
+        FORMS.clear()
+        FORMS.update(shape_groups())
         _children = children
 
 
@@ -86,6 +82,7 @@ def known(char: str) -> bool:
 
 
 def forms(part: str) -> set[str]:
+    _load()
     return FORMS.get(part, {part})
 
 
