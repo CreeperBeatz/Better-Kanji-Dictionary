@@ -1760,68 +1760,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* ---------------------------------------------------------------- decomposition */
-
-.decomp-edit {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.decomp-input {
-  flex: 1;
-  font-family: var(--mincho);
-  font-size: 19px;
-  padding: 6px 9px;
-}
-
-.decomp-edit .clear:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-
-.review {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
-}
-
-.review li {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 5px 0;
-  border-top: 1px solid var(--rule);
-  font-size: 12px;
-}
-
-.review-glyph {
-  font-family: var(--mincho);
-  font-size: 22px;
-  line-height: 1;
-  background: none;
-  border: 0;
-  padding: 0;
-  color: var(--paper);
-  cursor: pointer;
-}
-
-.review-glyph:hover {
-  color: var(--ai);
-}
-
-.review-why {
-  color: var(--muted);
-}
-
-.review-freq {
-  color: var(--faint);
-  font-variant-numeric: tabular-nums;
-}
-
-
 /* ---------------------------------------------------------------- stroke order */
 
 .strokes {
@@ -5911,4 +5849,321 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .forms-note {
   flex-basis: 100%;
   color: var(--muted);
+}
+
+/* The queue: a list on the left, the item being decided on the right. */
+
+.queue-filters {
+  margin-top: 0;
+  flex-wrap: wrap;
+}
+
+.queue-left {
+  margin-left: auto;
+}
+
+.queue-split {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 16px;
+  margin-top: 12px;
+  min-height: 0;
+}
+
+.queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 64vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--rule);
+}
+
+.queue-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  padding: 5px 8px;
+  color: var(--paper);
+  text-align: left;
+  cursor: pointer;
+}
+
+.queue-list button[data-on='true'] {
+  background: var(--ai-wash);
+  border-left-color: var(--ai);
+}
+
+.queue-glyph {
+  font-family: var(--mincho);
+  font-size: 19px;
+  line-height: 1.2;
+}
+
+.queue-kind {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.queue-item {
+  min-width: 0;
+}
+
+.queue-head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.queue-big {
+  font-family: var(--mincho);
+  font-size: 56px;
+  line-height: 1;
+}
+
+.queue-meta {
+  margin: 4px 0;
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
+.queue-reason {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.queue-compare {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+
+.queue-compare dt {
+  color: var(--muted);
+}
+
+.queue-compare dd {
+  margin: 0;
+}
+
+.queue-evidence {
+  border-top: 1px solid var(--rule);
+  padding-top: 8px;
+  font-size: 13px;
+}
+
+.queue-fonts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.queue-warn {
+  color: var(--shu);
+  margin: 6px 0;
+}
+
+.queue-notes,
+.queue-drafts {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.queue-draft {
+  font-family: var(--mincho);
+  margin-right: 8px;
+}
+
+.queue-word-head {
+  font-family: var(--mincho);
+  font-size: 26px;
+}
+
+.queue-word ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.queue-edit {
+  border-top: 1px solid var(--rule);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.queue-edit h4,
+.queue-evidence h4 {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.queue-keys {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.review-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  font-size: 12.5px;
+}
+
+.review-field > span:first-child {
+  color: var(--paper-dim);
+}
+
+.review-parts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.review-part {
+  display: inline-grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 3px;
+  font-family: var(--mincho);
+  font-size: 17px;
+  color: var(--paper);
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
+button.review-part {
+  cursor: pointer;
+}
+
+.review-parts-input {
+  font-family: var(--mincho);
+  font-size: 22px;
+  letter-spacing: 0.15em;
+}
+
+.review-groups {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.review-senses {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.review-senses th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.review-senses input {
+  width: 100%;
+}
+
+.review-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-pick button {
+  background: var(--sumi);
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  color: var(--paper);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.review-pick button[data-on='true'] {
+  background: var(--ai-wash);
+  border-color: var(--ai);
+}
+
+.review-pick kbd {
+  color: var(--muted);
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.decisions {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.decisions li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.decisions li[data-reverted] {
+  opacity: 0.6;
+}
+
+.decision-subject {
+  font-family: var(--mincho);
+  font-size: 18px;
+}
+
+.decision-change {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.decision-reason {
+  flex-basis: 100%;
+}
+
+.suggest-link {
+  font-size: 12px;
+}
+
+.suggest-panel {
+  width: min(560px, 100%);
+}
+
+@media (max-width: 640px) {
+  .queue-split {
+    grid-template-columns: 1fr;
+  }
+
+  .queue-list {
+    max-height: 22vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .queue-keys {
+    display: none;
+  }
 }

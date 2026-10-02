@@ -51,14 +51,13 @@ def main() -> None:
     if not assoc.exists() and store.ASSOC_DIR.exists():
         shutil.copytree(store.ASSOC_DIR, assoc)
     store.ASSOC_DIR, store.STORE, store.IMAGES = assoc, assoc / "store.json", assoc / "images"
-    store.OVERRIDE_FILE = tmp / "decomp_overrides.json"
 
-    try:
-        from server import review
-    except ImportError:
-        review = None
-    if review is not None:
-        review.use_dir(tmp / "review")
+    from server import offline, review
+
+    review.use_dir(tmp / "review")
+    # A pack built from the sandbox's decompositions is the sandbox's own.
+    offline.OUT = tmp / "offline"
+    offline.CURRENT = offline.OUT / "current.json"
 
     print(f"sandbox in {tmp}; admin is {args.owner}", flush=True)
     import uvicorn

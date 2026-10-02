@@ -5,17 +5,17 @@ places. FINDINGS.md calls hand-review "where the real effort lives", so the app
 makes it something you do in passing while studying rather than a separate
 spreadsheet session.
 
-Edits are written to data/decomp_overrides.json, which pipeline/decomp.py loads
-as its top layer, so a rebuild keeps them and the research pipeline can pick
-them up too. The graph applies them live, for everyone, so only the site's
-owner may make them; reading them and the queue stays open.
+An edit is a review decision (server/review.py): logged, revertible by the
+admin, and exported to data/decomp_overrides.json, which pipeline/decomp.py
+loads as its top layer. The graph applies them live, for everyone, so only
+reviewers and the admin may make them; reading them and the queue stays open.
 """
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Query
 
-from .. import store
+from .. import review, store
 from ..db import query
-from .auth import require_admin
+from .auth import require_role
 
 router = APIRouter(prefix="/api/decomp", tags=["decomposition"])
 
@@ -27,20 +27,18 @@ def list_overrides() -> dict:
 
 
 @router.put("/{char}")
-def set_override(char: str, payload: dict = Body(...), _: dict = Depends(require_admin)) -> dict:
-    if len(char) != 1:
-        raise HTTPException(400, "expected a single character")
+def set_override(char: str, payload: dict = Body(...), me: dict = Depends(require_role("reviewer"))) -> dict:
     components = payload.get("components")
-    if not isinstance(components, list) or any(not isinstance(c, str) or len(c) != 1 for c in components):
-        raise HTTPException(400, "components must be a list of single characters")
-    if char in components:
-        raise HTTPException(400, "a character cannot contain itself")
-    return store.set_decomposition(char, components)
+    review.direct("decomposition", char, components, me["id"], payload.get("reason"))
+    return {"char": char, "components": review.validate("decomposition", char, components)}
 
 
 @router.delete("/{char}")
-def clear_override(char: str, _: dict = Depends(require_admin)) -> dict:
-    return {"char": char, "cleared": store.clear_decomposition(char)}
+def clear_override(char: str, me: dict = Depends(require_role("reviewer"))) -> dict:
+    had = char in store.decomposition_overrides()
+    if had:
+        review.direct("decomposition", char, None, me["id"], "back to the source data")
+    return {"char": char, "cleared": had}
 
 
 @router.get("/review")

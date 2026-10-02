@@ -237,7 +237,35 @@ each one separately.
 - Add these rows to the offline pack if the offline kanji page shows forms; check
   `tests/offline_parity.py`.
 
-### Part 4 — Labeling queue (large)
+### Part 4 — Labeling queue (large) — DONE
+- Built: `server/review.py` (items, append-only decisions, live overlay, impact,
+  export), `server/routes/review.py`, `web/src/review/{Queue,editors,Suggest}.tsx`,
+  History / Auto-accepted tabs in `Workbench.tsx`; "suggest a change" on the
+  kanji page's parts line and on the Forms block. `DecompPanel.tsx` is gone;
+  `PUT`/`DELETE /api/decomp/{char}` are now reviewer direct edits, logged.
+  Check: `python tests/review_access.py`, `python tests/decomp_auth.py`;
+  browser: `tests/sandbox.py --dir X`, `tests/seed_review.py --dir X`,
+  `web/scripts/review-check.mjs`.
+- State: `data/review/review.json` (gitignored; **back it up with
+  data/associations before any deploy**). Decompositions stay in the store,
+  where the graph reads them.
+- **The server no longer writes `data/decomp_overrides.json`.**
+  `python -m server.review export` writes it plus `data/form_overrides.json`
+  (read by `pipeline/forms.py`) and `data/meaning_groups.json`; run it where
+  the decisions are (the Pi) and commit the result. `deploy/update.sh`'s
+  `git reset --hard` can no longer clobber reviewers' work.
+- Offline pack: its key follows `review.pack_key()`, moved only after
+  `PACK_DELAY` (10 min) without a decomposition decision, so a burst of
+  accepts causes one rebuild.
+- Choices made: **skip is per reviewer** (the item stays open for others; no
+  `skipped` status). A user may have at most 20 open suggestions and must give
+  a reason. Revert is admin-only, refuses if the value changed since
+  (`changed_since`), and reopens the item. Changing a kanji's sense list
+  reopens the words in any group whose id disappeared **or whose English
+  label changed** (catches splits; a pure rename reopens needlessly).
+  `word_sense` proposals may be loaded before the kanji's senses are
+  accepted; they stay out of the queue until then.
+
 The framework every task type in §5 runs on.
 - Storage: decisions are app data like notes. Keep them in the store
   (`data/associations/store.json` or a sibling file), **not** in the SQLite DB,

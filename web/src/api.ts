@@ -314,13 +314,92 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export interface ReviewItem {
+export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense'
+export type Origin = 'proposal' | 'suggestion'
+export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'none'
+
+/** One meaning group of a kanji, as the words it is used in divide it. */
+export interface MeaningGroup {
+  /** `生.life`: the kanji, a dot, a short id. */
+  id: string
+  en: string
+  bg: string | null
+  note: string | null
+}
+
+/** What each type's value is: parts, a link, meaning groups, or one group's id. */
+export type TaskValue = string[] | { kind: FormKind; note: string | null } | MeaningGroup[] | string | null
+
+/** A change waiting in the labeling queue (server/review.py). */
+export interface QueueItem {
+  id: string
+  type: TaskType
+  /** 青 · 龶|王 · 生 · 生|1234567 */
+  subject: string
+  proposed: TaskValue
+  /** What the site shows now. */
+  current: TaskValue
+  source: string
+  origin: Origin
+  reason: string | null
+  evidence: Record<string, unknown> | null
+  priority: number
+  status: 'open' | 'auto-accepted' | 'accepted' | 'edited' | 'rejected'
+  created: string
+  createdBy: Author | null
+  decidedBy: Author | null
+  confidence?: number
+}
+
+export interface Impact {
   char: string
-  freq: number | null
-  strokes: number | null
-  parts: number
-  score: number
-  reasons: string[]
+  before: string[]
+  after: string[]
+  removed: string[]
+  added: string[]
+  /** What the character, and so everything containing it, stops or starts having as a prerequisite. */
+  lost: string[]
+  gained: string[]
+  newEdge: boolean
+  containers: number
+  containersJoyo: number
+  topContainers: string[]
+  notes: { id: string; char: string; mentions: string[]; text: string }[]
+  notesTotal: number
+}
+
+export interface Decision {
+  id: string
+  action: 'accept' | 'edit' | 'reject' | 'direct' | 'auto' | 'revert' | 'reopen'
+  type: TaskType
+  subject: string
+  before: TaskValue
+  after: TaskValue
+  by: string
+  byCard?: Author | null
+  at: string
+  item: string | null
+  reason: string | null
+  supersedes: string | null
+  reverted_by: string | null
+}
+
+export interface ItemDetail extends QueueItem {
+  impact?: Impact
+  history: Decision[]
+  context: {
+    forms?: FormsResponse
+    a?: FormsResponse
+    b?: FormsResponse
+    char?: string
+    kanjidic?: string[]
+    curated?: string | null
+    on?: string[]
+    kun?: string[]
+    senses?: MeaningGroup[] | null
+    word?: Word
+    drafts?: { word: string; reading: string; gloss: string; proposed: string | null }[]
+  }
 }
 
 /** One handwriting candidate. `score` is 0-100 agreement, not a probability. */
@@ -383,9 +462,13 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
  * Answers that do not change while the app is open, kept: two parts of the
  * page asking at once -- a word's head and its panel, a picked character's
  * page and then its graph -- share one request. A failure is asked again.
+ * A reviewer's edit is the one exception: dataChanged() empties them all.
  */
+const keptCaches: Map<unknown, unknown>[] = []
+
 function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): (k: K) => Promise<T> {
   const answers = new Map<K, Promise<T>>()
+  keptCaches.push(answers)
   return (k) => {
     let p = answers.get(k)
     if (p) answers.delete(k) // to the back of the queue, as used just now
@@ -397,6 +480,20 @@ function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): (k: K) => Promise<T> 
     if (answers.size > size) answers.delete(answers.keys().next().value!)
     return p
   }
+}
+
+const changeListeners = new Set<() => void>()
+
+/** Something a reviewer changed went live: forget what was kept, and tell whoever shows it. */
+export function dataChanged() {
+  for (const c of keptCaches) c.clear()
+  similarCache.clear()
+  for (const l of changeListeners) l()
+}
+
+export function onDataChanged(listener: () => void): () => void {
+  changeListeners.add(listener)
+  return () => changeListeners.delete(listener)
 }
 
 /** The device's answer if it has one, the server's otherwise. */
@@ -659,20 +756,39 @@ export const api = {
   /** A note's picture: one of ours by name, or a GIF straight from KLIPY. */
   imageUrl: (name: string) => (isGifUrl(name) ? name : `${BASE}/api/assoc/image/${encodeURIComponent(name)}`),
 
-  reviewQueue: (limit = 40) =>
-    get<{ total: number; fixed: number; items: ReviewItem[] }>('/api/decomp/review', [
+  reviewQueueItems: (type?: TaskType, origin?: Origin, limit = 60) =>
+    get<{ total: number; items: QueueItem[] }>('/api/review/queue', [
+      ...(type ? [['type', type] as [string, string]] : []),
+      ...(origin ? [['origin', origin] as [string, string]] : []),
       ['limit', String(limit)],
     ]),
 
-  setDecomposition: (char: string, components: string[]) =>
-    send<{ char: string; components: string[] }>(
-      `/api/decomp/${encodeURIComponent(char)}`,
-      'PUT',
-      { components },
-    ),
+  reviewCounts: () => get<{ items: Record<string, Record<string, number>>; decisions: number }>('/api/review/counts'),
 
-  clearDecomposition: (char: string) =>
-    send<{ char: string; cleared: boolean }>(`/api/decomp/${encodeURIComponent(char)}`, 'DELETE'),
+  reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
+
+  decide: (id: string, action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, reason?: string) =>
+    send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason }),
+
+  /** A reviewer's own change, live at once. */
+  reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string) =>
+    send<Decision | { unchanged: true }>('/api/review/edit', 'POST', { type, subject, value, reason }),
+
+  /** From a user, queued for a reviewer; from a reviewer, made. */
+  suggest: (type: TaskType, subject: string, value: TaskValue, reason: string) =>
+    send<{ applied: boolean; item?: { id: string; status: string } }>('/api/review/suggest', 'POST', { type, subject, value, reason }),
+
+  impact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),
+
+  reviewHistory: (all = false, limit = 100) =>
+    get<{ items: Decision[] }>('/api/review/history', [
+      ['all', all ? 'true' : 'false'],
+      ['limit', String(limit)],
+    ]),
+
+  autoAccepted: () => get<{ items: Decision[] }>('/api/review/auto'),
+
+  revert: (decisionId: string) => send<{ decision: Decision }>(`/api/review/decisions/${encodeURIComponent(decisionId)}/revert`, 'POST'),
 
   /** `also`: other recognisers' picks, returned with the same metadata; they do not change the ranking. */
   recognize: (strokes: [number, number][][], also: string[] = []) =>

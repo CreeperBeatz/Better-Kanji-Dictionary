@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
-import { api, type GraphResponse, type KanjiNode, type Word } from './api'
+import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
@@ -602,6 +602,10 @@ export function App() {
     startAuth()
   }, [])
 
+  // A reviewer's edit (a decomposition, a form) went live: load the page again.
+  const [dataVersion, setDataVersion] = useState(0)
+  useEffect(() => onDataChanged(() => setDataVersion((v) => v + 1)), [])
+
   useEffect(() => {
     if (!focus) return
     let stale = false
@@ -622,7 +626,7 @@ export function App() {
     return () => {
       stale = true
     }
-  }, [focus, afterSlide])
+  }, [focus, afterSlide, dataVersion])
 
   // The rail shows the graph's data once it is for this character, and the
   // device's until then -- or instead, when there is no connection.
@@ -648,7 +652,7 @@ export function App() {
     return () => {
       stale = true
     }
-  }, [pageKanji, focus, afterSlide])
+  }, [pageKanji, focus, afterSlide, dataVersion])
 
   // A word opened from a link comes with nothing but its id; the head above
   // its associations wants what it is.
@@ -1019,6 +1023,7 @@ export function App() {
             onWord={openWord}
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
+            onSignIn={signIn}
           />
         ) : null
       }
@@ -1658,9 +1663,6 @@ export function App() {
               ))}
             </nav>
           )}
-          {/* "Its parts" -- the decomposition editor and review queue -- is
-              hidden for now. src/review/DecompPanel.tsx and the /api/decomp
-              routes are untouched, so putting it back is one line. */}
         </aside>
         {split && <SplitResizer share={searchShare} total={2 * railShown} onShare={setSearchShare} />}
         <RailResizer width={railShown} onWidth={setRailWidth} columns={split ? 2 : 1} />
@@ -1765,7 +1767,17 @@ export function App() {
       </div>
 
       {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
-      {workbench && <Workbench tab={workbench} onTab={setWorkbench} onClose={closeWorkbench} />}
+      {workbench && (
+        <Workbench
+          tab={workbench}
+          onTab={setWorkbench}
+          onClose={closeWorkbench}
+          onKanji={(c) => {
+            setWorkbench(null)
+            openKanji(c)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -44,8 +44,6 @@ ROOT = Path(__file__).parent.parent
 ASSOC_DIR = ROOT / "data" / "associations"
 STORE = ASSOC_DIR / "store.json"
 IMAGES = ASSOC_DIR / "images"
-# The decomposition overrides, mirrored where the pipeline reads them.
-OVERRIDE_FILE = ROOT / "data" / "decomp_overrides.json"
 
 # Author of every note written before there were accounts.
 LOCAL_AUTHOR = "local"
@@ -573,12 +571,17 @@ def decomposition_overrides() -> dict[str, list[str]]:
     return _read()["decomposition"]
 
 
+# Decompositions are set through review decisions (server/review.py), which
+# log them. The tracked data/decomp_overrides.json the pipeline reads is
+# written only by `python -m server.review export`, on purpose: on the Pi a
+# deploy's `git reset --hard` would otherwise fight the server over it.
+
+
 def set_decomposition(char: str, components: list[str]) -> dict:
     with _lock:
         data = load()
         data["decomposition"][char] = components
         save(data)
-        _write_override_file(data["decomposition"])
         return {"char": char, "components": components}
 
 
@@ -589,12 +592,4 @@ def clear_decomposition(char: str) -> bool:
             return False
         del data["decomposition"][char]
         save(data)
-        _write_override_file(data["decomposition"])
         return True
-
-
-def _write_override_file(overrides: dict[str, list[str]]) -> None:
-    """Mirror overrides to the file the pipeline reads, so a rebuild keeps them."""
-    path = OVERRIDE_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2), encoding="utf-8")

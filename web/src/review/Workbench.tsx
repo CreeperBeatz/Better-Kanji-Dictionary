@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type AdminPeople } from '../api'
+import { api, dataChanged, type AdminPeople, type Decision } from '../api'
 import { useAuth } from '../account/auth'
 import type { WorkbenchTab } from '../account/Account'
 import { Avatar } from '../account/Avatar'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { ValueView } from './editors'
+import { Queue } from './Queue'
 
 const S = strings(
   {
@@ -27,6 +29,23 @@ const S = strings(
     role_user: 'a user',
     role_reviewer: 'a reviewer',
     role_admin: 'admin',
+    queue: 'Queue',
+    history: 'History',
+    auto: 'Auto-accepted',
+    mine: 'mine',
+    everyone: 'everyone’s',
+    noHistory: 'No decisions yet.',
+    revert: 'revert',
+    reverted: 'reverted',
+    confirmRevert: 'Put back the value from before this decision?',
+    a_accept: 'accepted',
+    a_edit: 'edited',
+    a_reject: 'rejected',
+    a_direct: 'changed directly',
+    a_auto: 'auto-accepted',
+    a_revert: 'reverted',
+    a_reopen: 'reopened',
+    autoHint: 'Accepted by the mechanical rule, not by a person. Spot-check them: if more than a few are wrong, the rule needs tightening.',
   },
   {
     title: 'Преглед',
@@ -48,6 +67,23 @@ const S = strings(
     role_user: 'потребител',
     role_reviewer: 'рецензент',
     role_admin: 'администратор',
+    queue: 'Опашка',
+    history: 'История',
+    auto: 'Приети автоматично',
+    mine: 'моите',
+    everyone: 'на всички',
+    noHistory: 'Още няма решения.',
+    revert: 'върнете',
+    reverted: 'върнато',
+    confirmRevert: 'Да се върне ли стойността отпреди това решение?',
+    a_accept: 'прието',
+    a_edit: 'редактирано',
+    a_reject: 'отхвърлено',
+    a_direct: 'променено направо',
+    a_auto: 'прието автоматично',
+    a_revert: 'върнато',
+    a_reopen: 'отворено отново',
+    autoHint: 'Приети по механичното правило, а не от човек. Проверявайте на случаен принцип: ако повече от няколко са грешни, правилото трябва да се затегне.',
   },
 )
 
@@ -57,7 +93,17 @@ type Key = Parameters<ReturnType<typeof S>>[0]
  * The review screen: the labeling queue, your decisions, and for the admin,
  * who reviews. Reviewers and the admin only; the server checks it again.
  */
-export function Workbench({ tab, onTab, onClose }: { tab: WorkbenchTab; onTab: (t: WorkbenchTab) => void; onClose: () => void }) {
+export function Workbench({
+  tab,
+  onTab,
+  onClose,
+  onKanji,
+}: {
+  tab: WorkbenchTab
+  onTab: (t: WorkbenchTab) => void
+  onClose: () => void
+  onKanji?: (char: string) => void
+}) {
   const t = S(useLang())
   const { user } = useAuth()
 
@@ -73,7 +119,11 @@ export function Workbench({ tab, onTab, onClose }: { tab: WorkbenchTab; onTab: (
   }, [onClose])
 
   if (!user || user.role === 'user') return null
-  const tabs: [WorkbenchTab, Key][] = user.role === 'admin' ? [['people', 'people']] : []
+  const tabs: [WorkbenchTab, Key][] = [
+    ['queue', 'queue'],
+    ['history', 'history'],
+    ...(user.role === 'admin' ? ([['auto', 'auto'], ['people', 'people']] as [WorkbenchTab, Key][]) : []),
+  ]
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -89,7 +139,12 @@ export function Workbench({ tab, onTab, onClose }: { tab: WorkbenchTab; onTab: (
             </button>
           ))}
         </nav>
-        <div className="workbench-body">{tab === 'people' && user.role === 'admin' && <People />}</div>
+        <div className="workbench-body">
+          {tab === 'queue' && <Queue onKanji={onKanji} />}
+          {tab === 'history' && <History admin={user.role === 'admin'} />}
+          {tab === 'auto' && user.role === 'admin' && <History admin auto />}
+          {tab === 'people' && user.role === 'admin' && <People />}
+        </div>
       </div>
     </div>
   )
@@ -190,6 +245,86 @@ function People() {
           </ul>
         </section>
       )}
+    </>
+  )
+}
+
+const CHANGES = new Set(['accept', 'edit', 'direct', 'auto', 'revert', 'reopen'])
+
+/** Decisions, newest first: your own, everyone's for the admin, or the auto-accepted ones. */
+function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
+  const lang = useLang()
+  const t = S(lang)
+  const [everyone, setEveryone] = useState(auto)
+  const [rows, setRows] = useState<Decision[] | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    const ask = auto ? api.autoAccepted() : api.reviewHistory(everyone)
+    ask.then(
+      (d) => setRows(d.items),
+      (e) => setProblem(errorText(e, lang)),
+    )
+  }, [auto, everyone, lang])
+  useEffect(load, [load])
+
+  async function revert(d: Decision) {
+    if (!window.confirm(t('confirmRevert'))) return
+    setProblem(null)
+    try {
+      await api.revert(d.id)
+      if (d.type === 'decomposition' || d.type === 'form_link') dataChanged()
+      load()
+    } catch (e) {
+      setProblem(errorText(e, lang))
+    }
+  }
+
+  const when = (iso: string) =>
+    new Date(iso).toLocaleString(lang === 'bg' ? 'bg-BG' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })
+  return (
+    <>
+      {auto && <p className="hint">{t('autoHint')}</p>}
+      {admin && !auto && (
+        <nav className="overlay-tabs">
+          <button data-on={!everyone} onClick={() => setEveryone(false)}>
+            {t('mine')}
+          </button>
+          <button data-on={everyone} onClick={() => setEveryone(true)}>
+            {t('everyone')}
+          </button>
+        </nav>
+      )}
+      {problem && <p className="account-problem">{problem}</p>}
+      {rows === null && !problem && <p className="hint">{t('loading')}</p>}
+      {rows?.length === 0 && <p className="hint">{t('noHistory')}</p>}
+      <ul className="decisions">
+        {rows?.map((d) => (
+          <li key={d.id} data-reverted={!!d.reverted_by || undefined}>
+            <span className="hint">{when(d.at)}</span>{' '}
+            <span className="decision-subject" lang="ja">
+              {d.subject.split('|')[0]}
+            </span>{' '}
+            {t(`a_${d.action}` as Key)}
+            {d.byCard && <span className="hint"> · @{d.byCard.username ?? d.byCard.name}</span>}
+            {CHANGES.has(d.action) && (
+              <span className="decision-change">
+                <ValueView type={d.type} value={d.before} /> → <ValueView type={d.type} value={d.after} />
+              </span>
+            )}
+            {d.reason && <span className="hint decision-reason">{d.reason}</span>}
+            {admin &&
+              CHANGES.has(d.action) &&
+              (d.reverted_by ? (
+                <span className="hint"> · {t('reverted')}</span>
+              ) : (
+                <button className="clear" onClick={() => revert(d)}>
+                  {t('revert')}
+                </button>
+              ))}
+          </li>
+        ))}
+      </ul>
     </>
   )
 }

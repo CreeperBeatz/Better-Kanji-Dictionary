@@ -51,7 +51,6 @@ FORMAT = 4
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
-OVERRIDES = DB_PATH.parent / "decomp_overrides.json"
 
 WORD_CHUNK = 10_000
 WORDS_FOR = 12  # what /api/search/words-for returns by default
@@ -76,9 +75,15 @@ def _stamp(p: Path) -> str:
 
 
 def source_key() -> str:
-    """Changes whenever anything the pack is built from does."""
+    """Changes whenever anything the pack is built from does.
+
+    Decompositions count as of the last quiet moment (server/review.py
+    pack_key), so a reviewer accepting twenty in a row causes one rebuild.
+    """
+    from .review import pack_key
+
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{_stamp(OVERRIDES)}"
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{pack_key()}"
 
 
 def current() -> dict | None:

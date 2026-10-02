@@ -19,3 +19,7 @@ prod-credentials.env
 pipeline/translate/in/
 data/semantic-eval/
 data/similar-eval/
+
+# Review decisions and the queue live on the server; export them with
+# `python -m server.review export` to commit.
+data/review/

@@ -8,9 +8,10 @@
  * order, the old shape tells the story (TASK-forms-review.md).
  */
 import { useEffect, useState } from 'react'
-import { api, type FormItem, type FormsResponse } from '../api'
+import { api, onDataChanged, type FormItem, type FormsResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
+import { SuggestLink } from '../review/Suggest'
 
 const S = strings(
   {
@@ -56,6 +57,8 @@ const ROWS: [keyof Omit<FormsResponse, 'char' | 'meaning'>, Key][] = [
 /** The forms of `char`, or null until they arrive (offline they never do; the page goes without). */
 export function useForms(char: string, wanted = true): FormsResponse | null {
   const [data, setData] = useState<FormsResponse | null>(null)
+  const [version, setVersion] = useState(0)
+  useEffect(() => onDataChanged(() => setVersion((v) => v + 1)), [])
   useEffect(() => {
     if (!wanted) return
     let stale = false
@@ -66,11 +69,11 @@ export function useForms(char: string, wanted = true): FormsResponse | null {
     return () => {
       stale = true
     }
-  }, [char, wanted])
+  }, [char, wanted, version])
   return data?.char === char ? data : null
 }
 
-export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: string) => void }) {
+export function Forms({ data, onKanji, onSuggest }: { data: FormsResponse; onKanji: (char: string) => void; onSuggest?: () => void }) {
   const lang = useLang()
   const t = S(lang)
   const rows = ROWS.filter(([k]) => data[k].length > 0)
@@ -91,7 +94,9 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
 
   return (
     <div className="forms">
-      <h3>{t('title')}</h3>
+      <h3>
+        {t('title')} {onSuggest && <SuggestLink onOpen={onSuggest} />}
+      </h3>
       <dl>
         {rows.map(([k, label]) => (
           <div key={k} className="forms-row" data-kind={k}>
