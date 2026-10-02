@@ -46,8 +46,10 @@ infrastructure, all agreed with Dani:
    a bound part is a form of, and popular lookalike mnemonics (clearly marked).
 2. Show the kanji in **several fonts** side by side (print vs handwriting, old
    vs new glyph shapes).
-3. On the kanji page, **group the words by which meaning of the kanji they
-   use**, instead of one flat list.
+3. **Group a kanji's words by which meaning of the kanji they use.** Changed
+   by Dani 2026-10-02: the kanji page keeps a short flat list (the 5–10 most
+   common words) plus a "see all words" button; the grouping lives in the
+   search view that button opens. See Part 5.
 4. **Fix wrong decompositions**, with a human approving anything that isn't
    mechanically obvious.
 5. Infrastructure: **account roles** and a general **labeling queue** that 1,
@@ -232,11 +234,30 @@ The framework every task type in §5 runs on.
   assigns each common word to a group. Results come back as task items. A
   reviewer accepts them; low-confidence word assignments go to the queue
   automatically.
-- Page: "Words using 生" becomes one short list per meaning (label + 3–5 words,
-  "more" to expand), plus the catch-all group at the end.
-- `words_for_kanji`'s limit of 12 is too few to fill several groups. Add a grouped
-  endpoint rather than raising the default (the offline pack hard-codes
-  `WORDS_FOR = 12`).
+- **Where the groups show (Dani, 2026-10-02):**
+  - **Kanji page:** "Words using 生" stays a *flat* list of the 5–10 most common
+    words (today: 8 of the top 12 by nf), **not** grouped. Under it, a
+    "See all words with 生" button.
+  - **The button opens the search view** with a kanji-scoped query (shown in
+    the search bar, so it's back/forward-able like any search). It lists
+    *every* word containing 生, **divided by the meaning 生 carries in each
+    word**: one heading per accepted sense (label, en/bg), words by frequency
+    under it, the catch-all group last.
+  - Until a kanji's senses are accepted, the same view shows one flat list by
+    frequency. So the button and the all-words view (5a) can ship before any
+    AI work (5b).
+- Build order inside Part 5:
+  - **5a** (small, no AI): the button, the kanji-scoped search mode, and an
+    endpoint returning all words for a char (paged; common first, then the
+    rest). Leave `words_for_kanji` and the offline pack's `WORDS_FOR = 12`
+    alone; the page needs ≤10.
+  - **5b**: senses + word assignments (tasks C, D), then the grouped response
+    from the 5a endpoint.
+- "Suggest a change" for word groups (Part 4) sits on the group headings and
+  word rows in that search view, not on the kanji page.
+- Offline: the pack only has each kanji's top 12 words, so offline the button
+  either shows those 12 (grouped if the pack carries the sense ids) or is
+  hidden. Decide when building; check `tests/offline_parity.py`.
 
 ### Part 6 — Fill the queues (medium)
 - **IDS diff:** compare our parts with an IDS source (CHISE IDS or BabelStone
