@@ -175,7 +175,20 @@ each one separately.
 - `_public(user)` must not leak the role or email of other users. A small
   "reviewer" badge on public cards is fine if Dani wants one; ask.
 
-### Part 3 — Font strip (small, front-end only)
+### Part 3 — Font strip (small, front-end only) — DONE
+- Built: `pipeline/fonts.py` (`build_db.py fonts` stage → `font_cover`,
+  `font_old`), `GET /api/kanji/{char}/fonts`, `web/src/detail/FontStrip.tsx`
+  (after the stroke order). Check: `web/scripts/font-strip-check.mjs`.
+- Deviations, both for phone speed: Klee One and Yuji Syuku come from Google
+  Fonts like the page's own two faces (unicode-range slices, so only the
+  slice holding the character loads), injected once the strip is on screen.
+  Old JIS shapes are **SVG outlines in the DB**, not subset fonts: a subset
+  keeping `jp83` was 130–620 KB per font. Mincho `jp83` is exactly the JIS 2004
+  change list (葛 謎 遡 箸 餅 …); 1,043 old outlines over 516 characters.
+- A face is shown only if `font_cover` says it has the character *and*
+  `document.fonts.load` confirms it loaded (so offline it quietly drops).
+- Needs `pip install fonttools` to build; the DB check in `server/db.py`
+  now requires the `fonts` stage, so **the deployed DB needs `build_db.py fonts`**.
 - Under the big glyph on the kanji page: the same character in 3–4 labelled
   fonts, side by side.
   - Mincho: Shippori, already loaded.

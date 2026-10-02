@@ -283,6 +283,19 @@ def similar_to(char: str) -> dict:
     return {"char": char, **out}
 
 
+@router.get("/{char}/fonts")
+def fonts_of(char: str) -> dict:
+    """For the font strip: which of its faces have the character, and its old
+    JIS shapes where a face draws them differently (pipeline/fonts.py)."""
+    row = query_one("SELECT faces FROM font_cover WHERE char = ?", (char,))
+    old = query("SELECT face, feature, em, old FROM font_old WHERE char = ? ORDER BY feature, face", (char,))
+    return {
+        "char": char,
+        "faces": row["faces"].split() if row else [],
+        "old": [dict(r) for r in old],
+    }
+
+
 @router.get("/{char}")
 def get_kanji(char: str) -> dict:
     if len(char) != 1:

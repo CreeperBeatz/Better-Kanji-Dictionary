@@ -39,6 +39,7 @@ def get_db() -> sqlite3.Connection:
         ("sense_bg", "the Bulgarian tables", "bg"),
         ("similar", "similar kanji", "similar"),
         ("verb_pair", "verb pairs", "pairs"),
+        ("font_cover", "the font strip", "fonts"),
     ):
         if not conn.execute("SELECT 1 FROM sqlite_master WHERE name = ?", (table,)).fetchone():
             conn.close()

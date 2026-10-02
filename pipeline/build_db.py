@@ -752,6 +752,14 @@ def build_similar(db: sqlite3.Connection) -> None:
     print(f"  variants      {kinds['variant']:>7,} rows")
 
 
+@stage("fonts", "the font strip's four fonts -> which has each character, and old JIS shapes")
+def build_fonts(db: sqlite3.Connection) -> None:
+    """See pipeline/fonts.py. Needs the graph stage and fonttools."""
+    import fonts
+
+    fonts.build(db)
+
+
 # ---------------------------------------------------------------- driver
 
 

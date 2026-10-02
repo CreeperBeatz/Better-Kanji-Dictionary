@@ -70,6 +70,14 @@ export interface SimilarResponse {
   variant: (KanjiNode & { score: number })[]
 }
 
+/** Which of the font strip's faces have a character, and its older JIS shapes as outlines. */
+export interface FontsResponse {
+  char: string
+  faces: string[]
+  /** `old` is SVG path data on a 0 0 em em box, y down. */
+  old: { face: string; feature: 'jp78' | 'jp83' | 'jp90'; em: number; old: string }[]
+}
+
 /** One map scope, column-wise: index i across every array is one character. */
 export interface MapResponse {
   scope: string
@@ -432,6 +440,8 @@ export const api = {
     }
     return p
   },
+
+  fonts: kept((char: string) => get<FontsResponse>(`/api/kanji/${encodeURIComponent(char)}/fonts`)),
 
   word: kept((id: number) => get<WordEntry>(`/api/search/word/${id}`)),
 

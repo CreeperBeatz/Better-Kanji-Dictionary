@@ -3,6 +3,7 @@ import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
+import { FontStrip } from './FontStrip'
 import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, OtherForms, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
@@ -217,6 +218,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents }: Pr
       )}
 
       {!isPreview && <StrokeOrder char={data.focus.char} strokes={data.strokes} />}
+      {!isPreview && <FontStrip char={data.focus.char} />}
 
       {!isPreview && words.length > 0 && (
         <div className="vocab">

@@ -39,9 +39,13 @@ def main() -> None:
 
     from server import auth, store
 
+    real_avatars = auth.AVATARS
     auth.AUTH_DIR = tmp / "auth"
     auth.AUTH_FILE = auth.AUTH_DIR / "auth.json"
     auth.AVATARS = auth.AUTH_DIR / "avatars"
+    # Pictures only, no accounts: the copied notes' authors keep their faces.
+    if real_avatars.exists() and not auth.AVATARS.exists():
+        shutil.copytree(real_avatars, auth.AVATARS)
 
     assoc = tmp / "associations"
     if not assoc.exists() and store.ASSOC_DIR.exists():

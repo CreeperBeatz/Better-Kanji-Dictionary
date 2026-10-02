@@ -110,6 +110,29 @@ SOURCES = {
         "https://raw.githubusercontent.com/google/fonts/main/ofl/notoserifjp/NotoSerifJP%5Bwght%5D.ttf",
         "Noto Serif JP, OFL -- lookalikes in mincho",
     ),
+    # --- the kanji page's font strip (pipeline/fonts.py): print vs handwriting,
+    # and the old JIS glyph shapes some of them carry as OpenType features
+    **{
+        f"font-{key}": (
+            f"fonts/{name}",
+            f"https://raw.githubusercontent.com/google/fonts/main/ofl/{folder}/{name}",
+            f"{label}, OFL -- font strip",
+        )
+        for key, folder, name, label in (
+            ("mincho", "shipporimincho", "ShipporiMincho-Regular.ttf", "Shippori Mincho"),
+            ("gothic", "zenkakugothicnew", "ZenKakuGothicNew-Regular.ttf", "Zen Kaku Gothic New"),
+            ("textbook", "kleeone", "KleeOne-Regular.ttf", "Klee One"),
+            ("brush", "yujisyuku", "YujiSyuku-Regular.ttf", "Yuji Syuku"),
+        )
+    },
+    # --- decomposition check (Part 6 of TASK-forms-review.md). BabelStone's
+    # header: anyone may use the IDS data for any purpose without permission
+    # or attribution (IDS are facts). Region tags per sequence; J = Japan.
+    "babelstone-ids": (
+        "ids/IDS.TXT",
+        "https://www.babelstone.co.uk/CJK/IDS.TXT",
+        "ideographic description sequences, free for any use",
+    ),
     "unihan": (
         "Unihan.zip",
         "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip",
