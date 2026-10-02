@@ -116,6 +116,11 @@ export async function setAvatar(file: Blob | null) {
   set({ user })
 }
 
+export async function contribute(text: string) {
+  const { user } = await api.contribute(text)
+  set({ user })
+}
+
 export function clearAuthError() {
   set({ error: null })
 }

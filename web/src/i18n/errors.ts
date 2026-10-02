@@ -15,6 +15,15 @@ const ERRORS: Record<string, [string, string]> = {
   // signing in and the profile
   sign_in_required: ['sign in to save associations', 'влезте, за да запазвате асоциации'],
   admin_only: ["only the site's owner can do this", 'само собственикът на сайта може да прави това'],
+  reviewers_only: ['only reviewers can do this', 'само рецензентите могат да правят това'],
+  contribute_short: [
+    'say a little about yourself and your Japanese',
+    'кажете нещо за себе си и за японския си',
+  ],
+  contribute_already: ['you have already asked, or already review', 'вече сте поискали или вече рецензирате'],
+  request_not_found: ['no open request with that id', 'няма отворена заявка с този номер'],
+  reviewer_not_found: ['that account is not a reviewer', 'този профил не е рецензент'],
+  bad_request: ['the request was not understood', 'заявката не беше разбрана'],
   semantic_off: ['semantic search is not set up on this server', 'семантичното търсене не е настроено на този сървър'],
   semantic_unavailable: ['semantic search is not available right now', 'семантичното търсене не е достъпно в момента'],
   kanjify_off: ['Kanjify is not set up on this server', 'Kanjify не е настроен на този сървър'],

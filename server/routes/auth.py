@@ -38,8 +38,7 @@ def require_user(authorization: str | None = Header(None)) -> dict:
 def is_admin(user: dict | None) -> bool:
     """The site's owner, named by BETTERRTK_OWNER_EMAIL. Unset means nobody:
     unlike claiming legacy notes, this never falls back to whoever came first."""
-    owner = auth.normalise_email(os.environ.get("BETTERRTK_OWNER_EMAIL", ""))
-    return bool(owner and user and user.get("email") == owner)
+    return auth.role_of(user) == "admin" if user else False
 
 
 def require_admin(authorization: str | None = Header(None)) -> dict:
@@ -49,13 +48,31 @@ def require_admin(authorization: str | None = Header(None)) -> dict:
     return user
 
 
+def require_role(role: str):
+    """A dependency letting through `role` and anything above it (admin passes `reviewer`)."""
+    assert role in auth.ROLES
+
+    def dep(authorization: str | None = Header(None)) -> dict:
+        user = require_user(authorization)
+        if not auth.has_role(user, role):
+            if role == "admin":
+                raise AppError(403, "admin_only", "only the site's owner can do this")
+            raise AppError(403, "reviewers_only", "only reviewers can do this")
+        return user
+
+    return dep
+
+
 def _public(user: dict) -> dict:
+    """Your own account, as /me and sign-in return it. Never someone else's."""
     return {
         "id": user["id"],
         "email": user["email"],
         "name": user["name"],
         "username": user.get("username"),
         "avatar": user.get("avatar"),
+        "role": auth.role_of(user),
+        "contribution": auth.own_request(user["id"]),
     }
 
 
@@ -188,6 +205,32 @@ def get_avatar(name: str):
         media_type=AVATAR_TYPES.get(path.suffix.lower(), "application/octet-stream"),
         headers={"Cache-Control": "public, max-age=31536000, immutable"},
     )
+
+
+@router.post("/contribute")
+def contribute(request: Request, payload: dict = Body(...), authorization: str | None = Header(None)) -> dict:
+    """Ask to become a reviewer. The owner is emailed and decides on the admin page."""
+    user = require_user(authorization)
+    text = (payload.get("text") or "").strip()
+    if len(text) < 10:
+        raise AppError(400, "contribute_short", "say a little about yourself and your Japanese")
+    try:
+        auth.request_contribution(user["id"], text)
+    except auth.AlreadyAsked:
+        raise AppError(409, "contribute_already", "you have already asked, or already review")
+    owner = auth.owner_email()
+    if owner:
+        who = f"{user['name']} (@{user.get('username')}, {user['email']})"
+        try:
+            link = f"{_app_url(request)}/?admin=1"
+        except HTTPException:
+            link = "/?admin=1"
+        try:
+            mail.send_contribution_request(owner, who, text, link)
+        except RuntimeError as e:
+            # The request is saved and shows on the admin page either way.
+            print(f"[mail] {e}", flush=True)
+    return {"user": _public(user)}
 
 
 @router.post("/logout")

@@ -211,8 +211,25 @@ export interface Author {
   avatar: string | null
 }
 
+export type Role = 'user' | 'reviewer' | 'admin'
+
 export interface User extends Author {
   email: string
+  /** Admin is the site's owner; reviewers are approved by hand; everyone else is a user. */
+  role: Role
+  /** Your latest request to become a reviewer, if you made one. */
+  contribution: { id: string; status: 'open' | 'approved' | 'declined'; created: string; decided: string | null } | null
+}
+
+/** An account as only the admin page sees it. */
+export interface PersonCard extends Author {
+  email: string
+}
+
+export interface AdminPeople {
+  requests: { id: string; text: string; created: string; user: PersonCard }[]
+  reviewers: (PersonCard & { since: string | null })[]
+  log: { user: string; userName: string; before: Role; after: Role; by: string; byName: string; at: string; reason: string | null }[]
 }
 
 /** A note as the associations tab shows it: yours, or someone's public one. */
@@ -588,6 +605,17 @@ export const api = {
     send<{ id: string; deleted: boolean }>(`/api/comments/reply/${encodeURIComponent(replyId)}`, 'DELETE'),
 
   logout: () => send<{ ok: boolean }>('/api/auth/logout', 'POST'),
+
+  /** Ask to become a reviewer; the owner is emailed. */
+  contribute: (text: string) => send<{ user: User }>('/api/auth/contribute', 'POST', { text }),
+
+  adminPeople: () => get<AdminPeople>('/api/admin/people'),
+
+  decideRequest: (id: string, approve: boolean) =>
+    send<{ request: { id: string; status: string } }>(`/api/admin/requests/${encodeURIComponent(id)}`, 'POST', { approve }),
+
+  revokeReviewer: (userId: string) =>
+    send<{ ok: boolean }>(`/api/admin/reviewers/${encodeURIComponent(userId)}/revoke`, 'POST', {}),
 
   /** A note's picture: one of ours by name, or a GIF straight from KLIPY. */
   imageUrl: (name: string) => (isGifUrl(name) ? name : `${BASE}/api/assoc/image/${encodeURIComponent(name)}`),

@@ -23,7 +23,7 @@ from .errors import AppError, app_error_handler
 from . import auth as accounts
 from . import offline as offline_pack
 from . import store
-from .routes import assoc, atlas, auth, comments, decomp, gifs, graph, images, offline, recognize, search
+from .routes import admin, assoc, atlas, auth, comments, decomp, gifs, graph, images, offline, recognize, search
 
 app = FastAPI(
     title="Better Kanji Dictionary",
@@ -62,6 +62,7 @@ app.include_router(images.router)
 app.include_router(gifs.router)
 app.include_router(comments.router)
 app.include_router(decomp.router)
+app.include_router(admin.router)
 app.include_router(recognize.router)
 app.include_router(offline.router)
 

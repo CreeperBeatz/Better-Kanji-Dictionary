@@ -7,6 +7,12 @@ in the same session, and an address that already has an account signs into
 it rather than making a second one. A bearer header rather than a
 cookie because the dev frontend and this server sit on different origins.
 
+Every account has a role: `user`, `reviewer` (approved by hand, after asking
+to contribute) or `admin`. Admin is never stored: it is whoever's address is
+BETTERRTK_OWNER_EMAIL, so no request or API call can grant it, and with that
+unset nobody is admin. `reviewer` is stored on the user record; a missing role
+is `user`. Every change of role is logged, with who made it.
+
 Only hashes of tokens are stored, so `data/auth/auth.json` leaking does not let
 anyone sign in. The file is kept apart from the association store because it
 is not something you would ever want to commit or share.
@@ -16,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import secrets
 import threading
@@ -49,6 +56,20 @@ class UsernameTaken(Exception):
     pass
 
 
+class AlreadyAsked(Exception):
+    """There is an open request to contribute, or the account already reviews."""
+
+
+class NotFound(Exception):
+    pass
+
+
+ROLES = ("user", "reviewer", "admin")
+# How much each role may do; a route asking for `reviewer` lets admin through too.
+RANK = {"user": 0, "reviewer": 1, "admin": 2}
+MAX_REQUEST_TEXT = 1000
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -59,8 +80,12 @@ def _hash(token: str) -> str:
 
 def _load() -> dict:
     if not AUTH_FILE.exists():
-        return {"version": 1, "users": {}, "links": {}, "sessions": {}}
-    return json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+        data = {"version": 1, "users": {}, "links": {}, "sessions": {}}
+    else:
+        data = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+    data.setdefault("requests", {})
+    data.setdefault("role_log", [])
+    return data
 
 
 def _save(data: dict) -> None:
@@ -258,3 +283,152 @@ def set_avatar(user_id: str, raw: bytes | None, suffix: str = ".png") -> dict | 
         if old and old != user["avatar"]:
             (AVATARS / Path(old).name).unlink(missing_ok=True)
         return dict(user)
+
+
+# ---------------------------------------------------------------- roles
+
+
+def owner_email() -> str | None:
+    """The admin's address, from BETTERRTK_OWNER_EMAIL; None means nobody is admin."""
+    return normalise_email(os.environ.get("BETTERRTK_OWNER_EMAIL", ""))
+
+
+def role_of(user: dict | None) -> str:
+    if not user:
+        return "user"
+    owner = owner_email()
+    if owner and user.get("email") == owner:
+        return "admin"
+    return "reviewer" if user.get("role") == "reviewer" else "user"
+
+
+def has_role(user: dict | None, role: str) -> bool:
+    return user is not None and RANK[role_of(user)] >= RANK[role]
+
+
+def _log_role(data: dict, user_id: str, before: str, after: str, by: str, reason: str | None) -> None:
+    data["role_log"].append({
+        "user": user_id,
+        "before": before,
+        "after": after,
+        "by": by,
+        "at": _now().isoformat(),
+        "reason": reason,
+    })
+
+
+def _card(user: dict) -> dict:
+    """What the admin page shows of an account. Only ever sent to the admin."""
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "username": user.get("username"),
+        "avatar": user.get("avatar"),
+        "email": user["email"],
+    }
+
+
+def own_request(user_id: str) -> dict | None:
+    """This account's latest request to contribute, for its own Account page."""
+    data = _load()
+    mine = [r for r in data["requests"].values() if r["user"] == user_id]
+    if not mine:
+        return None
+    r = max(mine, key=lambda r: r["created"])
+    return {"id": r["id"], "status": r["status"], "created": r["created"], "decided": r.get("decided_at")}
+
+
+def request_contribution(user_id: str, text: str) -> dict:
+    """Ask to become a reviewer. One open request per account."""
+    with _lock:
+        data = _load()
+        user = data["users"].get(user_id)
+        if not user:
+            raise NotFound()
+        if role_of(user) != "user":
+            raise AlreadyAsked()
+        if any(r["user"] == user_id and r["status"] == "open" for r in data["requests"].values()):
+            raise AlreadyAsked()
+        req = {
+            "id": f"r-{uuid.uuid4().hex[:12]}",
+            "user": user_id,
+            "text": text[:MAX_REQUEST_TEXT],
+            "status": "open",
+            "created": _now().isoformat(),
+            "decided_by": None,
+            "decided_at": None,
+        }
+        data["requests"][req["id"]] = req
+        _save(data)
+        return dict(req)
+
+
+def open_requests() -> list[dict]:
+    data = _load()
+    rows = []
+    for r in sorted(data["requests"].values(), key=lambda r: r["created"]):
+        user = data["users"].get(r["user"])
+        if r["status"] == "open" and user:
+            rows.append({"id": r["id"], "text": r["text"], "created": r["created"], "user": _card(user)})
+    return rows
+
+
+def decide_request(request_id: str, approve: bool, by: str) -> dict:
+    """Approve (the account becomes a reviewer) or decline an open request."""
+    with _lock:
+        data = _load()
+        req = data["requests"].get(request_id)
+        if not req or req["status"] != "open":
+            raise NotFound()
+        req["status"] = "approved" if approve else "declined"
+        req["decided_by"] = by
+        req["decided_at"] = _now().isoformat()
+        user = data["users"].get(req["user"])
+        if approve and user and role_of(user) == "user":
+            user["role"] = "reviewer"
+            _log_role(data, user["id"], "user", "reviewer", by, f"request {request_id}")
+        _save(data)
+        return dict(req)
+
+
+def reviewers() -> list[dict]:
+    data = _load()
+    return [
+        {**_card(u), "since": next(
+            (e["at"] for e in reversed(data["role_log"]) if e["user"] == u["id"] and e["after"] == "reviewer"),
+            None,
+        )}
+        for u in data["users"].values()
+        if role_of(u) == "reviewer"
+    ]
+
+
+def revoke_reviewer(user_id: str, by: str, reason: str | None = None) -> dict:
+    with _lock:
+        data = _load()
+        user = data["users"].get(user_id)
+        if not user or role_of(user) != "reviewer":
+            raise NotFound()
+        user.pop("role", None)
+        _log_role(data, user_id, "reviewer", "user", by, reason)
+        _save(data)
+        return dict(user)
+
+
+def role_log(limit: int = 100) -> list[dict]:
+    data = _load()
+    names = {u["id"]: u.get("username") or u["name"] for u in data["users"].values()}
+    return [
+        {**e, "userName": names.get(e["user"], e["user"]), "byName": names.get(e["by"], e["by"])}
+        for e in reversed(data["role_log"][-limit:])
+    ]
+
+
+def names_for(user_ids: set[str]) -> dict[str, dict]:
+    """Public cards (no email, no role) for the given accounts."""
+    data = _load()
+    return {
+        uid: {"id": uid, "name": u["name"], "username": u.get("username"), "avatar": u.get("avatar")}
+        for uid in user_ids
+        if (u := data["users"].get(uid))
+    }

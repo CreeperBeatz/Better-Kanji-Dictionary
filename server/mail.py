@@ -1,4 +1,4 @@
-"""Sending the sign-in email.
+"""Sending the sign-in email, and telling the owner someone wants to contribute.
 
 Two senders behind one function. With `RESEND_API_KEY` set, mail goes out
 through Resend; without it, the link is printed to the server log and handed
@@ -46,6 +46,16 @@ def send_magic_link(email: str, link: str, lang: str = "en") -> None:
             "It works once and expires in 15 minutes. If you did not ask for it, ignore this email."
         )
     _send_resend(to=email, subject=subject, text=text)
+
+
+def send_contribution_request(owner: str, who: str, text: str, link: str) -> None:
+    """Tell the site's owner that `who` asked to become a reviewer. Always English: it goes to Dani."""
+    subject = f"{who} wants to contribute to Better Kanji Dictionary"
+    body = f"{who} asked to become a reviewer:\n\n{text}\n\nApprove or decline: {link}\n"
+    if is_dev():
+        print(f"[mail] to {owner}: {subject}\n{body}", flush=True)
+        return
+    _send_resend(to=owner, subject=subject, text=body)
 
 
 def _send_resend(to: str, subject: str, text: str) -> None:

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
+import { contribute, logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
 import { Credits } from '../About'
 import { strings, useLang, type Lang } from '../i18n'
 import { errorText } from '../i18n/errors'
@@ -42,6 +42,18 @@ const S = strings(
     profileHint:
       'Your name, username and picture show beside your public notes and replies. Your email is never shown. Notes are private unless you mark one public.',
     logOut: 'log out',
+    helpTitle: 'Help fix the data',
+    helpHint:
+      'Reviewers check and correct how kanji break into parts, their old forms and which meaning each word uses. Dani approves reviewers by hand.',
+    helpAsk: 'Who are you, and how do you know Japanese?',
+    helpSend: 'ask to review',
+    helpWaiting: 'Your request to review is waiting for an answer.',
+    helpDeclined: 'Your last request to review was declined. You can ask again.',
+    cannotAsk: 'could not send your request',
+    roleReviewer: 'You are a reviewer.',
+    roleAdmin: 'You run this site.',
+    openReview: 'review queue',
+    openPeople: 'reviewers and requests',
   },
   {
     moving: 'Бележките от този браузър се преместват в профила ви',
@@ -76,6 +88,18 @@ const S = strings(
     profileHint:
       'Името, потребителското име и снимката ви се виждат до публичните ви бележки и отговори. Имейлът ви не се показва никога. Бележките са лични, освен ако не отбележите някоя като публична.',
     logOut: 'изход',
+    helpTitle: 'Помогнете да поправим данните',
+    helpHint:
+      'Рецензентите проверяват и поправят как се разделят кандзитата на части, старите им форми и кое значение използва всяка дума. Дани одобрява рецензентите лично.',
+    helpAsk: 'Кои сте и откъде знаете японски?',
+    helpSend: 'поискайте да рецензирате',
+    helpWaiting: 'Заявката ви да рецензирате чака отговор.',
+    helpDeclined: 'Последната ви заявка беше отказана. Можете да поискате отново.',
+    cannotAsk: 'заявката не можа да бъде изпратена',
+    roleReviewer: 'Вие сте рецензент.',
+    roleAdmin: 'Вие управлявате този сайт.',
+    openReview: 'опашка за преглед',
+    openPeople: 'рецензенти и заявки',
   },
 )
 
@@ -109,8 +133,17 @@ function message(err: unknown, fallback: Key, lang: Lang) {
   return err instanceof Error ? errorText(err, lang) : S(lang)(fallback)
 }
 
+export type WorkbenchTab = 'queue' | 'history' | 'people' | 'auto'
+
 /** Mounted only while open, so each opening starts from a clean form. */
-export function AccountDialog({ onClose }: { onClose: () => void }) {
+export function AccountDialog({
+  onClose,
+  onWorkbench,
+}: {
+  onClose: () => void
+  /** Opens the review screen at a tab; reviewers and the admin only. */
+  onWorkbench?: (tab: WorkbenchTab) => void
+}) {
   const lang = useLang()
   const t = S(lang)
   const { user, error } = useAuth()
@@ -151,7 +184,7 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
           ×
         </button>
         {user ? (
-          <Profile onClose={onClose} />
+          <Profile onClose={onClose} onWorkbench={onWorkbench} />
         ) : sent ? (
           <>
             <h2>{t('checkEmail')}</h2>
@@ -212,7 +245,7 @@ export function AccountDialog({ onClose }: { onClose: () => void }) {
 
 const USERNAME = /^[a-z0-9_-]{3,24}$/
 
-function Profile({ onClose }: { onClose: () => void }) {
+function Profile({ onClose, onWorkbench }: { onClose: () => void; onWorkbench?: (tab: WorkbenchTab) => void }) {
   const lang = useLang()
   const t = S(lang)
   const { user } = useAuth()
@@ -344,6 +377,7 @@ function Profile({ onClose }: { onClose: () => void }) {
 
       <p className="hint">{t('profileHint')}</p>
       {problem && <p className="account-problem">{problem}</p>}
+      <Contribute onWorkbench={onWorkbench} />
       <p className="assoc-actions">
         <button
           className="clear"
@@ -359,5 +393,87 @@ function Profile({ onClose }: { onClose: () => void }) {
         </button>
       </p>
     </>
+  )
+}
+
+/** Asking to become a reviewer, or, for a reviewer, the way into the review screen. */
+function Contribute({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
+  const lang = useLang()
+  const t = S(lang)
+  const { user } = useAuth()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  if (!user) return null
+
+  if (user.role !== 'user') {
+    return (
+      <section className="account-contribute">
+        <h3>{t('helpTitle')}</h3>
+        <p className="hint">{t(user.role === 'admin' ? 'roleAdmin' : 'roleReviewer')}</p>
+        {onWorkbench && (
+          <p className="assoc-actions">
+            <button className="clear" onClick={() => onWorkbench('queue')}>
+              {t('openReview')}
+            </button>
+            {user.role === 'admin' && (
+              <button className="clear" onClick={() => onWorkbench('people')}>
+                {t('openPeople')}
+              </button>
+            )}
+          </p>
+        )}
+      </section>
+    )
+  }
+
+  const status = user.contribution?.status
+  if (status === 'open') {
+    return (
+      <section className="account-contribute">
+        <h3>{t('helpTitle')}</h3>
+        <p className="hint">{t('helpWaiting')}</p>
+      </section>
+    )
+  }
+
+  async function ask(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setProblem(null)
+    try {
+      await contribute(text.trim())
+      setText('')
+    } catch (err) {
+      setProblem(message(err, 'cannotAsk', lang))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <details className="account-contribute">
+      <summary>{t('helpTitle')}</summary>
+      <p className="hint">{t('helpHint')}</p>
+      {status === 'declined' && <p className="hint">{t('helpDeclined')}</p>}
+      <form className="account-form" onSubmit={ask}>
+        <label htmlFor="account-contribute">{t('helpAsk')}</label>
+        <textarea
+          id="account-contribute"
+          className="assoc-text"
+          rows={3}
+          maxLength={1000}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="account-row profile-save">
+          <span />
+          <button className="account-submit" disabled={busy || text.trim().length < 10}>
+            {t('helpSend')}
+          </button>
+        </div>
+      </form>
+      {problem && <p className="account-problem">{problem}</p>}
+    </details>
   )
 }

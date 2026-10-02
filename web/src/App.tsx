@@ -6,7 +6,8 @@ import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
-import { AccountDialog, ProfileButton } from './account/Account'
+import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
+import { Workbench } from './review/Workbench'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
@@ -148,6 +149,18 @@ const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'associations', 'compone
 type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
 /** What slides as a tab turns: the whole screen, or only what is under the page's head. */
 type TurnScope = 'whole' | 'pane'
+
+/** `?admin=1` (from the owner's email) or `?review=1`, read once and taken out of the address. */
+function initialWorkbench(): WorkbenchTab | null {
+  const url = new URL(window.location.href)
+  const tab = url.searchParams.has('admin') ? 'people' : url.searchParams.has('review') ? 'queue' : null
+  if (tab) {
+    url.searchParams.delete('admin')
+    url.searchParams.delete('review')
+    window.history.replaceState(window.history.state, '', url)
+  }
+  return tab
+}
 
 function initialRailTab(): RailTab {
   try {
@@ -447,6 +460,8 @@ export function App() {
   // a swipe across it turns the tab. Every visit to Components starts locked.
   const [graphLocked, setGraphLocked] = useState(true)
   const [accountOpen, setAccountOpen] = useState(false)
+  // The review screen; the admin's email links straight to its People tab.
+  const [workbench, setWorkbench] = useState<WorkbenchTab | null>(initialWorkbench)
   const { error: authError } = useAuth()
   // A sign-in link that did not work says why, where you would try again.
   const accountShown = accountOpen || authError !== null
@@ -931,6 +946,11 @@ export function App() {
     clearAuthError()
   }, [])
   const signIn = useCallback(() => setAccountOpen(true), [])
+  const openWorkbench = useCallback((tab: WorkbenchTab) => {
+    setAccountOpen(false)
+    setWorkbench(tab)
+  }, [])
+  const closeWorkbench = useCallback(() => setWorkbench(null), [])
 
   const hoveredNode: KanjiNode | null = useMemo(() => {
     if (!data || !hovered) return null
@@ -1744,7 +1764,8 @@ export function App() {
         </main>
       </div>
 
-      {accountShown && <AccountDialog onClose={closeAccount} />}
+      {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
+      {workbench && <Workbench tab={workbench} onTab={setWorkbench} onClose={closeWorkbench} />}
     </div>
   )
 }

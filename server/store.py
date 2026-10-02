@@ -44,6 +44,8 @@ ROOT = Path(__file__).parent.parent
 ASSOC_DIR = ROOT / "data" / "associations"
 STORE = ASSOC_DIR / "store.json"
 IMAGES = ASSOC_DIR / "images"
+# The decomposition overrides, mirrored where the pipeline reads them.
+OVERRIDE_FILE = ROOT / "data" / "decomp_overrides.json"
 
 # Author of every note written before there were accounts.
 LOCAL_AUTHOR = "local"
@@ -593,6 +595,6 @@ def clear_decomposition(char: str) -> bool:
 
 def _write_override_file(overrides: dict[str, list[str]]) -> None:
     """Mirror overrides to the file the pipeline reads, so a rebuild keeps them."""
-    path = ROOT / "data" / "decomp_overrides.json"
+    path = OVERRIDE_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2), encoding="utf-8")

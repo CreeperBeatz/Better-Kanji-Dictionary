@@ -155,7 +155,14 @@ each one separately.
 - Part 1 replaces `require_admin` with `require_role("reviewer")` for review
   writes, keeping `require_admin` for admin-only routes.
 
-### Part 1 — Account roles (small)
+### Part 1 — Account roles (small) — DONE
+- Built: `server/auth.py` (roles, requests, role log), `server/routes/admin.py`,
+  `require_role` in `server/routes/auth.py`, Account page "Help fix the data",
+  `web/src/review/Workbench.tsx` People tab (`?admin=1` opens it). Check:
+  `python tests/roles.py`; browser: `tests/sandbox.py` + `web/scripts/roles-check.mjs`.
+- Deviation: admin is **derived** from `BETTERRTK_OWNER_EMAIL` on every
+  request, never stored (a stored `"role": "admin"` is ignored). No separate
+  `ADMIN_EMAIL`. The reviewer badge on public cards is not built (ask Dani).
 - Add `role` to the user record in `auth.json` (missing = `user`). Seed Dani as
   admin from `ADMIN_EMAIL` at startup; there's no UI to grant admin.
 - A `require_role("reviewer")` dependency (admin passes too), next to
