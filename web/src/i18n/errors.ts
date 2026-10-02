@@ -14,6 +14,7 @@ import type { Lang } from '.'
 const ERRORS: Record<string, [string, string]> = {
   // signing in and the profile
   sign_in_required: ['sign in to save associations', 'влезте, за да запазвате асоциации'],
+  admin_only: ["only the site's owner can do this", 'само собственикът на сайта може да прави това'],
   semantic_off: ['semantic search is not set up on this server', 'семантичното търсене не е настроено на този сървър'],
   semantic_unavailable: ['semantic search is not available right now', 'семантичното търсене не е достъпно в момента'],
   kanjify_off: ['Kanjify is not set up on this server', 'Kanjify не е настроен на този сървър'],

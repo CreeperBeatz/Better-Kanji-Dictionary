@@ -7,13 +7,15 @@ spreadsheet session.
 
 Edits are written to data/decomp_overrides.json, which pipeline/decomp.py loads
 as its top layer, so a rebuild keeps them and the research pipeline can pick
-them up too.
+them up too. The graph applies them live, for everyone, so only the site's
+owner may make them; reading them and the queue stays open.
 """
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from .. import store
 from ..db import query
+from .auth import require_admin
 
 router = APIRouter(prefix="/api/decomp", tags=["decomposition"])
 
@@ -25,7 +27,7 @@ def list_overrides() -> dict:
 
 
 @router.put("/{char}")
-def set_override(char: str, payload: dict = Body(...)) -> dict:
+def set_override(char: str, payload: dict = Body(...), _: dict = Depends(require_admin)) -> dict:
     if len(char) != 1:
         raise HTTPException(400, "expected a single character")
     components = payload.get("components")
@@ -37,7 +39,7 @@ def set_override(char: str, payload: dict = Body(...)) -> dict:
 
 
 @router.delete("/{char}")
-def clear_override(char: str) -> dict:
+def clear_override(char: str, _: dict = Depends(require_admin)) -> dict:
     return {"char": char, "cleared": store.clear_decomposition(char)}
 
 

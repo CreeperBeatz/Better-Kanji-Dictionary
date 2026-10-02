@@ -35,6 +35,20 @@ def require_user(authorization: str | None = Header(None)) -> dict:
     return user
 
 
+def is_admin(user: dict | None) -> bool:
+    """The site's owner, named by BETTERRTK_OWNER_EMAIL. Unset means nobody:
+    unlike claiming legacy notes, this never falls back to whoever came first."""
+    owner = auth.normalise_email(os.environ.get("BETTERRTK_OWNER_EMAIL", ""))
+    return bool(owner and user and user.get("email") == owner)
+
+
+def require_admin(authorization: str | None = Header(None)) -> dict:
+    user = require_user(authorization)
+    if not is_admin(user):
+        raise AppError(403, "admin_only", "only the site's owner can do this")
+    return user
+
+
 def _public(user: dict) -> dict:
     return {
         "id": user["id"],
