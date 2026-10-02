@@ -6167,3 +6167,82 @@ button.review-part {
     display: none;
   }
 }
+
+/* ---------------------------------------------------------------- words with one kanji (*生*) */
+
+.vocab-all {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+.words-with-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.words-with-head h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.words-with-head p {
+  margin: 2px 0 0;
+}
+
+.words-with-kanji {
+  font-family: var(--mincho);
+  font-size: 40px;
+  line-height: 1;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--paper);
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.words-with-kanji:hover {
+  border-color: var(--rule-bright);
+}
+
+.meaning-group {
+  margin-top: 14px;
+}
+
+.meaning-group h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--paper-dim);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 4px;
+}
+
+.word-move {
+  font-size: 11px;
+  margin: 0 0 4px 12px;
+  opacity: 0;
+  transition: opacity 120ms var(--ease);
+}
+
+.word:hover .word-move,
+.word-move:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .word-move {
+    opacity: 1;
+  }
+}
+
+.words-more {
+  margin-top: 8px;
+}

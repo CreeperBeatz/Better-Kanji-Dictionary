@@ -29,6 +29,7 @@ const S = strings(
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
+    allWords: 'See all words with {char}, by meaning',
     formOf: 'a form of {char}',
     openEntry: 'Open this entry',
     openReading: 'Open {word}, read {reading}',
@@ -54,6 +55,7 @@ const S = strings(
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
+    allWords: 'Всички думи с {char}, по значение',
     formOf: 'форма на {char}',
     openEntry: 'Отворете тази статия',
     openReading: 'Отворете {word}, четено {reading}',
@@ -81,7 +83,12 @@ interface Props {
   onComponents?: () => void
   /** Opens sign-in, for someone signed out who wants to suggest a change. */
   onSignIn?: () => void
+  /** Runs a search, as if typed: "see all words" searches *生*. */
+  onSearch?: (q: string) => void
 }
+
+// The page shows only the most common few; the rest are a search away, by meaning.
+const PAGE_WORDS = 8
 
 const PLACEHOLDER = /radical|variant of/i
 
@@ -133,7 +140,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onSearch }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -261,7 +268,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         <div className="vocab">
           <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
           <ul>
-            {words.slice(0, 8).map((w) => (
+            {words.slice(0, PAGE_WORDS).map((w) => (
               <li key={w.id}>
                 <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
                   <span className="vocab-word">{w.headword}</span>
@@ -272,6 +279,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
               </li>
             ))}
           </ul>
+          {onSearch && (
+            <button className="clear vocab-all" onClick={() => onSearch(`*${data.focus.char}*`)}>
+              {t('allWords', { char: data.focus.char })}
+            </button>
+          )}
         </div>
       )}
 

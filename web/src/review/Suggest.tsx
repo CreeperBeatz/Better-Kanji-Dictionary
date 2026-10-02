@@ -30,6 +30,7 @@ const S = strings(
     sent: 'Thank you. A reviewer will look at it; you can see what became of it on your account page.',
     saved: 'Saved. It is live now, and logged.',
     signIn: 'Sign in to suggest a change.',
+    logIn: 'log in',
     failed: 'could not send this',
   },
   {
@@ -50,6 +51,7 @@ const S = strings(
     sent: 'Благодарим. Рецензент ще го погледне; какво е станало, ще видите в профила си.',
     saved: 'Запазено. Вече е в сила и е записано.',
     signIn: 'Влезте, за да предложите промяна.',
+    logIn: 'вход',
     failed: 'не можа да бъде изпратено',
   },
 )
@@ -75,7 +77,16 @@ export function SuggestLink({ onOpen }: { onOpen: () => void }) {
   )
 }
 
-export function SuggestDialog({ target, onClose, onSignIn }: { target: SuggestTarget; onClose: () => void; onSignIn: () => void }) {
+export function SuggestDialog({
+  target,
+  onClose,
+  onSignIn,
+}: {
+  target: SuggestTarget
+  onClose: () => void
+  /** Opens sign-in; without it the dialog only says to sign in. */
+  onSignIn?: () => void
+}) {
   const lang = useLang()
   const t = S(lang)
   const { user } = useAuth()
@@ -132,8 +143,13 @@ export function SuggestDialog({ target, onClose, onSignIn }: { target: SuggestTa
           <>
             <p className="hint">{t('signIn')}</p>
             <p className="assoc-actions">
-              <button className="account-submit" onClick={onSignIn}>
-                {t('suggest')}
+              {onSignIn && (
+                <button className="account-submit" onClick={onSignIn}>
+                  {t('logIn')}
+                </button>
+              )}
+              <button className="clear" onClick={onClose}>
+                {t('close')}
               </button>
             </p>
           </>

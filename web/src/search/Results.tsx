@@ -25,6 +25,7 @@ import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
 import { Pitch } from './Pitch'
 import { Valency } from './Valency'
+import { WordsWith } from './WordsWith'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -246,12 +247,15 @@ function WordRowView({
   onWord,
   why,
   open,
+  extra,
 }: {
   w: Word
   onWord: (w: Word) => void
   why?: string | null
   /** Open beside the list right now. */
   open?: boolean
+  /** Under the card: a "wrong meaning?" link in the words of one kanji. */
+  extra?: ReactNode
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -305,6 +309,7 @@ function WordRowView({
         </span>
       </button>
       {why && <p className="semantic-why">{why}</p>}
+      {extra}
     </li>
   )
 }
@@ -354,6 +359,12 @@ interface SearchProps {
   onMap: () => void
 }
 
+/** The kanji of a `*生*` query, which lists every word written with it. */
+export function scopedKanji(q: string): string | null {
+  const m = /^[*＊](\p{Script=Han})[*＊]$/u.exec(q.trim())
+  return m ? m[1] : null
+}
+
 /** How many words a result shows before the rest are added. */
 const FIRST_ROWS = 10
 
@@ -361,6 +372,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
+  const scoped = scopedKanji(term)
   const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
   const [[sort, order], setSort] = useState(savedSort)
   const key = keyOf(lang, common, `${sort}:${order}`, term)
@@ -368,7 +380,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!term) {
+    if (!term || scoped) {
       setResult(null)
       setBusy(false)
       return
@@ -429,6 +441,33 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
 
   if (!term) return <HomePage onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} open={open?.kanji} />
 
+  const tools = (
+    <div className="search-tools">
+      <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
+      <button
+        className="search-filter"
+        aria-pressed={common}
+        data-on={common || undefined}
+        onClick={toggleCommon}
+        title={t('commonOnlyTitle')}
+      >
+        {t('commonOnly')}
+      </button>
+    </div>
+  )
+
+  // *生*: every word written with that kanji, by the meaning it has in each.
+  if (scoped)
+    return (
+      <WordsWith
+        char={scoped}
+        common={common}
+        onKanji={onKanji}
+        tools={tools}
+        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} />}
+      />
+    )
+
   const reading = result?.interpretation?.reading
   const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
   // The query the dictionary answered with nothing -- the one on screen, not the
@@ -444,20 +483,8 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   // does not blink on every key.
   return (
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
-      {/* How the query was read on the left, the filter on the right, one line. */}
       {/* How to order what was found, and whether to show only common words. */}
-      <div className="search-tools">
-        <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
-        <button
-          className="search-filter"
-          aria-pressed={common}
-          data-on={common || undefined}
-          onClick={toggleCommon}
-          title={t('commonOnlyTitle')}
-        >
-          {t('commonOnly')}
-        </button>
-      </div>
+      {tools}
       {(reading || alternatives.length > 0) && (
         <p className="hint reading-note">
           {reading && t('readAs', { r: reading })}

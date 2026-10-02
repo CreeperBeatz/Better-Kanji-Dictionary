@@ -608,6 +608,56 @@ def words_for_kanji(char: str, limit: int = Query(12, ge=1, le=60)) -> dict:
     }
 
 
+@router.get("/words-with/{char}")
+def words_with(
+    char: str,
+    common: bool = Query(False, description="only words JMdict marks as common"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> dict:
+    """Every word written with `char`, for the search's `*生*`.
+
+    Divided by the meaning of the kanji each word uses, once reviewers have
+    accepted the kanji's meaning groups and placed the word (server/review.py):
+    one list per group, the catch-all last, all at once since they are the
+    reviewed few. The words not placed yet follow, common first, a page at a
+    time. Before any group is accepted, that second list is all there is.
+    """
+    from .. import review
+
+    if len(char) != 1:
+        return {"char": char, "senses": None, "groups": [], "rest": {"total": 0, "offset": 0, "words": []}}
+    rows = query(
+        "SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id "
+        "WHERE wc.char = ?" + (" AND w.common = 1" if common else "") + " "
+        "ORDER BY w.common DESC, w.nf IS NULL, w.nf, LENGTH(w.headword), w.id",
+        (char,),
+    )
+    ids = [r["id"] for r in rows]
+    senses = review.senses_of(char)
+    placed = review.word_senses(char) if senses else {}
+    groups = []
+    if senses:
+        in_group: dict[str, list[int]] = {}
+        for wid in ids:
+            if wid in placed:
+                in_group.setdefault(placed[wid], []).append(wid)
+        fetched = _fetch_words([w for ws in in_group.values() for w in ws])
+        for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None, "note": None}]:
+            words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
+            if words or s["id"] != review.CATCH_ALL:
+                groups.append({**s, "words": words})
+    rest = [w for w in ids if w not in placed]
+    page = rest[offset:offset + limit]
+    fetched = _fetch_words(page)
+    return {
+        "char": char,
+        "senses": senses,
+        "groups": groups,
+        "rest": {"total": len(rest), "offset": offset, "words": [fetched[w] for w in page if w in fetched]},
+    }
+
+
 def reading_forms(char: str, reading: str, on: bool) -> list[tuple[str, str]]:
     """The (written, kana) a word read this way would have, likeliest first.
 

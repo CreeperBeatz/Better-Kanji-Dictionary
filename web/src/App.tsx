@@ -1024,6 +1024,7 @@ export function App() {
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
             onSignIn={signIn}
+            onSearch={type}
           />
         ) : null
       }

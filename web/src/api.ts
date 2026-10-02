@@ -402,6 +402,15 @@ export interface ItemDetail extends QueueItem {
   }
 }
 
+/** Every word with a kanji: by accepted meaning group, then the ones not placed yet, a page at a time. */
+export interface WordsWithResponse {
+  char: string
+  senses: MeaningGroup[] | null
+  /** One per accepted group, the catch-all (`catch-all`) last when it has words. */
+  groups: (MeaningGroup & { words: Word[] })[]
+  rest: { total: number; offset: number; words: Word[] }
+}
+
 /** One handwriting candidate. `score` is 0-100 agreement, not a probability. */
 export interface DrawCandidate {
   char: string
@@ -613,6 +622,13 @@ export const api = {
     localFirst(local.wordsFor(char), () =>
       get<{ char: string; words: Word[] }>(`/api/search/words-for/${encodeURIComponent(char)}`),
     ),
+
+  wordsWith: (char: string, common: boolean, offset = 0, limit = 50) =>
+    get<WordsWithResponse>(`/api/search/words-with/${encodeURIComponent(char)}`, [
+      ['common', common ? 'true' : 'false'],
+      ['offset', String(offset)],
+      ['limit', String(limit)],
+    ]),
 
   /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
   readingWords: (char: string) =>
