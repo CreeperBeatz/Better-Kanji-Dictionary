@@ -41,6 +41,8 @@ const S = strings(
     reason: 'Reason (optional)',
     accept: 'accept',
     saveEdit: 'save my answer',
+    keep: 'looks right, keep it',
+    noProposal: 'nothing proposed: check it, and edit if it is wrong',
     reject: 'reject',
     skip: 'skip',
     keys: 'a accept · r reject · s skip · j/k next/previous',
@@ -81,6 +83,8 @@ const S = strings(
     reason: 'Причина (по желание)',
     accept: 'приемете',
     saveEdit: 'запазете моя отговор',
+    keep: 'вярно е, оставете го',
+    noProposal: 'нищо не е предложено: проверете и поправете, ако е грешно',
     reject: 'отхвърлете',
     skip: 'пропуснете',
     keys: 'a приемане · r отхвърляне · s пропускане · j/k следващо/предишно',
@@ -182,9 +186,15 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
-  const edited = item ? !same(draft, item.proposed) : false
+  // Nothing proposed (a cost-ranked check): leaving it as it is is a rejection of any change.
+  const open = item?.proposed === null
+  const edited = item ? (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
   const decideDraft = useCallback(
-    (value: TaskValue = draft) => (item && same(value, item.proposed) ? decide('accept') : decide('edit', value)),
+    (value: TaskValue = draft) => {
+      if (!item) return
+      if (item.proposed === null) return same(value, item.current) ? decide('reject') : decide('edit', value)
+      return same(value, item.proposed) ? decide('accept') : decide('edit', value)
+    },
     [item, draft, decide],
   )
 
@@ -286,7 +296,7 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
                 </dd>
                 <dt>{t('proposed')}</dt>
                 <dd>
-                  <ValueView type={item.type} value={item.proposed} groups={groups} />
+                  {open ? <span className="hint">{t('noProposal')}</span> : <ValueView type={item.type} value={item.proposed} groups={groups} />}
                 </dd>
               </dl>
 
@@ -310,7 +320,7 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
               {problem && <p className="account-problem">{problem}</p>}
               <div className="queue-actions">
                 <button className="account-submit" disabled={busy} onClick={() => decideDraft()}>
-                  {edited ? t('saveEdit') : t('accept')}
+                  {edited ? t('saveEdit') : open ? t('keep') : t('accept')}
                 </button>
                 <button className="clear" disabled={busy} onClick={() => decide('reject')}>
                   {t('reject')}

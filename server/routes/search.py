@@ -645,7 +645,7 @@ def words_with(
         fetched = _fetch_words([w for ws in in_group.values() for w in ws])
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None, "note": None}]:
             words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
-            if words or s["id"] != review.CATCH_ALL:
+            if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})
     rest = [w for w in ids if w not in placed]
     page = rest[offset:offset + limit]

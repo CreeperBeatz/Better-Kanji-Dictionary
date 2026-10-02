@@ -5923,6 +5923,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-family: var(--mincho);
   font-size: 56px;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .queue-meta {
@@ -6165,6 +6166,15 @@ button.review-part {
 
   .queue-keys {
     display: none;
+  }
+
+  .queue-head {
+    flex-wrap: wrap;
+  }
+
+  .queue-big {
+    font-size: 40px;
+    white-space: nowrap;
   }
 }
 
