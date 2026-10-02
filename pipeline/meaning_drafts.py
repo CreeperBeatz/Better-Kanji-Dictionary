@@ -268,22 +268,24 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
 
     if review_dir:
         review.use_dir(review_dir)
+    rows = []
     for c, v in a.items():
         f = freq.get(c) or 3000
-        review.add_item("kanji_senses", c, v["senses"], SOURCE, priority=round(10 - f / 500, 2),
-                        reason="drafted from its common words")
+        rows.append({"type": "kanji_senses", "subject": c, "proposed": v["senses"], "source": SOURCE,
+                     "priority": round(10 - f / 500, 2), "reason": "drafted from its common words"})
         for wid, (sense, conf) in v["words"].items():
             runs = [{"run": "A", "sense": f"{c}.{sense}" if sense != CATCH_ALL else sense, "confidence": conf}]
             if c in b and wid in b[c]["words"]:
                 sb, cb = b[c]["words"][wid]
                 runs.append({"run": "B", "sense": f"{c}.{sb}" if sb != CATCH_ALL else sb, "confidence": cb})
-            proposed = runs[0]["sense"]
-            review.add_item(
-                "word_sense", f"{c}|{wid}", proposed, SOURCE,
-                evidence={"runs": runs, "confidence": min(r["confidence"] for r in runs),
-                          "agree": len(runs) == 2 and runs[0]["sense"] == runs[1]["sense"]},
-                priority=round(5 - (nf.get(wid) or 48) / 10, 2),
-            )
+            rows.append({
+                "type": "word_sense", "subject": f"{c}|{wid}", "proposed": runs[0]["sense"], "source": SOURCE,
+                "evidence": {"runs": runs, "confidence": min(r["confidence"] for r in runs),
+                             "agree": len(runs) == 2 and runs[0]["sense"] == runs[1]["sense"]},
+                "priority": round(5 - (nf.get(wid) or 48) / 10, 2),
+            })
+    added, refused = review.add_items(rows)
+    print(f"added {added}, refused {refused}")
     print("loaded:", review.counts()["items"])
 
 

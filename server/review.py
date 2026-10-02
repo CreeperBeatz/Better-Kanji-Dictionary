@@ -534,6 +534,37 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
         return dict(item)
 
 
+def add_items(rows: list[dict]) -> tuple[int, int]:
+    """Many proposals at once, for loaders: one read and one write, not one per item.
+
+    Each row is add_item's arguments as a dict. Returns (added, refused): a
+    row that fails validation is skipped and counted, not raised.
+    """
+    with _lock:
+        data = _load()
+        open_keys = {
+            (i["type"], i["subject"], json.dumps(i["proposed"], sort_keys=True, ensure_ascii=False))
+            for i in data["items"].values() if i["status"] == "open"
+        }
+        added = refused = 0
+        for r in rows:
+            try:
+                proposed = validate(r["type"], r["subject"], r.get("proposed"), data, pending_ok=True)
+            except AppError:
+                refused += 1
+                continue
+            key = (r["type"], r["subject"], json.dumps(proposed, sort_keys=True, ensure_ascii=False))
+            if key in open_keys:
+                continue
+            open_keys.add(key)
+            _new_item(data, r["type"], r["subject"], proposed, r["source"], "proposal",
+                      (r.get("reason") or "").strip()[:MAX_TEXT] or None, r.get("evidence"), "system",
+                      r.get("priority", 0.0))
+            added += 1
+        _save(data)
+        return added, refused
+
+
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None) -> dict:
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, reject or skip")

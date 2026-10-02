@@ -168,10 +168,13 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
 
     if review_dir:
         review.use_dir(review_dir)
-    for l in keep:
-        review.add_item("form_link", l["subject"], {"kind": l["kind"], "note": l["note"]}, SOURCE,
-                        reason=l["note"], evidence={"confidence": l["confidence"], "batch": l["batch"]},
-                        priority=round(l["confidence"] * 3, 2))
+    added, refused = review.add_items([
+        {"type": "form_link", "subject": l["subject"], "proposed": {"kind": l["kind"], "note": l["note"]},
+         "source": SOURCE, "reason": l["note"], "evidence": {"confidence": l["confidence"], "batch": l["batch"]},
+         "priority": round(l["confidence"] * 3, 2)}
+        for l in keep
+    ])
+    print(f"added {added}, refused {refused}")
     print("loaded:", review.counts()["items"].get("form_link"))
 
 

@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT))
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8010)
+    ap.add_argument("--host", default="127.0.0.1", help="0.0.0.0 to reach it from a phone on the same network")
     ap.add_argument("--owner", default="admin@example.com")
     ap.add_argument("--dir", help="keep the sandbox here instead of a fresh temporary directory")
     args = ap.parse_args()
@@ -64,7 +65,7 @@ def main() -> None:
 
     from server.app import app
 
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":
