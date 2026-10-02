@@ -20,13 +20,14 @@ KINDS = ("positional", "old", "form_of", "looks_like")
 # Set by server/review.py: (char) -> (added rows, removed (char, other, kind) keys).
 overlay: Callable[[], tuple[list[dict], set[tuple[str, str, str]]]] | None = None
 
-# KANJIDIC files a radical's name where a meaning would be: 亻 "Radical
-# Number 9", 罒 "Net Radical Variant (no. 122)". Those say nothing to a learner.
-_PLACEHOLDER = re.compile(r"radical|variant of", re.I)
+# KANJIDIC sometimes files only a radical's number where a meaning would be:
+# 亻 "Radical Number 9", 耂 "Variant Of Radical 125". Those say nothing to a
+# learner. A radical's *name* does ("Dotted Cliff Radical (no. 53)") and stays.
+_FILLER = re.compile(r"\b(radical|number|variant|of)\b|\bno\.|[\d().,\s-]+", re.I)
 
 
 def real_meanings(meanings: list[str]) -> list[str]:
-    return [m for m in meanings if not _PLACEHOLDER.search(m)]
+    return [m for m in meanings if _FILLER.sub("", m).strip()]
 
 
 def _links() -> list[dict]:

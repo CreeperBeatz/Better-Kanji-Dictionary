@@ -119,6 +119,20 @@ def main() -> int:
         call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": [{"id": "birth", "en": "birth"}, senses[1]]})
         check("dropping a sense reopens its words", review.word_senses("生") == {} and review._read()["items"][item["id"]]["status"] == "open")
 
+        print("the auto-accept rule for words")
+        rows = query("SELECT w.id, w.headword FROM word_char wc JOIN word w ON w.id = wc.word_id WHERE wc.char = '青' AND w.common = 1 LIMIT 3")
+        sure, unsure, split = (f"青|{r['id']}" for r in rows)
+        run = lambda s, c: {"sense": s, "confidence": c}
+        review.add_item("word_sense", sure, "青.colour", "ai:test", evidence={"runs": [run("青.colour", 0.9), run("青.colour", 0.85)]})
+        review.add_item("word_sense", unsure, "青.colour", "ai:test", evidence={"runs": [run("青.colour", 0.9), run("青.colour", 0.6)]})
+        review.add_item("word_sense", split, "青.colour", "ai:test", evidence={"runs": [run("青.colour", 0.9), run("青.young", 0.9)]})
+        call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "青", "value": [{"id": "colour", "en": "blue, green"}, {"id": "young", "en": "young, unripe"}]})
+        placed = review.word_senses("青")
+        check("agreeing, confident runs are accepted", placed.get(int(sure.split("|")[1])) == "青.colour", placed)
+        check("a low confidence waits for a person", int(unsure.split("|")[1]) not in placed)
+        check("disagreeing runs wait for a person", int(split.split("|")[1]) not in placed)
+        check("the admin sees it in auto-accepted", any(d["subject"] == sure for d in call("GET", "/api/review/auto", "admin")[1]["items"]))
+
         print("form links")
         fl = {"type": "form_link", "subject": "龶|生", "value": {"kind": "form_of"}}
         check("form_of without evidence is 400", call("POST", "/api/review/edit", "reviewer", fl)[0] == 400)

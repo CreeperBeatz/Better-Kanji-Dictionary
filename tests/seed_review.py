@@ -35,7 +35,7 @@ def main() -> None:
         {"id": "student", "en": "student", "bg": "ученик"},
     ]
     review.add_item("kanji_senses", "生", senses, "ai:sample", reason="drafted from 40 common words", priority=3)
-    picks = {"生活": "生.life", "生まれる": "生.life", "先生": "生.student", "学生": "生.student", "生野菜": "生.raw", "生憎": "catch-all"}
+    picks = {"生活": "生.life", "生まれる": "生.life", "先生": "生.life", "学生": "生.student", "生野菜": "生.raw", "生憎": "catch-all"}
     for word, sense in picks.items():
         rows = query("SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id WHERE wc.char = '生' AND w.headword = ?", (word,))
         if rows:

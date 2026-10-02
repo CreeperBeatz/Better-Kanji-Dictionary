@@ -397,6 +397,7 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str) -> N
         before = live.get(subject, {}).get("senses") or []
         live[subject] = {"senses": value, "decision": decision}
         _reopen_words(data, subject, before, value, decision)
+        _auto_words(data, subject, value)
     else:
         live[subject] = {"sense": value, "decision": decision}
 
@@ -424,6 +425,40 @@ def _reopen_words(data: dict, char: str, before: list[dict], after: list[dict], 
             item.update(status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
         else:
             _new_item(data, "word_sense", subject, None, "reopened", "proposal", None, None, "auto", 0.0)
+
+
+AUTO_CONFIDENCE = 0.8
+
+
+def word_rule(item: dict, accepted_ids: set[str]) -> bool:
+    """TASK §6 for a word's meaning: two independent runs agree, both are
+    confident, and their pick is one of the kanji's accepted groups."""
+    runs = (item.get("evidence") or {}).get("runs") or []
+    if len(runs) < 2:
+        return False
+    picks = {r.get("sense") for r in runs}
+    return (
+        len(picks) == 1
+        and item["proposed"] in picks
+        and all(float(r.get("confidence") or 0) >= AUTO_CONFIDENCE for r in runs)
+        and item["proposed"] in accepted_ids | {CATCH_ALL}
+    )
+
+
+def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
+    """Once a kanji's groups are accepted, its words that pass the rule go live, as "auto"."""
+    ids = {s["id"] for s in senses}
+    for item in data["items"].values():
+        if item["type"] != "word_sense" or item["status"] != "open" or not item["subject"].startswith(f"{char}|"):
+            continue
+        if not word_rule(item, ids):
+            continue
+        before = live_value("word_sense", item["subject"], data)
+        d = _decision("auto", "word_sense", item["subject"], before, item["proposed"], "auto", item["id"],
+                      "two runs agree, both confident")
+        data["live"]["word_sense"][item["subject"]] = {"sense": item["proposed"], "decision": d["id"]}
+        item.update(status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
+        data["decisions"].append(d)
 
 
 # ---------------------------------------------------------------- items and decisions
