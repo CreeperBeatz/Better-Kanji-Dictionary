@@ -254,6 +254,11 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     with _db() as db:
         freq = {r["char"]: r["freq"] for r in db.execute("SELECT char, freq FROM kanji")}
         nf = {r["id"]: r["nf"] for r in db.execute("SELECT id, nf FROM word WHERE common = 1")}
+        head = {r["id"]: r["headword"] for r in db.execute("SELECT id, headword FROM word WHERE common = 1")}
+    # A word filed under the kanji only for a rare spelling (夫 under 人, for 良人)
+    # is not shown with it (search.words_with), so it is not queued either.
+    for c, v in a.items():
+        v["words"] = {w: p for w, p in v["words"].items() if c in head.get(w, "")}
     n_senses = len(a)
     n_words = sum(len(v["words"]) for v in a.values())
     print(f"\nwould load {n_senses} kanji_senses and {n_words} word_sense proposals (source {SOURCE})")

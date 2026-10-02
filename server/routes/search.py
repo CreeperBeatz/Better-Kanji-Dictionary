@@ -629,9 +629,11 @@ def words_with(
         return {"char": char, "senses": None, "groups": [], "rest": {"total": 0, "offset": 0, "words": []}}
     rows = query(
         "SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id "
-        "WHERE wc.char = ?" + (" AND w.common = 1" if common else "") + " "
+        # Only words whose headword shows the kanji: 夫 is filed under 人 for its
+        # rare spelling 良人, which would read as a mistake here.
+        "WHERE wc.char = ? AND instr(w.headword, ?) > 0" + (" AND w.common = 1" if common else "") + " "
         "ORDER BY w.common DESC, w.nf IS NULL, w.nf, LENGTH(w.headword), w.id",
-        (char,),
+        (char, char),
     )
     ids = [r["id"] for r in rows]
     senses = review.senses_of(char)

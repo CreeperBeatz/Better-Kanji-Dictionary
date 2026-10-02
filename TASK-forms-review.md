@@ -295,7 +295,28 @@ The framework every task type in §5 runs on.
   - keyboard-friendly: accept, edit, reject, skip
   - a per-reviewer history list
 
-### Part 5 — Meaning groups (large; the most valuable for learners)
+### Part 5 — Meaning groups (large; the most valuable for learners) — BUILT, drafts not loaded
+- 5a done: the page keeps 8 words + "See all words with 生, by meaning";
+  `*生*` in the search (`web/src/search/WordsWith.tsx`,
+  `GET /api/search/words-with/{char}`). Check: `web/scripts/words-with-check.mjs`.
+- 5b: `pipeline/meaning_drafts.py` + `pipeline/meaning_prompt.md`. Drafted by
+  Claude Code Sonnet subagents through a workflow: 114 batches of ≤400
+  words over the 979 N5–N2 kanji (41,028 kanji–word pairs). Run A drafts
+  groups and places words; run B re-places them given A's groups, shuffled.
+  `check` validates; `load --dry-run` counts; `load` queues (not run on
+  `data/review` yet: see the counts in the hand-off message).
+- The §6 word rule lives in `server/review.py` (`word_rule`, `_auto_words`):
+  when a kanji's groups are accepted, each open word whose two runs agree,
+  both ≥ 0.8, on a group that survived review, goes live as `auto`.
+- **Drafted 2026-10-02** (228 Sonnet agents, all valid): groups per kanji
+  2: 483, 3: 368, 4: 103, 5: 22, 6: 3; catch-all 2.3% of words; runs A and B
+  agree on 95.0%, both ≥ 0.8 on 69.8%. Ready to load: 979 `kanji_senses`,
+  39,832 `word_sense` (1,196 pairs dropped: the kanji is only in a rare
+  spelling, 夫 under 人 via 良人; `*人*` leaves them out too). A spot check of
+  40 would-be auto-accepts found none wrong.
+- Lesson from the sample: one subagent placed 日's words with a script of
+  headword rules and flat 0.93 confidences. The prompt now forbids code for
+  judging; keep that line.
 - This is spec constraint 2 ("meaning range in a few words", Halpern-style)
   finally getting built. Tasks C and D in §5.
 - Pipeline: an AI drafts groups for the 979 N5–N2 kanji first (N1 later), then
@@ -327,7 +348,20 @@ The framework every task type in §5 runs on.
   either shows those 12 (grouped if the pack carries the sense ids) or is
   hidden. Decide when building; check `tests/offline_parity.py`.
 
-### Part 6 — Fill the queues (medium)
+### Part 6 — Fill the queues (medium) — BUILT, nothing loaded
+- `pipeline/review_sources.py count|load`: BabelStone IDS (free for any use;
+  `fetch_sources.py babelstone-ids`) and KanjiVG diffs, old-form `form_of`
+  proposals for parts with no KANJIDIC entry, the cost ranking. Bare-stroke
+  splits, KanjiVG glyphs with strokes outside any named group, and source
+  spellings of shapes we keep apart (厂 for ⺁) are left out.
+- `pipeline/form_drafts.py` + `form_prompt.md`: subagents propose `form_of`
+  (with evidence) / `looks_like` for bound parts with no meaning, and
+  classify the Unihan variant pairs nothing classifies (`none` is dropped).
+- Counts (2026-10-02), none loaded: decomposition 224 proposals over 213
+  characters (IDS only 75, KanjiVG only 115, both 34; 3 would auto-accept;
+  182 add a containment edge), 99 cost-ranked checks, 16 old-form links,
+  35 AI form links (217 `none` dropped). Reproduce with `count` /
+  `load --dry-run`.
 - **IDS diff:** compare our parts with an IDS source (CHISE IDS or BabelStone
   IDS; **check the licence first**) for the N5–N2 closure (~1,370 nodes).
 - **KanjiVG diff:** compare with KanjiVG's component groups (already a source,
