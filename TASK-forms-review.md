@@ -89,13 +89,19 @@ infrastructure, all agreed with Dani:
   `origin` field (`proposal` | `suggestion`) drives the wording in the UI, and
   the queue can filter on it.
 
-### Still open — ask Dani
-1. **Who may suggest?** Any signed-in user, or reviewers only? If any user can,
-   a reviewer's suggestion probably still goes through the queue rather than
-   applying directly. Confirm both.
-2. **Deploying Part 0** (see §4). It's merged into `main`, but `main` also
-   carries undeployed work, so shipping it means a full deploy or a hotfix
-   branch off the commit production runs.
+### Answered by Dani, 2026-10-02
+1. **Who may suggest:** any signed-in user. A user's suggestion goes into the
+   queue. **Reviewers and admins edit directly**: their change goes live at
+   once, logged as a decision like any other (and revertible), without passing
+   through the queue.
+2. **Deploying:** no deploy plan until Dani is back on the Pi's network. Build
+   and commit everything on feature branches; don't plan or attempt a deploy.
+3. **AI drafting runs on Claude Code Sonnet subagents, not OpenRouter.** Up to
+   20 in parallel, one task each (e.g. one batch of kanji), each writing its
+   result to a JSON file. A script then validates those files and loads them
+   into the queue as `proposal` items with `source: "ai:claude-sonnet"`.
+   Nothing in the server calls a model for this.
+4. **Scope:** build the whole plan.
 
 ---
 
@@ -441,13 +447,10 @@ and appear in an admin "auto-accepted" list for spot checks.
   accepted.
 
 **AI**
-- **The OpenRouter key has a $5/week cap and the live site uses the same
-  key.** Batch per kanji, run small samples first, log spend, and stop if a
-  run is interrupted (a stopped benchmark once still spent ~$1.30). Use a
-  separate key for bulk drafting if Dani gives one.
-- **Model choice:** GPT-6 Luna (low effort) is the measured default here.
-  **Avoid Haiku 4.5 for kanji work**; it scored 30/64 on the semantic
-  benchmark.
+- **Drafting is done by Claude Code Sonnet subagents** (≤20 in parallel), each
+  given one batch and writing one JSON file under `data/drafts/<task>/`. No
+  OpenRouter calls for drafting: that key ($5/week cap) is the live site's.
+  Run a small sample first and look at it before fanning out.
 - **Validate model output server-side.** Kanjify once returned a variant (毎
   for 每) that isn't in the graph. Reject any character or group id that isn't
   in the allowed set.
