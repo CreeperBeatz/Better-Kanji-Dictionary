@@ -6183,19 +6183,21 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border-color: rgba(127, 184, 138, 0.45);
 }
 
+/* A box's own checkbox is always in view: whether it is confirmed is part of its header. */
 .board-group-check {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
   font-size: 12px;
   color: var(--paper-dim);
   cursor: pointer;
-  visibility: hidden;
 }
 
-.board-group-head:hover .board-group-check,
 .board-group-check[data-on] {
-  visibility: visible;
+  border-color: rgba(127, 184, 138, 0.5);
 }
 
 .board-group-check[data-on] {
@@ -6203,8 +6205,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 @media (hover: none) {
-  .board-check,
-  .board-group-check {
+  .board-check {
     visibility: visible;
   }
 }

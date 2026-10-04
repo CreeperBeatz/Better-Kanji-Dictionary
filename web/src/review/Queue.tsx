@@ -22,6 +22,8 @@ import { errorText } from '../i18n/errors'
 import { FontStrip } from '../detail/FontStrip'
 import { CATCH_ALL, strokesOk, ValueEditor, ValueView } from './editors'
 import { finalizeBoard, MeaningsBoard } from './MeaningsBoard'
+import { clearDraft, readDraft, writeDraft } from './drafts'
+import { queueRouteInUrl, replaceQueueRoute } from './route'
 
 const S = strings(
   {
@@ -126,8 +128,11 @@ type Placements = Record<number, string | null>
 export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void; onDecided?: () => void }) {
   const lang = useLang()
   const t = S(lang)
-  const [type, setType] = useState<TaskType | undefined>()
-  const [origin, setOrigin] = useState<Origin | undefined>()
+  // The address names the stage, the origin filter and the item (review/route.ts).
+  const [route] = useState(queueRouteInUrl)
+  const wanted = useRef(route.item)
+  const [type, setType] = useState<TaskType | undefined>(route.type)
+  const [origin, setOrigin] = useState<Origin | undefined>(route.origin)
   const [items, setItems] = useState<QueueItem[] | null>(null)
   const [total, setTotal] = useState(0)
   const [at, setAt] = useState(0)
@@ -143,10 +148,23 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const load = useCallback(() => {
     setItems(null)
     api.reviewQueueItems(type, origin).then(
-      (d) => {
-        setItems(d.items)
-        setTotal(d.total)
-        setAt(0)
+      async (d) => {
+        // The item the address names, when it is still open: found in the list,
+        // or fetched and put first when it sits further down the queue.
+        const id = wanted.current
+        wanted.current = undefined
+        let list = d.items
+        let n = id ? list.findIndex((i) => i.id === id) : -1
+        if (id && n < 0) {
+          const one = await api.reviewItem(id).catch(() => null)
+          if (one && one.status === 'open' && (!type || one.type === type) && (!origin || one.origin === origin)) {
+            list = [one, ...list]
+            n = 0
+          }
+        }
+        setItems(list)
+        setTotal(Math.max(d.total, list.length))
+        setAt(Math.max(0, n))
       },
       (e) => setProblem(errorText(e, lang)),
     )
@@ -159,13 +177,18 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // meaning-group editor throws.
   const [draftFor, setDraftFor] = useState<string | null>(null)
   if (item && item.id !== draftFor) {
+    // Work left on this item before a reload comes back (review/drafts.ts).
+    const kept = readDraft(item.id)
     setDraftFor(item.id)
-    setDraft(item.proposed ?? item.current)
+    setDraft(kept && 'draft' in kept ? (kept.draft ?? null) : (item.proposed ?? item.current))
+    setReason(kept?.reason ?? '')
   }
+  useEffect(() => {
+    if (items !== null) replaceQueueRoute({ type, origin, item: item?.id })
+  }, [type, origin, item?.id, items])
   useEffect(() => {
     setDetail(null)
     setProblem(null)
-    setReason('')
     setPlacements({})
     setPlacedFrom({})
     if (!item) return
@@ -178,7 +201,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
           const ids = new Set(((d.proposed ?? d.current ?? []) as MeaningGroup[]).map((g) => g.id))
           const p: Placements = {}
           for (const w of d.context.board) p[w.id] = w.group && (w.group === CATCH_ALL || ids.has(w.group)) ? w.group : null
-          setPlacements(p)
+          setPlacements(readDraft(d.id)?.placements ?? p)
           setPlacedFrom(p)
         }
       },
@@ -196,6 +219,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       setProblem(null)
       try {
         await api.decide(item.id, action, value, reason.trim() || undefined, words)
+        if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         if (action !== 'skip') onDecided?.()
         setItems((list) => list && list.filter((i) => i.id !== item.id))
@@ -234,6 +258,18 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     },
     [item, draft, decide, detail, placements, lang],
   )
+  // Keep the work on this item in the browser as it changes; once its detail
+  // is in, so a half-loaded item never overwrites what was kept.
+  useEffect(() => {
+    if (!item || detail?.id !== item.id) return
+    const start = item.proposed === null ? item.current : item.proposed
+    writeDraft(item.id, {
+      draft: same(draft, start) ? undefined : draft,
+      reason: reason.trim() ? reason : undefined,
+      placements: board && !same(placements, placedFrom) ? placements : undefined,
+    })
+  }, [item, detail, draft, reason, placements, placedFrom, board])
+
   const place = useCallback((ids: number[], to: string | null) => {
     setPlacements((p) => {
       const n = { ...p }
@@ -355,6 +391,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 {board ? (
                   detail?.context.board ? (
                     <MeaningsBoard
+                      key={item.id}
+                      cacheKey={item.id}
                       char={item.subject}
                       groups={(draft ?? []) as MeaningGroup[]}
                       onGroups={setDraft}

@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type BoardWord, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import { newsRank } from '../search/Results'
+import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
 
 const S = strings(
@@ -141,7 +142,9 @@ export function finalizeBoard(char: string, groups: MeaningGroup[], placements: 
 
 const isNew = (id: string) => /\.new\d+$/.test(id)
 
+/** Mounted once per item (keyed by it), so its state starts from what was kept for that item. */
 export function MeaningsBoard({
+  cacheKey,
   char,
   groups,
   onGroups,
@@ -150,6 +153,8 @@ export function MeaningsBoard({
   onPlace,
   restTotal,
 }: {
+  /** The item, to keep the board's own state under in the browser until it is decided. */
+  cacheKey: string
   char: string
   groups: MeaningGroup[]
   onGroups: (g: MeaningGroup[]) => void
@@ -161,18 +166,19 @@ export function MeaningsBoard({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const [rare, setRare] = useState<BoardWord[]>([])
-  const [rareLeft, setRareLeft] = useState(restTotal)
+  const [kept] = useState(() => readDraft(cacheKey)?.board)
+  const [rare, setRare] = useState<BoardWord[]>(kept?.rare ?? [])
+  const [rareLeft, setRareLeft] = useState(kept?.rareLeft ?? restTotal)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [over, setOver] = useState<string | undefined>()
   // Collapsed boxes, by bucket id.
-  const [shut, setShut] = useState<Set<string>>(new Set())
+  const [shut, setShut] = useState<Set<string>>(new Set(kept?.shut))
   // Confirmation, a reviewer's checklist while working: boxes (by bucket id)
   // and words. A word can be confirmed only in a confirmed box; confirmed
   // words fold into a "confirmed" part of the box, shut unless opened.
-  const [okBoxes, setOkBoxes] = useState<Set<string>>(new Set())
-  const [okWords, setOkWords] = useState<Set<number>>(new Set())
-  const [openOk, setOpenOk] = useState<Set<string>>(new Set())
+  const [okBoxes, setOkBoxes] = useState<Set<string>>(new Set(kept?.okBoxes))
+  const [okWords, setOkWords] = useState<Set<number>>(new Set(kept?.okWords))
+  const [openOk, setOpenOk] = useState<Set<string>>(new Set(kept?.openOk))
   // The right-click menu: where it opens and which words it moves.
   const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; from: Bucket } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -203,14 +209,11 @@ export function MeaningsBoard({
   }, [menu])
 
   useEffect(() => {
-    setRare([])
-    setRareLeft(restTotal)
-    setPicked(new Set())
-    setMenu(null)
-    setOkBoxes(new Set())
-    setOkWords(new Set())
-    setOpenOk(new Set())
-  }, [char, restTotal])
+    const empty = !okBoxes.size && !okWords.size && !openOk.size && !shut.size && !rare.length
+    writeDraft(cacheKey, {
+      board: empty ? undefined : { okBoxes: [...okBoxes], okWords: [...okWords], openOk: [...openOk], shut: [...shut], rare, rareLeft },
+    })
+  }, [cacheKey, okBoxes, okWords, openOk, shut, rare, rareLeft])
 
   function moreRare() {
     api.restWords(char, rare.length, RARE_PAGE).then(

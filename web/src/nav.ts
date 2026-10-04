@@ -149,7 +149,7 @@ function write(entry: Entry, how: 'push' | 'replace') {
     // The review screen's entry (review/route.ts) keeps its address and its tab.
     const review = reviewTabInState(window.history.state)
     if (how === 'push') window.history.pushState(entry, '', urlOf(top))
-    else if (review) window.history.replaceState({ ...entry, review }, '', window.location.pathname)
+    else if (review) window.history.replaceState({ ...entry, review }, '', window.location.pathname + window.location.search)
     else window.history.replaceState(entry, '', urlOf(top))
   } catch {
     // Safari refuses too many history calls in a burst; the next one catches up.
