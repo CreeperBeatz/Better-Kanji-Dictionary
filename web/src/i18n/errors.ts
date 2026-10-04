@@ -90,17 +90,44 @@ const ERRORS: Record<string, [string, string]> = {
   reply_too_long: ['a reply is at most {max} characters', 'отговорът е най-много {max} знака'],
   reply_not_found: ['no such reply', 'няма такъв отговор'],
   reply_not_yours: ['that reply is not yours', 'този отговор не е ваш'],
+
+  // the review queue (server/review.py)
+  parts_invalid: ['parts must be single characters', 'частите трябва да са отделни знаци'],
+  parts_self: ['a character cannot contain itself', 'знак не може да съдържа себе си'],
+  parts_stroke: ['a bare stroke is not a part: {parts}', 'отделна черта не е част: {parts}'],
+  parts_unknown: ['not in the graph: {parts}', 'няма ги в графа: {parts}'],
+  parts_cycle: ['{parts} already contains this character', '{parts} вече съдържа този знак'],
+  form_kind: ['pick a relation', 'изберете връзка'],
+  form_evidence: ['say where this comes from: the old form, or a reference', 'кажете откъде идва: старата форма или справочник'],
+  senses_count: ['a kanji has 2 to 6 meanings here, the catch-all aside', 'кандзито има от 2 до 6 значения тук, без общата група'],
+  senses_id: ['each meaning needs its own short id: a-z, 0-9 and -', 'всяко значение има нужда от свой кратък код: a-z, 0-9 и -'],
+  senses_invalid: ['each meaning needs an id and an English label', 'всяко значение има нужда от код и английски етикет'],
+  senses_label: ["a meaning's label is 1 to 4 words", 'етикетът на значението е от 1 до 4 думи'],
+  senses_not_accepted: ["this kanji's meanings are not accepted yet", 'значенията на това кандзи още не са приети'],
+  sense_unknown: ["not one of this kanji's meanings", 'не е от значенията на това кандзи'],
+  word_not_with: ['that word is not written with this kanji', 'тази дума не се пише с това кандзи'],
+  words_invalid: ['the words could not be read', 'думите не можаха да бъдат прочетени'],
+  needs_edit: ['this item has no proposal to accept; pick a value', 'няма предложение за приемане; изберете стойност'],
+  needs_value: ['pick a value', 'изберете стойност'],
+  item_not_found: ['no such item', 'няма такава задача'],
+  item_closed: ['this item was already decided', 'по тази задача вече е решено'],
+  decision_not_found: ['no such decision', 'няма такова решение'],
+  not_revertible: ['that decision changed nothing, or was already reverted', 'това решение не е променило нищо или вече е върнато'],
+  changed_since: ['this was changed again since; revert the later change first', 'оттогава е променяно пак; първо върнете по-късната промяна'],
+  suggest_reason: ['say why, so a reviewer can check it', 'кажете защо, за да може рецензент да провери'],
+  too_many_suggestions: ['you have {n} suggestions waiting already', 'вече имате {n} чакащи предложения'],
 }
 
 const FALLBACK: Record<Lang, string> = { en: 'something went wrong', bg: 'нещо се обърка' }
 
 /** The words for an error from anywhere -- the API, the network, a bug -- in `lang`. */
 export function errorText(e: unknown, lang: Lang): string {
-  if (e instanceof ApiError && e.code && ERRORS[e.code]) {
-    // Bulgarian gets its own text; English keeps the server's, which may say more.
-    if (lang === 'en') return e.message
+  if (e instanceof ApiError) {
     const params = e.params ?? {}
-    return ERRORS[e.code][1].replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
+    const fill = (text: string) => text.replace(/\{(\w+)\}/g, (m, k: string) => (k in params ? String(params[k]) : m))
+    // Bulgarian gets its own text; English keeps the server's, which may say more.
+    if (lang === 'bg' && e.code && ERRORS[e.code]) return fill(ERRORS[e.code][1])
+    if (e.message) return fill(e.message)
   }
   if (e instanceof Error && e.message) return e.message
   return FALLBACK[lang]
