@@ -50,6 +50,7 @@ import json
 import re
 import threading
 
+from . import bg_overlay
 from .db import query
 
 # --- feature quantisation ------------------------------------------------
@@ -536,7 +537,7 @@ def index() -> dict[int, list[tuple[str, Glyph]]]:
             "SELECT k.char, k.freq, k.meanings, kb.meanings AS meanings_bg "
             "FROM kanji k LEFT JOIN kanji_bg kb ON kb.char = k.char"
         ):
-            bg = json.loads(row["meanings_bg"]) if row["meanings_bg"] else None
+            bg = bg_overlay.kanji(row["char"], row["meanings_bg"])
             _meta[row["char"]] = (row["freq"], json.loads(row["meanings"] or "[]"), bg)
 
         buckets: dict[int, list[tuple[str, Glyph]]] = {}

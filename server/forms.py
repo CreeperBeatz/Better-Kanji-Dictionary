@@ -13,6 +13,7 @@ import json
 import re
 from typing import Callable
 
+from . import bg_overlay
 from .db import query
 
 KINDS = ("positional", "old", "form_of", "looks_like")
@@ -73,7 +74,7 @@ def _nodes(chars: list[str]) -> dict[str, dict]:
     marks = ",".join("?" * len(chars))
     rows = query(f"SELECT char, meanings, joyo FROM kanji WHERE char IN ({marks})", tuple(chars))
     bg = {
-        r["char"]: json.loads(r["meanings"])
+        r["char"]: bg_overlay.kanji(r["char"], r["meanings"])
         for r in query(f"SELECT char, meanings FROM kanji_bg WHERE char IN ({marks})", tuple(chars))
     }
     curated = {

@@ -20,6 +20,7 @@ from collections.abc import Iterator
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
+from .. import bg_overlay
 from .. import bulgarian as bg
 from .. import kanji_parts
 from .. import semantic as sem
@@ -76,7 +77,7 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
                     "pos": (r["pos"] or "").split(",") if r["pos"] else [],
                     "misc": (r["misc"] or "").split(",") if r["misc"] else [],
                     "gloss": r["gloss"],
-                    "glossBg": r["gloss_bg"],
+                    "glossBg": bg_overlay.gloss(r["word_id"], r["ord"], r["gloss_bg"]),
                 }
             )
     for r in query(
@@ -577,7 +578,7 @@ def _kanji_hits(chars: list[str]) -> list[dict]:
         {
             "char": r["char"],
             "meanings": _json.loads(r["meanings"] or "[]"),
-            "meaningsBg": _json.loads(r["meanings_bg"]) if r["meanings_bg"] else None,
+            "meaningsBg": bg_overlay.kanji(r["char"], r["meanings_bg"]),
             "curated": r["curated"],
             "freq": r["freq"],
             "jlpt": r["jlpt"],

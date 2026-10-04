@@ -41,6 +41,7 @@ import time
 from array import array
 from pathlib import Path
 
+from . import bg_overlay
 from .db import DB_PATH
 
 # Bump when the pack's layout changes, so every client fetches a new one.
@@ -339,10 +340,10 @@ def build(force: bool = False) -> dict:
     senses: dict[int, list] = {}
     pos_mask = array("B", [0] * len(words))
     for r in conn.execute(
-        "SELECT s.word_id, s.pos, s.misc, s.gloss, b.gloss FROM sense s "
+        "SELECT s.word_id, s.pos, s.misc, s.gloss, b.gloss, s.ord FROM sense s "
         "LEFT JOIN sense_bg b ON b.word_id = s.word_id AND b.ord = s.ord ORDER BY s.word_id, s.ord"
     ):
-        senses.setdefault(r[0], []).append([r[1], r[2], r[3], r[4]])
+        senses.setdefault(r[0], []).append([r[1], r[2], r[3], bg_overlay.gloss(r[0], r[5], r[4])])
         i = index_of.get(r[0])
         if i is not None:
             pos_mask[i] |= _pos_mask(r[1])
@@ -488,7 +489,7 @@ def build(force: bool = False) -> dict:
                     r["in_kanjidic"], json.loads(r["meanings"] or "[]"),
                     json.loads(r["on_yomi"] or "[]"), json.loads(r["kun_yomi"] or "[]"),
                     r["fanout"], r["curated"],
-                    json.loads(r["meanings_bg"]) if r["meanings_bg"] else None,
+                    bg_overlay.kanji(r["char"], r["meanings_bg"]),
                 ]
                 for r in kanji
             ],

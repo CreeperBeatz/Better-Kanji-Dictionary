@@ -45,7 +45,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import auth, forms, store
+from . import auth, bg_overlay, forms, store
 from .db import query, query_one
 from .errors import AppError
 
@@ -58,7 +58,7 @@ EXPORTS = {
     "meaning": ROOT / "data" / "meaning_groups.json",
 }
 
-TYPES = ("decomposition", "form_link", "kanji_senses", "word_sense")
+TYPES = ("decomposition", "form_link", "kanji_senses", "word_sense", "bg")
 ORIGINS = ("proposal", "suggestion")
 # open: waiting. The rest say how it was closed.
 STATUSES = ("open", "auto-accepted", "accepted", "edited", "rejected")
@@ -95,7 +95,7 @@ def _empty() -> dict:
         "version": 1,
         "items": {},
         "decisions": [],
-        "live": {"form_link": {}, "kanji_senses": {}, "word_sense": {}},
+        "live": {"form_link": {}, "kanji_senses": {}, "word_sense": {}, "bg": {}},
         "pack_key": None,
     }
 
@@ -112,6 +112,20 @@ def _stat() -> tuple[int, int] | None:
 
 
 def _load() -> dict:
+    """For changing: the caller saves after. When the file has not changed
+    since it was last read or written, the parsed copy is reused rather than
+    parsing ~30 MB again for every decision: the containers a change adds to
+    are copied (shallowly, a few ms), so a reader going through the shared
+    copy never sees one grow under it."""
+    snap = _snapshot
+    if snap is not None and snap[0] is not None and snap[0] == _stat():
+        d = snap[1]
+        return {
+            **d,
+            "items": dict(d["items"]),
+            "decisions": list(d["decisions"]),
+            "live": {k: dict(v) for k, v in d["live"].items()},
+        }
     if not FILE.exists():
         return _empty()
     try:
@@ -145,9 +159,10 @@ def _save(data: dict) -> None:
     global _snapshot
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
     tmp = FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     tmp.replace(FILE)
-    _snapshot = None
+    # What was just written is the file now: readers and the next change use it as is.
+    _snapshot = (_stat(), data)
 
 
 # ---------------------------------------------------------------- the graph, for checks and impact
@@ -338,6 +353,32 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             })
         return out
 
+    if type_ == "bg":
+        kind, _, key = subject.partition(":")
+        if kind == "word" and key.isdigit():
+            n = query_one("SELECT COUNT(*) AS n FROM sense WHERE word_id = ?", (int(key),))["n"]
+            if not n:
+                raise _bad("bad_subject", "no such word")
+            if value is None:
+                return None
+            if not isinstance(value, list) or len(value) != n or any(not isinstance(g, str) for g in value):
+                raise _bad("bg_invalid", "one Bulgarian gloss per sense")
+            out = [" ".join(g.split())[:400] for g in value]
+            if not any(out):
+                raise _bad("bg_invalid", "one Bulgarian gloss per sense")
+            return out
+        if kind == "kanji" and len(key) == 1:
+            if value is None:
+                return None
+            if not isinstance(value, list) or any(not isinstance(m, str) for m in value):
+                raise _bad("bg_invalid", "one Bulgarian gloss per sense")
+            out = [" ".join(m.split())[:60] for m in value]
+            out = [m for m in out if m]
+            if not 1 <= len(out) <= 12:
+                raise _bad("bg_meanings", "a kanji has 1 to 12 Bulgarian meanings")
+            return out
+        raise _bad("bad_subject", "that is not a subject of this type")
+
     # word_sense
     char, wid = _split(subject)
     if len(char) != 1 or not wid.isdigit():
@@ -370,6 +411,8 @@ def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
         return {"kind": entry["kind"], "note": entry.get("note")}
     if type_ == "kanji_senses":
         return entry["senses"]
+    if type_ == "bg":
+        return entry["value"]
     return entry["sense"]
 
 
@@ -382,7 +425,30 @@ def current(type_: str, subject: str, data: dict | None = None) -> Any:
         links = [r for r in forms.links_of(a) if {r["char"], r["other"]} == {a, b}]
         mine = [r for r in links if r["char"] == a] or links
         return {"kind": mine[0]["kind"], "note": mine[0]["note"]} if mine else {"kind": "none", "note": None}
+    if type_ == "bg":
+        return _bg_shown(subject)
     return live_value(type_, subject, data)
+
+
+def _bg_built(subject: str) -> list[str] | None:
+    """The machine-translated Bulgarian a card starts from, as built."""
+    kind, _, key = subject.partition(":")
+    if kind == "word":
+        rows = query("SELECT s.ord, b.gloss FROM sense s LEFT JOIN sense_bg b ON b.word_id = s.word_id AND b.ord = s.ord "
+                     "WHERE s.word_id = ? ORDER BY s.ord", (int(key),))
+        return [r["gloss"] or "" for r in rows] or None
+    r = query_one("SELECT meanings FROM kanji_bg WHERE char = ?", (key,))
+    return json.loads(r["meanings"]) if r else None
+
+
+def _bg_shown(subject: str) -> list[str] | None:
+    """What the site shows now: reviewed, else built."""
+    kind, _, key = subject.partition(":")
+    if kind == "word":
+        wid = int(key)
+        built = _bg_built(subject) or []
+        return [bg_overlay.gloss(wid, i, g) or "" for i, g in enumerate(built)]
+    return bg_overlay.kanji(key, None) or _bg_built(subject)
 
 
 def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, explicit_words: bool = False) -> None:
@@ -398,6 +464,14 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
             store.set_decomposition(subject, value)
         _schedule_pack()
         return
+    if type_ == "bg":
+        if value is None:
+            data["live"]["bg"].pop(subject, None)
+        else:
+            data["live"]["bg"][subject] = {"value": value, "decision": decision}
+        _bg_live(subject, value)
+        _schedule_pack()
+        return
     live = data["live"][type_]
     if value is None:
         live.pop(subject, None)
@@ -411,6 +485,32 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
             _auto_words(data, subject, value)
     else:
         live[subject] = {"sense": value, "decision": decision}
+
+
+def _bg_live(subject: str, value: list[str] | None) -> None:
+    """Show reviewed Bulgarian at once, everywhere it is read (server/bg_overlay.py)."""
+    kind, _, key = subject.partition(":")
+    if kind == "word":
+        bg_overlay.set_word(int(key), value)
+        return
+    bg_overlay.set_kanji(key, value)
+    from . import recognize
+
+    if key in recognize._meta:  # handwriting candidates carry the meanings too
+        freq, meanings, built = recognize._meta[key]
+        recognize._meta[key] = (freq, meanings, value or _bg_built(subject))
+
+
+def load_bg_overlay() -> None:
+    """At startup: the reviewed Bulgarian in the store becomes what pages show."""
+    words, kanji = {}, {}
+    for subject, entry in _read()["live"].get("bg", {}).items():
+        kind, _, key = subject.partition(":")
+        if kind == "word":
+            words[int(key)] = entry["value"]
+        else:
+            kanji[key] = entry["value"]
+    bg_overlay.load(words, kanji)
 
 
 def _reopen_words(data: dict, char: str, before: list[dict], after: list[dict], decision: str) -> None:
@@ -795,13 +895,19 @@ def _names(ids: set[str]) -> dict[str, dict]:
 def _view(item: dict, names: dict, data: dict) -> dict:
     out = {k: v for k, v in item.items() if k != "skipped_by"}
     out["current"] = current(item["type"], item["subject"], data)
+    if item["type"] == "bg" and item["subject"].startswith("word:"):
+        r = query_one("SELECT headword, reading FROM word WHERE id = ?", (int(item["subject"][5:]),))
+        out["label"] = f"{r['headword']}" if r else item["subject"]
     out["createdBy"] = names.get(item["created_by"])
     out["decidedBy"] = names.get(item["decided_by"]) if item["decided_by"] else None
     return out
 
 
-def queue(user_id: str, type_: str | None = None, origin: str | None = None, limit: int = 50) -> dict:
-    """Open items, worst first: highest priority, then oldest; your skips left out."""
+def queue(user_id: str, type_: str | None = None, origin: str | None = None, limit: int = 50,
+          skipped: bool = False) -> dict:
+    """Open items, worst first: highest priority, then oldest; your skips left
+    out, or only your skips with `skipped`. `types` counts what waits per type
+    (for the filter, before the type is picked), `skipped` how many you skipped."""
     data = _read()
     accepted = data["live"]["kanji_senses"]
     # Words waiting in a follow-up are decided there, not one by one.
@@ -809,19 +915,27 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         f"{i['subject']}|{w}" for i in data["items"].values()
         if i["status"] == "open" and (fw := follow_up_words(i)) for w in fw
     }
-    rows = [
+    waiting = [
         i for i in data["items"].values()
         if i["status"] == "open"
-        and user_id not in i["skipped_by"]
         and i["subject"] not in held
         # A word's meaning waits until its kanji's meanings are accepted.
         and (i["type"] != "word_sense" or i["subject"].split("|")[0] in accepted)
-        and (type_ is None or i["type"] == type_)
         and (origin is None or i["origin"] == origin)
     ]
+    mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
+    types = {t: 0 for t in TYPES}
+    for i in mine:
+        types[i["type"]] += 1
+    rows = [i for i in mine if type_ is None or i["type"] == type_]
     rows.sort(key=lambda i: (-(i.get("priority") or 0), i["created"]))
     names = _names({i["created_by"] for i in rows[:limit]})
-    return {"total": len(rows), "items": [_view(i, names, data) for i in rows[:limit]]}
+    return {
+        "total": len(rows),
+        "items": [_view(i, names, data) for i in rows[:limit]],
+        "types": types,
+        "skipped": sum(1 for i in waiting if user_id in i["skipped_by"] and (type_ is None or i["type"] == type_)),
+    }
 
 
 def counts() -> dict:
@@ -875,6 +989,22 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
     if type_ == "form_link":
         a, b = subject.split("|")
         return {"a": forms.forms_of(a), "b": forms.forms_of(b)}
+    if type_ == "bg":
+        from .routes.search import _fetch_words
+
+        kind, _, key = subject.partition(":")
+        if kind == "word":
+            return {"word": _fetch_words([int(key)]).get(int(key)), "built": _bg_built(subject)}
+        k = query_one("SELECT meanings, on_yomi, kun_yomi, jlpt, grade, freq FROM kanji WHERE char = ?", (key,))
+        cur = query_one("SELECT meaning FROM kanji_curated WHERE char = ?", (key,))
+        return {
+            "char": key,
+            "kanjidic": json.loads(k["meanings"]) if k else [],
+            "curated": cur["meaning"] if cur else None,
+            "on": json.loads(k["on_yomi"]) if k and k["on_yomi"] else [],
+            "kun": json.loads(k["kun_yomi"]) if k and k["kun_yomi"] else [],
+            "built": _bg_built(subject),
+        }
     return {"forms": forms.forms_of(subject)}
 
 
@@ -1119,7 +1249,8 @@ forms.overlay = _form_overlay
 
 def _overrides_key() -> str:
     ov = store.decomposition_overrides()
-    return hashlib.sha256(json.dumps(ov, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:16]
+    blob = json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key()
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 def pack_key() -> str:
@@ -1187,10 +1318,36 @@ def export() -> dict[str, int]:
             "kanji_senses": len(meaning["senses"]), "word_sense": len(meaning["words"])}
 
 
+def load_bg(dry_run: bool = False) -> dict[str, int]:
+    """Queue the machine-translated Bulgarian for checking: one card per word in
+    the labeling scope (common, or a newspaper rank or JLPT level) and one per
+    jōyō or JLPT kanji, most frequent first, kanji before words, all after the
+    other stages in the "all" list. A card already queued is not queued twice."""
+    rows = []
+    for r in query("SELECT k.char, k.freq FROM kanji k JOIN kanji_bg b ON b.char = k.char "
+                   "WHERE k.joyo = 1 OR k.jlpt IS NOT NULL"):
+        subject = f"kanji:{r['char']}"
+        rows.append({"type": "bg", "subject": subject, "proposed": _bg_built(subject), "source": "mt:claude-sonnet-5",
+                     "priority": round(0.99 - min(r["freq"] or 2500, 2500) / 100000, 5)})
+    for r in query("SELECT DISTINCT w.id, w.nf, j.level AS jlpt FROM word w JOIN sense_bg b ON b.word_id = w.id "
+                   "LEFT JOIN word_jlpt j ON j.word_id = w.id WHERE w.common = 1 OR w.nf IS NOT NULL OR j.level IS NOT NULL"):
+        subject = f"word:{r['id']}"
+        pri = 0.8 - r["nf"] / 100 if r["nf"] else (0.3 - (6 - r["jlpt"]) / 100 if r["jlpt"] else 0.2)
+        rows.append({"type": "bg", "subject": subject, "proposed": _bg_built(subject), "source": "mt:claude-sonnet-5",
+                     "priority": round(pri, 5)})
+    counts = {"kanji": sum(1 for r in rows if r["subject"].startswith("kanji:")), "words": sum(1 for r in rows if r["subject"].startswith("word:"))}
+    if dry_run:
+        return counts
+    added, refused = add_items(rows)
+    return {**counts, "added": added, "refused": refused}
+
+
 if __name__ == "__main__":
-    if sys.argv[1:] == ["export"]:
+    if sys.argv[1:2] == ["load-bg"]:
+        print(load_bg(dry_run="--dry-run" in sys.argv))
+    elif sys.argv[1:] == ["export"]:
         for k, n in export().items():
             print(f"{k:14} {n:>6}")
         print("wrote " + ", ".join(str(p.relative_to(ROOT)) for p in EXPORTS.values()))
     else:
-        print("usage: python -m server.review export")
+        print("usage: python -m server.review export | load-bg [--dry-run]")

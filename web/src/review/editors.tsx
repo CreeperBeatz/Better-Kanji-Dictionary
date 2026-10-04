@@ -124,6 +124,13 @@ export function ValueView({ type, value, groups }: { type: TaskType; value: Task
       </span>
     )
   }
+  if (type === 'bg') {
+    return (
+      <span lang="bg" className="review-bg">
+        {(value as string[]).filter(Boolean).join(' · ')}
+      </span>
+    )
+  }
   if (type === 'kanji_senses') {
     return (
       <ol className="review-groups">

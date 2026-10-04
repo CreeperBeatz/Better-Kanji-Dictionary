@@ -76,6 +76,14 @@ def migrate_accounts() -> None:
 
 
 @app.on_event("startup")
+def reviewed_bulgarian() -> None:
+    # Before anything is served: pages show reviewed Bulgarian over the built text.
+    from . import review as review_store
+
+    review_store.load_bg_overlay()
+
+
+@app.on_event("startup")
 def build_offline_pack() -> None:
     # In the background: a changed database means a new pack, which takes a
     # while on the Pi, and nothing else should wait for it.

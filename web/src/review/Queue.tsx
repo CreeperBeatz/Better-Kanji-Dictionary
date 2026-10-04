@@ -22,6 +22,7 @@ import { errorText } from '../i18n/errors'
 import { FontStrip } from '../detail/FontStrip'
 import { CATCH_ALL, strokesOk, ValueEditor, ValueView } from './editors'
 import { finalizeBoard, MeaningsBoard } from './MeaningsBoard'
+import { BgCard } from './BgCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { queueRouteInUrl, replaceQueueRoute } from './route'
 
@@ -32,6 +33,12 @@ const S = strings(
     t_form_link: 'forms',
     t_kanji_senses: 'meanings',
     t_word_sense: 'word meanings',
+    t_bg: 'Bulgarian',
+    skippedTab: 'skipped',
+    skippedTitle: 'The items you skipped, to do now',
+    showSkipped: '{n} skipped: show them',
+    nothingSkipped: 'Nothing skipped here.',
+    backToQueue: 'back to the queue',
     o_proposal: 'proposals',
     o_suggestion: 'suggestions',
     proposalFrom: 'proposal · {source}',
@@ -74,6 +81,12 @@ const S = strings(
     t_form_link: 'форми',
     t_kanji_senses: 'значения',
     t_word_sense: 'значения в думи',
+    t_bg: 'български',
+    skippedTab: 'пропуснати',
+    skippedTitle: 'Пропуснатите задачи, за да ги свършите сега',
+    showSkipped: 'пропуснати: {n}. Покажете ги',
+    nothingSkipped: 'Тук нищо не е пропуснато.',
+    backToQueue: 'обратно към опашката',
     o_proposal: 'предложения от данни',
     o_suggestion: 'предложения от хора',
     proposalFrom: 'от данни · {source}',
@@ -113,9 +126,9 @@ const S = strings(
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense']
+const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg']
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
-const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link']
+const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link', 'bg']
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
@@ -135,6 +148,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const wanted = useRef(route.item)
   const [type, setType] = useState<TaskType | undefined>(route.type)
   const [origin, setOrigin] = useState<Origin | undefined>(route.origin)
+  // The items you skipped, instead of the queue; and what waits, per type, for greying out empty stages.
+  const [showSkipped, setShowSkipped] = useState(!!route.skipped)
+  const [types, setTypes] = useState<Record<string, number>>({})
+  const [skippedN, setSkippedN] = useState(0)
   const [items, setItems] = useState<QueueItem[] | null>(null)
   const [total, setTotal] = useState(0)
   const [at, setAt] = useState(0)
@@ -150,7 +167,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
   const load = useCallback(() => {
     setItems(null)
-    api.reviewQueueItems(type, origin).then(
+    api.reviewQueueItems(type, origin, showSkipped).then(
       async (d) => {
         // The item the address names, when it is still open: found in the list,
         // or fetched and put first when it sits further down the queue.
@@ -167,11 +184,13 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         }
         setItems(list)
         setTotal(Math.max(d.total, list.length))
+        setTypes(d.types)
+        setSkippedN(d.skipped)
         setAt(Math.max(0, n))
       },
       (e) => setProblem(errorText(e, lang)),
     )
-  }, [type, origin, lang])
+  }, [type, origin, showSkipped, lang])
   useEffect(load, [load])
 
   const item = items?.[at] ?? null
@@ -188,8 +207,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setSkipped(new Set(kept?.skipped))
   }
   useEffect(() => {
-    if (items !== null) replaceQueueRoute({ type, origin, item: item?.id })
-  }, [type, origin, item?.id, items])
+    if (items !== null) replaceQueueRoute({ type, origin, item: item?.id, skipped: showSkipped || undefined })
+  }, [type, origin, item?.id, items, showSkipped])
   useEffect(() => {
     setDetail(null)
     setProblem(null)
@@ -228,6 +247,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         if (action !== 'skip') onDecided?.()
         setItems((list) => list && list.filter((i) => i.id !== item.id))
         setTotal((n) => n - 1)
+        if (!showSkipped) setTypes((c) => ({ ...c, [item.type]: Math.max(0, (c[item.type] ?? 1) - 1) }))
+        if (action === 'skip' && !showSkipped) setSkippedN((n) => n + 1)
+        if (action !== 'skip' && showSkipped) setSkippedN((n) => Math.max(0, n - 1))
         setAt((i) => Math.max(0, Math.min(i, (items?.length ?? 1) - 2)))
       } catch (e) {
         setProblem(errorText(e, lang))
@@ -235,7 +257,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setBusy(false)
       }
     },
-    [item, busy, reason, items, lang, onDecided],
+    [item, busy, reason, items, lang, onDecided, showSkipped],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
@@ -304,7 +326,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   keys.current = (e: KeyboardEvent) => {
     if (typing(e) || e.ctrlKey || e.metaKey || e.altKey || !item) return
     if (e.key === 'a' || e.key === 'Enter') decideDraft()
-    else if (e.key === 'r') decide('reject')
+    else if (e.key === 'r' && item.type !== 'bg') decide('reject')
     else if (e.key === 's') decide('skip')
     else if (e.key === 'j' || e.key === 'ArrowDown') setAt((i) => Math.min(i + 1, (items?.length ?? 1) - 1))
     else if (e.key === 'k' || e.key === 'ArrowUp') setAt((i) => Math.max(i - 1, 0))
@@ -322,20 +344,22 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   }, [])
 
   const subjectGlyphs = (i: QueueItem) => {
-    const [a, b] = i.subject.split('|')
+    const [a] = i.subject.split('|')
+    const b = i.type === 'bg' ? i.subject.split(':')[1] : i.subject.split('|')[1]
     if (i.type === 'form_link') return `${a} · ${b}`
     if (i.type === 'word_sense') return a
+    if (i.type === 'bg') return i.label ?? b ?? i.subject.split(':')[1]
     return a
   }
 
   return (
     <div className="queue">
       <nav className="overlay-tabs queue-filters">
-        <button data-on={!type} onClick={() => setType(undefined)}>
+        <button data-on={!type} data-empty={TYPES.every((k) => types[k] === 0) || undefined} onClick={() => setType(undefined)}>
           {t('all')}
         </button>
         {TYPES.map((k) => (
-          <button key={k} data-on={type === k} onClick={() => setType(k)}>
+          <button key={k} data-on={type === k} data-empty={types[k] === 0 || undefined} onClick={() => setType(k)}>
             {t(`t_${k}` as Key)}
           </button>
         ))}
@@ -348,11 +372,34 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             {t(`o_${o}` as Key)}
           </button>
         ))}
+        <span className="overlay-tab-rule" />
+        <button
+          data-on={showSkipped}
+          data-empty={(!showSkipped && skippedN === 0) || undefined}
+          title={t('skippedTitle')}
+          onClick={() => setShowSkipped((v) => !v)}
+        >
+          {t('skippedTab')} {skippedN > 0 && <span className="queue-count">{skippedN}</span>}
+        </button>
         <span className="tally queue-left">{items && t('left', { n: total })}</span>
       </nav>
 
       {items === null && <p className="hint">{problem ?? t('loading')}</p>}
-      {items !== null && items.length === 0 && <p className="hint">{t('nothing')}</p>}
+      {items !== null && items.length === 0 && (
+        <p className="hint queue-empty">
+          {showSkipped ? t('nothingSkipped') : t('nothing')}{' '}
+          {!showSkipped && skippedN > 0 && (
+            <button className="clear" onClick={() => setShowSkipped(true)}>
+              {t('showSkipped', { n: skippedN })}
+            </button>
+          )}
+          {showSkipped && (
+            <button className="clear" onClick={() => setShowSkipped(false)}>
+              {t('backToQueue')}
+            </button>
+          )}
+        </p>
+      )}
 
       {items !== null && items.length > 0 && (
         <div className="queue-split">
@@ -392,7 +439,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               </header>
 
               <div className="queue-judge">
-              {!board && (
+              {!board && item.type !== 'bg' && (
               <dl className="queue-compare">
                 <dt>{t('now')}</dt>
                 <dd>
@@ -405,12 +452,18 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               </dl>
               )}
 
-              {detail && <Evidence detail={detail} onKanji={onKanji} />}
+              {detail && item.type !== 'bg' && <Evidence detail={detail} onKanji={onKanji} />}
               </div>
 
               <div className="queue-decide">
               <div className="queue-edit">
-                {board ? (
+                {item.type === 'bg' ? (
+                  detail?.id === item.id ? (
+                    <BgCard detail={detail} value={(draft ?? []) as string[]} onChange={setDraft} />
+                  ) : (
+                    <p className="hint">{t('loading')}</p>
+                  )
+                ) : board ? (
                   detail?.context.board ? (
                     <MeaningsBoard
                       key={item.id}
@@ -451,9 +504,12 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 <button className="account-submit" disabled={busy} onClick={() => decideDraft()}>
                   {edited ? t('saveEdit') : open ? t('keep') : t('accept')}
                 </button>
-                <button className="clear" disabled={busy} onClick={() => decide('reject')}>
-                  {t('reject')}
-                </button>
+                {/* A translation is fixed or kept; rejecting one would close it with nothing done. */}
+                {item.type !== 'bg' && (
+                  <button className="clear" disabled={busy} onClick={() => decide('reject')}>
+                    {t('reject')}
+                  </button>
+                )}
                 <button className="clear" disabled={busy} onClick={() => decide('skip')}>
                   {t('skip')}
                 </button>

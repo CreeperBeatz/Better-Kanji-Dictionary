@@ -18,7 +18,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .. import forms, store
+from .. import bg_overlay, forms, store
 from ..db import query, query_one
 
 router = APIRouter(prefix="/api/kanji", tags=["graph"])
@@ -139,7 +139,7 @@ def _node(row) -> dict:
         "joyo": bool(row["joyo"]),
         "inKanjidic": bool(row["in_kanjidic"]),
         "meanings": json.loads(row["meanings"] or "[]"),
-        "meaningsBg": json.loads(row["meanings_bg"]) if row["meanings_bg"] else None,
+        "meaningsBg": bg_overlay.kanji(row["char"], row["meanings_bg"]),
         "onYomi": json.loads(row["on_yomi"] or "[]"),
         "kunYomi": json.loads(row["kun_yomi"] or "[]"),
         "fanout": row["joyo_count"] if "joyo_count" in row.keys() else None,

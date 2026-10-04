@@ -17,7 +17,7 @@ import json
 
 from fastapi import APIRouter, HTTPException
 
-from .. import store
+from .. import bg_overlay, store
 from ..db import query
 
 router = APIRouter(prefix="/api/map", tags=["map"])
@@ -100,7 +100,7 @@ def _build(scope: str) -> dict:
     for c in chars:
         m = json.loads(rows[c]["meanings"] or "[]") if c in rows else []
         meanings.append(m[0] if m else "")
-        b = json.loads(rows[c]["meanings_bg"] or "[]") if c in rows else []
+        b = (bg_overlay.kanji(c, rows[c]["meanings_bg"]) or []) if c in rows else []
         meanings_bg.append(b[0] if b else "")
 
     # Lookalikes pull on the layout too, so 人 and 入 end up in sight of each

@@ -314,7 +314,7 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense'
+export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense' | 'bg'
 export type Origin = 'proposal' | 'suggestion'
 export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'none'
 
@@ -327,7 +327,10 @@ export interface MeaningGroup {
   note: string | null
 }
 
-/** What each type's value is: parts, a link, meaning groups, or one group's id. */
+/**
+ * What each type's value is: parts, a link, meaning groups, one group's id, or
+ * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings.
+ */
 export type TaskValue = string[] | { kind: FormKind; note: string | null } | MeaningGroup[] | string | null
 
 /** A change waiting in the labeling queue (server/review.py). */
@@ -349,6 +352,8 @@ export interface QueueItem {
   createdBy: Author | null
   decidedBy: Author | null
   confidence?: number
+  /** Bulgarian word cards: the word's headword, for the list. */
+  label?: string
 }
 
 export interface Impact {
@@ -438,6 +443,8 @@ export interface ItemDetail extends QueueItem {
     kun?: string[]
     senses?: MeaningGroup[] | null
     word?: Word
+    /** Bulgarian: the machine translation the card started from. */
+    built?: string[] | null
     /** kanji_senses: its common words (and any placed), each in its group now. */
     board?: BoardWord[]
   }
@@ -813,10 +820,15 @@ export const api = {
   /** A note's picture: one of ours by name, or a GIF straight from KLIPY. */
   imageUrl: (name: string) => (isGifUrl(name) ? name : `${BASE}/api/assoc/image/${encodeURIComponent(name)}`),
 
-  reviewQueueItems: (type?: TaskType, origin?: Origin, limit = 60) =>
-    get<{ total: number; items: QueueItem[] }>('/api/review/queue', [
+  /**
+   * Open items. `types`: how many wait per type (greys out empty stages);
+   * `skipped`: how many you skipped. With `skipped` true, only those.
+   */
+  reviewQueueItems: (type?: TaskType, origin?: Origin, skipped = false, limit = 60) =>
+    get<{ total: number; items: QueueItem[]; types: Record<TaskType, number>; skipped: number }>('/api/review/queue', [
       ...(type ? [['type', type] as [string, string]] : []),
       ...(origin ? [['origin', origin] as [string, string]] : []),
+      ...(skipped ? [['skipped', 'true'] as [string, string]] : []),
       ['limit', String(limit)],
     ]),
 

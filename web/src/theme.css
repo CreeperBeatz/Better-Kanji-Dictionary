@@ -1922,6 +1922,100 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+/* A stage with nothing waiting: still there, greyed. */
+.overlay-tabs button[data-empty] {
+  color: var(--faint);
+}
+
+.overlay-tabs button[data-empty][data-on='true'] {
+  color: var(--paper-dim);
+}
+
+.queue-count {
+  font-size: 11px;
+  color: var(--shu);
+}
+
+.queue-empty .clear {
+  margin-left: 6px;
+}
+
+/* A Bulgarian card: the English per sense, the Bulgarian beside it to fix. */
+.bg-card {
+  display: grid;
+  gap: 10px;
+}
+
+.bg-head {
+  margin: 0;
+  font-size: 16px;
+  color: var(--paper-dim);
+}
+
+.bg-senses {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 10px;
+}
+
+.bg-sense {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 14px;
+  align-items: center;
+}
+
+.bg-en {
+  font-size: 13.5px;
+}
+
+.bg-pos {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.bg-input {
+  padding: 6px 9px;
+}
+
+.bg-sense[data-changed] .bg-input {
+  border-color: var(--ai);
+}
+
+.bg-was {
+  grid-column: 2;
+  font-size: 11.5px;
+}
+
+.bg-meanings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.bg-meaning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bg-meaning .assoc-text {
+  width: 170px;
+  padding: 5px 8px;
+}
+
+@media (max-width: 640px) {
+  .bg-sense {
+    grid-template-columns: 1fr;
+  }
+
+  .bg-was {
+    grid-column: 1;
+  }
+}
+
 .overlay-tab-rule {
   width: 1px;
   height: 16px;

@@ -161,6 +161,25 @@ whose group changed.
   wordplay), pick *the kanji brings no meaning to the word*.
 - Keys 1–9 pick and decide in one press.
 
+## Bulgarian
+
+Question: is the machine-translated Bulgarian right?
+
+Every Bulgarian gloss and kanji meaning was machine-translated. One card per
+word (the kanji's common or ranked words) and one per jōyō or JLPT kanji,
+most frequent first.
+
+- **Words.** Each sense shows the English and, beside it, the Bulgarian to
+  check. Fix what is wrong or unnatural; leave what is right. A changed field
+  is marked and shows the machine translation under it.
+- **Kanji.** One short meaning per field, saying what the English says.
+  Add or remove fields as needed (1 to 12).
+- **Accept** confirms the card as it is; *save my answer* keeps your fixes.
+  Either way it shows on the site at once. Search by Bulgarian text still
+  uses the old wording until the data is rebuilt.
+- **Not sure?** *Skip* it. Skipped cards wait under *skipped* in the queue
+  bar, for when there is nothing else to do.
+
 ## Cases
 
 ### 龰: a stroke split against a variant of the same part

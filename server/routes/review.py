@@ -22,13 +22,14 @@ def queue(
     type: str | None = Query(None),
     origin: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    skipped: bool = Query(False, description="only the items you skipped"),
     me: dict = Depends(reviewer),
 ) -> dict:
     if type is not None and type not in review.TYPES:
         raise AppError(400, "bad_type", "unknown task type")
     if origin is not None and origin not in review.ORIGINS:
         raise AppError(400, "bad_origin", "origin is proposal or suggestion")
-    return review.queue(me["id"], type, origin, limit)
+    return review.queue(me["id"], type, origin, limit, skipped)
 
 
 @router.get("/counts")

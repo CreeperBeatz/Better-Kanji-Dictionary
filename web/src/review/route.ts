@@ -21,6 +21,7 @@ const SLUGS: Record<TaskType, string> = {
   form_link: 'forms',
   kanji_senses: 'meanings',
   word_sense: 'word-meanings',
+  bg: 'bulgarian',
 }
 
 export interface QueueRoute {
@@ -28,6 +29,8 @@ export interface QueueRoute {
   origin?: Origin
   /** The item open in the queue. */
   item?: string
+  /** Showing the items you skipped. */
+  skipped?: boolean
 }
 
 // Where the queue was, so coming back to its tab from History lands there again.
@@ -35,15 +38,24 @@ let lastQueue: QueueRoute = {}
 
 export function queuePath(r: QueueRoute): string {
   const path = `/review/queue/${r.type ? SLUGS[r.type] : 'all'}${r.item ? `/${r.item}` : ''}`
-  return r.origin ? `${path}?origin=${r.origin}` : path
+  const q = new URLSearchParams()
+  if (r.origin) q.set('origin', r.origin)
+  if (r.skipped) q.set('skipped', '1')
+  return q.size ? `${path}?${q}` : path
 }
 
 export function queueRouteInUrl(): QueueRoute {
   const m = window.location.pathname.match(QUEUE_PATH)
   if (!m) return lastQueue
   const type = (Object.keys(SLUGS) as TaskType[]).find((k) => SLUGS[k] === m[1])
-  const origin = new URLSearchParams(window.location.search).get('origin')
-  return { type, item: m[2], origin: origin === 'proposal' || origin === 'suggestion' ? origin : undefined }
+  const params = new URLSearchParams(window.location.search)
+  const origin = params.get('origin')
+  return {
+    type,
+    item: m[2],
+    origin: origin === 'proposal' || origin === 'suggestion' ? origin : undefined,
+    skipped: params.get('skipped') === '1' || undefined,
+  }
 }
 
 /** The queue moved to another stage or item: the address follows, in place. */
