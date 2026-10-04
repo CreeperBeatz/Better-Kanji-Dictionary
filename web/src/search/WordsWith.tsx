@@ -1,7 +1,7 @@
 /**
  * The search for `*生*`: every word written with one kanji, divided by the
  * meaning the kanji carries in each word -- 生活 and 生まれる under "life",
- * 生野菜 under "raw", 生憎 under "sound / fixed spelling" -- once reviewers have
+ * 生野菜 under "raw", 生憎 under "brings no meaning" -- once reviewers have
  * accepted the kanji's meaning groups and placed the word. The kanji page
  * shows only the most common few and opens this for the rest.
  *
@@ -29,6 +29,8 @@ const S = strings(
     loading: 'looking',
     wrongGroup: 'wrong meaning?',
     wrongGroupTitle: 'Suggest which meaning of {char} this word uses',
+    noMeaning: '{char} brings no meaning to these words',
+    noMeaningHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
   },
   {
     title: 'Думи с {char}',
@@ -42,6 +44,8 @@ const S = strings(
     loading: 'търсене',
     wrongGroup: 'грешно значение?',
     wrongGroupTitle: 'Предложете кое значение на {char} използва думата',
+    noMeaning: '{char} не внася значение в тези думи',
+    noMeaningHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните кандзи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
   },
 )
 
@@ -136,8 +140,9 @@ export function WordsWith({
       {data?.groups.map((g) => (
         <div key={g.id} className="meaning-group">
           <h3>
-            {groupLabel(g.id, senses, lang)}
+            {g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang)}
             {g.note && <span className="hint"> — {g.note}</span>}
+            {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
             {g.id !== CATCH_ALL && senses && (
               <SuggestLink onOpen={() => setSuggest({ type: 'kanji_senses', subject: char, value: senses })} />
             )}

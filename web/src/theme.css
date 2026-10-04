@@ -6121,6 +6121,19 @@ html[data-nav]::view-transition-old(tabs):only-child {
   flex: 1 1 auto;
 }
 
+.board-fixed .hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.meaning-group-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .board-count {
   font-size: 12px;
 }

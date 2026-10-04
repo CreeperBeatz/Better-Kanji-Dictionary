@@ -73,7 +73,7 @@ Question: what are the 2–6 things this kanji does in modern words?
   green, young or unripe).
 - Each group should cover at least two common words; merge the rest.
 - Labels: 1–4 words in English, the same in Bulgarian. Keep the note short.
-- Sound-only uses and fixed spellings (寿司, 生憎) go to the catch-all, which
+- Words the kanji brings no meaning to go in their own box (see below). It
   always exists and is not one of the 2–6.
 - Use the words under each group to test the split: if a group's words don't
   share a meaning, the group is wrong.
@@ -84,16 +84,45 @@ A meanings item shows each group as a box with its words under it (reading
 and gloss). The kanji's common words come placed where the AI drafted them;
 words with a red edge are the ones it was unsure of, so look at those first.
 
-- **Move words** by dragging them, or tap several and press *move here* on a
-  group (works on a phone too).
+- **Move words** by dragging them, right-clicking one to pick its group, or
+  tapping several and pressing *move here* on a group (works on a phone too).
+- **Only unsure** narrows every box to the cards the model was unsure of.
 - **Add or remove groups** with *add a group* / *remove group*. A removed
   group's words drop to *Not in a group*.
-- **Not in a group** holds words no group claims. Rarer words load a page at a
-  time; drag one into a group if it belongs there.
+- **Not in a group** holds words no group claims. Words with a newspaper rank
+  or a JLPT level always show; unranked ones load a page at a time. Drag one
+  into a group if it belongs there.
 - **Accept** (or *save my answer* once you changed something) decides the
   groups and every word on the board together, as you left them. History shows
   it as one decision ("+ N words placed"), and reverting it puts all of them
   back in the queue.
+
+### The kanji brings no meaning to the word
+
+The box under the groups is for words where the kanji is *written* but gives
+the word none of its meanings: the word means what it means some other way.
+It is not one of the 2–6 groups and always exists. Three kinds of word go
+there:
+
+- **Sound-only spellings (ateji).** The kanji were picked for their reading,
+  often for a foreign word: 合羽 カッパ (from Portuguese *capa*), 珈琲 (coffee),
+  亜米利加 (America).
+- **Whole-word spellings the separate kanji don't explain.** The word is read
+  and understood as a unit: 生姜 しょうが (ginger), 百合 ゆり (lily), 生憎
+  あいにく (unfortunately).
+- **Wordplay.** 米寿 べいじゅ (88th birthday) is there because 米 can be taken
+  apart as 八十八, not because of rice.
+
+The test: could you explain the word's meaning from *this* kanji's meaning?
+If yes, even loosely, it belongs in a real group. If not, it goes here.
+
+- **Not a shrug box.** The drafting model sometimes put a word here when it
+  could not decide. 沖合 (offshore) is one: 合 there is the ordinary "area,
+  extent" sense (as in 歩合), which is a real group. Check each word here
+  rather than accepting the box as it is.
+- **Per kanji, not per word.** In 合羽 the 合 brings nothing, but a word can
+  have one kanji in this box and another in a real group: each kanji is
+  judged on its own.
 
 ## Word meanings (word_sense)
 
@@ -106,7 +135,8 @@ whose group changed.
 - Pick what the kanji contributes, not what the word means overall.
 - A word with two kanji is two items, one per kanji, and they can land in
   different groups.
-- Ateji and fixed spellings go to the catch-all.
+- If the kanji brings no meaning to the word (ateji, whole-word spellings,
+  wordplay), pick *the kanji brings no meaning to the word*.
 - Keys 1–9 pick and decide in one press.
 
 ## Cases

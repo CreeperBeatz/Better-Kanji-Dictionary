@@ -4,7 +4,7 @@
  * Each group is a box: its labels (English, Bulgarian, a note) and the words
  * it holds, with readings and glosses. Words move by drag and drop, or, on a
  * phone, by tapping them and then "move here" on a group. The catch-all
- * (sound / fixed spelling) is always there; "not in a group" holds the words
+ * (the kanji brings no meaning to the word) is always there; "not in a group" holds the words
  * no group claims, the common ones first and the rarer ones a page at a time.
  *
  * The board only edits; the queue decides. `finalizeBoard` turns it into what
@@ -25,8 +25,8 @@ const S = strings(
     note: 'Note',
     remove: 'remove group',
     addGroup: 'add a group',
-    catchAll: 'Sound / fixed spelling',
-    catchAllHint: 'ateji and fixed spellings: the kanji brings no meaning',
+    catchAll: 'The kanji brings no meaning to the word',
+    catchAllHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
     none: 'Not in a group',
     noneHint: 'words no group claims; they are left out of the grouped list',
     moveHere: 'move {n} here',
@@ -59,8 +59,8 @@ const S = strings(
     note: 'Бележка',
     remove: 'махнете групата',
     addGroup: 'добавете група',
-    catchAll: 'Звук / устойчиво изписване',
-    catchAllHint: 'атеджи и устойчиви изписвания: кандзито не носи значение',
+    catchAll: 'Кандзито не внася значение в думата',
+    catchAllHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните кандзи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
     none: 'Извън групите',
     noneHint: 'думи, които никоя група не взима; не се показват в групирания списък',
     moveHere: 'преместете {n} тук',
