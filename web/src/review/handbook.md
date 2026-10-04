@@ -94,6 +94,8 @@ words with a red edge are the ones it was unsure of, so look at those first.
   box checkbox: their words can be ticked straight away. Confirmed words
   fold into a *confirmed* part of the box, shut by default, so what is left
   in view is what still needs a look. Moving a word clears its tick.
+  Right-click works too: *Confirm* on one word, or on a selection to confirm
+  them all at once (words in groups not confirmed yet are left out).
 - **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
   submit, the groups and every other word are decided, and the skipped words
   come back together as a follow-up for the same kanji at the very end of the

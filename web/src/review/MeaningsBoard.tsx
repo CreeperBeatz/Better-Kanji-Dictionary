@@ -45,6 +45,11 @@ const S = strings(
     moveTo: 'Move to',
     moveMany: 'Move {n} selected to',
     unnamed: '(unnamed group)',
+    confirmOne: 'Confirm: it belongs here',
+    confirmMany: 'Confirm {n} selected',
+    confirmSome: 'Confirm {n} of {m} selected (the rest are in groups not confirmed yet)',
+    unconfirmOne: 'Take back the confirmation',
+    unconfirmMany: 'Take back {n} confirmations',
     skip: 'Not sure: leave for later',
     skipMany: 'Not sure: leave {n} for later',
     unskip: 'Decide it now after all',
@@ -91,6 +96,11 @@ const S = strings(
     moveTo: 'Преместете в',
     moveMany: 'Преместете {n} избрани в',
     unnamed: '(група без име)',
+    confirmOne: 'Потвърдете: на мястото си е',
+    confirmMany: 'Потвърдете {n} избрани',
+    confirmSome: 'Потвърдете {n} от {m} избрани (останалите са в още непотвърдени групи)',
+    unconfirmOne: 'Отменете потвърждението',
+    unconfirmMany: 'Отменете {n} потвърждения',
     skip: 'Не съм сигурен: оставете за по-късно',
     skipMany: 'Не съм сигурен: оставете {n} за по-късно',
     unskip: 'Все пак решете сега',
@@ -290,6 +300,28 @@ export function MeaningsBoard({
     })
     // Taking a group's confirmation back takes back its words' too.
     if (!on) unconfirm((byBucket.get(key) ?? []).map((w) => w.id))
+  }
+
+  // Where each word sits now, and whether it may be confirmed there: in a
+  // confirmed group or one of the two fixed boxes, and not left for later.
+  const where = useMemo(() => {
+    const m = new Map<number, Bucket>()
+    for (const [b, list] of byBucket) for (const w of list) m.set(w.id, b)
+    return m
+  }, [byBucket])
+  const canConfirm = (id: number) => {
+    const b = where.get(id) ?? null
+    return !skipped.has(id) && (b === null || b === CATCH_ALL || okBoxes.has(b))
+  }
+  function setConfirmed(ids: number[], on: boolean) {
+    setOkWords((s) => {
+      const n = new Set(s)
+      for (const id of ids) {
+        if (on) n.add(id)
+        else n.delete(id)
+      }
+      return n
+    })
   }
 
   function toggleWord(id: number) {
@@ -572,6 +604,44 @@ export function MeaningsBoard({
             </button>
           ))}
           <hr />
+          {(() => {
+            const ids = menu.ids
+            const done = ids.filter((id) => okWords.has(id))
+            if (done.length === ids.length)
+              return (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    setConfirmed(ids, false)
+                    setPicked(new Set())
+                    setMenu(null)
+                  }}
+                >
+                  {ids.length > 1 ? t('unconfirmMany', { n: ids.length }) : t('unconfirmOne')}
+                </button>
+              )
+            const ok = ids.filter((id) => !okWords.has(id) && canConfirm(id))
+            const label =
+              ids.length === 1
+                ? t(ok.length ? 'confirmOne' : 'confirmFirst')
+                : ok.length === ids.length - done.length
+                  ? t('confirmMany', { n: ok.length })
+                  : t('confirmSome', { n: ok.length, m: ids.length - done.length })
+            return (
+              <button
+                role="menuitem"
+                className="board-menu-ok"
+                disabled={!ok.length}
+                onClick={() => {
+                  setConfirmed(ok, true)
+                  setPicked(new Set())
+                  setMenu(null)
+                }}
+              >
+                {label}
+              </button>
+            )
+          })()}
           {menu.ids.every((id) => skipped.has(id)) ? (
             <button
               role="menuitem"

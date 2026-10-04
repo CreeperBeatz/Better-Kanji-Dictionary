@@ -6247,6 +6247,15 @@ html[data-nav]::view-transition-old(tabs):only-child {
   color: var(--shu);
 }
 
+.board-menu .board-menu-ok:not(:disabled) {
+  color: #7fb88a;
+}
+
+.board-menu button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 .board-done-toggle {
   padding: 2px 0;
   margin-bottom: 4px;
