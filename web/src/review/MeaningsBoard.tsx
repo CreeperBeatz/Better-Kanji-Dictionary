@@ -3,7 +3,8 @@
  *
  * Each group is a box: its labels (English, Bulgarian, a note) and the words
  * it holds, with readings and glosses. Words move by drag and drop, or, on a
- * phone, by tapping them and then "move here" on a group. The catch-all
+ * phone, by a long press where the browser maps it to the menu; tapping
+ * selects several for the menu to move at once. The catch-all
  * (the kanji brings no meaning to the word) is always there; "not in a group" holds the words
  * no group claims, the common ones first and the rarer ones a page at a time.
  *
@@ -20,7 +21,7 @@ import { CATCH_ALL } from './editors'
 const S = strings(
   {
     groups: 'Meaning groups',
-    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, right-click a word to pick its group, or tap words and then “move here”. Tick a group to confirm it, then tick its words as you check them.',
+    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group. Tick a group to confirm it, then tick its words as you check them.',
     en: 'English label',
     bg: 'Bulgarian',
     note: 'Note',
@@ -30,7 +31,6 @@ const S = strings(
     catchAllHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
     none: 'Not in a group',
     noneHint: 'words no group claims; they are left out of the grouped list',
-    moveHere: 'move {n} here',
     clearPick: 'clear selection',
     picked: '{n} selected',
     empty: 'no words',
@@ -71,7 +71,7 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
-    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите, щракнете с десния бутон върху дума, за да ѝ изберете група, или ги докоснете и после „преместете тук“. Отметнете група, за да я потвърдите, после отмятайте думите ѝ, докато ги проверявате.',
+    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група. Отметнете група, за да я потвърдите, после отмятайте думите ѝ, докато ги проверявате.',
     en: 'Английски етикет',
     bg: 'Български',
     note: 'Бележка',
@@ -81,7 +81,6 @@ const S = strings(
     catchAllHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните кандзи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
     none: 'Извън групите',
     noneHint: 'думи, които никоя група не взима; не се показват в групирания списък',
-    moveHere: 'преместете {n} тук',
     clearPick: 'изчистете избора',
     picked: 'избрани: {n}',
     empty: 'няма думи',
@@ -488,12 +487,6 @@ export function MeaningsBoard({
             {key === null && !followUp && rareLeft > 0 && ` · ${t('nShown', { n: all.length.toLocaleString(lang) })}`}
             {done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
           </span>
-          {/* Not on the no-meaning box: "move 12 here" there read as a claim about the words. The menu still moves them. */}
-          {picked.size > 0 && key !== CATCH_ALL && (
-            <button className="clear board-move" onClick={() => move(key)}>
-              {t('moveHere', { n: picked.size })}
-            </button>
-          )}
         </header>
         {!shut.has(id) && (
           <>

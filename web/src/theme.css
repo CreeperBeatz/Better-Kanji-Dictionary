@@ -6279,9 +6279,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   color: var(--muted);
 }
 
-.board-move {
-  color: var(--ai);
-}
 
 .board-words {
   list-style: none;

@@ -84,8 +84,9 @@ A meanings item shows each group as a box with its words under it (reading
 and gloss). The kanji's common words come placed where the AI drafted them;
 words with a red edge are the ones it was unsure of, so look at those first.
 
-- **Move words** by dragging them, right-clicking one to pick its group, or
-  tapping several and pressing *move here* on a group (works on a phone too).
+- **Move words** by dragging them, or right-clicking one to pick its group.
+  Click several to select them first and the menu moves them all. (On a
+  phone, a long press opens the menu where the browser allows it.)
 - **Confirm as you go.** Tick a group's *confirmed* once you are sure the
   group the model suggested is real (its label and scope, not made up); then
   tick each word you have checked (hover a card for its checkbox; in a
