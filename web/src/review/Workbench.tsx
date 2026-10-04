@@ -6,7 +6,7 @@ import { Avatar } from '../account/Avatar'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { ValueView } from './editors'
-import { Progress } from './Progress'
+import { ProgressMini, ProgressPage, useProgress } from './Progress'
 import { Queue } from './Queue'
 
 const Handbook = lazy(() => import('./Handbook'))
@@ -45,6 +45,7 @@ const S = strings(
     a_revert: 'reverted',
     a_reopen: 'reopened',
     handbook: 'Handbook',
+    progress: 'Progress',
     mode: 'Review mode',
     exit: 'Exit',
     reviewer: 'Reviewer',
@@ -91,6 +92,7 @@ const S = strings(
     a_revert: 'върнато',
     a_reopen: 'отворено отново',
     handbook: 'Наръчник',
+    progress: 'Напредък',
     mode: 'Режим преглед',
     exit: 'Изход',
     reviewer: 'Рецензент',
@@ -127,6 +129,7 @@ export function Workbench({
   const { user } = useAuth()
   const [version, setVersion] = useState(0)
   const decided = useCallback(() => setVersion((v) => v + 1), [])
+  const progress = useProgress(version)
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -143,6 +146,7 @@ export function Workbench({
   const tabs: [WorkbenchTab, Key][] = [
     ['queue', 'queue'],
     ['history', 'history'],
+    ['progress', 'progress'],
     ...(user.role === 'admin' ? ([['auto', 'auto'], ['people', 'people']] as [WorkbenchTab, Key][]) : []),
     ['handbook', 'handbook'],
   ]
@@ -159,6 +163,7 @@ export function Workbench({
               </button>
             ))}
           </nav>
+          <ProgressMini data={progress} onOpen={() => onTab('progress')} />
           <div className="workbench-mode">
             <h2>{t('mode')}</h2>
             <button className="workbench-exit" onClick={onClose} title="Esc">
@@ -166,10 +171,10 @@ export function Workbench({
             </button>
           </div>
         </header>
-        <Progress version={version} />
         <div className="workbench-body" data-tab={tab}>
           {tab === 'queue' && <Queue onKanji={onKanji} onDecided={decided} />}
           {tab === 'history' && <History admin={user.role === 'admin'} />}
+          {tab === 'progress' && <ProgressPage data={progress} />}
           {tab === 'auto' && user.role === 'admin' && <History admin auto />}
           {tab === 'people' && user.role === 'admin' && <People />}
           {tab === 'handbook' && (

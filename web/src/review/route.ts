@@ -7,7 +7,7 @@
  */
 import type { WorkbenchTab } from '../account/Account'
 
-const TABS: WorkbenchTab[] = ['queue', 'history', 'auto', 'people', 'handbook']
+const TABS: WorkbenchTab[] = ['queue', 'history', 'progress', 'auto', 'people', 'handbook']
 const PATH = /^\/review(?:\/([a-z]+))?\/?$/
 
 export function reviewPath(tab: WorkbenchTab): string {
