@@ -149,12 +149,19 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
   useEffect(load, [load])
 
   const item = items?.[at] ?? null
+  // Reset the draft while rendering, not in an effect: for one render the
+  // editor would get the last item's value, and a list of parts handed to the
+  // meaning-group editor throws.
+  const [draftFor, setDraftFor] = useState<string | null>(null)
+  if (item && item.id !== draftFor) {
+    setDraftFor(item.id)
+    setDraft(item.proposed ?? item.current)
+  }
   useEffect(() => {
     setDetail(null)
     setProblem(null)
     setReason('')
     if (!item) return
-    setDraft(item.proposed ?? item.current)
     let stale = false
     api.reviewItem(item.id).then(
       (d) => !stale && setDetail(d),
