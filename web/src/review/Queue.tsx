@@ -55,8 +55,12 @@ const S = strings(
     keep: 'looks right, keep it',
     noProposal: 'nothing proposed: check it, and edit if it is wrong',
     reject: 'reject',
+    reset: 'reset card',
+    resetTitle: 'Throw away what you changed on this card and start again from the proposal',
+    confirmReset: 'Throw away what you changed on this card?',
     skip: 'skip',
     keys: 'a accept · r reject · s skip · j/k next/previous',
+    keysNoReject: 'a accept · s skip · j/k next/previous',
     keysWord: '1–9 pick and decide · r reject · s skip · j/k next/previous',
     removed: 'Loses as a part',
     added: 'Gains as a part',
@@ -103,8 +107,12 @@ const S = strings(
     keep: 'вярно е, оставете го',
     noProposal: 'нищо не е предложено: проверете и поправете, ако е грешно',
     reject: 'отхвърлете',
+    reset: 'нулирайте картата',
+    resetTitle: 'Изхвърлете промените по тази карта и започнете отначало от предложението',
+    confirmReset: 'Да се изхвърлят ли промените по тази карта?',
     skip: 'пропуснете',
     keys: 'a приемане · r отхвърляне · s пропускане · j/k следващо/предишно',
+    keysNoReject: 'a приемане · s пропускане · j/k следващо/предишно',
     keysWord: '1–9 избор и решение · r отхвърляне · s пропускане · j/k следващо/предишно',
     removed: 'Губи като част',
     added: 'Получава като част',
@@ -139,6 +147,13 @@ function typing(e: KeyboardEvent) {
 
 type Placements = Record<number, string | null>
 
+/**
+ * Reject is for proposals that can be wrong as a whole: a decomposition, a
+ * form link, or anything a person suggested. Meanings and Bulgarian are
+ * shaped until right, then accepted, or skipped.
+ */
+const canReject = (i: QueueItem) => i.type === 'decomposition' || i.type === 'form_link' || i.origin === 'suggestion'
+
 /** `onDecided` is told after each decision, so the progress can count again. */
 export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void; onDecided?: () => void }) {
   const lang = useLang()
@@ -162,6 +177,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [placements, setPlacements] = useState<Placements>({})
   const [placedFrom, setPlacedFrom] = useState<Placements>({})
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
+  // The board's own work (confirmed words, folded boxes), and a key to start it afresh.
+  const [boardWork, setBoardWork] = useState(false)
+  const [fresh, setFresh] = useState(0)
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
   const [labelsFrom, setLabelsFrom] = useState<Record<string, string>>({})
@@ -219,6 +237,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setPlacedFrom({})
     setLabels({})
     setLabelsFrom({})
+    setBoardWork(false)
     if (!item) return
     let stale = false
     api.reviewItem(item.id).then(
@@ -278,6 +297,23 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
   const relabelled = item?.type === 'bg' && !same(labels, labelsFrom)
+  // Anything to throw away: the answer, the reason, words moved or left for later, labels, board ticks.
+  const changed = !!item && (edited0() || !!reason.trim() || skipped.size > 0 || boardWork)
+  function edited0() {
+    if (!item) return false
+    return moved || relabelled || (item.proposed === null ? !same(draft, item.current) : !same(draft, item.proposed))
+  }
+  function reset() {
+    if (!item || !window.confirm(t('confirmReset'))) return
+    clearDraft(item.id)
+    setDraft(item.proposed ?? item.current)
+    setReason('')
+    setPlacements(placedFrom)
+    setSkipped(new Set())
+    setLabels(labelsFrom)
+    setBoardWork(false)
+    setFresh((n) => n + 1)
+  }
   const edited = item ? moved || relabelled || (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
   const decideDraft = useCallback(
     (value: TaskValue = draft) => {
@@ -340,7 +376,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   keys.current = (e: KeyboardEvent) => {
     if (typing(e) || e.ctrlKey || e.metaKey || e.altKey || !item) return
     if (e.key === 'a' || e.key === 'Enter') decideDraft()
-    else if (e.key === 'r' && item.type !== 'bg') decide('reject')
+    else if (e.key === 'r' && canReject(item)) decide('reject')
     else if (e.key === 's') decide('skip')
     else if (e.key === 'j' || e.key === 'ArrowDown') setAt((i) => Math.min(i + 1, (items?.length ?? 1) - 1))
     else if (e.key === 'k' || e.key === 'ArrowUp') setAt((i) => Math.max(i - 1, 0))
@@ -480,7 +516,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 ) : board ? (
                   detail?.context.board ? (
                     <MeaningsBoard
-                      key={item.id}
+                      key={`${item.id}:${fresh}`}
+                      onWork={setBoardWork}
                       cacheKey={item.id}
                       char={item.subject}
                       groups={(draft ?? []) as MeaningGroup[]}
@@ -518,8 +555,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 <button className="account-submit" disabled={busy} onClick={() => decideDraft()}>
                   {edited ? t('saveEdit') : open ? t('keep') : t('accept')}
                 </button>
-                {/* A translation is fixed or kept; rejecting one would close it with nothing done. */}
-                {item.type !== 'bg' && (
+                {canReject(item) && (
                   <button className="clear" disabled={busy} onClick={() => decide('reject')}>
                     {t('reject')}
                   </button>
@@ -527,7 +563,12 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 <button className="clear" disabled={busy} onClick={() => decide('skip')}>
                   {t('skip')}
                 </button>
-                <span className="hint queue-keys">{t(item.type === 'word_sense' ? 'keysWord' : 'keys')}</span>
+                <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
+                  {t('reset')}
+                </button>
+                <span className="hint queue-keys">
+                  {t(item.type === 'word_sense' ? 'keysWord' : canReject(item) ? 'keys' : 'keysNoReject')}
+                </span>
               </div>
               </div>
             </article>

@@ -11,7 +11,6 @@ const PREFIX = 'betterrtk:review-draft:'
 const KEEP_DAYS = 30
 
 export interface BoardDraft {
-  okBoxes: string[]
   okWords: number[]
   openOk: string[]
   shut: string[]

@@ -21,6 +21,13 @@ Nothing an AI or a data source proposes is live until a person accepts it.
 Every decision is logged and can be reverted from History, so decide and move
 on; you can always come back.
 
+**The buttons.** Every card has *accept* (or *save my answer* once you
+changed something), *skip*, and *reset card*, which throws away what you
+changed on it and starts again from the proposal (greyed when there is
+nothing to throw away). *Reject* is only on parts, forms and people's
+suggestions: things that can be wrong as a whole. Meanings and Bulgarian are
+shaped until they are right, then accepted, or skipped.
+
 ## Parts (decomposition)
 
 Question: which parts does this character visibly contain, as written today?
@@ -92,16 +99,12 @@ words with a red edge are the ones it was unsure of, so look at those first.
 - **Move words** by dragging them, or right-clicking one to pick its group.
   Click several to select them first and the menu moves them all. (On a
   phone, a long press opens the menu where the browser allows it.)
-- **Confirm as you go.** Tick a group's *confirmed* once you are sure the
-  group the model suggested is real (its label and scope, not made up); then
-  tick each word you have checked (hover a card for its checkbox; in a
-  suggested group a word can only be confirmed once the group is). *The kanji
-  brings no meaning* and *Not in a group* are not suggestions, so they have no
-  box checkbox: their words can be ticked straight away. Confirmed words
-  fold into a *confirmed* part of the box, shut by default, so what is left
-  in view is what still needs a look. Moving a word clears its tick.
-  Right-click works too: *Confirm* on one word, or on a selection to confirm
-  them all at once (words in groups not confirmed yet are left out).
+- **Confirm words as you go.** Tick each word you have checked (hover a card
+  for its checkbox), or right-click *Confirm* on one word or a selection.
+  Confirmed words fold into a *confirmed* part at the top of their box, shut
+  by default, so what is left in view is what still needs a look. Moving a
+  word clears its tick. (Groups need no ticking: fix or remove a wrong one,
+  and what you accept is what you meant.)
 - **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
   submit, the groups and every other word are decided, and the skipped words
   come back together as a follow-up for the same kanji at the very end of the

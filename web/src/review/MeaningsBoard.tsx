@@ -23,7 +23,7 @@ import { CATCH_ALL } from './editors'
 const S = strings(
   {
     groups: 'Meaning groups',
-    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group. Tick a group to confirm it, then tick its words as you check them.',
+    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group. Tick words as you check them; they fold away.',
     en: 'English label',
     bg: 'Bulgarian',
     note: 'Note',
@@ -36,10 +36,7 @@ const S = strings(
     clearPick: 'clear selection',
     picked: '{n} selected',
     empty: 'no words',
-    confirmGroup: 'confirmed',
-    confirmGroupTitle: 'This suggested group is real: its label and what it stands for, not made up',
     confirmWord: 'Confirm: this word belongs here',
-    confirmFirst: 'Confirm the group first',
     confirmed: 'confirmed',
     nConfirmed: '{n} confirmed',
     moveTo: 'Move to',
@@ -47,7 +44,6 @@ const S = strings(
     unnamed: '(unnamed group)',
     confirmOne: 'Confirm: it belongs here',
     confirmMany: 'Confirm {n} selected',
-    confirmSome: 'Confirm {n} of {m} selected (the rest are in groups not confirmed yet)',
     unconfirmOne: 'Take back the confirmation',
     unconfirmMany: 'Take back {n} confirmations',
     skip: 'Not sure: leave for later',
@@ -71,7 +67,7 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
-    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група. Отметнете група, за да я потвърдите, после отмятайте думите ѝ, докато ги проверявате.',
+    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група. Отмятайте думите, докато ги проверявате; те се прибират.',
     en: 'Английски етикет',
     bg: 'Български',
     note: 'Бележка',
@@ -84,10 +80,7 @@ const S = strings(
     clearPick: 'изчистете избора',
     picked: 'избрани: {n}',
     empty: 'няма думи',
-    confirmGroup: 'потвърдена',
-    confirmGroupTitle: 'Предложената група е истинска: етикетът ѝ и това, което обхваща, не са измислени',
     confirmWord: 'Потвърдете: думата е на мястото си',
-    confirmFirst: 'Първо потвърдете групата',
     confirmed: 'потвърдени',
     nConfirmed: 'потвърдени: {n}',
     moveTo: 'Преместете в',
@@ -95,7 +88,6 @@ const S = strings(
     unnamed: '(група без име)',
     confirmOne: 'Потвърдете: на мястото си е',
     confirmMany: 'Потвърдете {n} избрани',
-    confirmSome: 'Потвърдете {n} от {m} избрани (останалите са в още непотвърдени групи)',
     unconfirmOne: 'Отменете потвърждението',
     unconfirmMany: 'Отменете {n} потвърждения',
     skip: 'Не съм сигурен: оставете за по-късно',
@@ -176,6 +168,7 @@ export function MeaningsBoard({
   skipped,
   onSkip,
   followUp = false,
+  onWork,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -191,6 +184,8 @@ export function MeaningsBoard({
   onSkip: (ids: number[], on: boolean) => void
   /** A follow-up of skipped words: the groups are decided, only the words are placed. */
   followUp?: boolean
+  /** Told whether the board holds work of its own (confirmed words, folded boxes), for the reset button. */
+  onWork?: (has: boolean) => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -199,10 +194,8 @@ export function MeaningsBoard({
   const [over, setOver] = useState<string | undefined>()
   // Collapsed boxes, by bucket id.
   const [shut, setShut] = useState<Set<string>>(new Set(kept?.shut))
-  // Confirmation, a reviewer's checklist while working: boxes (by bucket id)
-  // and words. A word can be confirmed only in a confirmed box; confirmed
-  // words fold into a "confirmed" part of the box, shut unless opened.
-  const [okBoxes, setOkBoxes] = useState<Set<string>>(new Set(kept?.okBoxes))
+  // Confirmation, a reviewer's checklist while working: the words checked.
+  // Confirmed words fold into a "confirmed" part of their box, shut unless opened.
   const [okWords, setOkWords] = useState<Set<number>>(new Set(kept?.okWords))
   const [openOk, setOpenOk] = useState<Set<string>>(new Set(kept?.openOk))
   // The right-click menu: where it opens and which words it moves.
@@ -235,11 +228,12 @@ export function MeaningsBoard({
   }, [menu])
 
   useEffect(() => {
-    const empty = !okBoxes.size && !okWords.size && !openOk.size && !shut.size
+    const empty = !okWords.size && !openOk.size && !shut.size
     writeDraft(cacheKey, {
-      board: empty ? undefined : { okBoxes: [...okBoxes], okWords: [...okWords], openOk: [...openOk], shut: [...shut] },
+      board: empty ? undefined : { okWords: [...okWords], openOk: [...openOk], shut: [...shut] },
     })
-  }, [cacheKey, okBoxes, okWords, openOk, shut])
+    onWork?.(!empty)
+  }, [cacheKey, okWords, openOk, shut, onWork])
 
   // Words by bucket, each sorted by newspaper rank, JLPT, then grade.
   const byBucket = useMemo(() => {
@@ -272,29 +266,8 @@ export function MeaningsBoard({
     setPicked(new Set())
   }
 
-  function toggleBox(id: string, key: Bucket) {
-    const on = !okBoxes.has(id)
-    setOkBoxes((s) => {
-      const n = new Set(s)
-      if (on) n.add(id)
-      else n.delete(id)
-      return n
-    })
-    // Taking a group's confirmation back takes back its words' too.
-    if (!on) unconfirm((byBucket.get(key) ?? []).map((w) => w.id))
-  }
-
-  // Where each word sits now, and whether it may be confirmed there: in a
-  // confirmed group or one of the two fixed boxes, and not left for later.
-  const where = useMemo(() => {
-    const m = new Map<number, Bucket>()
-    for (const [b, list] of byBucket) for (const w of list) m.set(w.id, b)
-    return m
-  }, [byBucket])
-  const canConfirm = (id: number) => {
-    const b = where.get(id) ?? null
-    return !skipped.has(id) && (b === null || b === CATCH_ALL || okBoxes.has(b))
-  }
+  // A word left for later is not confirmed.
+  const canConfirm = (id: number) => !skipped.has(id)
   function setConfirmed(ids: number[], on: boolean) {
     setOkWords((s) => {
       const n = new Set(s)
@@ -337,7 +310,6 @@ export function MeaningsBoard({
     const inIt = (byBucket.get(id) ?? []).map((w) => w.id)
     if (inIt.length) onPlace(inIt, null)
     unconfirm(inIt)
-    setOkBoxes((s) => setIn(s, id, false))
     onGroups(groups.filter((_, j) => j !== i))
   }
   function addGroup() {
@@ -358,9 +330,7 @@ export function MeaningsBoard({
   function card(w: BoardWord, from: Bucket) {
     const unsure = isUnsure(w)
     const isSkipped = skipped.has(w.id)
-    // Only a suggested group needs confirming first; the two fixed boxes are not suggestions.
-    const fixed = from === null || from === CATCH_ALL
-    const boxOk = (fixed || okBoxes.has(from)) && !isSkipped
+    const boxOk = !isSkipped
     const ok = okWords.has(w.id)
     return (
       <li
@@ -387,7 +357,7 @@ export function MeaningsBoard({
         <span className="board-head" lang="ja">
           <label
             className="board-check"
-            title={boxOk ? t('confirmWord') : t('confirmFirst')}
+            title={t('confirmWord')}
             data-off={!boxOk || undefined}
             onClick={(e) => e.stopPropagation()}
           >
@@ -458,12 +428,6 @@ export function MeaningsBoard({
             {shut.has(id) ? '▸' : '▾'}
           </button>
           {head}
-          {key !== null && key !== CATCH_ALL && (
-            <label className="board-group-check" data-on={okBoxes.has(id) || undefined} title={t('confirmGroupTitle')}>
-              <input type="checkbox" checked={okBoxes.has(id)} onChange={() => toggleBox(id, key)} />
-              <span>{t('confirmGroup')}</span>
-            </label>
-          )}
           <span className="hint board-count">
             {t('words', { n: all.length.toLocaleString(lang) })}
             {done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
@@ -589,12 +553,7 @@ export function MeaningsBoard({
                 </button>
               )
             const ok = ids.filter((id) => !okWords.has(id) && canConfirm(id))
-            const label =
-              ids.length === 1
-                ? t(ok.length ? 'confirmOne' : 'confirmFirst')
-                : ok.length === ids.length - done.length
-                  ? t('confirmMany', { n: ok.length })
-                  : t('confirmSome', { n: ok.length, m: ids.length - done.length })
+            const label = ids.length === 1 ? t('confirmOne') : t('confirmMany', { n: ok.length })
             return (
               <button
                 role="menuitem"

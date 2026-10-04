@@ -23,8 +23,8 @@ const S = strings(
     remove: 'remove',
     hint: 'Check each Bulgarian gloss against the English beside it. Fix what is wrong or unnatural; leave what is right.',
     groups: 'Its meaning groups: give each its Bulgarian label',
-    groupsHint: 'Short, natural Bulgarian for what the group stands for. The meanings below can start from them.',
-    fromGroups: 'fill the meanings from these labels',
+    groupsHint: 'Short, natural Bulgarian for what the group stands for. The meanings above can start from them.',
+    fromGroups: 'fill from the group labels below',
     inGroups: 'What its kanji bring here',
     noMeaning: 'brings no meaning to this word',
     notPlaced: 'not placed in a group',
@@ -43,8 +43,8 @@ const S = strings(
     remove: 'махнете',
     hint: 'Сверете всеки български превод с английския до него. Поправете грешното или неестественото; оставете вярното.',
     groups: 'Групите му значения: дайте на всяка български етикет',
-    groupsHint: 'Кратко, естествено на български, какво обхваща групата. Значенията по-долу могат да тръгнат от тях.',
-    fromGroups: 'попълнете значенията от тези етикети',
+    groupsHint: 'Кратко, естествено на български, какво обхваща групата. Значенията по-горе могат да тръгнат от тях.',
+    fromGroups: 'попълнете от етикетите на групите по-долу',
     inGroups: 'Какво внасят кандзитата му тук',
     noMeaning: 'не внася значение в тази дума',
     notPlaced: 'не е разпределена в група',
@@ -153,6 +153,35 @@ export function BgCard({
         <dt>{t('machine')}</dt>
         <dd lang="bg">{built.join(', ')}</dd>
       </dl>
+      <div className="review-field">
+        <span>{t('meanings')}</span>
+        <span className="hint">{t('meaningsHint')}</span>
+        <div className="bg-meanings">
+          {value.map((m, i) => (
+            <span key={i} className="bg-meaning">
+              <input className="assoc-text" lang="bg" value={m} maxLength={60} aria-label={`${t('meanings')} ${i + 1}`} onChange={(e) => set(i, e.target.value)} />
+              <button className="clear" onClick={() => onChange(value.filter((_, j) => j !== i))}>
+                {t('remove')}
+              </button>
+            </span>
+          ))}
+        </div>
+        <span className="bg-meaning-tools">
+          {value.length < 12 && (
+            <button className="clear" onClick={() => onChange([...value, ''])}>
+              + {t('add')}
+            </button>
+          )}
+            {Object.values(labels).some((l) => l.trim()) && (
+              <button
+                className="clear"
+                onClick={() => onChange(c.senses!.map((g) => (labels[g.id] ?? '').trim()).filter(Boolean).slice(0, 12))}
+              >
+                {t('fromGroups')}
+              </button>
+            )}
+        </span>
+      </div>
       {c.senses && c.senses.length > 0 && (
         <div className="bg-groups">
           <span>{t('groups')}</span>
@@ -175,35 +204,8 @@ export function BgCard({
               </li>
             ))}
           </ul>
-          {Object.values(labels).some((l) => l.trim()) && (
-            <button
-              className="clear"
-              onClick={() => onChange(c.senses!.map((g) => (labels[g.id] ?? '').trim()).filter(Boolean).slice(0, 12))}
-            >
-              {t('fromGroups')}
-            </button>
-          )}
         </div>
       )}
-      <div className="review-field">
-        <span>{t('meanings')}</span>
-        <span className="hint">{t('meaningsHint')}</span>
-        <div className="bg-meanings">
-          {value.map((m, i) => (
-            <span key={i} className="bg-meaning">
-              <input className="assoc-text" lang="bg" value={m} maxLength={60} aria-label={`${t('meanings')} ${i + 1}`} onChange={(e) => set(i, e.target.value)} />
-              <button className="clear" onClick={() => onChange(value.filter((_, j) => j !== i))}>
-                {t('remove')}
-              </button>
-            </span>
-          ))}
-        </div>
-        {value.length < 12 && (
-          <button className="clear" onClick={() => onChange([...value, ''])}>
-            + {t('add')}
-          </button>
-        )}
-      </div>
     </div>
   )
 }
