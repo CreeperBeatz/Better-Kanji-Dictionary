@@ -250,8 +250,11 @@ each one separately.
   Check: `python tests/review_access.py`, `python tests/decomp_auth.py`;
   browser: `tests/sandbox.py --dir X`, `tests/seed_review.py --dir X`,
   `web/scripts/review-check.mjs`.
-- State: `data/review/review.json` (gitignored; **back it up with
-  data/associations before any deploy**). Decompositions stay in the store,
+- State: `data/review/review.db`, SQLite, one row per item, decision and live
+  entry (gitignored; **back it up with data/associations before any deploy**,
+  via `python -m server.review backup <file>`: the db runs in WAL mode, so a
+  plain copy of the file while the server runs can miss the latest decisions).
+  An old `review.json` is moved in on first start and renamed `.json.migrated`. Decompositions stay in the store,
   where the graph reads them.
 - **The server no longer writes `data/decomp_overrides.json`.**
   `python -m server.review export` writes it plus `data/form_overrides.json`

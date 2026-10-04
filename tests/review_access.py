@@ -155,6 +155,10 @@ def main() -> int:
         print("admin-only lists")
         for who, want in (("reviewer", 403), ("admin", 200)):
             check(f"{who} GET auto is {want}", call("GET", "/api/review/auto", who)[0] == want)
+
+        print("the store")
+        with review._lock:
+            check("every change above reached the database", review._fetch(review._db()) == review._read())
     finally:
         srv.stop()
     return check.done()

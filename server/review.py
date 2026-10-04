@@ -19,8 +19,9 @@ putting the value from before back, provided nothing changed it since.
 
 What decisions make live is an overlay the server reads on every request:
 decompositions in the association store (where the graph already reads them),
-the other types here, under `live`. None of it is in the SQLite database,
-which is rebuilt and swapped on deploys. `python -m server.review export`
+the other types here, under `live`. All of this is in data/review/review.db,
+not in the data database, which is rebuilt and swapped on deploys. Copy it
+with `python -m server.review backup <file>`, which is safe while the server runs. `python -m server.review export`
 writes the accepted state to tracked files for the pipeline and for git
 (data/decomp_overrides.json, data/form_overrides.json,
 data/meaning_groups.json); nothing writes those files on its own, so a
@@ -34,13 +35,15 @@ accepts in a row cause one rebuild, not twenty.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import re
-import shutil
+import sqlite3
 import sys
 import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -51,7 +54,8 @@ from .errors import AppError
 
 ROOT = Path(__file__).parent.parent
 REVIEW_DIR = ROOT / "data" / "review"
-FILE = REVIEW_DIR / "review.json"
+DB = REVIEW_DIR / "review.db"
+LEGACY = REVIEW_DIR / "review.json"  # the store before review.db; read once, then renamed
 EXPORTS = {
     "decomposition": ROOT / "data" / "decomp_overrides.json",
     "form_link": ROOT / "data" / "form_overrides.json",
@@ -76,14 +80,20 @@ STROKES = set("一丨丶丿乙亅乚㇒㇏")
 SENSE_ID = re.compile(r"^[a-z0-9-]{1,24}$")
 
 _lock = threading.RLock()
-_snapshot: tuple[tuple[int, int] | None, dict] | None = None
+_conn: sqlite3.Connection | None = None
+_state: dict | None = None
+_version: int | None = None
 _pack_timer: threading.Timer | None = None
 
 
 def use_dir(path: Path) -> None:
     """Keep the review state somewhere else (tests/sandbox.py)."""
-    global REVIEW_DIR, FILE, _snapshot
-    REVIEW_DIR, FILE, _snapshot = path, path / "review.json", None
+    global REVIEW_DIR, DB, LEGACY, _conn, _state
+    with _lock:
+        if _conn is not None:
+            _conn.close()
+        REVIEW_DIR, DB, LEGACY = path, path / "review.db", path / "review.json"
+        _conn = _state = None
 
 
 def _now() -> str:
@@ -103,66 +113,188 @@ def _empty() -> dict:
 # ---------------------------------------------------------------- storage
 
 
-def _stat() -> tuple[int, int] | None:
-    try:
-        st = FILE.stat()
-        return (st.st_mtime_ns, st.st_size)
-    except FileNotFoundError:
-        return None
+# data/review/review.db (SQLite, not the swapped data DB): a row per item, per
+# decision and per live entry, so a decision writes the few rows it touched.
+# The whole state is also kept in memory, read once, and everything reads it
+# there; another process's commit (a loader) is noticed and read again.
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS item (
+    seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL, subject TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS decision (
+    seq INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL, subject TEXT NOT NULL, action TEXT NOT NULL, body TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS live (
+    type TEXT NOT NULL, subject TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY (type, subject));
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+"""
 
 
-def _load() -> dict:
-    """For changing: the caller saves after. When the file has not changed
-    since it was last read or written, the parsed copy is reused rather than
-    parsing ~30 MB again for every decision: the containers a change adds to
-    are copied (shallowly, a few ms), so a reader going through the shared
-    copy never sees one grow under it."""
-    snap = _snapshot
-    if snap is not None and snap[0] is not None and snap[0] == _stat():
-        d = snap[1]
-        return {
-            **d,
-            "items": dict(d["items"]),
-            "decisions": list(d["decisions"]),
-            "live": {k: dict(v) for k, v in d["live"].items()},
-        }
-    if not FILE.exists():
-        return _empty()
+def _dump(v: Any) -> str:
+    return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+
+
+def _db() -> sqlite3.Connection:
+    """The connection, opened once; the caller holds _lock."""
+    global _conn
+    if _conn is None:
+        REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(DB, timeout=30, isolation_level=None, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=FULL")
+        conn.executescript(SCHEMA)
+        _conn = conn
+        _migrate(conn)
+    return _conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """The first time: everything in the old review.json moves in, and the file is renamed."""
+    if not LEGACY.exists():
+        return
+    conn.execute("BEGIN IMMEDIATE")
     try:
-        data = json.loads(FILE.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        backup = FILE.with_suffix(f".corrupt-{int(datetime.now().timestamp())}.json")
-        shutil.copy2(FILE, backup)
-        raise RuntimeError(f"{FILE} is not valid JSON; copied to {backup.name} and stopped")
-    base = _empty()
-    for k, v in base.items():
-        data.setdefault(k, v)
-    for k, v in base["live"].items():
-        data["live"].setdefault(k, v)
+        if conn.execute("SELECT 1 FROM item UNION ALL SELECT 1 FROM decision LIMIT 1").fetchone():
+            conn.execute("ROLLBACK")
+            return
+        data = {**_empty(), **json.loads(LEGACY.read_text(encoding="utf-8"))}
+        for k, v in _empty()["live"].items():
+            data["live"].setdefault(k, v)
+        _write(conn, _empty(), {
+            **data,
+            "_dirty": {"items": dict.fromkeys(data.get("items", {})), "decisions": {},
+                       "live": {(t, s) for t, entries in data["live"].items() for s in entries}},
+        })
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+    LEGACY.replace(LEGACY.with_suffix(".json.migrated"))
+
+
+def _fetch(conn: sqlite3.Connection) -> dict:
+    data = _empty()
+    items = data["items"]
+    for (body,) in conn.execute("SELECT body FROM item ORDER BY seq"):
+        i = json.loads(body)
+        items[i["id"]] = i
+    data["decisions"] = [json.loads(b) for (b,) in conn.execute("SELECT body FROM decision ORDER BY seq")]
+    for t, s, body in conn.execute("SELECT type, subject, body FROM live"):
+        data["live"].setdefault(t, {})[s] = json.loads(body)
+    row = conn.execute("SELECT value FROM meta WHERE key = 'pack_key'").fetchone()
+    data["pack_key"] = row[0] if row else None
     return data
 
 
+def _current() -> dict:
+    """The state in memory, read again if another process committed since; the caller holds _lock."""
+    global _state, _version
+    conn = _db()
+    v = conn.execute("PRAGMA data_version").fetchone()[0]
+    if _state is None or v != _version:
+        _state, _version = _fetch(conn), v
+    return _state
+
+
 def _read() -> dict:
-    """For reading only: shared, never mutate it. Reparsed when the file changes."""
-    global _snapshot
-    key = _stat()
-    snap = _snapshot
-    if snap is not None and snap[0] == key:
-        return snap[1]
+    """For reading only: shared, never mutate it."""
     with _lock:
-        key = _stat()
-        _snapshot = (key, _load())
-        return _snapshot[1]
+        return _current()
 
 
-def _save(data: dict) -> None:
-    global _snapshot
-    REVIEW_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    tmp.replace(FILE)
-    # What was just written is the file now: readers and the next change use it as is.
-    _snapshot = (_stat(), data)
+@contextmanager
+def _change():
+    """For changing: a copy to change, written when the block ends, as one transaction.
+
+    The copy shares items and decisions with the state readers see, so
+    neither is changed in place: `_update`, `_update_decision` and
+    `_set_live` put changed copies in, and mark them to be written. Only the
+    containers are copied (a few ms), so a reader never sees one grow under
+    it, and a block that raises leaves the state as it was.
+    """
+    global _state
+    with _lock:
+        conn = _db()
+        conn.execute("BEGIN IMMEDIATE")  # other processes wait; their commits are read first
+        try:
+            base = _current()
+            work = {
+                **base,
+                "items": dict(base["items"]),
+                "decisions": list(base["decisions"]),
+                "live": {k: dict(v) for k, v in base["live"].items()},
+                "_dirty": {"items": {}, "decisions": {}, "live": set()},
+            }
+            yield work
+            _write(conn, base, work)
+            conn.execute("COMMIT")
+        except BaseException:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            raise
+        _state = work
+
+
+def _write(conn: sqlite3.Connection, base: dict, work: dict) -> None:
+    """The rows `work` changed from `base`: decisions are only ever added, the rest as marked."""
+    dirty = work.pop("_dirty")
+    conn.executemany(
+        "INSERT INTO item (id, type, subject, status, body) VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT (id) DO UPDATE SET status = excluded.status, body = excluded.body",
+        [(i["id"], i["type"], i["subject"], i["status"], _dump(i)) for i in map(work["items"].__getitem__, dirty["items"])],
+    )
+    conn.executemany(
+        "INSERT INTO decision (id, type, subject, action, body) VALUES (?, ?, ?, ?, ?)",
+        [(d["id"], d["type"], d["subject"], d["action"], _dump(d)) for d in work["decisions"][len(base["decisions"]):]],
+    )
+    conn.executemany("UPDATE decision SET body = ? WHERE id = ?", [(_dump(d), d["id"]) for d in dirty["decisions"].values()])
+    gone, there = [], []
+    for t, s in dirty["live"]:
+        entry = work["live"][t].get(s)
+        if entry is None:
+            gone.append((t, s))
+        else:
+            there.append((t, s, _dump(entry)))
+    conn.executemany("DELETE FROM live WHERE type = ? AND subject = ?", gone)
+    conn.executemany("INSERT INTO live (type, subject, body) VALUES (?, ?, ?) "
+                     "ON CONFLICT (type, subject) DO UPDATE SET body = excluded.body", there)
+    if work["pack_key"] != base["pack_key"]:
+        conn.execute("INSERT INTO meta (key, value) VALUES ('pack_key', ?) "
+                     "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (work["pack_key"],))
+
+
+def _update(data: dict, item: dict, **fields) -> dict:
+    """`item` with `fields` changed, as a new dict in its place (see _change)."""
+    new = {**item, **fields}
+    data["items"][new["id"]] = new
+    data["_dirty"]["items"][new["id"]] = None
+    return new
+
+
+def _update_decision(data: dict, d: dict, **fields) -> dict:
+    new = {**d, **fields}
+    ds = data["decisions"]
+    ds[next(k for k in range(len(ds) - 1, -1, -1) if ds[k] is d)] = new
+    data["_dirty"]["decisions"][new["id"]] = new
+    return new
+
+
+def _set_live(data: dict, type_: str, subject: str, entry: dict | None) -> None:
+    if entry is None:
+        data["live"][type_].pop(subject, None)
+    else:
+        data["live"][type_][subject] = entry
+    data["_dirty"]["live"].add((type_, subject))
+
+
+def backup(dest: Path) -> None:
+    """A consistent copy of the store, safe while the server runs."""
+    with _lock:
+        out = sqlite3.connect(dest)
+        try:
+            _db().backup(out)
+        finally:
+            out.close()
 
 
 # ---------------------------------------------------------------- the graph, for checks and impact
@@ -267,6 +399,14 @@ def _bad(code: str, detail: str, **params) -> AppError:
 def _word(word_id: int) -> dict | None:
     r = query_one("SELECT id, headword FROM word WHERE id = ?", (word_id,))
     return dict(r) if r else None
+
+
+@functools.lru_cache(maxsize=256)
+def _word_ids(char: str) -> frozenset[int]:
+    """The words written with `char`, read once per kanji (the database does not
+    change under a running server): word_char is indexed by char only, so asking
+    word by word scanned all of 国's for each word on its board."""
+    return frozenset(r["word_id"] for r in query("SELECT word_id FROM word_char WHERE char = ?", (char,)))
 
 
 def _split(subject: str, n: int = 2) -> list[str]:
@@ -383,7 +523,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
     char, wid = _split(subject)
     if len(char) != 1 or not wid.isdigit():
         raise _bad("bad_subject", "a word sense is a kanji and a word id")
-    if not query_one("SELECT 1 FROM word_char WHERE word_id = ? AND char = ?", (int(wid), char)):
+    if int(wid) not in _word_ids(char):
         raise _bad("word_not_with", "that word is not written with this kanji")
     if value is None:
         return None
@@ -465,26 +605,22 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
         _schedule_pack()
         return
     if type_ == "bg":
-        if value is None:
-            data["live"]["bg"].pop(subject, None)
-        else:
-            data["live"]["bg"][subject] = {"value": value, "decision": decision}
+        _set_live(data, "bg", subject, None if value is None else {"value": value, "decision": decision})
         _bg_live(subject, value)
         _schedule_pack()
         return
-    live = data["live"][type_]
     if value is None:
-        live.pop(subject, None)
+        _set_live(data, type_, subject, None)
     elif type_ == "form_link":
-        live[subject] = {**value, "decision": decision}
+        _set_live(data, type_, subject, {**value, "decision": decision})
     elif type_ == "kanji_senses":
-        before = live.get(subject, {}).get("senses") or []
-        live[subject] = {"senses": value, "decision": decision}
+        before = data["live"][type_].get(subject, {}).get("senses") or []
+        _set_live(data, type_, subject, {"senses": value, "decision": decision})
         if not explicit_words:
             _reopen_words(data, subject, before, value, decision)
             _auto_words(data, subject, value)
     else:
-        live[subject] = {"sense": value, "decision": decision}
+        _set_live(data, type_, subject, {"sense": value, "decision": decision})
 
 
 def _bg_live(subject: str, value: list[str] | None) -> None:
@@ -526,14 +662,15 @@ def _reopen_words(data: dict, char: str, before: list[dict], after: list[dict], 
         return
     ws = data["live"]["word_sense"]
     for subject in [k for k, v in ws.items() if k.startswith(f"{char}|") and v["sense"] in changed]:
-        old = ws.pop(subject)
+        old = ws[subject]
+        _set_live(data, "word_sense", subject, None)
         data["decisions"].append(_decision(
             "reopen", "word_sense", subject, old["sense"], None, "auto", None,
             f"its meaning group changed in {decision}",
         ))
         item = _latest_item(data, "word_sense", subject)
         if item:
-            item.update(status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
+            _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
         else:
             _new_item(data, "word_sense", subject, None, "reopened", "proposal", None, None, "auto", 0.0)
 
@@ -559,7 +696,7 @@ def word_rule(item: dict, accepted_ids: set[str]) -> bool:
 def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
     """Once a kanji's groups are accepted, its words that pass the rule go live, as "auto"."""
     ids = {s["id"] for s in senses}
-    for item in data["items"].values():
+    for item in list(data["items"].values()):
         if item["type"] != "word_sense" or item["status"] != "open" or not item["subject"].startswith(f"{char}|"):
             continue
         if not word_rule(item, ids):
@@ -567,8 +704,8 @@ def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
         before = live_value("word_sense", item["subject"], data)
         d = _decision("auto", "word_sense", item["subject"], before, item["proposed"], "auto", item["id"],
                       "two runs agree, both confident")
-        data["live"]["word_sense"][item["subject"]] = {"sense": item["proposed"], "decision": d["id"]}
-        item.update(status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
+        _set_live(data, "word_sense", item["subject"], {"sense": item["proposed"], "decision": d["id"]})
+        _update(data, item, status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
         data["decisions"].append(d)
 
 
@@ -620,6 +757,7 @@ def _new_item(data: dict, type_: str, subject: str, proposed: Any, source: str, 
         **extra,
     }
     data["items"][item["id"]] = item
+    data["_dirty"]["items"][item["id"]] = None
     return item
 
 
@@ -629,8 +767,7 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
     """Put a change in the queue; an identical open one is returned instead of a twin."""
     if origin not in ORIGINS:
         raise _bad("bad_origin", "origin is proposal or suggestion")
-    with _lock:
-        data = _load()
+    with _change() as data:
         proposed = validate(type_, subject, proposed, data, pending_ok=origin == "proposal", machine=origin == "proposal")
         for i in data["items"].values():
             if i["status"] == "open" and i["type"] == type_ and i["subject"] == subject and i["proposed"] == proposed:
@@ -641,7 +778,6 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
                 raise AppError(429, "too_many_suggestions", "you have {n} suggestions waiting already", n=mine)
         item = _new_item(data, type_, subject, proposed, source, origin,
                          (reason or "").strip()[:MAX_TEXT] or None, evidence, by, priority, **extra)
-        _save(data)
         return dict(item)
 
 
@@ -651,8 +787,7 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
     Each row is add_item's arguments as a dict. Returns (added, refused): a
     row that fails validation is skipped and counted, not raised.
     """
-    with _lock:
-        data = _load()
+    with _change() as data:
         open_keys = {
             (i["type"], i["subject"], json.dumps(i["proposed"], sort_keys=True, ensure_ascii=False))
             for i in data["items"].values() if i["status"] == "open"
@@ -672,7 +807,6 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
                       (r.get("reason") or "").strip()[:MAX_TEXT] or None, r.get("evidence"), "system",
                       r.get("priority", 0.0))
             added += 1
-        _save(data)
         return added, refused
 
 
@@ -696,8 +830,7 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, reject or skip")
     reason = (reason or "").strip()[:MAX_TEXT] or None
-    with _lock:
-        data = _load()
+    with _change() as data:
         item = data["items"].get(item_id)
         if not item:
             raise AppError(404, "item_not_found", "no such item")
@@ -707,15 +840,13 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
 
         if action == "skip":
             if user_id not in item["skipped_by"]:
-                item["skipped_by"].append(user_id)
-            _save(data)
+                item = _update(data, item, skipped_by=[*item["skipped_by"], user_id])
             return dict(item)
 
         if action == "reject":
             d = _decision("reject", type_, subject, None, None, user_id, item_id, reason)
-            item.update(status="rejected", decided_by=user_id, decided_at=d["at"], decision=d["id"])
+            item = _update(data, item, status="rejected", decided_by=user_id, decided_at=d["at"], decision=d["id"])
             data["decisions"].append(d)
-            _save(data)
             return dict(item)
 
         if action == "accept" and item["proposed"] is None:
@@ -729,7 +860,8 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
             raise _bad("words_invalid", "words are a map of word id to group")
         d = _decision(action, type_, subject, before, after, user_id, item_id, reason)
         _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
-        item.update(
+        item = _update(
+            data, item,
             status="accepted" if action == "accept" else "edited",
             decided_by=user_id, decided_at=d["at"], decision=d["id"],
         )
@@ -742,7 +874,6 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
                           f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
         if type_ == "bg" and labels and subject.startswith("kanji:"):
             _label_groups(data, subject[6:], labels, user_id, d["id"])
-        _save(data)
         return dict(item)
 
 
@@ -811,13 +942,13 @@ def _place_words(data: dict, char: str, words: dict, user_id: str, parent: str) 
         item = item if item and item["status"] == "open" else None
         if item and value is None:
             c = _decision("reject", "word_sense", subject, None, None, user_id, item["id"], None)
-            item.update(status="rejected", decided_by=user_id, decided_at=c["at"], decision=c["id"])
+            _update(data, item, status="rejected", decided_by=user_id, decided_at=c["at"], decision=c["id"])
         elif item:
             act = "accept" if item["proposed"] == value else "edit"
             c = _decision(act, "word_sense", subject, before, value, user_id, item["id"], None)
             _apply(data, "word_sense", subject, value, c["id"])
-            item.update(status="accepted" if act == "accept" else "edited",
-                        decided_by=user_id, decided_at=c["at"], decision=c["id"])
+            _update(data, item, status="accepted" if act == "accept" else "edited",
+                    decided_by=user_id, decided_at=c["at"], decision=c["id"])
         elif before != value:
             c = _decision("direct", "word_sense", subject, before, value, user_id, None, None)
             _apply(data, "word_sense", subject, value, c["id"])
@@ -831,8 +962,7 @@ def _place_words(data: dict, char: str, words: dict, user_id: str, parent: str) 
 
 def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | None = None) -> dict:
     """A reviewer's or the admin's own change, from the page: live at once, logged like any other."""
-    with _lock:
-        data = _load()
+    with _change() as data:
         after = validate(type_, subject, value, data)
         before = live_value(type_, subject, data)
         if before == after:
@@ -841,14 +971,12 @@ def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | Non
                       (reason or "").strip()[:MAX_TEXT] or None)
         _apply(data, type_, subject, after, d["id"])
         data["decisions"].append(d)
-        _save(data)
         return dict(d)
 
 
 def auto_accept(item_id: str, why: str) -> dict:
     """For loaders whose items pass the mechanical rule (TASK §6); logged as by "auto"."""
-    with _lock:
-        data = _load()
+    with _change() as data:
         item = data["items"][item_id]
         if item["status"] != "open":
             return dict(item)
@@ -856,16 +984,14 @@ def auto_accept(item_id: str, why: str) -> dict:
         before = live_value(item["type"], item["subject"], data)
         d = _decision("auto", item["type"], item["subject"], before, after, "auto", item_id, why)
         _apply(data, item["type"], item["subject"], after, d["id"])
-        item.update(status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
+        item = _update(data, item, status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
         data["decisions"].append(d)
-        _save(data)
         return dict(item)
 
 
 def revert(decision_id: str, user_id: str) -> dict:
     """Put back the value from before `decision_id`, as a new decision; reopens its item."""
-    with _lock:
-        data = _load()
+    with _change() as data:
         d = next((x for x in data["decisions"] if x["id"] == decision_id), None)
         if not d:
             raise AppError(404, "decision_not_found", "no such decision")
@@ -879,7 +1005,7 @@ def revert(decision_id: str, user_id: str) -> dict:
             validate(d["type"], d["subject"], d["before"], data)
         children = [c for c in data["decisions"] if c.get("parent") == decision_id and not c.get("reverted_by")]
         _apply(data, d["type"], d["subject"], d["before"], r["id"], explicit_words=bool(children))
-        d["reverted_by"] = r["id"]
+        d = _update_decision(data, d, reverted_by=r["id"])
         _reopen(data, d)
         data["decisions"].append(r)
         # The words placed on the meanings board go back with it.
@@ -894,17 +1020,16 @@ def revert(decision_id: str, user_id: str) -> dict:
             else:
                 continue
             rc["parent"] = r["id"]
-            c["reverted_by"] = rc["id"]
+            c = _update_decision(data, c, reverted_by=rc["id"])
             _reopen(data, c)
             data["decisions"].append(rc)
-        _save(data)
         return dict(r)
 
 
 def _reopen(data: dict, d: dict) -> None:
     item = data["items"].get(d["item"]) if d["item"] else None
     if item and item["decision"] == d["id"]:
-        item.update(status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
+        _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
 
 
 # ---------------------------------------------------------------- reading the queue
@@ -1324,20 +1449,16 @@ def pack_key() -> str:
     key = _read().get("pack_key")
     if key is None:
         key = _overrides_key()
-        with _lock:
-            data = _load()
+        with _change() as data:
             data["pack_key"] = key
-            _save(data)
     return key
 
 
 def _flush_pack() -> None:
     global _pack_timer
-    with _lock:
+    with _change() as data:
         _pack_timer = None
-        data = _load()
         data["pack_key"] = _overrides_key()
-        _save(data)
     from . import offline
 
     offline.ensure_async()
@@ -1415,5 +1536,8 @@ if __name__ == "__main__":
         for k, n in export().items():
             print(f"{k:14} {n:>6}")
         print("wrote " + ", ".join(str(p.relative_to(ROOT)) for p in EXPORTS.values()))
+    elif sys.argv[1:2] == ["backup"] and len(sys.argv) == 3:
+        backup(Path(sys.argv[2]))
+        print(f"copied {DB} to {sys.argv[2]}")
     else:
-        print("usage: python -m server.review export | load-bg [--dry-run]")
+        print("usage: python -m server.review export | load-bg [--dry-run] | backup <file.db>")
