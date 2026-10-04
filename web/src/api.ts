@@ -396,6 +396,8 @@ export interface BoardWord {
   nf: number | null
   /** On the JLPT N{jlpt} list. */
   jlpt: number | null
+  /** School grade of its hardest kanji (1-6, 8 jōyō, 9-10 name kanji); null when one has none. */
+  grade: number | null
   gloss: string
   glossBg: string | null
   group: string | null

@@ -80,9 +80,20 @@ const S = strings(
 const RARE_PAGE = 100
 type Bucket = string | null
 
-/** Newspaper frequency first (nf 1 is the top 500), words with none after; then common, then shorter. */
+/**
+ * As the server lists them (server/review.py word_order): newspaper frequency
+ * (nf 1 is the top 500), then JLPT (N5 first), then the grade of the word's
+ * hardest kanji. Words with neither a newspaper rank nor a JLPT level sink.
+ */
 function byNews(a: BoardWord, b: BoardWord): number {
-  return (a.nf ?? 99) - (b.nf ?? 99) || Number(b.common) - Number(a.common) || a.headword.length - b.headword.length || a.id - b.id
+  const jlpt = (w: BoardWord) => (w.jlpt ? 6 - w.jlpt : 99)
+  return (
+    (a.nf ?? 99) - (b.nf ?? 99) ||
+    jlpt(a) - jlpt(b) ||
+    (a.grade ?? 99) - (b.grade ?? 99) ||
+    a.headword.length - b.headword.length ||
+    a.id - b.id
+  )
 }
 
 /** Groups with their final ids (new ones named from their English label) and every placement under them. */

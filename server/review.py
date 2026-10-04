@@ -838,14 +838,40 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
     return {"forms": forms.forms_of(subject)}
 
 
-def _words_of(char: str) -> list:
-    """Every word written with `char` whose headword shows it, common first (as `*生*` lists them)."""
-    return query(
-        "SELECT w.id, w.common FROM word_char wc JOIN word w ON w.id = wc.word_id "
-        "WHERE wc.char = ? AND instr(w.headword, ?) > 0 "
-        "ORDER BY w.common DESC, w.nf IS NULL, w.nf, LENGTH(w.headword), w.id",
+_grades: dict[str, int] | None = None
+
+
+def word_grade(headword: str) -> int | None:
+    """The school grade of the hardest kanji in a word (1-6 primary, 8 secondary
+    jōyō, 9-10 name kanji); None when one of its kanji has no grade."""
+    global _grades
+    if _grades is None:
+        _grades = {r["char"]: r["grade"] for r in query("SELECT char, grade FROM kanji WHERE grade IS NOT NULL")}
+    kanji = [c for c in headword if "㐀" <= c <= "鿿" or "豈" <= c <= "﫿" or c >= "\U00020000"]
+    if not kanji:
+        return 0
+    got = [_grades.get(c) for c in kanji]
+    return None if None in got else max(got)
+
+
+def word_order(nf: int | None, jlpt: int | None, grade: int | None, headword: str, wid: int) -> tuple:
+    """How the board lists words: newspaper frequency, then JLPT (N5 first),
+    then the grade of its hardest kanji. Words with neither a newspaper rank
+    nor a JLPT level fall to the bottom by the first two keys alone."""
+    return (nf or 99, 6 - jlpt if jlpt else 99, grade if grade is not None else 99, len(headword), wid)
+
+
+def _words_of(char: str) -> list[dict]:
+    """Every word written with `char` whose headword shows it, in `word_order`."""
+    rows = query(
+        "SELECT w.id, w.common, w.nf, w.headword, j.level AS jlpt FROM word_char wc JOIN word w ON w.id = wc.word_id "
+        "LEFT JOIN word_jlpt j ON j.word_id = w.id "
+        "WHERE wc.char = ? AND instr(w.headword, ?) > 0",
         (char, char),
     )
+    out = [dict(r) for r in rows]
+    out.sort(key=lambda r: word_order(r["nf"], r["jlpt"], word_grade(r["headword"]), r["headword"], r["id"]))
+    return out
 
 
 def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
@@ -858,6 +884,7 @@ def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
         "common": w["common"],
         "nf": w["nf"],
         "jlpt": w["jlpt"],
+        "grade": word_grade(w["headword"]),
         "gloss": " / ".join(s["gloss"] for s in first if s["gloss"]),
         "glossBg": " / ".join(s["glossBg"] for s in first if s.get("glossBg")) or None,
         "group": group,
