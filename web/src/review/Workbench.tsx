@@ -32,7 +32,6 @@ const S = strings(
     role_admin: 'admin',
     queue: 'Queue',
     history: 'History',
-    auto: 'Auto-accepted',
     noHistory: 'No decisions yet.',
     revert: 'revert',
     reverted: 'reverted',
@@ -57,7 +56,6 @@ const S = strings(
     clearFilters: 'clear',
     shown: '{n} shown',
     words: '+ {n} words placed',
-    autoHint: 'Accepted by the mechanical rule, not by a person. Spot-check them: if more than a few are wrong, the rule needs tightening.',
   },
   {
     people: 'Хора',
@@ -79,7 +77,6 @@ const S = strings(
     role_admin: 'администратор',
     queue: 'Опашка',
     history: 'История',
-    auto: 'Приети автоматично',
     noHistory: 'Още няма решения.',
     revert: 'върнете',
     reverted: 'върнато',
@@ -104,7 +101,6 @@ const S = strings(
     clearFilters: 'изчистете',
     shown: 'показани: {n}',
     words: '+ {n} разпределени думи',
-    autoHint: 'Приети по механичното правило, а не от човек. Проверявайте на случаен принцип: ако повече от няколко са грешни, правилото трябва да се затегне.',
   },
 )
 
@@ -147,7 +143,7 @@ export function Workbench({
     ['queue', 'queue'],
     ['history', 'history'],
     ['progress', 'progress'],
-    ...(user.role === 'admin' ? ([['auto', 'auto'], ['people', 'people']] as [WorkbenchTab, Key][]) : []),
+    ...(user.role === 'admin' ? ([['people', 'people']] as [WorkbenchTab, Key][]) : []),
     ['handbook', 'handbook'],
   ]
 
@@ -175,7 +171,6 @@ export function Workbench({
           {tab === 'queue' && <Queue onKanji={onKanji} onDecided={decided} />}
           {tab === 'history' && <History admin={user.role === 'admin'} />}
           {tab === 'progress' && <ProgressPage data={progress} />}
-          {tab === 'auto' && user.role === 'admin' && <History admin auto />}
           {tab === 'people' && user.role === 'admin' && <People />}
           {tab === 'handbook' && (
             <Suspense fallback={<p className="hint">{t('loading')}</p>}>
@@ -289,8 +284,8 @@ function People() {
 
 const CHANGES = new Set(['accept', 'edit', 'direct', 'auto', 'revert', 'reopen'])
 
-/** Decisions, newest first: your own, everyone's for the admin, or the auto-accepted ones. */
-function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
+/** Decisions, newest first: your own, or everyone's for the admin. */
+function History({ admin }: { admin: boolean }) {
   const lang = useLang()
   const t = S(lang)
   const { user } = useAuth()
@@ -303,13 +298,6 @@ function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
   const [problem, setProblem] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    if (auto) {
-      api.autoAccepted().then(
-        (d) => setRows(d.items),
-        (e) => setProblem(errorText(e, lang)),
-      )
-      return
-    }
     const f: HistoryFilter = { all: admin && !by, by: admin && by ? by : undefined, from: from || undefined, to: to || undefined }
     api.reviewHistory(f).then(
       (d) => {
@@ -318,7 +306,7 @@ function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
       },
       (e) => setProblem(errorText(e, lang)),
     )
-  }, [auto, admin, by, from, to, lang])
+  }, [admin, by, from, to, lang])
   useEffect(load, [load])
 
   async function revert(d: Decision) {
@@ -339,48 +327,45 @@ function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
   const who = (p: Author) => (p.id === 'auto' ? t('autoRule') : p.username ? '@' + p.username : p.name)
   return (
     <>
-      {auto && <p className="hint">{t('autoHint')}</p>}
-      {!auto && (
-        <div className="history-filters">
-          {admin && (
-            <label>
-              <span>{t('reviewer')}</span>
-              <select className="assoc-text" value={by} onChange={(e) => setBy(e.target.value)}>
-                <option value="">{t('anyone')}</option>
-                {user && <option value={user.id}>{t('me')}</option>}
-                {people
-                  .filter((p) => p.id !== user?.id)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {who(p)}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
+      <div className="history-filters">
+        {admin && (
           <label>
-            <span>{t('from')}</span>
-            <input className="assoc-text" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+            <span>{t('reviewer')}</span>
+            <select className="assoc-text" value={by} onChange={(e) => setBy(e.target.value)}>
+              <option value="">{t('anyone')}</option>
+              {user && <option value={user.id}>{t('me')}</option>}
+              {people
+                .filter((p) => p.id !== user?.id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {who(p)}
+                  </option>
+                ))}
+            </select>
           </label>
-          <label>
-            <span>{t('to')}</span>
-            <input className="assoc-text" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-          </label>
-          {filtered && (
-            <button
-              className="clear"
-              onClick={() => {
-                setBy('')
-                setFrom('')
-                setTo('')
-              }}
-            >
-              {t('clearFilters')}
-            </button>
-          )}
-          {rows && <span className="hint history-count">{t('shown', { n: rows.length })}</span>}
-        </div>
-      )}
+        )}
+        <label>
+          <span>{t('from')}</span>
+          <input className="assoc-text" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label>
+          <span>{t('to')}</span>
+          <input className="assoc-text" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        {filtered && (
+          <button
+            className="clear"
+            onClick={() => {
+              setBy('')
+              setFrom('')
+              setTo('')
+            }}
+          >
+            {t('clearFilters')}
+          </button>
+        )}
+        {rows && <span className="hint history-count">{t('shown', { n: rows.length })}</span>}
+      </div>
       {problem && <p className="account-problem">{problem}</p>}
       {rows === null && !problem && <p className="hint">{t('loading')}</p>}
       {rows?.length === 0 && <p className="hint">{t('noHistory')}</p>}

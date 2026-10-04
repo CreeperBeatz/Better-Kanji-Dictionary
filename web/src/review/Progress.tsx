@@ -24,12 +24,13 @@ const S = strings(
     s_word_sense: 'Word meanings',
     d_decomposition: 'which parts each character visibly contains',
     d_form_link: 'how bound shapes relate to the kanji they come from',
-    d_kanji_senses: 'the meaning groups of each kanji',
-    d_word_sense: 'which group each word is in',
+    d_kanji_senses: 'one per kanji: its groups, with its words placed on the board',
+    d_word_sense: 'single words: suggestions, and words whose group changed',
     of: '{done} of {total}',
     left: '{n} left',
     dictionary: 'The dictionary',
     meaningsCover: '{n} of {total} N5–N2 kanji have accepted meanings',
+    wordsCover: '{n} of {total} drafted words placed in a group (decided with their kanji’s meanings)',
     loading: 'loading',
   },
   {
@@ -47,12 +48,13 @@ const S = strings(
     s_word_sense: 'Значения в думи',
     d_decomposition: 'кои части съдържа видимо всеки знак',
     d_form_link: 'как свързаните форми се отнасят към кандзито, от което идват',
-    d_kanji_senses: 'групите значения на всяко кандзи',
-    d_word_sense: 'в коя група е всяка дума',
+    d_kanji_senses: 'по една за кандзи: групите му, с думите, разпределени на дъската',
+    d_word_sense: 'отделни думи: предложения и думи, чиято група се е променила',
     of: '{done} от {total}',
     left: 'остават {n}',
     dictionary: 'Речникът',
     meaningsCover: '{n} от {total} кандзи от N5–N2 имат приети значения',
+    wordsCover: '{n} от {total} чернови думи са разпределени в група (решават се със значенията на кандзито си)',
     loading: 'зареждане',
   },
 )
@@ -126,6 +128,7 @@ export function ProgressPage({ data }: { data: ReviewProgress | null }) {
         <Bar done={data.kanji.verified} total={data.kanji.total} />
         <p className="hint">{t('verifiedLong', { n: n(data.kanji.verified), total: n(data.kanji.total) })}</p>
         <p className="hint">{t('meaningsCover', { n: n(data.meanings.accepted), total: n(data.meanings.total) })}</p>
+        <p className="hint">{t('wordsCover', { n: n(data.words.done), total: n(data.words.total) })}</p>
       </section>
 
       <section className="progress-card">

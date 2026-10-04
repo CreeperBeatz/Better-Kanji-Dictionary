@@ -413,6 +413,8 @@ export interface ReviewProgress {
   /** N5-N2 kanji with nothing open on their parts, forms, meanings or words. */
   kanji: { verified: number; total: number }
   meanings: { accepted: number; total: number }
+  /** Drafted word placements, decided with their kanji's meanings: not tasks of their own. */
+  words: { done: number; total: number }
 }
 
 export interface HistoryFilter {
@@ -858,7 +860,6 @@ export const api = {
       ['limit', String(limit)],
     ]),
 
-  autoAccepted: () => get<{ items: Decision[] }>('/api/review/auto'),
 
   revert: (decisionId: string) => send<{ decision: Decision }>(`/api/review/decisions/${encodeURIComponent(decisionId)}/revert`, 'POST'),
 

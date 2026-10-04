@@ -1008,20 +1008,29 @@ def history(user_id: str | None, limit: int = 100, type_: str | None = None, by:
 
 
 def progress() -> dict:
-    """How far review has got: items decided per type, and how many N5-N2
+    """How far review has got: tasks decided per stage, and how many N5-N2
     kanji are fully verified -- nothing open on its parts (to any depth) or
-    its forms, its meanings accepted, and none of its words waiting."""
+    its forms, its meanings accepted, and none of its words waiting.
+
+    A task is what a reviewer decides in one go. A kanji's meanings are one,
+    with all its drafted words on the board, so drafted word placements are
+    counted apart (`words`), not as tasks; only a word on its own (a user's
+    suggestion, a word reopened when its group changed) is a task.
+    """
     from .routes.graph import children_of
 
     data = _read()
     stages = {t: {"done": 0, "total": 0} for t in TYPES}
+    words = {"done": 0, "total": 0}
     open_by: dict[str, set[str]] = {t: set() for t in TYPES}
     for i in data["items"].values():
-        stages[i["type"]]["total"] += 1
         if i["status"] == "open":
             open_by[i["type"]].add(i["subject"])
-        else:
-            stages[i["type"]]["done"] += 1
+        drafted = i["type"] == "word_sense" and i["source"].startswith("ai:")
+        count = words if drafted else stages[i["type"]]
+        count["total"] += 1
+        if i["status"] != "open":
+            count["done"] += 1
     targets = [r["char"] for r in query("SELECT char FROM kanji WHERE jlpt BETWEEN 2 AND 5")]
 
     # Every part below every target, a level at a time, then each closure from that map.
@@ -1053,6 +1062,7 @@ def progress() -> dict:
         "stages": stages,
         "kanji": {"verified": verified, "total": len(targets)},
         "meanings": {"accepted": sum(1 for c in targets if c in senses), "total": len(targets)},
+        "words": words,
     }
 
 
