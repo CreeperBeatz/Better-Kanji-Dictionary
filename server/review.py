@@ -261,8 +261,14 @@ def _split(subject: str, n: int = 2) -> list[str]:
     return parts
 
 
-def validate(type_: str, subject: str, value: Any, data: dict | None = None, pending_ok: bool = False) -> Any:
+def validate(type_: str, subject: str, value: Any, data: dict | None = None, pending_ok: bool = False,
+             machine: bool = False) -> Any:
     """`value` cleaned, or an AppError saying what is wrong with it. None clears an override.
+
+    `machine`: the value comes from a data source or a model, not a person. A
+    bare stroke as a part is refused only then -- sources chop real parts into
+    strokes (口 -> 丨一) -- while a reviewer may decide a stroke means
+    something in a character (the flame 丶 on 主), as people suggesting may.
 
     `pending_ok`: a word's meaning may be proposed before its kanji's meanings
     are accepted (the AI drafts both at once); it waits, out of the queue, until they are.
@@ -282,7 +288,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if subject in parts:
             raise _bad("parts_self", "a character cannot contain itself")
         strokes = [c for c in parts if c in STROKES]
-        if strokes:
+        if strokes and machine:
             raise _bad("parts_stroke", "a bare stroke is not a part: {parts}", parts="".join(strokes))
         unknown = [c for c in parts if not _known(c)]
         if unknown:
@@ -525,7 +531,7 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
         raise _bad("bad_origin", "origin is proposal or suggestion")
     with _lock:
         data = _load()
-        proposed = validate(type_, subject, proposed, data, pending_ok=origin == "proposal")
+        proposed = validate(type_, subject, proposed, data, pending_ok=origin == "proposal", machine=origin == "proposal")
         for i in data["items"].values():
             if i["status"] == "open" and i["type"] == type_ and i["subject"] == subject and i["proposed"] == proposed:
                 return dict(i)
@@ -554,7 +560,7 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
         added = refused = 0
         for r in rows:
             try:
-                proposed = validate(r["type"], r["subject"], r.get("proposed"), data, pending_ok=True)
+                proposed = validate(r["type"], r["subject"], r.get("proposed"), data, pending_ok=True, machine=True)
             except AppError:
                 refused += 1
                 continue
@@ -690,7 +696,7 @@ def auto_accept(item_id: str, why: str) -> dict:
         item = data["items"][item_id]
         if item["status"] != "open":
             return dict(item)
-        after = validate(item["type"], item["subject"], item["proposed"], data)
+        after = validate(item["type"], item["subject"], item["proposed"], data, machine=True)
         before = live_value(item["type"], item["subject"], data)
         d = _decision("auto", item["type"], item["subject"], before, after, "auto", item_id, why)
         _apply(data, item["type"], item["subject"], after, d["id"])

@@ -23,8 +23,12 @@ Question: which parts does this character visibly contain, as written today?
 - **Each part should mean something in this character.** A data source that
   splits a shape into stroke groups (IDS often does) is describing the
   drawing, not the character. Reject it.
-- **No bare strokes as parts.** 丶 丿 ⺊ and friends are not things a learner
-  can attach a story to.
+- **Bare strokes are parts only when they mean something.** Data sources love
+  to chop real parts into strokes (口 → 丨一), so their stroke splits are
+  refused outright. You can still use a stroke (一 丨 丶 丿 乙 亅 …) after a
+  confirmation, when it carries meaning in that character: 主 is 丶 + 王, a
+  lampstand (王) with its flame (丶). If the stroke is only there because the
+  drawing has it, leave it out.
 - **Judge by today's shape.** 青 contains 月, even though the old form 靑 had
   丹 there. The 丹 belongs in a form note, not in the parts.
 - **Read the impact.** "This adds a containment edge" means the study order

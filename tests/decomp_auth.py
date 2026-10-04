@@ -44,7 +44,7 @@ def main() -> int:
         check("it is gone", store.decomposition_overrides() == {})
         check("both writes are logged decisions", [d["by"] for d in review._read()["decisions"]] == [srv.ids["reviewer"], srv.ids["admin"]])
         check("reading the overrides stays open", call("GET", "/api/decomp/overrides")[0] == 200)
-        check("a part that is a stroke is 400", call("PUT", "/api/decomp/%E9%9D%92", "reviewer", {"components": ["一"]})[0] == 400)
+        check("a part that is the character itself is 400", call("PUT", "/api/decomp/%E9%9D%92", "reviewer", {"components": ["青"]})[0] == 400)
 
         os.environ.pop("BETTERRTK_OWNER_EMAIL")
         check("owner unset: the owner is a plain user, 403", put("admin")[0] == 403)

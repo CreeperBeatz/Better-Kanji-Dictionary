@@ -20,7 +20,7 @@ import {
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { FontStrip } from '../detail/FontStrip'
-import { CATCH_ALL, ValueEditor, ValueView } from './editors'
+import { CATCH_ALL, strokesOk, ValueEditor, ValueView } from './editors'
 import { finalizeBoard, MeaningsBoard } from './MeaningsBoard'
 
 const S = strings(
@@ -225,10 +225,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         const fin = finalizeBoard(item.subject, (value ?? []) as MeaningGroup[], placements)
         return same(fin.groups, item.proposed) ? decide('accept', undefined, fin.words) : decide('edit', fin.groups, fin.words)
       }
-      if (item.proposed === null) return same(value, item.current) ? decide('reject') : decide('edit', value)
-      return same(value, item.proposed) ? decide('accept') : decide('edit', value)
+      if (item.proposed === null) {
+        if (same(value, item.current)) return decide('reject')
+        return item.type === 'decomposition' && !strokesOk(value, lang) ? undefined : decide('edit', value)
+      }
+      if (same(value, item.proposed)) return decide('accept')
+      return item.type === 'decomposition' && !strokesOk(value, lang) ? undefined : decide('edit', value)
     },
-    [item, draft, decide, detail, placements],
+    [item, draft, decide, detail, placements, lang],
   )
   const place = useCallback((ids: number[], to: string | null) => {
     setPlacements((p) => {

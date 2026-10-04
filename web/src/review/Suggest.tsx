@@ -9,7 +9,7 @@ import { api, dataChanged, type MeaningGroup, type TaskType, type TaskValue } fr
 import { useAuth } from '../account/auth'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
-import { ValueEditor } from './editors'
+import { strokesOk, ValueEditor } from './editors'
 
 const S = strings(
   {
@@ -115,6 +115,7 @@ export function SuggestDialog({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (target.type === 'decomposition' && !strokesOk(value, lang)) return
     setBusy(true)
     setProblem(null)
     try {

@@ -15,6 +15,7 @@ import sys
 from harness import Checks, Server
 
 from server import review, store
+from server.errors import AppError
 from server.routes import decomp, graph
 from server.routes import review as review_routes
 
@@ -50,13 +51,20 @@ def main() -> int:
 
         print("bad values are refused")
         for name, value, code in (
-            ("a stroke", ["一", "月"], "parts_stroke"),
             ("itself", ["青"], "parts_self"),
             ("an unknown part", ["A"], "parts_unknown"),
             ("a cycle", ["晴"], "parts_cycle"),
         ):
             status, res = call("POST", "/api/review/suggest", "user", {**body, "value": value})
             check(f"{name} is 400 {code}", (status, res.get("code")) == (400, code), (status, res))
+
+        print("strokes: refused from sources, allowed from people")
+        try:
+            review.validate("decomposition", "主", ["丶", "王"], machine=True)
+            check("a source's stroke split is refused", False)
+        except AppError as e:
+            check("a source's stroke split is refused", e.code == "parts_stroke", e.code)
+        check("a person may use a stroke (the flame on 主)", review.validate("decomposition", "主", ["丶", "王"]) == ["丶", "王"])
 
         print("the reviewer decides")
         _, q = call("GET", "/api/review/queue", "reviewer")

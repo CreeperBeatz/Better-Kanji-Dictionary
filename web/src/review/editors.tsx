@@ -24,6 +24,7 @@ const S = strings(
     draw: 'Draw',
     drawTitle: 'Draw a part; picking it adds it',
     hideDraw: 'Hide drawing',
+    confirmStroke: '{parts}: a single stroke. Use it as a part anyway? Only when it means something in this character, like the flame 丶 on 主.',
     kind: 'Relation',
     k_positional: 'the same part in another position',
     k_old: 'its old form',
@@ -51,6 +52,7 @@ const S = strings(
     draw: 'Рисуване',
     drawTitle: 'Нарисувайте част; изборът я добавя',
     hideDraw: 'Скрийте рисуването',
+    confirmStroke: '{parts}: отделна черта. Да се използва ли все пак като част? Само ако значи нещо в този знак, като пламъка 丶 в 主.',
     kind: 'Връзка',
     k_positional: 'същата част в друга позиция',
     k_old: 'старата му форма',
@@ -73,6 +75,18 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 export const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'none']
+
+/**
+ * Single strokes (server/review.py STROKES). The server refuses them as parts
+ * only from data sources; a person may use one, after saying yes to this.
+ */
+const STROKES = new Set([...'一丨丶丿乙亅乚㇒㇏'])
+
+/** True when the parts hold no stroke, or the person confirms they mean it. */
+export function strokesOk(parts: TaskValue, lang: 'en' | 'bg'): boolean {
+  const strokes = Array.isArray(parts) ? (parts as string[]).filter((c) => STROKES.has(c)) : []
+  return !strokes.length || window.confirm(S(lang)('confirmStroke', { parts: strokes.join(' ') }))
+}
 export const CATCH_ALL = 'catch-all'
 
 export function groupLabel(id: string, groups: MeaningGroup[] | null | undefined, lang: 'en' | 'bg'): string {
