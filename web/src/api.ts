@@ -445,6 +445,8 @@ export interface ItemDetail extends QueueItem {
     word?: Word
     /** Bulgarian: the machine translation the card started from. */
     built?: string[] | null
+    /** Bulgarian word cards: for each of its kanji with accepted groups, the group it is in here. */
+    groups?: { char: string; group: string | null; en: string | null; bg: string | null }[]
     /** kanji_senses: its common words (and any placed), each in its group now. */
     board?: BoardWord[]
   }

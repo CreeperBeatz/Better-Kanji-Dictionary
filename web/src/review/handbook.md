@@ -169,6 +169,14 @@ Every Bulgarian gloss and kanji meaning was machine-translated. One card per
 word (the kanji's common or ranked words) and one per jōyō or JLPT kanji,
 most frequent first.
 
+**Meanings come first.** A kanji's card waits until its meaning groups are
+accepted, and a word's card until the groups of *all* its kanji are (kanji
+with no meanings task don't hold anything up). Then the card shows them: a
+kanji card lists its groups with their Bulgarian labels (and can fill its
+meanings from them as a start); a word card says which group each of its
+kanji is in for this word. That tells you which sense the translation must
+carry; the word's own English is still what you translate.
+
 - **Words.** Each sense shows the English and, beside it, the Bulgarian to
   check. Fix what is wrong or unnatural; leave what is right. A changed field
   is marked and shows the machine translation under it.

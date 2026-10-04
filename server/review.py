@@ -915,12 +915,15 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         f"{i['subject']}|{w}" for i in data["items"].values()
         if i["status"] == "open" and (fw := follow_up_words(i)) for w in fw
     }
+    pending = _meanings_pending(data)
     waiting = [
         i for i in data["items"].values()
         if i["status"] == "open"
         and i["subject"] not in held
         # A word's meaning waits until its kanji's meanings are accepted.
         and (i["type"] != "word_sense" or i["subject"].split("|")[0] in accepted)
+        # Bulgarian waits for the meanings too: the groups are its context.
+        and (i["type"] != "bg" or not _bg_waits(i["subject"], pending))
         and (origin is None or i["origin"] == origin)
     ]
     mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
@@ -936,6 +939,32 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         "types": types,
         "skipped": sum(1 for i in waiting if user_id in i["skipped_by"] and (type_ is None or i["type"] == type_)),
     }
+
+
+def _meanings_pending(data: dict) -> set[str]:
+    """Kanji that have a meanings task whose groups are not accepted yet."""
+    has = {i["subject"] for i in data["items"].values() if i["type"] == "kanji_senses"}
+    return has - set(data["live"]["kanji_senses"])
+
+
+_headwords: dict[int, str] | None = None
+
+
+def _headword(word_id: int) -> str:
+    """Headwords of the translated words, read once (the database does not change under a running server)."""
+    global _headwords
+    if _headwords is None:
+        _headwords = {r["id"]: r["headword"] for r in query(
+            "SELECT id, headword FROM word WHERE id IN (SELECT DISTINCT word_id FROM sense_bg)")}
+    return _headwords.get(word_id, "")
+
+
+def _bg_waits(subject: str, pending: set[str]) -> bool:
+    """A Bulgarian card waits while its kanji's groups, or any of its word's kanji's, are still to be made."""
+    kind, _, key = subject.partition(":")
+    if kind == "kanji":
+        return key in pending
+    return any(c in pending for c in _headword(int(key)))
 
 
 def counts() -> dict:
@@ -994,7 +1023,18 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
 
         kind, _, key = subject.partition(":")
         if kind == "word":
-            return {"word": _fetch_words([int(key)]).get(int(key)), "built": _bg_built(subject)}
+            wid = int(key)
+            live = data["live"]
+            # For each of the word's kanji with accepted groups: the group it is in here.
+            groups = []
+            for c in dict.fromkeys(_headword(wid)):
+                senses = (live["kanji_senses"].get(c) or {}).get("senses")
+                if not senses:
+                    continue
+                placed = (live["word_sense"].get(f"{c}|{wid}") or {}).get("sense")
+                g = next((x for x in senses if x["id"] == placed), None)
+                groups.append({"char": c, "group": placed, "en": g["en"] if g else None, "bg": g.get("bg") if g else None})
+            return {"word": _fetch_words([wid]).get(wid), "built": _bg_built(subject), "groups": groups}
         k = query_one("SELECT meanings, on_yomi, kun_yomi, jlpt, grade, freq FROM kanji WHERE char = ?", (key,))
         cur = query_one("SELECT meaning FROM kanji_curated WHERE char = ?", (key,))
         return {
@@ -1004,6 +1044,7 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
             "on": json.loads(k["on_yomi"]) if k and k["on_yomi"] else [],
             "kun": json.loads(k["kun_yomi"]) if k and k["kun_yomi"] else [],
             "built": _bg_built(subject),
+            "senses": (data["live"]["kanji_senses"].get(key) or {}).get("senses"),
         }
     return {"forms": forms.forms_of(subject)}
 

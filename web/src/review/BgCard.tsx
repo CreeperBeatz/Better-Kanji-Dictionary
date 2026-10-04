@@ -6,6 +6,7 @@
  */
 import type { ItemDetail } from '../api'
 import { strings, useLang } from '../i18n'
+import { CATCH_ALL } from './editors'
 
 const S = strings(
   {
@@ -21,6 +22,11 @@ const S = strings(
     add: 'add a meaning',
     remove: 'remove',
     hint: 'Check each Bulgarian gloss against the English beside it. Fix what is wrong or unnatural; leave what is right.',
+    groups: 'Its meaning groups',
+    fromGroups: 'fill from the groups’ Bulgarian labels',
+    inGroups: 'What its kanji bring here',
+    noMeaning: 'brings no meaning to this word',
+    notPlaced: 'not placed in a group',
   },
   {
     english: 'Английски',
@@ -35,6 +41,11 @@ const S = strings(
     add: 'добавете значение',
     remove: 'махнете',
     hint: 'Сверете всеки български превод с английския до него. Поправете грешното или неестественото; оставете вярното.',
+    groups: 'Групите му значения',
+    fromGroups: 'попълнете от българските етикети на групите',
+    inGroups: 'Какво внасят кандзитата му тук',
+    noMeaning: 'не внася значение в тази дума',
+    notPlaced: 'не е разпределена в група',
   },
 )
 
@@ -52,6 +63,29 @@ export function BgCard({ detail, value, onChange }: { detail: ItemDetail; value:
         <p className="bg-head" lang="ja">
           {w.reading}
         </p>
+        {c.groups && c.groups.length > 0 && (
+          <div className="bg-groups">
+            <span className="hint">{t('inGroups')}</span>
+            <ul>
+              {c.groups.map((g) => (
+                <li key={g.char}>
+                  <span className="bg-group-char" lang="ja">
+                    {g.char}
+                  </span>{' '}
+                  {g.group === CATCH_ALL ? (
+                    <span className="hint">{t('noMeaning')}</span>
+                  ) : g.en ? (
+                    <>
+                      <b>{g.en}</b> {g.bg && <span lang="bg">· {g.bg}</span>}
+                    </>
+                  ) : (
+                    <span className="hint">{t('notPlaced')}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <p className="hint">{t('hint')}</p>
         <ol className="bg-senses">
           {w.senses.map((s, i) => (
@@ -104,6 +138,23 @@ export function BgCard({ detail, value, onChange }: { detail: ItemDetail; value:
         <dt>{t('machine')}</dt>
         <dd lang="bg">{built.join(', ')}</dd>
       </dl>
+      {c.senses && c.senses.length > 0 && (
+        <div className="bg-groups">
+          <span className="hint">{t('groups')}</span>
+          <ul>
+            {c.senses.map((g) => (
+              <li key={g.id}>
+                <b>{g.en}</b> {g.bg && <span lang="bg">· {g.bg}</span>}
+              </li>
+            ))}
+          </ul>
+          {c.senses.some((g) => g.bg) && (
+            <button className="clear" onClick={() => onChange(c.senses!.map((g) => g.bg ?? '').filter(Boolean).slice(0, 12))}>
+              {t('fromGroups')}
+            </button>
+          )}
+        </div>
+      )}
       <div className="review-field">
         <span>{t('meanings')}</span>
         <span className="hint">{t('meaningsHint')}</span>

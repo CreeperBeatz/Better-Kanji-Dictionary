@@ -1952,6 +1952,26 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper-dim);
 }
 
+.bg-groups {
+  padding: 8px 12px;
+  border-left: 3px solid var(--ai);
+  background: var(--sumi);
+  font-size: 13px;
+}
+
+.bg-groups ul {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.bg-group-char {
+  font-family: var(--mincho);
+  font-size: 17px;
+}
+
 .bg-senses {
   margin: 0;
   padding-left: 22px;
