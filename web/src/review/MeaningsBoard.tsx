@@ -10,7 +10,7 @@
  * The board only edits; the queue decides. `finalizeBoard` turns it into what
  * the server takes: the groups with their final ids, and word id -> group id.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type BoardWord, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import { newsRank } from '../search/Results'
@@ -19,7 +19,7 @@ import { CATCH_ALL } from './editors'
 const S = strings(
   {
     groups: 'Meaning groups',
-    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, or tap words and then “move here”.',
+    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, right-click a word to pick its group, or tap words and then “move here”.',
     en: 'English label',
     bg: 'Bulgarian',
     note: 'Note',
@@ -33,7 +33,12 @@ const S = strings(
     clearPick: 'clear selection',
     picked: '{n} selected',
     empty: 'no words',
-    moreRare: 'show {n} more rare words ({left} not shown)',
+    moreRare: 'show {n} more unranked words ({left} not shown)',
+    onlyUnsure: 'only cards the model was unsure about ({n})',
+    shown: '{n} of {total} words',
+    moveTo: 'Move to',
+    moveMany: 'Move {n} selected to',
+    unnamed: '(unnamed group)',
     unsure: 'the drafting model was unsure here',
     words: '{n} words',
     common: 'common',
@@ -48,7 +53,7 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
-    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите или ги докоснете и после „преместете тук“.',
+    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите, щракнете с десния бутон върху дума, за да ѝ изберете група, или ги докоснете и после „преместете тук“.',
     en: 'Английски етикет',
     bg: 'Български',
     note: 'Бележка',
@@ -62,7 +67,12 @@ const S = strings(
     clearPick: 'изчистете избора',
     picked: 'избрани: {n}',
     empty: 'няма думи',
-    moreRare: 'покажете още {n} редки думи (непоказани: {left})',
+    moreRare: 'покажете още {n} думи без класиране (непоказани: {left})',
+    onlyUnsure: 'само картите, за които моделът не беше сигурен ({n})',
+    shown: '{n} от {total} думи',
+    moveTo: 'Преместете в',
+    moveMany: 'Преместете {n} избрани в',
+    unnamed: '(група без име)',
     unsure: 'моделът не беше сигурен тук',
     words: '{n} думи',
     common: 'чести',
@@ -79,6 +89,8 @@ const S = strings(
 
 const RARE_PAGE = 100
 type Bucket = string | null
+
+const isUnsure = (w: BoardWord) => w.agree === false || (typeof w.confidence === 'number' && w.confidence < 0.8)
 
 /**
  * As the server lists them (server/review.py word_order): newspaper frequency
@@ -145,13 +157,43 @@ export function MeaningsBoard({
   const [rareLeft, setRareLeft] = useState(restTotal)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [over, setOver] = useState<string | undefined>()
-  // Collapsed boxes, by bucket id; "not in a group" starts collapsed, being the long one.
-  const [shut, setShut] = useState<Set<string>>(new Set(['∅']))
+  // Collapsed boxes, by bucket id.
+  const [shut, setShut] = useState<Set<string>>(new Set())
+  const [onlyUnsure, setOnlyUnsure] = useState(false)
+  // The right-click menu: where it opens and which words it moves.
+  const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; from: Bucket } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menu) return
+    const close = (e: Event) => {
+      if (e instanceof MouseEvent && menuRef.current?.contains(e.target as Node)) return
+      setMenu(null)
+    }
+    // Escape closes the menu, not the review screen behind it.
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setMenu(null)
+    }
+    window.addEventListener('mousedown', close)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    window.addEventListener('keydown', key, true)
+    menuRef.current?.querySelector('button')?.focus()
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('keydown', key, true)
+    }
+  }, [menu])
 
   useEffect(() => {
     setRare([])
     setRareLeft(restTotal)
     setPicked(new Set())
+    setMenu(null)
   }, [char, restTotal])
 
   function moreRare() {
@@ -176,6 +218,7 @@ export function MeaningsBoard({
     for (const list of m.values()) list.sort(byNews)
     return m
   }, [words, rare, placements, groups])
+  const unsureCount = useMemo(() => [...words, ...rare].filter(isUnsure).length, [words, rare])
 
   function move(to: Bucket, ids?: number[]) {
     const list = ids ?? [...picked]
@@ -215,8 +258,8 @@ export function MeaningsBoard({
       return n
     })
 
-  function card(w: BoardWord) {
-    const unsure = w.agree === false || (typeof w.confidence === 'number' && w.confidence < 0.8)
+  function card(w: BoardWord, from: Bucket) {
+    const unsure = isUnsure(w)
     return (
       <li
         key={w.id}
@@ -230,6 +273,11 @@ export function MeaningsBoard({
           e.dataTransfer.effectAllowed = 'move'
         }}
         onClick={() => toggle(w.id)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          const ids = picked.has(w.id) ? [...picked] : [w.id]
+          setMenu({ x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 280), ids, from })
+        }}
         title={unsure ? t('unsure') : undefined}
       >
         <span className="board-head" lang="ja">
@@ -259,7 +307,8 @@ export function MeaningsBoard({
   }
 
   function bucket(key: Bucket, head: React.ReactNode, extra?: React.ReactNode) {
-    const list = byBucket.get(key) ?? []
+    const all = byBucket.get(key) ?? []
+    const list = onlyUnsure ? all.filter(isUnsure) : all
     const id = key ?? '∅'
     return (
       <section
@@ -291,7 +340,9 @@ export function MeaningsBoard({
             {shut.has(id) ? '▸' : '▾'}
           </button>
           {head}
-          <span className="hint board-count">{t('words', { n: list.length })}</span>
+          <span className="hint board-count">
+            {onlyUnsure ? t('shown', { n: list.length, total: all.length }) : t('words', { n: all.length })}
+          </span>
           {picked.size > 0 && (
             <button className="clear board-move" onClick={() => move(key)}>
               {t('moveHere', { n: picked.size })}
@@ -309,13 +360,13 @@ export function MeaningsBoard({
                   <h5>
                     {t(common ? 'common' : 'uncommon')} <span className="hint">{part.length}</span>
                   </h5>
-                  <ul className="board-words">{part.map(card)}</ul>
+                  <ul className="board-words">{part.map((w) => card(w, key))}</ul>
                 </div>
               )
             })}
           </>
         )}
-        {!shut.has(id) && extra}
+        {!shut.has(id) && !onlyUnsure && extra}
       </section>
     )
   }
@@ -325,6 +376,10 @@ export function MeaningsBoard({
       <div className="board-top">
         <h4>{t('groups')}</h4>
         <span className="hint">{t('groupsHint')}</span>
+        <label className="board-filter">
+          <input type="checkbox" checked={onlyUnsure} onChange={(e) => setOnlyUnsure(e.target.checked)} />
+          <span>{t('onlyUnsure', { n: unsureCount })}</span>
+        </label>
         {picked.size > 0 && (
           <span className="board-picked">
             {t('picked', { n: picked.size })}{' '}
@@ -368,6 +423,29 @@ export function MeaningsBoard({
             {t('moreRare', { n: Math.min(RARE_PAGE, rareLeft), left: rareLeft })}
           </button>
         ),
+      )}
+      {menu && (
+        <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+          <p className="board-menu-title">{menu.ids.length > 1 ? t('moveMany', { n: menu.ids.length }) : t('moveTo')}</p>
+          {[
+            ...groups.map((g) => [g.id, g.en.trim() || t('unnamed')] as [Bucket, string]),
+            [CATCH_ALL, t('catchAll')] as [Bucket, string],
+            [null, t('none')] as [Bucket, string],
+          ].map(([to, label]) => (
+            <button
+              key={to ?? '∅'}
+              role="menuitem"
+              data-here={to === menu.from || undefined}
+              disabled={menu.ids.length === 1 && to === menu.from}
+              onClick={() => {
+                move(to, menu.ids)
+                setMenu(null)
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

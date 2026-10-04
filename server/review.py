@@ -893,9 +893,14 @@ def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
     }
 
 
+def _on_board(r: dict) -> bool:
+    """Shown from the start: common, or ranked some way (newspaper, JLPT). The rest load on request."""
+    return bool(r["common"] or r["nf"] or r["jlpt"])
+
+
 def board(char: str, data: dict | None = None) -> tuple[list[dict], int]:
-    """The meanings board: the kanji's common words, and any other word already
-    placed, each in the group it is in now -- placed, else drafted, else none.
+    """The meanings board: the kanji's common or ranked words, and any other word
+    already placed, each in the group it is in now -- placed, else drafted, else none.
     Also how many rarer words are left over (`rest_words` pages through them)."""
     from .routes.search import _fetch_words
 
@@ -904,7 +909,7 @@ def board(char: str, data: dict | None = None) -> tuple[list[dict], int]:
     placed = {int(k[len(prefix):]): v["sense"] for k, v in data["live"]["word_sense"].items() if k.startswith(prefix)}
     items = _word_items(data, char)
     rows = _words_of(char)
-    ids = [r["id"] for r in rows if r["common"] or r["id"] in placed]
+    ids = [r["id"] for r in rows if _on_board(r) or r["id"] in placed]
     words = _fetch_words(ids)
     out = []
     for wid in ids:
@@ -918,13 +923,13 @@ def board(char: str, data: dict | None = None) -> tuple[list[dict], int]:
 
 
 def rest_words(char: str, offset: int = 0, limit: int = 100) -> dict:
-    """The rarer words with `char` that are in no group, a page at a time."""
+    """The rarer, unranked words with `char` that are in no group, a page at a time."""
     from .routes.search import _fetch_words
 
     data = _read()
     prefix = f"{char}|"
     placed = {int(k[len(prefix):]) for k in data["live"]["word_sense"] if k.startswith(prefix)}
-    rest = [r["id"] for r in _words_of(char) if not r["common"] and r["id"] not in placed]
+    rest = [r["id"] for r in _words_of(char) if not _on_board(r) and r["id"] not in placed]
     page = rest[offset:offset + limit]
     words = _fetch_words(page)
     return {"total": len(rest), "offset": offset, "words": [_board_word(words[w], None, None) for w in page if w in words]}
