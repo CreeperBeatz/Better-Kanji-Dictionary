@@ -856,6 +856,8 @@ def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
         "headword": w["headword"],
         "reading": w["reading"],
         "common": w["common"],
+        "nf": w["nf"],
+        "jlpt": w["jlpt"],
         "gloss": " / ".join(s["gloss"] for s in first if s["gloss"]),
         "glossBg": " / ".join(s["glossBg"] for s in first if s.get("glossBg")) or None,
         "group": group,

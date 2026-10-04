@@ -392,6 +392,10 @@ export interface BoardWord {
   headword: string
   reading: string
   common: boolean
+  /** JMdict newspaper frequency band, 1-48: among the nf*500 most frequent words. */
+  nf: number | null
+  /** On the JLPT N{jlpt} list. */
+  jlpt: number | null
   gloss: string
   glossBg: string | null
   group: string | null

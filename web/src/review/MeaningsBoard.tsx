@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type BoardWord, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
+import { newsRank } from '../search/Results'
 import { CATCH_ALL } from './editors'
 
 const S = strings(
@@ -35,6 +36,15 @@ const S = strings(
     moreRare: 'show {n} more rare words ({left} not shown)',
     unsure: 'the drafting model was unsure here',
     words: '{n} words',
+    common: 'common',
+    uncommon: 'uncommon',
+    commonTitle: 'JMdict marks it as common',
+    uncommonTitle: 'JMdict does not mark it as common',
+    news: 'top {n}',
+    newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
+    jlpt: 'On the JLPT N{n} vocabulary list',
+    collapse: 'collapse',
+    expand: 'expand',
   },
   {
     groups: 'Групи значения',
@@ -55,11 +65,25 @@ const S = strings(
     moreRare: 'покажете още {n} редки думи (непоказани: {left})',
     unsure: 'моделът не беше сигурен тук',
     words: '{n} думи',
+    common: 'чести',
+    uncommon: 'редки',
+    commonTitle: 'JMdict я отбелязва като честа',
+    uncommonTitle: 'JMdict не я отбелязва като честа',
+    news: 'топ {n}',
+    newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
+    jlpt: 'В речника за JLPT N{n}',
+    collapse: 'свийте',
+    expand: 'разгънете',
   },
 )
 
 const RARE_PAGE = 100
 type Bucket = string | null
+
+/** Newspaper frequency first (nf 1 is the top 500), words with none after; then common, then shorter. */
+function byNews(a: BoardWord, b: BoardWord): number {
+  return (a.nf ?? 99) - (b.nf ?? 99) || Number(b.common) - Number(a.common) || a.headword.length - b.headword.length || a.id - b.id
+}
 
 /** Groups with their final ids (new ones named from their English label) and every placement under them. */
 export function finalizeBoard(char: string, groups: MeaningGroup[], placements: Record<number, Bucket>) {
@@ -110,6 +134,8 @@ export function MeaningsBoard({
   const [rareLeft, setRareLeft] = useState(restTotal)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [over, setOver] = useState<string | undefined>()
+  // Collapsed boxes, by bucket id; "not in a group" starts collapsed, being the long one.
+  const [shut, setShut] = useState<Set<string>>(new Set(['∅']))
 
   useEffect(() => {
     setRare([])
@@ -136,6 +162,7 @@ export function MeaningsBoard({
       if (!m.has(key)) m.set(key, [])
       m.get(key)!.push(w)
     }
+    for (const list of m.values()) list.sort(byNews)
     return m
   }, [words, rare, placements, groups])
 
@@ -169,6 +196,56 @@ export function MeaningsBoard({
   }
 
   const gloss = (w: BoardWord) => (lang === 'bg' && w.glossBg) || w.gloss
+  const toggleShut = (id: string) =>
+    setShut((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+
+  function card(w: BoardWord) {
+    const unsure = w.agree === false || (typeof w.confidence === 'number' && w.confidence < 0.8)
+    return (
+      <li
+        key={w.id}
+        className="board-word"
+        data-picked={picked.has(w.id) || undefined}
+        data-unsure={unsure || undefined}
+        draggable
+        onDragStart={(e) => {
+          const ids = picked.has(w.id) ? [...picked] : [w.id]
+          e.dataTransfer.setData('text/plain', ids.join(','))
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onClick={() => toggle(w.id)}
+        title={unsure ? t('unsure') : undefined}
+      >
+        <span className="board-head" lang="ja">
+          {w.headword}
+        </span>
+        <span className="board-reading" lang="ja">
+          {w.reading}
+        </span>
+        <span className="board-marks">
+          {w.nf && (
+            <span className="word-news" title={t('newsTitle', { n: (w.nf * 500).toLocaleString(lang), b: w.nf })}>
+              {t('news', { n: newsRank(w.nf) })}
+            </span>
+          )}
+          {w.jlpt && (
+            <span className="word-jlpt" data-level={w.jlpt} title={t('jlpt', { n: w.jlpt })}>
+              N{w.jlpt}
+            </span>
+          )}
+          <span className="word-common" data-common={w.common || undefined} title={t(w.common ? 'commonTitle' : 'uncommonTitle')}>
+            {t(w.common ? 'common' : 'uncommon')}
+          </span>
+        </span>
+        <span className="board-gloss">{gloss(w)}</span>
+      </li>
+    )
+  }
 
   function bucket(key: Bucket, head: React.ReactNode, extra?: React.ReactNode) {
     const list = byBucket.get(key) ?? []
@@ -199,6 +276,9 @@ export function MeaningsBoard({
         }}
       >
         <header className="board-group-head">
+          <button className="board-caret" onClick={() => toggleShut(id)} aria-expanded={!shut.has(id)} title={t(shut.has(id) ? 'expand' : 'collapse')}>
+            {shut.has(id) ? '▸' : '▾'}
+          </button>
           {head}
           <span className="hint board-count">{t('words', { n: list.length })}</span>
           {picked.size > 0 && (
@@ -207,38 +287,24 @@ export function MeaningsBoard({
             </button>
           )}
         </header>
-        <ul className="board-words">
-          {list.length === 0 && <li className="hint board-empty">{t('empty')}</li>}
-          {list.map((w) => {
-            const unsure = w.agree === false || (typeof w.confidence === 'number' && w.confidence < 0.8)
-            return (
-              <li
-                key={w.id}
-                className="board-word"
-                data-picked={picked.has(w.id) || undefined}
-                data-unsure={unsure || undefined}
-                data-common={w.common || undefined}
-                draggable
-                onDragStart={(e) => {
-                  const ids = picked.has(w.id) ? [...picked] : [w.id]
-                  e.dataTransfer.setData('text/plain', ids.join(','))
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
-                onClick={() => toggle(w.id)}
-                title={unsure ? t('unsure') : undefined}
-              >
-                <span className="board-head" lang="ja">
-                  {w.headword}
-                </span>
-                <span className="board-reading" lang="ja">
-                  {w.reading}
-                </span>
-                <span className="board-gloss">{gloss(w)}</span>
-              </li>
-            )
-          })}
-        </ul>
-        {extra}
+        {!shut.has(id) && (
+          <>
+            {list.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
+            {[true, false].map((common) => {
+              const part = list.filter((w) => w.common === common)
+              if (!part.length) return null
+              return (
+                <div key={String(common)} className="board-part">
+                  <h5>
+                    {t(common ? 'common' : 'uncommon')} <span className="hint">{part.length}</span>
+                  </h5>
+                  <ul className="board-words">{part.map(card)}</ul>
+                </div>
+              )
+            })}
+          </>
+        )}
+        {!shut.has(id) && extra}
       </section>
     )
   }

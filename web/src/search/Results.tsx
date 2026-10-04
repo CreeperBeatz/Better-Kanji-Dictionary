@@ -229,7 +229,7 @@ function SortPill({
 const ALL_WORDS_KEY = 'betterrtk:allWords'
 
 /** JMdict nf buckets are 500 words wide: nf12 is the top 6,000. */
-function newsRank(nf: number): string {
+export function newsRank(nf: number): string {
   const n = nf * 500
   return n < 1000 ? String(n) : `${n / 1000}k`
 }
