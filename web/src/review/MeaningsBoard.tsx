@@ -6,13 +6,15 @@
  * phone, by a long press where the browser maps it to the menu; tapping
  * selects several for the menu to move at once. The catch-all
  * (the kanji brings no meaning to the word) is always there; "not in a group" holds the words
- * no group claims, the common ones first and the rarer ones a page at a time.
+ * no group claims. Only words in the labeling scope are on the board: common,
+ * or with a newspaper rank or a JLPT level (server/review.py `_on_board`).
+ * The rest are a separate task, later.
  *
  * The board only edits; the queue decides. `finalizeBoard` turns it into what
  * the server takes: the groups with their final ids, and word id -> group id.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, type BoardWord, type MeaningGroup } from '../api'
+import { type BoardWord, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import { newsRank } from '../search/Results'
 import { readDraft, writeDraft } from './drafts'
@@ -30,18 +32,16 @@ const S = strings(
     catchAll: 'The kanji brings no meaning to the word',
     catchAllHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
     none: 'Not in a group',
-    noneHint: 'words no group claims; they are left out of the grouped list',
+    noneHint: 'common or ranked words no group claims; rarer words are not labelled here',
     clearPick: 'clear selection',
     picked: '{n} selected',
     empty: 'no words',
-    moreRare: 'show {n} more unranked words ({left} not shown)',
     confirmGroup: 'confirmed',
     confirmGroupTitle: 'This suggested group is real: its label and what it stands for, not made up',
     confirmWord: 'Confirm: this word belongs here',
     confirmFirst: 'Confirm the group first',
     confirmed: 'confirmed',
     nConfirmed: '{n} confirmed',
-    nShown: '{n} shown',
     moveTo: 'Move to',
     moveMany: 'Move {n} selected to',
     unnamed: '(unnamed group)',
@@ -80,18 +80,16 @@ const S = strings(
     catchAll: 'Кандзито не внася значение в думата',
     catchAllHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните кандзи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
     none: 'Извън групите',
-    noneHint: 'думи, които никоя група не взима; не се показват в групирания списък',
+    noneHint: 'чести или класирани думи, които никоя група не взима; редките думи не се разпределят тук',
     clearPick: 'изчистете избора',
     picked: 'избрани: {n}',
     empty: 'няма думи',
-    moreRare: 'покажете още {n} думи без класиране (непоказани: {left})',
     confirmGroup: 'потвърдена',
     confirmGroupTitle: 'Предложената група е истинска: етикетът ѝ и това, което обхваща, не са измислени',
     confirmWord: 'Потвърдете: думата е на мястото си',
     confirmFirst: 'Първо потвърдете групата',
     confirmed: 'потвърдени',
     nConfirmed: 'потвърдени: {n}',
-    nShown: 'показани: {n}',
     moveTo: 'Преместете в',
     moveMany: 'Преместете {n} избрани в',
     unnamed: '(група без име)',
@@ -121,7 +119,6 @@ const S = strings(
   },
 )
 
-const RARE_PAGE = 100
 type Bucket = string | null
 
 const isUnsure = (w: BoardWord) => w.agree === false || (typeof w.confidence === 'number' && w.confidence < 0.8)
@@ -176,7 +173,6 @@ export function MeaningsBoard({
   words,
   placements,
   onPlace,
-  restTotal,
   skipped,
   onSkip,
   followUp = false,
@@ -186,11 +182,10 @@ export function MeaningsBoard({
   char: string
   groups: MeaningGroup[]
   onGroups: (g: MeaningGroup[]) => void
-  /** The board's own words: the kanji's common words and any already placed. */
+  /** The board's words: the kanji's common or ranked words, and any already placed. */
   words: BoardWord[]
   placements: Record<number, Bucket>
   onPlace: (ids: number[], to: Bucket) => void
-  restTotal: number
   /** Words the reviewer is not sure of; on submit they come back as a follow-up. */
   skipped: Set<number>
   onSkip: (ids: number[], on: boolean) => void
@@ -200,8 +195,6 @@ export function MeaningsBoard({
   const lang = useLang()
   const t = S(lang)
   const [kept] = useState(() => readDraft(cacheKey)?.board)
-  const [rare, setRare] = useState<BoardWord[]>(kept?.rare ?? [])
-  const [rareLeft, setRareLeft] = useState(kept?.rareLeft ?? restTotal)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [over, setOver] = useState<string | undefined>()
   // Collapsed boxes, by bucket id.
@@ -242,26 +235,16 @@ export function MeaningsBoard({
   }, [menu])
 
   useEffect(() => {
-    const empty = !okBoxes.size && !okWords.size && !openOk.size && !shut.size && !rare.length
+    const empty = !okBoxes.size && !okWords.size && !openOk.size && !shut.size
     writeDraft(cacheKey, {
-      board: empty ? undefined : { okBoxes: [...okBoxes], okWords: [...okWords], openOk: [...openOk], shut: [...shut], rare, rareLeft },
+      board: empty ? undefined : { okBoxes: [...okBoxes], okWords: [...okWords], openOk: [...openOk], shut: [...shut] },
     })
-  }, [cacheKey, okBoxes, okWords, openOk, shut, rare, rareLeft])
+  }, [cacheKey, okBoxes, okWords, openOk, shut])
 
-  function moreRare() {
-    api.restWords(char, rare.length, RARE_PAGE).then(
-      (d) => {
-        setRare((r) => [...r, ...d.words.filter((w) => !r.some((x) => x.id === w.id))])
-        setRareLeft(Math.max(0, d.total - d.offset - d.words.length))
-      },
-      () => {},
-    )
-  }
-
-  // Words by bucket, in the order they came: the board's, then the rare ones as loaded.
+  // Words by bucket, each sorted by newspaper rank, JLPT, then grade.
   const byBucket = useMemo(() => {
     const m = new Map<Bucket, BoardWord[]>()
-    for (const w of [...words, ...rare]) {
+    for (const w of words) {
       const b = w.id in placements ? placements[w.id] : w.group
       const key = b && (b === CATCH_ALL || groups.some((g) => g.id === b)) ? b : null
       if (!m.has(key)) m.set(key, [])
@@ -269,7 +252,7 @@ export function MeaningsBoard({
     }
     for (const list of m.values()) list.sort(byNews)
     return m
-  }, [words, rare, placements, groups])
+  }, [words, placements, groups])
 
   // A word that moves is no longer confirmed: it was confirmed where it was.
   const unconfirm = (ids: number[]) =>
@@ -482,9 +465,7 @@ export function MeaningsBoard({
             </label>
           )}
           <span className="hint board-count">
-            {/* "Not in a group" counts the unranked words not loaded yet, too. */}
-            {t('words', { n: (all.length + (key === null && !followUp ? rareLeft : 0)).toLocaleString(lang) })}
-            {key === null && !followUp && rareLeft > 0 && ` · ${t('nShown', { n: all.length.toLocaleString(lang) })}`}
+            {t('words', { n: all.length.toLocaleString(lang) })}
             {done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
           </span>
         </header>
@@ -569,11 +550,6 @@ export function MeaningsBoard({
         <div className="board-fixed">
           <b>{t('none')}</b> <span className="hint">{t('noneHint')}</span>
         </div>,
-        !followUp && rareLeft > 0 && (
-          <button className="clear board-more" onClick={moreRare}>
-            {t('moreRare', { n: Math.min(RARE_PAGE, rareLeft), left: rareLeft })}
-          </button>
-        ),
       )}
       {menu && (
         <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>

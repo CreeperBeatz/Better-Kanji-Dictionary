@@ -438,8 +438,6 @@ export interface ItemDetail extends QueueItem {
     word?: Word
     /** kanji_senses: its common words (and any placed), each in its group now. */
     board?: BoardWord[]
-    /** kanji_senses: how many rarer words are in no group; `api.restWords` pages through them. */
-    restTotal?: number
   }
 }
 
@@ -838,11 +836,6 @@ export const api = {
     skip?: Record<number, string | null>,
   ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip }),
 
-  restWords: (char: string, offset = 0, limit = 100) =>
-    get<{ total: number; offset: number; words: BoardWord[] }>(`/api/review/words/${encodeURIComponent(char)}`, [
-      ['offset', String(offset)],
-      ['limit', String(limit)],
-    ]),
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
 

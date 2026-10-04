@@ -842,7 +842,7 @@ def item(item_id: str) -> dict:
     view = _view(it, _names({it["created_by"], it["decided_by"]}), data)
     view["context"] = context(it["type"], it["subject"], data)
     if (only := follow_up_words(it)) is not None:
-        view["context"]["board"], view["context"]["restTotal"] = board(it["subject"], data, only)
+        view["context"]["board"] = board(it["subject"], data, only)
     if it["type"] == "decomposition" and isinstance(it["proposed"], list):
         view["impact"] = impact(it["subject"], it["proposed"])
     view["history"] = [d for d in data["decisions"] if d["type"] == it["type"] and d["subject"] == it["subject"]][-10:]
@@ -870,7 +870,7 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
             wid = int(subject.split("|")[1])
             out["word"] = _fetch_words([wid]).get(wid)
         else:
-            out["board"], out["restTotal"] = board(char, data)
+            out["board"] = board(char, data)
         return out
     if type_ == "form_link":
         a, b = subject.split("|")
@@ -934,17 +934,18 @@ def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
 
 
 def _on_board(r: dict) -> bool:
-    """Shown from the start: common, or ranked some way (newspaper, JLPT). The rest load on request."""
+    """In the labeling scope: common, or ranked (a newspaper rank or a JLPT level).
+    Rarer words are left for a separate task; a grade alone is no ranking, as
+    nearly every word written in jōyō kanji has one."""
     return bool(r["common"] or r["nf"] or r["jlpt"])
 
 
-def board(char: str, data: dict | None = None, only: dict[str, str | None] | None = None) -> tuple[list[dict], int]:
+def board(char: str, data: dict | None = None, only: dict[str, str | None] | None = None) -> list[dict]:
     """The meanings board: the kanji's common or ranked words, and any other word
     already placed, each in the group it is in now -- placed, else drafted, else none.
-    Also how many rarer words are left over (`rest_words` pages through them).
 
     `only`, for a follow-up: just these words, each where the reviewer left it
-    when skipping (unless it was placed since), and nothing left over."""
+    when skipping (unless it was placed since)."""
     from .routes.search import _fetch_words
 
     data = data or _read()
@@ -970,20 +971,8 @@ def board(char: str, data: dict | None = None, only: dict[str, str | None] | Non
         else:
             group = it["proposed"] if it and it["status"] == "open" else None
         out.append(_board_word(w, group, it))
-    return out, 0 if only is not None else len(rows) - len(ids)
+    return out
 
-
-def rest_words(char: str, offset: int = 0, limit: int = 100) -> dict:
-    """The rarer, unranked words with `char` that are in no group, a page at a time."""
-    from .routes.search import _fetch_words
-
-    data = _read()
-    prefix = f"{char}|"
-    placed = {int(k[len(prefix):]) for k in data["live"]["word_sense"] if k.startswith(prefix)}
-    rest = [r["id"] for r in _words_of(char) if not _on_board(r) and r["id"] not in placed]
-    page = rest[offset:offset + limit]
-    words = _fetch_words(page)
-    return {"total": len(rest), "offset": offset, "words": [_board_word(words[w], None, None) for w in page if w in words]}
 
 
 def history(user_id: str | None, limit: int = 100, type_: str | None = None, by: str | None = None,

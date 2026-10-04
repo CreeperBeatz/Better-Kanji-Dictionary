@@ -12,6 +12,11 @@ thought, add it under **Cases** so the next reviewer decides it the same way.
 - *Forms* and *meanings* answer "where does it come from, what does each part
   do?" Old forms are evidence for those, never for parts.
 
+**Scope.** Word labeling covers each kanji's *common* words, and words with a
+newspaper rank or a JLPT level. Rarer, unranked words are not labelled here;
+they will be a separate task. (A school grade is not a ranking: nearly every
+word written in jōyō kanji has one.)
+
 Nothing an AI or a data source proposes is live until a person accepts it.
 Every decision is logged and can be reverted from History, so decide and move
 on; you can always come back.
@@ -106,9 +111,9 @@ words with a red edge are the ones it was unsure of, so look at those first.
   address names the item (/review/queue/meanings/…), so it can be reopened.
 - **Add or remove groups** with *add a group* / *remove group*. A removed
   group's words drop to *Not in a group*.
-- **Not in a group** holds words no group claims. Words with a newspaper rank
-  or a JLPT level always show; unranked ones load a page at a time. Drag one
-  into a group if it belongs there.
+- **Not in a group** holds the in-scope words no group claims (common, or
+  with a newspaper rank or JLPT level). Drag one into a group if it belongs
+  there.
 - **Accept** (or *save my answer* once you changed something) decides the
   groups and every word on the board together, as you left them. History shows
   it as one decision ("+ N words placed"), and reverting it puts all of them

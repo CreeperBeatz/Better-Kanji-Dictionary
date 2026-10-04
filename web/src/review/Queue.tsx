@@ -421,7 +421,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       words={detail.context.board}
                       placements={placements}
                       onPlace={place}
-                      restTotal={detail.context.restTotal ?? 0}
                       skipped={skipped}
                       onSkip={skip}
                       followUp={isFollowUp(item)}

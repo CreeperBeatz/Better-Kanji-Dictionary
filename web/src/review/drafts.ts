@@ -5,7 +5,7 @@
  * tomorrow, picks up where it was left. Deciding the item (accept, edit,
  * reject) throws it away; skipping keeps it.
  */
-import type { BoardWord, TaskValue } from '../api'
+import type { TaskValue } from '../api'
 
 const PREFIX = 'betterrtk:review-draft:'
 const KEEP_DAYS = 30
@@ -15,9 +15,6 @@ export interface BoardDraft {
   okWords: number[]
   openOk: string[]
   shut: string[]
-  /** The rarer words loaded so far, so ones moved into a group still show. */
-  rare: BoardWord[]
-  rareLeft: number
 }
 
 export interface ItemDraft {

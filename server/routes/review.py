@@ -47,16 +47,6 @@ def decide(item_id: str, payload: dict = Body(...), me: dict = Depends(reviewer)
                                   payload.get("words"), payload.get("skip"))}
 
 
-@router.get("/words/{char}")
-def rest_words(
-    char: str,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
-    _: dict = Depends(reviewer),
-) -> dict:
-    """The rarer words with a kanji that are in no group, for the meanings board."""
-    return review.rest_words(char, offset, limit)
-
 
 @router.get("/progress")
 def progress(_: dict = Depends(reviewer)) -> dict:
