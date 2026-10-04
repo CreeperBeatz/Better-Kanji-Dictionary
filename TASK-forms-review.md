@@ -238,6 +238,10 @@ each one separately.
   `tests/offline_parity.py`.
 
 ### Part 4 — Labeling queue (large) — DONE
+- **Labeling handbook** (2026-10-04): `web/src/review/handbook.md`, shown as the
+  Handbook tab of the review screen. Rules per task type plus worked **Cases**;
+  add a case whenever a decision took thought (first one: 龰, IDS 人卜 vs 止).
+  The review screen is full-window since then.
 - Built: `server/review.py` (items, append-only decisions, live overlay, impact,
   export), `server/routes/review.py`, `web/src/review/{Queue,editors,Suggest}.tsx`,
   History / Auto-accepted tabs in `Workbench.tsx`; "suggest a change" on the

@@ -296,6 +296,7 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
                 </div>
               </header>
 
+              <div className="queue-judge">
               <dl className="queue-compare">
                 <dt>{t('now')}</dt>
                 <dd>
@@ -308,7 +309,9 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
               </dl>
 
               {detail && <Evidence detail={detail} onKanji={onKanji} />}
+              </div>
 
+              <div className="queue-decide">
               <div className="queue-edit">
                 {item.type !== 'word_sense' && <h4>{t('yourValue')}</h4>}
                 <ValueEditor
@@ -336,6 +339,7 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
                   {t('skip')}
                 </button>
                 <span className="hint queue-keys">{t(item.type === 'word_sense' ? 'keysWord' : 'keys')}</span>
+              </div>
               </div>
             </article>
           )}

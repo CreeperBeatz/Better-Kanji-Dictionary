@@ -5722,10 +5722,38 @@ html[data-nav]::view-transition-old(tabs):only-child {
   resize: vertical;
 }
 
+.overlay.workbench-screen {
+  padding: 0;
+}
+
+/* The review screen takes the whole window: no card, no backdrop around it. */
 .workbench {
   position: relative;
-  width: min(960px, 100%);
-  max-height: 88vh;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 12px 24px 0;
+}
+
+.workbench-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.workbench-head .overlay-tabs {
+  margin-top: 0;
+}
+
+.workbench-head .account-x {
+  position: static;
+  margin-left: auto;
 }
 
 .workbench h2 {
@@ -5736,10 +5764,71 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .workbench-body {
+  flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
-  margin-top: 12px;
+  padding: 12px 0 24px;
   min-height: 0;
+}
+
+/* The queue scrolls inside: its list and the item each on their own. */
+.workbench-body[data-tab='queue'] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.handbook {
+  max-width: 760px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.handbook h1 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 4px 0 8px;
+}
+
+.handbook h2 {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--paper);
+  margin: 28px 0 6px;
+}
+
+.handbook h3 {
+  font-size: 14.5px;
+  font-weight: 500;
+  margin: 18px 0 4px;
+}
+
+.handbook li + li {
+  margin-top: 4px;
+}
+
+.handbook table {
+  border-collapse: collapse;
+  margin: 10px 0;
+}
+
+.handbook th,
+.handbook td {
+  border: 1px solid var(--rule);
+  padding: 4px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.handbook code {
+  font-size: 13px;
+}
+
+.forms-none {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
 .workbench-section + .workbench-section {
@@ -5862,10 +5951,18 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin-left: auto;
 }
 
+.queue {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .queue-split {
+  flex: 1;
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 16px;
+  grid-template-columns: 240px 1fr;
+  gap: 24px;
   margin-top: 12px;
   min-height: 0;
 }
@@ -5874,8 +5971,9 @@ html[data-nav]::view-transition-old(tabs):only-child {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 64vh;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--rule);
 }
 
@@ -5911,6 +6009,64 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .queue-item {
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 4px 24px 0;
+}
+
+.queue-judge,
+.queue-decide {
+  min-width: 0;
+}
+
+/* Wide screens: what to judge by on the left, the answer on the right,
+   which stays in view while the evidence scrolls. */
+@media (min-width: 1100px) {
+  .queue-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.75fr);
+    grid-template-areas: 'head head' 'judge decide';
+    gap: 0 32px;
+    align-content: start;
+    align-items: start;
+  }
+
+  .queue-head {
+    grid-area: head;
+  }
+
+  .queue-judge {
+    grid-area: judge;
+  }
+
+  .queue-decide {
+    grid-area: decide;
+    position: sticky;
+    top: 0;
+  }
+
+  .queue-decide .queue-edit {
+    border-top: 0;
+    margin-top: 12px;
+    padding-top: 0;
+  }
+}
+
+/* Narrower: the buttons stay at the bottom of the item while it scrolls
+   (the item, not the answer block, has to be their parent for that). */
+@media (max-width: 1099px) {
+  .queue-decide {
+    display: contents;
+  }
+
+  .queue-actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--sumi-lift);
+    padding: 8px 0;
+    border-top: 1px solid var(--rule);
+  }
 }
 
 .queue-head {
@@ -5921,7 +6077,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .queue-big {
   font-family: var(--mincho);
-  font-size: 56px;
+  font-size: 72px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -6158,10 +6314,37 @@ button.review-part {
     grid-template-columns: 1fr;
   }
 
+  .queue-split {
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+  }
+
   .queue-list {
     max-height: 22vh;
     border-right: 0;
     border-bottom: 1px solid var(--rule);
+  }
+
+  .workbench {
+    padding: 8px 12px 0;
+  }
+
+  .workbench-head {
+    gap: 8px;
+  }
+
+  .workbench h2 {
+    display: none;
+  }
+
+  .workbench-head .overlay-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .workbench-head .overlay-tabs button {
+    flex: none;
   }
 
   .queue-keys {

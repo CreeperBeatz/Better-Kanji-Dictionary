@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { api, dataChanged, type AdminPeople, type Decision } from '../api'
 import { useAuth } from '../account/auth'
 import type { WorkbenchTab } from '../account/Account'
@@ -7,6 +7,8 @@ import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { ValueView } from './editors'
 import { Queue } from './Queue'
+
+const Handbook = lazy(() => import('./Handbook'))
 
 const S = strings(
   {
@@ -45,6 +47,7 @@ const S = strings(
     a_auto: 'auto-accepted',
     a_revert: 'reverted',
     a_reopen: 'reopened',
+    handbook: 'Handbook',
     autoHint: 'Accepted by the mechanical rule, not by a person. Spot-check them: if more than a few are wrong, the rule needs tightening.',
   },
   {
@@ -83,6 +86,7 @@ const S = strings(
     a_auto: 'прието автоматично',
     a_revert: 'върнато',
     a_reopen: 'отворено отново',
+    handbook: 'Наръчник',
     autoHint: 'Приети по механичното правило, а не от човек. Проверявайте на случаен принцип: ако повече от няколко са грешни, правилото трябва да се затегне.',
   },
 )
@@ -123,27 +127,36 @@ export function Workbench({
     ['queue', 'queue'],
     ['history', 'history'],
     ...(user.role === 'admin' ? ([['auto', 'auto'], ['people', 'people']] as [WorkbenchTab, Key][]) : []),
+    ['handbook', 'handbook'],
   ]
 
+  // The whole screen: the queue needs the room, and its list and item scroll on their own.
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="overlay workbench-screen">
       <div className="overlay-panel workbench" role="dialog" aria-modal="true" aria-label={t('title')}>
-        <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
-          ×
-        </button>
-        <h2>{t('title')}</h2>
-        <nav className="overlay-tabs" role="tablist">
-          {tabs.map(([k, label]) => (
-            <button key={k} role="tab" aria-selected={tab === k} data-on={tab === k} onClick={() => onTab(k)}>
-              {t(label)}
-            </button>
-          ))}
-        </nav>
-        <div className="workbench-body">
+        <header className="workbench-head">
+          <h2>{t('title')}</h2>
+          <nav className="overlay-tabs" role="tablist">
+            {tabs.map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={tab === k} data-on={tab === k} onClick={() => onTab(k)}>
+                {t(label)}
+              </button>
+            ))}
+          </nav>
+          <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
+            ×
+          </button>
+        </header>
+        <div className="workbench-body" data-tab={tab}>
           {tab === 'queue' && <Queue onKanji={onKanji} />}
           {tab === 'history' && <History admin={user.role === 'admin'} />}
           {tab === 'auto' && user.role === 'admin' && <History admin auto />}
           {tab === 'people' && user.role === 'admin' && <People />}
+          {tab === 'handbook' && (
+            <Suspense fallback={<p className="hint">{t('loading')}</p>}>
+              <Handbook />
+            </Suspense>
+          )}
         </div>
       </div>
     </div>

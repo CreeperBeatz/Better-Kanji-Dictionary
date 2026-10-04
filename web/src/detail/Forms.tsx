@@ -12,6 +12,7 @@ import { api, onDataChanged, type FormItem, type FormsResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { SuggestLink } from '../review/Suggest'
+import { useAuth } from '../account/auth'
 
 const S = strings(
   {
@@ -26,6 +27,7 @@ const S = strings(
     lookalikeOf: 'Mistaken for it',
     variants: 'Other variants',
     notAPage: '{char} has no page of its own',
+    none: 'No forms recorded yet.',
   },
   {
     title: 'Форми',
@@ -39,6 +41,7 @@ const S = strings(
     lookalikeOf: 'Бъркат го с него',
     variants: 'Други варианти',
     notAPage: '{char} няма собствена страница',
+    none: 'Още няма записани форми.',
   },
 )
 
@@ -76,8 +79,12 @@ export function useForms(char: string, wanted = true): FormsResponse | null {
 export function Forms({ data, onKanji, onSuggest }: { data: FormsResponse; onKanji: (char: string) => void; onSuggest?: () => void }) {
   const lang = useLang()
   const t = S(lang)
+  const { user } = useAuth()
   const rows = ROWS.filter(([k]) => data[k].length > 0)
-  if (!rows.length) return null
+  // With nothing to show the block is left out, except for reviewers: it is
+  // where a missing link (龰 is a form of 止) gets added.
+  const reviewer = !!user && user.role !== 'user'
+  if (!rows.length && !(reviewer && onSuggest)) return null
 
   const glyph = (i: FormItem) => {
     const meaning = meaningsOf(i, lang).value[0]
@@ -97,6 +104,7 @@ export function Forms({ data, onKanji, onSuggest }: { data: FormsResponse; onKan
       <h3>
         {t('title')} {onSuggest && <SuggestLink onOpen={onSuggest} />}
       </h3>
+      {!rows.length && <p className="forms-none">{t('none')}</p>}
       <dl>
         {rows.map(([k, label]) => (
           <div key={k} className="forms-row" data-kind={k}>
