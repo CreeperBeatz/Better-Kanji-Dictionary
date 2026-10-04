@@ -5998,20 +5998,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin: 0;
 }
 
-.board-filter {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-basis: 100%;
-  font-size: 12.5px;
-  color: var(--paper-dim);
-  cursor: pointer;
-}
-
-.board-filter input {
-  accent-color: var(--shu);
-}
-
 /* The right-click menu on a word: its group, picked from a list. */
 .board-menu {
   position: fixed;
@@ -6163,6 +6149,83 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .board-part + .board-part {
   margin-top: 10px;
+}
+
+/* Confirming: a checkbox on each card and box, shown on hover (always on
+   touch screens), and kept in view once ticked. */
+.board-check {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  vertical-align: 2px;
+  visibility: hidden;
+  cursor: pointer;
+}
+
+.board-check input,
+.board-group-check input {
+  margin: 0;
+  accent-color: #7fb88a;
+  cursor: inherit;
+}
+
+.board-check[data-off] {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.board-word:hover .board-check,
+.board-word[data-ok] .board-check {
+  visibility: visible;
+}
+
+.board-word[data-ok] {
+  border-color: rgba(127, 184, 138, 0.45);
+}
+
+.board-group-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--paper-dim);
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.board-group-head:hover .board-group-check,
+.board-group-check[data-on] {
+  visibility: visible;
+}
+
+.board-group-check[data-on] {
+  color: #7fb88a;
+}
+
+@media (hover: none) {
+  .board-check,
+  .board-group-check {
+    visibility: visible;
+  }
+}
+
+.board-done {
+  border-top: 1px dashed var(--rule);
+  padding-top: 8px;
+}
+
+.board-done-toggle {
+  padding: 2px 0;
+  margin-bottom: 4px;
+  background: none;
+  border: 0;
+  color: #7fb88a;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
 }
 
 .board-part h5 {
