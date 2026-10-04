@@ -86,7 +86,14 @@ words with a red edge are the ones it was unsure of, so look at those first.
 
 - **Move words** by dragging them, right-clicking one to pick its group, or
   tapping several and pressing *move here* on a group (works on a phone too).
-- **Only unsure** narrows every box to the cards the model was unsure of.
+- **Confirm as you go.** Tick a box's *confirmed* once its label and scope are
+  right; then tick each word you have checked (hover a card for its
+  checkbox; a word can only be confirmed in a confirmed box). Confirmed words
+  fold into a *confirmed* part of the box, shut by default, so what is left
+  in view is what still needs a look. Moving a word clears its tick.
+- **Your work is kept** in this browser until you decide the item: reload,
+  close the tab or come back tomorrow, and the board is as you left it. The
+  address names the item (/review/queue/meanings/…), so it can be reopened.
 - **Add or remove groups** with *add a group* / *remove group*. A removed
   group's words drop to *Not in a group*.
 - **Not in a group** holds words no group claims. Words with a newspaper rank
