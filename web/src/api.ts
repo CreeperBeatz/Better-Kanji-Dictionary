@@ -850,7 +850,9 @@ export const api = {
     reason?: string,
     words?: Record<number, string | null>,
     skip?: Record<number, string | null>,
-  ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip }),
+    /** A kanji's Bulgarian card: group id -> the group's Bulgarian label. */
+    labels?: Record<string, string>,
+  ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip, labels }),
 
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),

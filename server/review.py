@@ -680,10 +680,14 @@ FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
-           words: dict | None = None, skip: dict | None = None) -> dict:
+           words: dict | None = None, skip: dict | None = None, labels: dict | None = None) -> dict:
     """`words`, for a kanji's meanings: word id -> group id (None: in no group),
     as the reviewer left them on the board. Each becomes a decision of its own,
     under this one, and is reverted with it.
+
+    `labels`, for a kanji's Bulgarian card: group id -> its Bulgarian label.
+    Bulgarian is labelled in the Bulgarian stage, not on the meanings board,
+    so the groups' labels are set here, as a decision under this one.
 
     `skip`: the words the reviewer was not sure of, word id -> where they had
     it so far. They are left undecided and come back together as a follow-up
@@ -736,8 +740,28 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
             if held:
                 _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
                           f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
+        if type_ == "bg" and labels and subject.startswith("kanji:"):
+            _label_groups(data, subject[6:], labels, user_id, d["id"])
         _save(data)
         return dict(item)
+
+
+def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str) -> None:
+    """Set the Bulgarian labels of a kanji's accepted groups (a decision under `parent`)."""
+    if not isinstance(labels, dict):
+        raise _bad("bg_invalid", "one Bulgarian gloss per sense")
+    before = live_value("kanji_senses", char, data)
+    if not before:
+        return
+    after = validate("kanji_senses", char, [
+        {**g, "bg": (" ".join(str(labels.get(g["id"], g.get("bg") or "")).split())[:40] or None)} for g in before
+    ], data)
+    if after == before:
+        return
+    c = _decision("direct", "kanji_senses", char, before, after, user_id, None, "Bulgarian labels")
+    c["parent"] = parent
+    _apply(data, "kanji_senses", char, after, c["id"], explicit_words=True)
+    data["decisions"].append(c)
 
 
 def _skipped(skip: Any) -> dict[str, str | None]:
@@ -866,7 +890,7 @@ def revert(decision_id: str, user_id: str) -> dict:
             elif c["action"] in CHANGES and live_value(c["type"], c["subject"], data) == c["after"]:
                 rc = _decision("revert", c["type"], c["subject"], c["after"], c["before"], user_id, c["item"],
                                f"revert {c['id']}", supersedes=c["id"])
-                _apply(data, c["type"], c["subject"], c["before"], rc["id"])
+                _apply(data, c["type"], c["subject"], c["before"], rc["id"], explicit_words=True)
             else:
                 continue
             rc["parent"] = r["id"]
@@ -1202,7 +1226,8 @@ def progress() -> dict:
         count["total"] += 1
         if i["status"] != "open":
             count["done"] += 1
-    targets = [r["char"] for r in query("SELECT char FROM kanji WHERE jlpt BETWEEN 2 AND 5")]
+    # The kanji in the meanings scope: N5-N2, plus the frequent ones the JLPT lists miss (DATA-ISSUES.md).
+    targets = sorted({i["subject"] for i in data["items"].values() if i["type"] == "kanji_senses"})
 
     # Every part below every target, a level at a time, then each closure from that map.
     kids: dict[str, list[str]] = {}

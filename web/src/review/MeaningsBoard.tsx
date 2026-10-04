@@ -520,12 +520,11 @@ export function MeaningsBoard({
           g.id,
           followUp ? (
             <div className="board-fixed">
-              <b>{g.en}</b> {g.bg && <span className="hint">{g.bg}</span>}
+              <b>{g.en}</b>
             </div>
           ) : (
           <div className="board-labels">
             <input className="assoc-text board-en" value={g.en} placeholder={t('en')} aria-label={t('en')} maxLength={40} onChange={(e) => setGroup(i, { en: e.target.value })} />
-            <input className="assoc-text" value={g.bg ?? ''} placeholder={t('bg')} aria-label={t('bg')} maxLength={40} onChange={(e) => setGroup(i, { bg: e.target.value || null })} />
             <input className="assoc-text board-note" value={g.note ?? ''} placeholder={t('note')} aria-label={t('note')} maxLength={200} onChange={(e) => setGroup(i, { note: e.target.value || null })} />
             <button className="clear" onClick={() => removeGroup(i)}>
               {t('remove')}

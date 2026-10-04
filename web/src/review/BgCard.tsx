@@ -22,8 +22,9 @@ const S = strings(
     add: 'add a meaning',
     remove: 'remove',
     hint: 'Check each Bulgarian gloss against the English beside it. Fix what is wrong or unnatural; leave what is right.',
-    groups: 'Its meaning groups',
-    fromGroups: 'fill from the groups’ Bulgarian labels',
+    groups: 'Its meaning groups: give each its Bulgarian label',
+    groupsHint: 'Short, natural Bulgarian for what the group stands for. The meanings below can start from them.',
+    fromGroups: 'fill the meanings from these labels',
     inGroups: 'What its kanji bring here',
     noMeaning: 'brings no meaning to this word',
     notPlaced: 'not placed in a group',
@@ -41,15 +42,29 @@ const S = strings(
     add: 'добавете значение',
     remove: 'махнете',
     hint: 'Сверете всеки български превод с английския до него. Поправете грешното или неестественото; оставете вярното.',
-    groups: 'Групите му значения',
-    fromGroups: 'попълнете от българските етикети на групите',
+    groups: 'Групите му значения: дайте на всяка български етикет',
+    groupsHint: 'Кратко, естествено на български, какво обхваща групата. Значенията по-долу могат да тръгнат от тях.',
+    fromGroups: 'попълнете значенията от тези етикети',
     inGroups: 'Какво внасят кандзитата му тук',
     noMeaning: 'не внася значение в тази дума',
     notPlaced: 'не е разпределена в група',
   },
 )
 
-export function BgCard({ detail, value, onChange }: { detail: ItemDetail; value: string[]; onChange: (v: string[]) => void }) {
+export function BgCard({
+  detail,
+  value,
+  onChange,
+  labels,
+  onLabels,
+}: {
+  detail: ItemDetail
+  value: string[]
+  onChange: (v: string[]) => void
+  /** A kanji card: its groups' Bulgarian labels, by group id. */
+  labels: Record<string, string>
+  onLabels: (l: Record<string, string>) => void
+}) {
   const lang = useLang()
   const t = S(lang)
   const c = detail.context
@@ -140,16 +155,31 @@ export function BgCard({ detail, value, onChange }: { detail: ItemDetail; value:
       </dl>
       {c.senses && c.senses.length > 0 && (
         <div className="bg-groups">
-          <span className="hint">{t('groups')}</span>
-          <ul>
+          <span>{t('groups')}</span>
+          <span className="hint">{t('groupsHint')}</span>
+          <ul className="bg-labels">
             {c.senses.map((g) => (
-              <li key={g.id}>
-                <b>{g.en}</b> {g.bg && <span lang="bg">· {g.bg}</span>}
+              <li key={g.id} data-changed={(labels[g.id] ?? '') !== (g.bg ?? '') || undefined}>
+                <span className="bg-label-en">
+                  <b>{g.en}</b>
+                  {g.note && <span className="hint"> — {g.note}</span>}
+                </span>
+                <input
+                  className="assoc-text"
+                  lang="bg"
+                  maxLength={40}
+                  value={labels[g.id] ?? ''}
+                  aria-label={g.en}
+                  onChange={(e) => onLabels({ ...labels, [g.id]: e.target.value })}
+                />
               </li>
             ))}
           </ul>
-          {c.senses.some((g) => g.bg) && (
-            <button className="clear" onClick={() => onChange(c.senses!.map((g) => g.bg ?? '').filter(Boolean).slice(0, 12))}>
+          {Object.values(labels).some((l) => l.trim()) && (
+            <button
+              className="clear"
+              onClick={() => onChange(c.senses!.map((g) => (labels[g.id] ?? '').trim()).filter(Boolean).slice(0, 12))}
+            >
               {t('fromGroups')}
             </button>
           )}

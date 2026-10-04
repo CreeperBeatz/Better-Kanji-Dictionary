@@ -199,7 +199,6 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
             <tr>
               <th>{t('id')}</th>
               <th>{t('en')}</th>
-              <th>{t('bg')}</th>
               <th>{t('note')}</th>
               <th />
             </tr>
@@ -212,9 +211,6 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
                 </td>
                 <td>
                   <input className="assoc-text" value={g.en} autoFocus={autoFocus && i === 0} onChange={(e) => set(i, { en: e.target.value })} />
-                </td>
-                <td>
-                  <input className="assoc-text" value={g.bg ?? ''} onChange={(e) => set(i, { bg: e.target.value })} />
                 </td>
                 <td>
                   <input className="assoc-text" value={g.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} />

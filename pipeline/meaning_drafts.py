@@ -7,6 +7,9 @@
     python pipeline/meaning_drafts.py check
     python pipeline/meaning_drafts.py load [--dry-run] [--review-dir DIR]
 
+    # kanji the level lists miss (分 has no JLPT level), in a folder of their own:
+    python pipeline/meaning_drafts.py --drafts data/drafts/meanings-gap prepare --chars 分的無
+
 Tasks C and D of TASK-forms-review.md. No model is called from here: the
 subagents (Claude Code, Sonnet, up to 20 at once) each read
 pipeline/meaning_prompt.md and one input batch, and write one JSON file.
@@ -56,13 +59,16 @@ def _db() -> sqlite3.Connection:
     return db
 
 
-def _kanji(db: sqlite3.Connection, levels: list[int]) -> list[dict]:
-    marks = ",".join("?" * len(levels))
+def _kanji(db: sqlite3.Connection, levels: list[int], chars: str | None = None) -> list[dict]:
+    if chars:
+        where, params = f"k.char IN ({','.join('?' * len(chars))})", list(chars)
+    else:
+        where, params = f"k.jlpt IN ({','.join('?' * len(levels))})", levels
     rows = db.execute(
         f"SELECT k.char, k.meanings, k.on_yomi, k.kun_yomi, k.freq, c.meaning AS curated "
         f"FROM kanji k LEFT JOIN kanji_curated c ON c.char = k.char "
-        f"WHERE k.jlpt IN ({marks}) ORDER BY k.jlpt DESC, k.freq IS NULL, k.freq",
-        levels,
+        f"WHERE {where} ORDER BY k.jlpt DESC, k.freq IS NULL, k.freq",
+        params,
     ).fetchall()
     out = []
     for r in rows:
@@ -107,9 +113,9 @@ def _write(path: Path, data: dict) -> None:
     path.write_text(f'{head[:-1]}, "kanji": [\n{lines}\n]}}\n', encoding="utf-8")
 
 
-def prepare(levels: list[int], sample: int | None) -> None:
+def prepare(levels: list[int], sample: int | None, chars: str | None = None) -> None:
     with _db() as db:
-        kanji = _kanji(db, levels)
+        kanji = _kanji(db, levels, chars)
     if sample:
         # A spread, not the first few: common and rare, few words and many.
         step = max(1, len(kanji) // sample)
@@ -291,9 +297,11 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--drafts", type=Path, help="keep these drafts in another folder (default data/drafts/meanings)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--levels", default="5,4,3,2")
+    p.add_argument("--chars", help="exactly these kanji, instead of JLPT levels")
     p.add_argument("--sample", type=int)
     pb = sub.add_parser("prepare-b")
     pb.add_argument("--batch", help="just this batch's number, e.g. 007")
@@ -303,8 +311,12 @@ def main() -> int:
     l.add_argument("--dry-run", action="store_true")
     l.add_argument("--review-dir", type=Path)
     args = ap.parse_args()
+    if args.drafts:
+        global DRAFTS, IN, OUT
+        DRAFTS = args.drafts if args.drafts.is_absolute() else ROOT / args.drafts
+        IN, OUT = DRAFTS / "in", DRAFTS / "out"
     if args.cmd == "prepare":
-        prepare([int(x) for x in args.levels.split(",")], args.sample)
+        prepare([int(x) for x in args.levels.split(",")], args.sample, args.chars)
     elif args.cmd == "prepare-b":
         prepare_b(args.batch)
     elif args.cmd == "check":

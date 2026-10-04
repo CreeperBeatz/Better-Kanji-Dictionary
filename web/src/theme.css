@@ -1967,6 +1967,28 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 2px;
 }
 
+.bg-labels li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 14px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.bg-labels .assoc-text {
+  padding: 5px 8px;
+}
+
+.bg-labels li[data-changed] .assoc-text {
+  border-color: var(--ai);
+}
+
+@media (max-width: 640px) {
+  .bg-labels li {
+    grid-template-columns: 1fr;
+  }
+}
+
 .bg-group-char {
   font-family: var(--mincho);
   font-size: 17px;

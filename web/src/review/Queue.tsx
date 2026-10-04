@@ -162,6 +162,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [placements, setPlacements] = useState<Placements>({})
   const [placedFrom, setPlacedFrom] = useState<Placements>({})
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
+  // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
+  const [labels, setLabels] = useState<Record<string, string>>({})
+  const [labelsFrom, setLabelsFrom] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -214,12 +217,20 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setProblem(null)
     setPlacements({})
     setPlacedFrom({})
+    setLabels({})
+    setLabelsFrom({})
     if (!item) return
     let stale = false
     api.reviewItem(item.id).then(
       (d) => {
         if (stale) return
         setDetail(d)
+        if (d.type === 'bg' && d.context.senses) {
+          const l: Record<string, string> = {}
+          for (const g of d.context.senses) l[g.id] = g.bg ?? ''
+          setLabels(readDraft(d.id)?.labels ?? l)
+          setLabelsFrom(l)
+        }
         if (d.type === 'kanji_senses' && d.context.board) {
           const ids = new Set(((d.proposed ?? d.current ?? []) as MeaningGroup[]).map((g) => g.id))
           const p: Placements = {}
@@ -241,7 +252,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       setBusy(true)
       setProblem(null)
       try {
-        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip)
+        const withLabels = item.type === 'bg' && Object.keys(labels).length ? labels : undefined
+        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels)
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         if (action !== 'skip') onDecided?.()
@@ -257,7 +269,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setBusy(false)
       }
     },
-    [item, busy, reason, items, lang, onDecided, showSkipped],
+    [item, busy, reason, items, lang, onDecided, showSkipped, labels],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
@@ -265,7 +277,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const open = item?.proposed === null
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
-  const edited = item ? moved || (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
+  const relabelled = item?.type === 'bg' && !same(labels, labelsFrom)
+  const edited = item ? moved || relabelled || (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
   const decideDraft = useCallback(
     (value: TaskValue = draft) => {
       if (!item) return
@@ -299,8 +312,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       reason: reason.trim() ? reason : undefined,
       placements: board && !same(placements, placedFrom) ? placements : undefined,
       skipped: skipped.size ? [...skipped] : undefined,
+      labels: item.type === 'bg' && !same(labels, labelsFrom) ? labels : undefined,
     })
-  }, [item, detail, draft, reason, placements, placedFrom, board, skipped])
+  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom])
 
   const skip = useCallback((ids: number[], on: boolean) => {
     setSkipped((s) => {
@@ -459,7 +473,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               <div className="queue-edit">
                 {item.type === 'bg' ? (
                   detail?.id === item.id ? (
-                    <BgCard detail={detail} value={(draft ?? []) as string[]} onChange={setDraft} />
+                    <BgCard detail={detail} value={(draft ?? []) as string[]} onChange={setDraft} labels={labels} onLabels={setLabels} />
                   ) : (
                     <p className="hint">{t('loading')}</p>
                   )

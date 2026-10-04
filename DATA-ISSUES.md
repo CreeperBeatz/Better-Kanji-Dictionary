@@ -1,0 +1,113 @@
+# Data issues
+
+The dictionary should be ground truth, so every mistake found in the data is
+written down here, with what was done about it. Add an entry the moment one
+is found, even if nothing is done yet; move it to **Fixed** when it is.
+
+Each entry: an id, when it was found, what is wrong (with an example), where
+it comes from, and its status. Statuses:
+
+- **open**: known, nothing done yet
+- **in review**: in the review queue (/review), waiting for a person
+- **partly fixed**: some of it done; the entry says what is left
+- **fixed**: done; the entry says how and where
+
+## Open
+
+### D-001 · Frequent kanji with no JLPT level
+*Found 2026-10-04.* 分 的 無 可 身 韓 岡 阪 狙 埼 里 have no JLPT level in our
+kanji data, though 分 is basic N5/N4 vocabulary. Meanings were drafted only
+for JLPT N5–N2 kanji, so these got no meanings task, and their Bulgarian
+cards opened with no groups behind them.
+Source: the kanji data's `jlpt_new` field (a modern reconstruction).
+Selection used: jōyō, no JLPT level, and frequency rank ≤ 1000 or school
+grade ≤ 2.
+**Status: partly fixed** (2026-10-05). Meanings tasks drafted (two runs,
+96.5% agreement) and queued for all 11: 11 meaning-group items and 706 word
+placements. The meanings scope is now "every kanji with a meanings task", not
+"JLPT N5–N2", so progress counts them. The JLPT level itself is still missing in the data (search filters
+and the map's levels still leave them out).
+
+### D-002 · All Bulgarian is machine-translated and unchecked
+*Found 2026-10-04.* Every Bulgarian gloss (30,200 words) and kanji meaning
+(10,350 kanji) came from a machine translation. It sometimes picks the wrong
+sense: 生 is "Life, Genuine, Birth" in English but "живот, раждам се, ученик"
+(student) in Bulgarian.
+Source: jmdict-kanjidic-bg (`mt:claude-sonnet-5`).
+**Status: in review.** The Bulgarian stage has one card per in-scope word and
+per jōyō/JLPT kanji (32,545). Each card opens once its kanji's meaning groups
+are accepted. Corrections show on the site at once. They are not copied back
+into jmdict-kanjidic-bg automatically; that is done by hand.
+
+### D-003 · KANJIDIC English meanings with noise
+*Found 2026-10-02.* 合 is listed as "Fit, Suit, Join, 0.1". The "0.1" is the
+old unit 合 (a tenth of a 升), shown as a bare number.
+Source: KANJIDIC2 meanings, shown verbatim.
+**Status: open.** No task type covers kanji English meanings yet. How many
+kanji have this kind of noise is not known.
+
+### D-004 · Decompositions that lose or invent parts
+*Found 2026-10-02* (TASK-forms-review.md §5 A).
+- 五 → 力: 五 is given 力 as a part, so 語 (via 吾) "contains" 力.
+- 段 has only 殳; the left half is missing.
+- 為 is only 灬.
+- 並 is only 二.
+
+Source: cjk-decomp / topokanji, through pipeline/decomp.py.
+**Status: in review.** 並 has an IDS proposal (䒑 业) in the queue. 五, 段 and
+為 were added to the queue as checks on 2026-10-05.
+
+### D-005 · 龰 has no form link to 止
+*Found 2026-10-04.* 龰 (the bottom of 足 走 定) is 止 written at the bottom,
+but nothing records that, so its page cannot borrow 止's meaning.
+**Status: in review.** A drafted form link (龰 is a form of 止) is in the
+queue. (The IDS stroke split 人 卜 for its parts was rejected; see the
+handbook case.)
+
+### D-006 · Drafted word placements: the no-meaning box used as a shrug
+*Found 2026-10-04.* The meanings drafts sometimes put a word in "the kanji
+brings no meaning" when the model could not decide. 沖合 (offshore) is one:
+its 合 is the ordinary "area, extent" sense, as in 歩合.
+Source: the subagent drafts (`ai:claude-sonnet`).
+**Status: in review.** Every placement is checked on its kanji's meanings
+board. The handbook warns about this box.
+
+## Fixed
+
+### D-007 · 主 lost its dot
+*Found 2026-10-04.* 主 had only 王 as a part; the flame 丶 on top was dropped.
+**Fixed 2026-10-04** by review: 主 = 丶 王. People may now use single strokes
+as parts after a confirmation; data sources still may not.
+
+### D-008 · 龶 was a dead end
+*Found 2026-10-02.* 青 → 龶 + 月, and 龶 had no meaning, no parts and no
+link, so learners called it "king".
+**Fixed 2026-10-02** in the forms data: 龶 is a form of 生, and looks like 王
+(labelled as a mnemonic only).
+
+### D-009 · Override lines that broke real parts into strokes
+Topokanji's override lines split real parts into strokes (口 → 丨一, 門 →
+丨彐月), and 艹 → 卄 → 廾 made every grass kanji "contain" 廾.
+**Fixed** by guards in pipeline/decomp.py.
+
+### D-010 · `fix(...)` override lines read as atomic
+Override lines written `fix(...)` were read as "no parts".
+**Fixed** in pipeline/decomp.py. (The research ordering in order-n2.tsv
+predates the fix.)
+
+### D-011 · Words filed under a kanji only through a rare spelling
+夫 is filed under 人 because of its rare spelling 良人, which would read as a
+mistake in 人's word list.
+**Fixed:** a word is listed, drafted and queued under a kanji only when its
+headword contains it.
+
+### D-012 · Sources that spell a shape we keep apart
+IDS and KanjiVG sometimes write 厂 for ⺁, which we treat as a different shape.
+**Fixed:** such spellings are left out of the queue's proposals
+(pipeline/review_sources.py).
+
+## Known limits (not mistakes, but worth knowing)
+
+- A corrected Bulgarian gloss shows everywhere at once, but searching by
+  Bulgarian text still finds the word by its old wording until the data is
+  rebuilt with the correction.

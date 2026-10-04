@@ -24,6 +24,8 @@ export interface ItemDraft {
   placements?: Record<number, string | null>
   /** Meanings: the words left for later. */
   skipped?: number[]
+  /** A kanji's Bulgarian card: the groups' Bulgarian labels as edited. */
+  labels?: Record<string, string>
   board?: BoardDraft
 }
 
