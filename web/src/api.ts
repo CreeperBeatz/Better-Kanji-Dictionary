@@ -382,6 +382,38 @@ export interface Decision {
   reason: string | null
   supersedes: string | null
   reverted_by: string | null
+  /** For a kanji's meanings: how many word placements were decided with it. */
+  words?: number
+}
+
+/** A word on the meanings board, in the group it is in now (null: in none). */
+export interface BoardWord {
+  id: number
+  headword: string
+  reading: string
+  common: boolean
+  gloss: string
+  glossBg: string | null
+  group: string | null
+  /** The drafting model's, when it drafted the placement. */
+  confidence?: number | null
+  /** Whether the two drafting runs agreed. */
+  agree?: boolean | null
+}
+
+export interface ReviewProgress {
+  tasks: { done: number; total: number }
+  stages: Record<TaskType, { done: number; total: number }>
+  /** N5-N2 kanji with nothing open on their parts, forms, meanings or words. */
+  kanji: { verified: number; total: number }
+  meanings: { accepted: number; total: number }
+}
+
+export interface HistoryFilter {
+  all?: boolean
+  by?: string
+  from?: string
+  to?: string
 }
 
 export interface ItemDetail extends QueueItem {
@@ -398,7 +430,10 @@ export interface ItemDetail extends QueueItem {
     kun?: string[]
     senses?: MeaningGroup[] | null
     word?: Word
-    drafts?: { word: string; reading: string; gloss: string; proposed: string | null }[]
+    /** kanji_senses: its common words (and any placed), each in its group now. */
+    board?: BoardWord[]
+    /** kanji_senses: how many rarer words are in no group; `api.restWords` pages through them. */
+    restTotal?: number
   }
 }
 
@@ -783,8 +818,17 @@ export const api = {
 
   reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
 
-  decide: (id: string, action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, reason?: string) =>
-    send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason }),
+  /** `words`, for a kanji's meanings: word id -> group id or null, as left on the board. */
+  decide: (id: string, action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, reason?: string, words?: Record<number, string | null>) =>
+    send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words }),
+
+  restWords: (char: string, offset = 0, limit = 100) =>
+    get<{ total: number; offset: number; words: BoardWord[] }>(`/api/review/words/${encodeURIComponent(char)}`, [
+      ['offset', String(offset)],
+      ['limit', String(limit)],
+    ]),
+
+  reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
 
   /** A reviewer's own change, live at once. */
   reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string) =>
@@ -796,9 +840,12 @@ export const api = {
 
   impact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),
 
-  reviewHistory: (all = false, limit = 100) =>
-    get<{ items: Decision[] }>('/api/review/history', [
-      ['all', all ? 'true' : 'false'],
+  reviewHistory: (f: HistoryFilter = {}, limit = 200) =>
+    get<{ items: Decision[]; people: Author[] }>('/api/review/history', [
+      ['all', f.all ? 'true' : 'false'],
+      ...(f.by ? [['by', f.by] as [string, string]] : []),
+      ...(f.from ? [['from', f.from] as [string, string]] : []),
+      ...(f.to ? [['to', f.to] as [string, string]] : []),
       ['limit', String(limit)],
     ]),
 

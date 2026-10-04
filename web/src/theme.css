@@ -5751,16 +5751,329 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin-top: 0;
 }
 
-.workbench-head .account-x {
-  position: static;
+.workbench-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin-left: auto;
+  flex: none;
 }
 
 .workbench h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ai);
+}
+
+.workbench-exit {
+  background: none;
+  border: 1px solid var(--rule-bright);
+  border-radius: 2px;
+  color: var(--paper);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 14px;
+  cursor: pointer;
+}
+
+.workbench-exit:hover {
+  background: var(--sumi);
+  border-color: var(--paper-dim);
+}
+
+/* Progress, under the header: one line, a click opens it per stage. */
+.progress {
+  min-height: 34px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.progress-sum {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 8px 0;
+  background: none;
+  border: 0;
   color: var(--paper-dim);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.progress-sum b {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.progress-sum > .progress-bar {
+  flex: 0 1 280px;
+}
+
+.progress-verified {
+  color: var(--paper);
+}
+
+.progress-caret {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.progress-bar {
+  display: block;
+  height: 6px;
+  min-width: 80px;
+  background: var(--sumi);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ai);
+}
+
+.progress-stages {
+  display: grid;
+  gap: 6px;
+  padding: 2px 0 12px;
+  font-size: 12.5px;
+}
+
+.progress-stage {
+  display: grid;
+  grid-template-columns: 120px minmax(80px, 280px) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-stage-n {
+  color: var(--paper-dim);
+}
+
+.progress-stages .hint {
+  margin: 2px 0 0;
+}
+
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.history-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.history-filters .assoc-text {
+  min-width: 150px;
+}
+
+.history-count {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* Parts: the draw pad under the field, its pick added to the parts. */
+.review-parts-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.review-parts-row .review-parts-input {
+  flex: 1;
+}
+
+.review-parts-row .review-draw-toggle {
+  width: auto;
+  height: auto;
+  display: flex;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.review-parts-row .review-draw-toggle > span {
+  position: static;
+  width: auto;
+  height: auto;
+  clip-path: none;
+  font-size: 12.5px;
+}
+
+.review-draw {
+  width: min(100%, 560px);
+  margin-top: 6px;
+}
+
+.review-draw .drawpad {
+  max-width: 280px;
+}
+
+/* The meanings board: one box per group, its words under its labels. */
+.board {
+  display: grid;
+  gap: 12px;
+}
+
+.board-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.board-top h4 {
+  margin: 0;
+}
+
+.board-picked {
+  margin-left: auto;
+  font-size: 12.5px;
+  color: var(--ai);
+}
+
+.board-group {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px 12px;
+  background: var(--sumi);
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.board-group[data-kind='catch-all'],
+.board-group[data-kind='none'] {
+  background: none;
+  border-style: dashed;
+}
+
+.board-group[data-over] {
+  border-color: var(--ai);
+  background: var(--ai-wash);
+}
+
+.board-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.board-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 520px;
+}
+
+.board-labels .assoc-text {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 5px 8px;
+}
+
+.board-labels .board-en {
+  font-weight: 500;
+}
+
+.board-labels .board-note {
+  flex: 2 1 220px;
+}
+
+.board-fixed {
+  flex: 1 1 auto;
+}
+
+.board-count {
+  font-size: 12px;
+}
+
+.board-move {
+  color: var(--ai);
+}
+
+.board-words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 4px 6px;
+}
+
+.board-word {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi-lift);
+  cursor: grab;
+  user-select: none;
+  min-width: 0;
+}
+
+.board-word:hover {
+  border-color: var(--rule-bright);
+}
+
+.board-word[data-picked] {
+  border-color: var(--ai);
+  background: var(--ai-wash);
+}
+
+.board-word[data-unsure] {
+  box-shadow: inset 3px 0 0 var(--shu);
+}
+
+.board-head {
+  font-family: var(--mincho);
+  font-size: 17px;
+}
+
+.board-reading {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-gloss {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--paper-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-empty {
+  font-size: 12px;
+  border: 0;
+}
+
+.board-add {
+  justify-self: start;
+}
+
+.board-more {
+  margin-top: 8px;
 }
 
 .workbench-body {
@@ -6010,6 +6323,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .queue-item {
   min-width: 0;
   min-height: 0;
+  max-width: 1100px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 4px 24px 0;
@@ -6020,53 +6334,19 @@ html[data-nav]::view-transition-old(tabs):only-child {
   min-width: 0;
 }
 
-/* Wide screens: what to judge by on the left, the answer on the right,
-   which stays in view while the evidence scrolls. */
-@media (min-width: 1100px) {
-  .queue-item {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.75fr);
-    grid-template-areas: 'head head' 'judge decide';
-    gap: 0 32px;
-    align-content: start;
-    align-items: start;
-  }
-
-  .queue-head {
-    grid-area: head;
-  }
-
-  .queue-judge {
-    grid-area: judge;
-  }
-
-  .queue-decide {
-    grid-area: decide;
-    position: sticky;
-    top: 0;
-  }
-
-  .queue-decide .queue-edit {
-    border-top: 0;
-    margin-top: 12px;
-    padding-top: 0;
-  }
+/* One column; the buttons stay at the bottom of the item while it scrolls
+   (the item, not the answer block, has to be their parent for that). */
+.queue-decide {
+  display: contents;
 }
 
-/* Narrower: the buttons stay at the bottom of the item while it scrolls
-   (the item, not the answer block, has to be their parent for that). */
-@media (max-width: 1099px) {
-  .queue-decide {
-    display: contents;
-  }
-
-  .queue-actions {
-    position: sticky;
-    bottom: 0;
-    background: var(--sumi-lift);
-    padding: 8px 0;
-    border-top: 1px solid var(--rule);
-  }
+.queue-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--sumi-lift);
+  padding: 8px 0;
+  border-top: 1px solid var(--rule);
 }
 
 .queue-head {
@@ -6335,6 +6615,23 @@ button.review-part {
 
   .workbench h2 {
     display: none;
+  }
+
+  .progress-sum {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+
+  .progress-sum > .progress-bar {
+    flex-basis: 100%;
+  }
+
+  .progress-stage {
+    grid-template-columns: 96px 1fr;
+  }
+
+  .progress-stage-n {
+    grid-column: 2;
   }
 
   .workbench-head .overlay-tabs {

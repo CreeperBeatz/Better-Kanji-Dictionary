@@ -7,8 +7,12 @@
  *   kanji_senses   2 to 6 meaning groups, each an id and a label in en and bg
  *   word_sense     one of the kanji's groups, or the catch-all
  */
+import { lazy, Suspense, useState } from 'react'
 import { type FormKind, type MeaningGroup, type TaskType, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
+
+// Not needed until its button is pressed.
+const DrawPad = lazy(() => import('../draw/DrawPad').then((m) => ({ default: m.DrawPad })))
 
 const S = strings(
   {
@@ -17,6 +21,9 @@ const S = strings(
     noneYet: 'none yet',
     parts: 'Parts, as characters',
     partsHint: 'Type or paste the direct parts in writing order: 生月. Leave empty for a character with no parts.',
+    draw: 'Draw',
+    drawTitle: 'Draw a part; picking it adds it',
+    hideDraw: 'Hide drawing',
     kind: 'Relation',
     k_positional: 'the same part in another position',
     k_old: 'its old form',
@@ -41,6 +48,9 @@ const S = strings(
     noneYet: 'още няма',
     parts: 'Части, като знаци',
     partsHint: 'Напишете или поставете преките части по реда на писане: 生月. Оставете празно за знак без части.',
+    draw: 'Рисуване',
+    drawTitle: 'Нарисувайте част; изборът я добавя',
+    hideDraw: 'Скрийте рисуването',
     kind: 'Връзка',
     k_positional: 'същата част в друга позиция',
     k_old: 'старата му форма',
@@ -130,22 +140,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
   const lang = useLang()
   const t = S(lang)
 
-  if (type === 'decomposition') {
-    const text = ((value as string[] | null) ?? []).join('')
-    return (
-      <label className="review-field">
-        <span>{t('parts')}</span>
-        <input
-          className="assoc-text review-parts-input"
-          lang="ja"
-          value={text}
-          autoFocus={autoFocus}
-          onChange={(e) => onChange([...e.target.value.replace(/\s|[,、・]/g, '')])}
-        />
-        <span className="hint">{t('partsHint')}</span>
-      </label>
-    )
-  }
+  if (type === 'decomposition') return <PartsEditor value={value as string[] | null} onChange={onChange} autoFocus={autoFocus} />
 
   if (type === 'form_link') {
     const v = (value as { kind: FormKind; note: string | null } | null) ?? { kind: 'looks_like', note: null }
@@ -230,6 +225,42 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
           <kbd>{i + 1}</kbd> {groupLabel(id, groups, lang)}
         </button>
       ))}
+    </div>
+  )
+}
+
+/** Parts as typed characters, or drawn: a pick from the pad is added at the end. */
+function PartsEditor({ value, onChange, autoFocus }: { value: string[] | null; onChange: (v: TaskValue) => void; autoFocus?: boolean }) {
+  const t = S(useLang())
+  const [drawing, setDrawing] = useState(false)
+  const parts = value ?? []
+  return (
+    <div className="review-field">
+      <span>{t('parts')}</span>
+      <div className="review-parts-row">
+        <input
+          className="assoc-text review-parts-input"
+          lang="ja"
+          value={parts.join('')}
+          autoFocus={autoFocus}
+          aria-label={t('parts')}
+          onChange={(e) => onChange([...e.target.value.replace(/\s|[,、・]/g, '')])}
+        />
+        <button className="searchbar-tool review-draw-toggle" data-on={drawing || undefined} aria-pressed={drawing} onClick={() => setDrawing((d) => !d)} title={t('drawTitle')}>
+          <svg viewBox="0 0 20 20" aria-hidden>
+            <path d="M3 17c2-.4 3.2-1.2 4.3-2.3L16.5 5.5a1.8 1.8 0 0 0-2.5-2.5L4.8 12.2C3.7 13.3 3.2 14.8 3 17Z" />
+          </svg>
+          <span>{drawing ? t('hideDraw') : t('draw')}</span>
+        </button>
+      </div>
+      <span className="hint">{t('partsHint')}</span>
+      {drawing && (
+        <div className="review-draw">
+          <Suspense fallback={null}>
+            <DrawPad onPick={(c) => onChange([...parts.filter((p) => p !== c), c])} />
+          </Suspense>
+        </div>
+      )}
     </div>
   )
 }

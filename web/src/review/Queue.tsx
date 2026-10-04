@@ -21,6 +21,7 @@ import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { FontStrip } from '../detail/FontStrip'
 import { CATCH_ALL, ValueEditor, ValueView } from './editors'
+import { finalizeBoard, MeaningsBoard } from './MeaningsBoard'
 
 const S = strings(
   {
@@ -59,7 +60,6 @@ const S = strings(
     kanjidic: 'KANJIDIC',
     curated: 'Kanji Alive',
     readings: 'Readings',
-    drafts: 'Drafted words per group',
     word: 'The word',
     pickHint: 'Pick what {char} contributes to the word, not what the word means overall.',
     left: '{n} waiting',
@@ -101,7 +101,6 @@ const S = strings(
     kanjidic: 'KANJIDIC',
     curated: 'Kanji Alive',
     readings: 'Четения',
-    drafts: 'Чернови думи по групи',
     word: 'Думата',
     pickHint: 'Изберете какво внася {char} в думата, а не какво значи думата като цяло.',
     left: '{n} чакат',
@@ -114,14 +113,17 @@ const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_s
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
 const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link']
 
-const same = (a: TaskValue, b: TaskValue) => JSON.stringify(a) === JSON.stringify(b)
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 function typing(e: KeyboardEvent) {
   const el = e.target as HTMLElement | null
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
 }
 
-export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
+type Placements = Record<number, string | null>
+
+/** `onDecided` is told after each decision, so the progress can count again. */
+export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void; onDecided?: () => void }) {
   const lang = useLang()
   const t = S(lang)
   const [type, setType] = useState<TaskType | undefined>()
@@ -132,6 +134,9 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
   const [detail, setDetail] = useState<ItemDetail | null>(null)
   const [draft, setDraft] = useState<TaskValue>(null)
   const [reason, setReason] = useState('')
+  // A kanji's meanings: where each word on the board is, and where it started.
+  const [placements, setPlacements] = useState<Placements>({})
+  const [placedFrom, setPlacedFrom] = useState<Placements>({})
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -161,10 +166,22 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
     setDetail(null)
     setProblem(null)
     setReason('')
+    setPlacements({})
+    setPlacedFrom({})
     if (!item) return
     let stale = false
     api.reviewItem(item.id).then(
-      (d) => !stale && setDetail(d),
+      (d) => {
+        if (stale) return
+        setDetail(d)
+        if (d.type === 'kanji_senses' && d.context.board) {
+          const ids = new Set(((d.proposed ?? d.current ?? []) as MeaningGroup[]).map((g) => g.id))
+          const p: Placements = {}
+          for (const w of d.context.board) p[w.id] = w.group && (w.group === CATCH_ALL || ids.has(w.group)) ? w.group : null
+          setPlacements(p)
+          setPlacedFrom(p)
+        }
+      },
       (e) => !stale && setProblem(errorText(e, lang)),
     )
     return () => {
@@ -173,13 +190,14 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
   }, [item?.id])
 
   const decide = useCallback(
-    async (action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue) => {
+    async (action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, words?: Placements) => {
       if (!item || busy) return
       setBusy(true)
       setProblem(null)
       try {
-        await api.decide(item.id, action, value, reason.trim() || undefined)
+        await api.decide(item.id, action, value, reason.trim() || undefined, words)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
+        if (action !== 'skip') onDecided?.()
         setItems((list) => list && list.filter((i) => i.id !== item.id))
         setTotal((n) => n - 1)
         setAt((i) => Math.max(0, Math.min(i, (items?.length ?? 1) - 2)))
@@ -189,21 +207,36 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
         setBusy(false)
       }
     },
-    [item, busy, reason, items, lang],
+    [item, busy, reason, items, lang, onDecided],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
   // Nothing proposed (a cost-ranked check): leaving it as it is is a rejection of any change.
   const open = item?.proposed === null
-  const edited = item ? (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
+  const board = item?.type === 'kanji_senses'
+  const moved = board && !same(placements, placedFrom)
+  const edited = item ? moved || (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
   const decideDraft = useCallback(
     (value: TaskValue = draft) => {
       if (!item) return
+      if (item.type === 'kanji_senses') {
+        // The groups and every word on the board, decided together.
+        if (!detail?.context.board) return
+        const fin = finalizeBoard(item.subject, (value ?? []) as MeaningGroup[], placements)
+        return same(fin.groups, item.proposed) ? decide('accept', undefined, fin.words) : decide('edit', fin.groups, fin.words)
+      }
       if (item.proposed === null) return same(value, item.current) ? decide('reject') : decide('edit', value)
       return same(value, item.proposed) ? decide('accept') : decide('edit', value)
     },
-    [item, draft, decide],
+    [item, draft, decide, detail, placements],
   )
+  const place = useCallback((ids: number[], to: string | null) => {
+    setPlacements((p) => {
+      const n = { ...p }
+      for (const id of ids) n[id] = to
+      return n
+    })
+  }, [])
 
   const keys = useRef<(e: KeyboardEvent) => void>(() => {})
   keys.current = (e: KeyboardEvent) => {
@@ -297,6 +330,7 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
               </header>
 
               <div className="queue-judge">
+              {!board && (
               <dl className="queue-compare">
                 <dt>{t('now')}</dt>
                 <dd>
@@ -307,20 +341,39 @@ export function Queue({ onKanji }: { onKanji?: (char: string) => void }) {
                   {open ? <span className="hint">{t('noProposal')}</span> : <ValueView type={item.type} value={item.proposed} groups={groups} />}
                 </dd>
               </dl>
+              )}
 
               {detail && <Evidence detail={detail} onKanji={onKanji} />}
               </div>
 
               <div className="queue-decide">
               <div className="queue-edit">
-                {item.type !== 'word_sense' && <h4>{t('yourValue')}</h4>}
-                <ValueEditor
-                  type={item.type}
-                  value={draft}
-                  onChange={setDraft}
-                  groups={groups}
-                  char={item.subject.split('|')[0]}
-                />
+                {board ? (
+                  detail?.context.board ? (
+                    <MeaningsBoard
+                      char={item.subject}
+                      groups={(draft ?? []) as MeaningGroup[]}
+                      onGroups={setDraft}
+                      words={detail.context.board}
+                      placements={placements}
+                      onPlace={place}
+                      restTotal={detail.context.restTotal ?? 0}
+                    />
+                  ) : (
+                    <p className="hint">{t('loading')}</p>
+                  )
+                ) : (
+                  <>
+                    {item.type !== 'word_sense' && <h4>{t('yourValue')}</h4>}
+                    <ValueEditor
+                      type={item.type}
+                      value={draft}
+                      onChange={setDraft}
+                      groups={groups}
+                      char={item.subject.split('|')[0]}
+                    />
+                  </>
+                )}
                 <label className="review-field">
                   <span>{t('reason')}</span>
                   <input className="assoc-text" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
@@ -480,28 +533,6 @@ function Evidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: st
             ))}
           </ol>
           <p className="hint">{t('pickHint', { char: c.char ?? '' })}</p>
-        </div>
-      )}
-      {detail.type === 'kanji_senses' && c.drafts && c.drafts.length > 0 && (
-        <div>
-          <h4>{t('drafts')}</h4>
-          <ul className="queue-drafts">
-            {Object.entries(
-              c.drafts.reduce<Record<string, typeof c.drafts>>((acc, d) => {
-                ;(acc[d.proposed ?? '?'] ??= []).push(d)
-                return acc
-              }, {}),
-            ).map(([g, ws]) => (
-              <li key={g}>
-                <b>{g}</b>{' '}
-                {ws.slice(0, 6).map((w) => (
-                  <span key={w.word} className="queue-draft" title={w.gloss} lang="ja">
-                    {w.word}
-                  </span>
-                ))}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

@@ -1,19 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { api, dataChanged, type AdminPeople, type Decision } from '../api'
+import { api, dataChanged, type AdminPeople, type Author, type Decision, type HistoryFilter } from '../api'
 import { useAuth } from '../account/auth'
 import type { WorkbenchTab } from '../account/Account'
 import { Avatar } from '../account/Avatar'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { ValueView } from './editors'
+import { Progress } from './Progress'
 import { Queue } from './Queue'
 
 const Handbook = lazy(() => import('./Handbook'))
 
 const S = strings(
   {
-    title: 'Review',
-    close: 'close',
     people: 'People',
     requests: 'Asking to review',
     noRequests: 'No one is waiting.',
@@ -34,8 +33,6 @@ const S = strings(
     queue: 'Queue',
     history: 'History',
     auto: 'Auto-accepted',
-    mine: 'mine',
-    everyone: 'everyone’s',
     noHistory: 'No decisions yet.',
     revert: 'revert',
     reverted: 'reverted',
@@ -48,11 +45,20 @@ const S = strings(
     a_revert: 'reverted',
     a_reopen: 'reopened',
     handbook: 'Handbook',
+    mode: 'Review mode',
+    exit: 'Exit',
+    reviewer: 'Reviewer',
+    anyone: 'everyone',
+    me: 'me',
+    autoRule: 'the auto rule',
+    from: 'From',
+    to: 'To',
+    clearFilters: 'clear',
+    shown: '{n} shown',
+    words: '+ {n} words placed',
     autoHint: 'Accepted by the mechanical rule, not by a person. Spot-check them: if more than a few are wrong, the rule needs tightening.',
   },
   {
-    title: 'Преглед',
-    close: 'затворете',
     people: 'Хора',
     requests: 'Искат да рецензират',
     noRequests: 'Никой не чака.',
@@ -73,8 +79,6 @@ const S = strings(
     queue: 'Опашка',
     history: 'История',
     auto: 'Приети автоматично',
-    mine: 'моите',
-    everyone: 'на всички',
     noHistory: 'Още няма решения.',
     revert: 'върнете',
     reverted: 'върнато',
@@ -87,6 +91,17 @@ const S = strings(
     a_revert: 'върнато',
     a_reopen: 'отворено отново',
     handbook: 'Наръчник',
+    mode: 'Режим преглед',
+    exit: 'Изход',
+    reviewer: 'Рецензент',
+    anyone: 'всички',
+    me: 'аз',
+    autoRule: 'автоматичното правило',
+    from: 'От',
+    to: 'До',
+    clearFilters: 'изчистете',
+    shown: 'показани: {n}',
+    words: '+ {n} разпределени думи',
     autoHint: 'Приети по механичното правило, а не от човек. Проверявайте на случаен принцип: ако повече от няколко са грешни, правилото трябва да се затегне.',
   },
 )
@@ -110,6 +125,8 @@ export function Workbench({
 }) {
   const t = S(useLang())
   const { user } = useAuth()
+  const [version, setVersion] = useState(0)
+  const decided = useCallback(() => setVersion((v) => v + 1), [])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -133,9 +150,8 @@ export function Workbench({
   // The whole screen: the queue needs the room, and its list and item scroll on their own.
   return (
     <div className="overlay workbench-screen">
-      <div className="overlay-panel workbench" role="dialog" aria-modal="true" aria-label={t('title')}>
+      <div className="overlay-panel workbench" role="dialog" aria-modal="true" aria-label={t('mode')}>
         <header className="workbench-head">
-          <h2>{t('title')}</h2>
           <nav className="overlay-tabs" role="tablist">
             {tabs.map(([k, label]) => (
               <button key={k} role="tab" aria-selected={tab === k} data-on={tab === k} onClick={() => onTab(k)}>
@@ -143,12 +159,16 @@ export function Workbench({
               </button>
             ))}
           </nav>
-          <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
-            ×
-          </button>
+          <div className="workbench-mode">
+            <h2>{t('mode')}</h2>
+            <button className="workbench-exit" onClick={onClose} title="Esc">
+              {t('exit')}
+            </button>
+          </div>
         </header>
+        <Progress version={version} />
         <div className="workbench-body" data-tab={tab}>
-          {tab === 'queue' && <Queue onKanji={onKanji} />}
+          {tab === 'queue' && <Queue onKanji={onKanji} onDecided={decided} />}
           {tab === 'history' && <History admin={user.role === 'admin'} />}
           {tab === 'auto' && user.role === 'admin' && <History admin auto />}
           {tab === 'people' && user.role === 'admin' && <People />}
@@ -268,17 +288,32 @@ const CHANGES = new Set(['accept', 'edit', 'direct', 'auto', 'revert', 'reopen']
 function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
   const lang = useLang()
   const t = S(lang)
-  const [everyone, setEveryone] = useState(auto)
+  const { user } = useAuth()
+  // The admin sees everyone's unless narrowed to one person; a reviewer sees their own.
+  const [by, setBy] = useState('')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
   const [rows, setRows] = useState<Decision[] | null>(null)
+  const [people, setPeople] = useState<Author[]>([])
   const [problem, setProblem] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    const ask = auto ? api.autoAccepted() : api.reviewHistory(everyone)
-    ask.then(
-      (d) => setRows(d.items),
+    if (auto) {
+      api.autoAccepted().then(
+        (d) => setRows(d.items),
+        (e) => setProblem(errorText(e, lang)),
+      )
+      return
+    }
+    const f: HistoryFilter = { all: admin && !by, by: admin && by ? by : undefined, from: from || undefined, to: to || undefined }
+    api.reviewHistory(f).then(
+      (d) => {
+        setRows(d.items)
+        if (d.people.length) setPeople(d.people)
+      },
       (e) => setProblem(errorText(e, lang)),
     )
-  }, [auto, everyone, lang])
+  }, [auto, admin, by, from, to, lang])
   useEffect(load, [load])
 
   async function revert(d: Decision) {
@@ -295,18 +330,51 @@ function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
 
   const when = (iso: string) =>
     new Date(iso).toLocaleString(lang === 'bg' ? 'bg-BG' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })
+  const filtered = !!(by || from || to)
+  const who = (p: Author) => (p.id === 'auto' ? t('autoRule') : p.username ? '@' + p.username : p.name)
   return (
     <>
       {auto && <p className="hint">{t('autoHint')}</p>}
-      {admin && !auto && (
-        <nav className="overlay-tabs">
-          <button data-on={!everyone} onClick={() => setEveryone(false)}>
-            {t('mine')}
-          </button>
-          <button data-on={everyone} onClick={() => setEveryone(true)}>
-            {t('everyone')}
-          </button>
-        </nav>
+      {!auto && (
+        <div className="history-filters">
+          {admin && (
+            <label>
+              <span>{t('reviewer')}</span>
+              <select className="assoc-text" value={by} onChange={(e) => setBy(e.target.value)}>
+                <option value="">{t('anyone')}</option>
+                {user && <option value={user.id}>{t('me')}</option>}
+                {people
+                  .filter((p) => p.id !== user?.id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {who(p)}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
+          <label>
+            <span>{t('from')}</span>
+            <input className="assoc-text" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label>
+            <span>{t('to')}</span>
+            <input className="assoc-text" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </label>
+          {filtered && (
+            <button
+              className="clear"
+              onClick={() => {
+                setBy('')
+                setFrom('')
+                setTo('')
+              }}
+            >
+              {t('clearFilters')}
+            </button>
+          )}
+          {rows && <span className="hint history-count">{t('shown', { n: rows.length })}</span>}
+        </div>
       )}
       {problem && <p className="account-problem">{problem}</p>}
       {rows === null && !problem && <p className="hint">{t('loading')}</p>}
@@ -325,6 +393,7 @@ function History({ admin, auto = false }: { admin: boolean; auto?: boolean }) {
                 <ValueView type={d.type} value={d.before} /> → <ValueView type={d.type} value={d.after} />
               </span>
             )}
+            {!!d.words && <span className="hint"> {t('words', { n: d.words })}</span>}
             {d.reason && <span className="hint decision-reason">{d.reason}</span>}
             {admin &&
               CHANGES.has(d.action) &&

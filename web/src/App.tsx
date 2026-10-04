@@ -18,7 +18,8 @@ import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
-import { pageInUrl, samePage, useNav, type Page, type Stack } from './nav'
+import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
+import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 
 // Wanted only once the map is opened, so loaded then.
@@ -150,15 +151,16 @@ type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
 /** What slides as a tab turns: the whole screen, or only what is under the page's head. */
 type TurnScope = 'whole' | 'pane'
 
-/** `?admin=1` (from the owner's email) or `?review=1`, read once and taken out of the address. */
+/**
+ * The review screen, when the address names it: /review, /review/history ...
+ * The older `?admin=1` (in the owner's email) and `?review=1` become those.
+ * The entry is marked now, before the rail writes its own (nav.ts).
+ */
 function initialWorkbench(): WorkbenchTab | null {
   const url = new URL(window.location.href)
-  const tab = url.searchParams.has('admin') ? 'people' : url.searchParams.has('review') ? 'queue' : null
-  if (tab) {
-    url.searchParams.delete('admin')
-    url.searchParams.delete('review')
-    window.history.replaceState(window.history.state, '', url)
-  }
+  const legacy = url.searchParams.has('admin') ? 'people' : url.searchParams.has('review') ? 'queue' : null
+  const tab = reviewTabInUrl() ?? legacy
+  if (tab) replaceReview(tab)
   return tab
 }
 
@@ -950,11 +952,35 @@ export function App() {
     clearAuthError()
   }, [])
   const signIn = useCallback(() => setAccountOpen(true), [])
+  // The review screen is a history entry of its own (review/route.ts). One
+  // pushed this visit is closed with back; one the visit opened on is replaced.
+  const pushedReview = useRef(false)
   const openWorkbench = useCallback((tab: WorkbenchTab) => {
     setAccountOpen(false)
+    if (reviewTabInState(window.history.state)) replaceReview(tab)
+    else {
+      pushReview(tab)
+      pushedReview.current = true
+    }
     setWorkbench(tab)
   }, [])
-  const closeWorkbench = useCallback(() => setWorkbench(null), [])
+  const workbenchTab = useCallback((tab: WorkbenchTab) => {
+    replaceReview(tab)
+    setWorkbench(tab)
+  }, [])
+  const stackTop = stack[stack.length - 1]
+  const closeWorkbench = useCallback(() => {
+    if (pushedReview.current && reviewTabInState(window.history.state)) {
+      pushedReview.current = false
+      window.history.back()
+    } else dropReview(urlOf(stackTop))
+    setWorkbench(null)
+  }, [stackTop])
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => setWorkbench(reviewTabInState(e.state))
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
 
   const hoveredNode: KanjiNode | null = useMemo(() => {
     if (!data || !hovered) return null
@@ -1771,9 +1797,10 @@ export function App() {
       {workbench && (
         <Workbench
           tab={workbench}
-          onTab={setWorkbench}
+          onTab={workbenchTab}
           onClose={closeWorkbench}
           onKanji={(c) => {
+            // Over the review entry, so back comes back to the review screen.
             setWorkbench(null)
             openKanji(c)
           }}

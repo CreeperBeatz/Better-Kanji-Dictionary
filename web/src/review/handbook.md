@@ -44,6 +44,8 @@ Question: which parts does this character visibly contain, as written today?
   another character").
 - **Checks** (nothing proposed) ask you to look at the current parts. If they
   are right, press *looks right, keep it*. If not, type the right parts.
+- **Can't type a part?** Press *Draw* next to the parts field and draw it;
+  picking a candidate adds it to the parts.
 
 ## Forms (form_link)
 
@@ -69,16 +71,33 @@ Question: what are the 2–6 things this kanji does in modern words?
 - Labels: 1–4 words in English, the same in Bulgarian. Keep the note short.
 - Sound-only uses and fixed spellings (寿司, 生憎) go to the catch-all, which
   always exists and is not one of the 2–6.
-- Use the drafted words under each group to test the split: if a group's words
-  don't share a meaning, the group is wrong.
+- Use the words under each group to test the split: if a group's words don't
+  share a meaning, the group is wrong.
 
-Accepting a kanji's groups places its confident words automatically (both
-drafting runs agree, both at least 0.8 sure). The rest come to *word
-meanings*. If you rename or drop a group, words drafted for it come to you.
+### The board
+
+A meanings item shows each group as a box with its words under it (reading
+and gloss). The kanji's common words come placed where the AI drafted them;
+words with a red edge are the ones it was unsure of, so look at those first.
+
+- **Move words** by dragging them, or tap several and press *move here* on a
+  group (works on a phone too).
+- **Add or remove groups** with *add a group* / *remove group*. A removed
+  group's words drop to *Not in a group*.
+- **Not in a group** holds words no group claims. Rarer words load a page at a
+  time; drag one into a group if it belongs there.
+- **Accept** (or *save my answer* once you changed something) decides the
+  groups and every word on the board together, as you left them. History shows
+  it as one decision ("+ N words placed"), and reverting it puts all of them
+  back in the queue.
 
 ## Word meanings (word_sense)
 
 Question: in this word, which of the kanji's groups is the kanji using?
+
+Words are normally placed on the meanings board, so this tab is mostly empty.
+It holds what comes up afterwards: a user's suggestion for one word, or a word
+whose group changed.
 
 - Pick what the kanji contributes, not what the word means overall.
 - A word with two kanji is two items, one per kanji, and they can land in

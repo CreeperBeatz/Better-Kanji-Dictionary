@@ -43,7 +43,24 @@ def item(item_id: str, _: dict = Depends(reviewer)) -> dict:
 
 @router.post("/items/{item_id}/decide")
 def decide(item_id: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
-    return {"item": review.decide(item_id, payload.get("action", ""), me["id"], payload.get("value"), payload.get("reason"))}
+    return {"item": review.decide(item_id, payload.get("action", ""), me["id"], payload.get("value"), payload.get("reason"),
+                                  payload.get("words"))}
+
+
+@router.get("/words/{char}")
+def rest_words(
+    char: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    _: dict = Depends(reviewer),
+) -> dict:
+    """The rarer words with a kanji that are in no group, for the meanings board."""
+    return review.rest_words(char, offset, limit)
+
+
+@router.get("/progress")
+def progress(_: dict = Depends(reviewer)) -> dict:
+    return review.progress()
 
 
 @router.post("/edit")
@@ -83,12 +100,15 @@ def impact(payload: dict = Body(...), _: dict = Depends(reviewer)) -> dict:
 def history(
     everyone: bool = Query(False, alias="all"),
     type: str | None = Query(None),
+    by: str | None = Query(None, description="one decider's id, or auto (admin)"),
+    since: str | None = Query(None, alias="from", pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    until: str | None = Query(None, alias="to", pattern=r"^\d{4}-\d{2}-\d{2}$"),
     limit: int = Query(100, ge=1, le=500),
     me: dict = Depends(reviewer),
 ) -> dict:
-    if everyone and not auth.has_role(me, "admin"):
+    if (everyone or by) and not auth.has_role(me, "admin"):
         raise AppError(403, "admin_only", "only the site's owner can do this")
-    return review.history(None if everyone else me["id"], limit, type)
+    return review.history(None if everyone or by else me["id"], limit, type, by, since, until)
 
 
 @router.get("/auto")
