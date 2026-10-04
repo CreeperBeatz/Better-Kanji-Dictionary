@@ -576,11 +576,19 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
         return added, refused
 
 
+FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
+
+
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
-           words: dict | None = None) -> dict:
+           words: dict | None = None, skip: dict | None = None) -> dict:
     """`words`, for a kanji's meanings: word id -> group id (None: in no group),
     as the reviewer left them on the board. Each becomes a decision of its own,
-    under this one, and is reverted with it."""
+    under this one, and is reverted with it.
+
+    `skip`: the words the reviewer was not sure of, word id -> where they had
+    it so far. They are left undecided and come back together as a follow-up
+    item for the same kanji at the end of the queue, groups fixed, only them.
+    """
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, reject or skip")
     reason = (reason or "").strip()[:MAX_TEXT] or None
@@ -623,9 +631,33 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
         )
         data["decisions"].append(d)
         if explicit:
-            _place_words(data, subject, words, user_id, d["id"])
+            held = _skipped(skip)
+            _place_words(data, subject, {k: v for k, v in words.items() if str(k) not in held}, user_id, d["id"])
+            if held:
+                _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
+                          f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
         _save(data)
         return dict(item)
+
+
+def _skipped(skip: Any) -> dict[str, str | None]:
+    """The skip map, cleaned: word id (as text) -> the group it sat in, or None."""
+    if not skip:
+        return {}
+    if not isinstance(skip, dict):
+        raise _bad("words_invalid", "words are a map of word id to group")
+    out = {}
+    for k, v in skip.items():
+        if not str(k).isdigit() or not (v is None or isinstance(v, str)):
+            raise _bad("words_invalid", "words are a map of word id to group")
+        out[str(k)] = v
+    return out
+
+
+def follow_up_words(item: dict) -> dict[str, str | None] | None:
+    """For a follow-up of skipped words: word id -> where the reviewer had it."""
+    w = (item.get("evidence") or {}).get("words") if item["type"] == "kanji_senses" else None
+    return w if isinstance(w, dict) else None
 
 
 def _word_items(data: dict, char: str) -> dict[int, dict]:
@@ -772,10 +804,16 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     """Open items, worst first: highest priority, then oldest; your skips left out."""
     data = _read()
     accepted = data["live"]["kanji_senses"]
+    # Words waiting in a follow-up are decided there, not one by one.
+    held = {
+        f"{i['subject']}|{w}" for i in data["items"].values()
+        if i["status"] == "open" and (fw := follow_up_words(i)) for w in fw
+    }
     rows = [
         i for i in data["items"].values()
         if i["status"] == "open"
         and user_id not in i["skipped_by"]
+        and i["subject"] not in held
         # A word's meaning waits until its kanji's meanings are accepted.
         and (i["type"] != "word_sense" or i["subject"].split("|")[0] in accepted)
         and (type_ is None or i["type"] == type_)
@@ -803,6 +841,8 @@ def item(item_id: str) -> dict:
         raise AppError(404, "item_not_found", "no such item")
     view = _view(it, _names({it["created_by"], it["decided_by"]}), data)
     view["context"] = context(it["type"], it["subject"], data)
+    if (only := follow_up_words(it)) is not None:
+        view["context"]["board"], view["context"]["restTotal"] = board(it["subject"], data, only)
     if it["type"] == "decomposition" and isinstance(it["proposed"], list):
         view["impact"] = impact(it["subject"], it["proposed"])
     view["history"] = [d for d in data["decisions"] if d["type"] == it["type"] and d["subject"] == it["subject"]][-10:]
@@ -898,10 +938,13 @@ def _on_board(r: dict) -> bool:
     return bool(r["common"] or r["nf"] or r["jlpt"])
 
 
-def board(char: str, data: dict | None = None) -> tuple[list[dict], int]:
+def board(char: str, data: dict | None = None, only: dict[str, str | None] | None = None) -> tuple[list[dict], int]:
     """The meanings board: the kanji's common or ranked words, and any other word
     already placed, each in the group it is in now -- placed, else drafted, else none.
-    Also how many rarer words are left over (`rest_words` pages through them)."""
+    Also how many rarer words are left over (`rest_words` pages through them).
+
+    `only`, for a follow-up: just these words, each where the reviewer left it
+    when skipping (unless it was placed since), and nothing left over."""
     from .routes.search import _fetch_words
 
     data = data or _read()
@@ -909,7 +952,10 @@ def board(char: str, data: dict | None = None) -> tuple[list[dict], int]:
     placed = {int(k[len(prefix):]): v["sense"] for k, v in data["live"]["word_sense"].items() if k.startswith(prefix)}
     items = _word_items(data, char)
     rows = _words_of(char)
-    ids = [r["id"] for r in rows if _on_board(r) or r["id"] in placed]
+    if only is not None:
+        ids = [r["id"] for r in rows if str(r["id"]) in only]
+    else:
+        ids = [r["id"] for r in rows if _on_board(r) or r["id"] in placed]
     words = _fetch_words(ids)
     out = []
     for wid in ids:
@@ -917,9 +963,14 @@ def board(char: str, data: dict | None = None) -> tuple[list[dict], int]:
         if not w:
             continue
         it = items.get(wid)
-        group = placed[wid] if wid in placed else (it["proposed"] if it and it["status"] == "open" else None)
+        if wid in placed:
+            group = placed[wid]
+        elif only is not None and str(wid) in only:
+            group = only[str(wid)]
+        else:
+            group = it["proposed"] if it and it["status"] == "open" else None
         out.append(_board_word(w, group, it))
-    return out, len(rows) - len(ids)
+    return out, 0 if only is not None else len(rows) - len(ids)
 
 
 def rest_words(char: str, offset: int = 0, limit: int = 100) -> dict:

@@ -824,9 +824,19 @@ export const api = {
 
   reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
 
-  /** `words`, for a kanji's meanings: word id -> group id or null, as left on the board. */
-  decide: (id: string, action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, reason?: string, words?: Record<number, string | null>) =>
-    send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words }),
+  /**
+   * `words`, for a kanji's meanings: word id -> group id or null, as left on the
+   * board. `skip`: the words left for later, with where they sat; they come back
+   * as a follow-up item at the end of the queue.
+   */
+  decide: (
+    id: string,
+    action: 'accept' | 'edit' | 'reject' | 'skip',
+    value?: TaskValue,
+    reason?: string,
+    words?: Record<number, string | null>,
+    skip?: Record<number, string | null>,
+  ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip }),
 
   restWords: (char: string, offset = 0, limit = 100) =>
     get<{ total: number; offset: number; words: BoardWord[] }>(`/api/review/words/${encodeURIComponent(char)}`, [

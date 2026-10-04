@@ -35,6 +35,7 @@ const S = strings(
     o_proposal: 'proposals',
     o_suggestion: 'suggestions',
     proposalFrom: 'proposal · {source}',
+    followUp: 'left for later',
     suggestionBy: 'suggestion by {who}',
     nothing: 'Nothing waiting here.',
     loading: 'loading',
@@ -76,6 +77,7 @@ const S = strings(
     o_proposal: 'предложения от данни',
     o_suggestion: 'предложения от хора',
     proposalFrom: 'от данни · {source}',
+    followUp: 'оставени за по-късно',
     suggestionBy: 'предложено от {who}',
     nothing: 'Тук нищо не чака.',
     loading: 'зареждане',
@@ -142,6 +144,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // A kanji's meanings: where each word on the board is, and where it started.
   const [placements, setPlacements] = useState<Placements>({})
   const [placedFrom, setPlacedFrom] = useState<Placements>({})
+  const [skipped, setSkipped] = useState<Set<number>>(new Set())
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -182,6 +185,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setDraftFor(item.id)
     setDraft(kept && 'draft' in kept ? (kept.draft ?? null) : (item.proposed ?? item.current))
     setReason(kept?.reason ?? '')
+    setSkipped(new Set(kept?.skipped))
   }
   useEffect(() => {
     if (items !== null) replaceQueueRoute({ type, origin, item: item?.id })
@@ -213,12 +217,12 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   }, [item?.id])
 
   const decide = useCallback(
-    async (action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, words?: Placements) => {
+    async (action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, words?: Placements, skip?: Placements) => {
       if (!item || busy) return
       setBusy(true)
       setProblem(null)
       try {
-        await api.decide(item.id, action, value, reason.trim() || undefined, words)
+        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip)
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         if (action !== 'skip') onDecided?.()
@@ -247,7 +251,12 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         // The groups and every word on the board, decided together.
         if (!detail?.context.board) return
         const fin = finalizeBoard(item.subject, (value ?? []) as MeaningGroup[], placements)
-        return same(fin.groups, item.proposed) ? decide('accept', undefined, fin.words) : decide('edit', fin.groups, fin.words)
+        // Words left for later are not decided now; they come back with where they sat.
+        const words: Placements = {}
+        const skip: Placements = {}
+        for (const [id, g] of Object.entries(fin.words)) (skipped.has(Number(id)) ? skip : words)[Number(id)] = g
+        const later = Object.keys(skip).length ? skip : undefined
+        return same(fin.groups, item.proposed) ? decide('accept', undefined, words, later) : decide('edit', fin.groups, words, later)
       }
       if (item.proposed === null) {
         if (same(value, item.current)) return decide('reject')
@@ -256,7 +265,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       if (same(value, item.proposed)) return decide('accept')
       return item.type === 'decomposition' && !strokesOk(value, lang) ? undefined : decide('edit', value)
     },
-    [item, draft, decide, detail, placements, lang],
+    [item, draft, decide, detail, placements, lang, skipped],
   )
   // Keep the work on this item in the browser as it changes; once its detail
   // is in, so a half-loaded item never overwrites what was kept.
@@ -267,8 +276,21 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       draft: same(draft, start) ? undefined : draft,
       reason: reason.trim() ? reason : undefined,
       placements: board && !same(placements, placedFrom) ? placements : undefined,
+      skipped: skipped.size ? [...skipped] : undefined,
     })
-  }, [item, detail, draft, reason, placements, placedFrom, board])
+  }, [item, detail, draft, reason, placements, placedFrom, board, skipped])
+
+  const skip = useCallback((ids: number[], on: boolean) => {
+    setSkipped((s) => {
+      const n = new Set(s)
+      for (const id of ids) {
+        if (on) n.add(id)
+        else n.delete(id)
+      }
+      return n
+    })
+  }, [])
+  const isFollowUp = (i: QueueItem) => i.type === 'kanji_senses' && !!(i.evidence as { words?: unknown } | null)?.words
 
   const place = useCallback((ids: number[], to: string | null) => {
     setPlacements((p) => {
@@ -342,7 +364,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     {subjectGlyphs(i)}
                   </span>
                   <span className="queue-kind">
-                    {t(`t_${i.type}` as Key)} · {i.origin === 'suggestion' ? t('o_suggestion') : i.source}
+                    {t(`t_${i.type}` as Key)} · {isFollowUp(i) ? t('followUp') : i.origin === 'suggestion' ? t('o_suggestion') : i.source}
                   </span>
                 </button>
               </li>
@@ -400,6 +422,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       placements={placements}
                       onPlace={place}
                       restTotal={detail.context.restTotal ?? 0}
+                      skipped={skipped}
+                      onSkip={skip}
+                      followUp={isFollowUp(item)}
                     />
                   ) : (
                     <p className="hint">{t('loading')}</p>

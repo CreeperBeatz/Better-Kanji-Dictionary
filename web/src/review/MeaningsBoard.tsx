@@ -36,14 +36,22 @@ const S = strings(
     empty: 'no words',
     moreRare: 'show {n} more unranked words ({left} not shown)',
     confirmGroup: 'confirmed',
-    confirmGroupTitle: 'This group is right: its label and what it stands for',
+    confirmGroupTitle: 'This suggested group is real: its label and what it stands for, not made up',
     confirmWord: 'Confirm: this word belongs here',
     confirmFirst: 'Confirm the group first',
     confirmed: 'confirmed',
     nConfirmed: '{n} confirmed',
+    nShown: '{n} shown',
     moveTo: 'Move to',
     moveMany: 'Move {n} selected to',
     unnamed: '(unnamed group)',
+    skip: 'Not sure: leave for later',
+    skipMany: 'Not sure: leave {n} for later',
+    unskip: 'Decide it now after all',
+    skippedTag: 'not sure',
+    skippedTitle: 'Left for later: on submit it comes back at the end of the queue',
+    skippedNote: '{n} words left for later: when you submit, they come back together at the end of the queue.',
+    followUp: 'Left for later: only the words skipped last time. The groups are already decided.',
     unsure: 'the drafting model was unsure here',
     words: '{n} words',
     common: 'common',
@@ -74,14 +82,22 @@ const S = strings(
     empty: 'няма думи',
     moreRare: 'покажете още {n} думи без класиране (непоказани: {left})',
     confirmGroup: 'потвърдена',
-    confirmGroupTitle: 'Групата е вярна: етикетът ѝ и това, което обхваща',
+    confirmGroupTitle: 'Предложената група е истинска: етикетът ѝ и това, което обхваща, не са измислени',
     confirmWord: 'Потвърдете: думата е на мястото си',
     confirmFirst: 'Първо потвърдете групата',
     confirmed: 'потвърдени',
     nConfirmed: 'потвърдени: {n}',
+    nShown: 'показани: {n}',
     moveTo: 'Преместете в',
     moveMany: 'Преместете {n} избрани в',
     unnamed: '(група без име)',
+    skip: 'Не съм сигурен: оставете за по-късно',
+    skipMany: 'Не съм сигурен: оставете {n} за по-късно',
+    unskip: 'Все пак решете сега',
+    skippedTag: 'не съм сигурен',
+    skippedTitle: 'Оставена за по-късно: при изпращане се връща в края на опашката',
+    skippedNote: 'Оставени за по-късно думи: {n}. При изпращане се връщат заедно в края на опашката.',
+    followUp: 'Оставени за по-късно: само пропуснатите миналия път думи. Групите вече са решени.',
     unsure: 'моделът не беше сигурен тук',
     words: '{n} думи',
     common: 'чести',
@@ -152,6 +168,9 @@ export function MeaningsBoard({
   placements,
   onPlace,
   restTotal,
+  skipped,
+  onSkip,
+  followUp = false,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -163,6 +182,11 @@ export function MeaningsBoard({
   placements: Record<number, Bucket>
   onPlace: (ids: number[], to: Bucket) => void
   restTotal: number
+  /** Words the reviewer is not sure of; on submit they come back as a follow-up. */
+  skipped: Set<number>
+  onSkip: (ids: number[], on: boolean) => void
+  /** A follow-up of skipped words: the groups are decided, only the words are placed. */
+  followUp?: boolean
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -252,6 +276,7 @@ export function MeaningsBoard({
     if (!list.length) return
     onPlace(list, to)
     unconfirm(list)
+    if (list.some((id) => skipped.has(id))) onSkip(list, false)
     setPicked(new Set())
   }
 
@@ -318,7 +343,10 @@ export function MeaningsBoard({
 
   function card(w: BoardWord, from: Bucket) {
     const unsure = isUnsure(w)
-    const boxOk = okBoxes.has(from ?? '∅')
+    const isSkipped = skipped.has(w.id)
+    // Only a suggested group needs confirming first; the two fixed boxes are not suggestions.
+    const fixed = from === null || from === CATCH_ALL
+    const boxOk = (fixed || okBoxes.has(from)) && !isSkipped
     const ok = okWords.has(w.id)
     return (
       <li
@@ -327,6 +355,7 @@ export function MeaningsBoard({
         data-picked={picked.has(w.id) || undefined}
         data-unsure={unsure || undefined}
         data-ok={ok || undefined}
+        data-skipped={isSkipped || undefined}
         draggable
         onDragStart={(e) => {
           const ids = picked.has(w.id) ? [...picked] : [w.id]
@@ -364,6 +393,11 @@ export function MeaningsBoard({
           {w.jlpt && (
             <span className="word-jlpt" data-level={w.jlpt} title={t('jlpt', { n: w.jlpt })}>
               N{w.jlpt}
+            </span>
+          )}
+          {isSkipped && (
+            <span className="board-skipped" title={t('skippedTitle')}>
+              {t('skippedTag')}
             </span>
           )}
           <span className="word-common" data-common={w.common || undefined} title={t(w.common ? 'commonTitle' : 'uncommonTitle')}>
@@ -410,15 +444,20 @@ export function MeaningsBoard({
             {shut.has(id) ? '▸' : '▾'}
           </button>
           {head}
-          <label className="board-group-check" data-on={okBoxes.has(id) || undefined} title={t('confirmGroupTitle')}>
-            <input type="checkbox" checked={okBoxes.has(id)} onChange={() => toggleBox(id, key)} />
-            <span>{t('confirmGroup')}</span>
-          </label>
+          {key !== null && key !== CATCH_ALL && (
+            <label className="board-group-check" data-on={okBoxes.has(id) || undefined} title={t('confirmGroupTitle')}>
+              <input type="checkbox" checked={okBoxes.has(id)} onChange={() => toggleBox(id, key)} />
+              <span>{t('confirmGroup')}</span>
+            </label>
+          )}
           <span className="hint board-count">
-            {t('words', { n: all.length })}
+            {/* "Not in a group" counts the unranked words not loaded yet, too. */}
+            {t('words', { n: (all.length + (key === null && !followUp ? rareLeft : 0)).toLocaleString(lang) })}
+            {key === null && !followUp && rareLeft > 0 && ` · ${t('nShown', { n: all.length.toLocaleString(lang) })}`}
             {done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
           </span>
-          {picked.size > 0 && (
+          {/* Not on the no-meaning box: "move 12 here" there read as a claim about the words. The menu still moves them. */}
+          {picked.size > 0 && key !== CATCH_ALL && (
             <button className="clear board-move" onClick={() => move(key)}>
               {t('moveHere', { n: picked.size })}
             </button>
@@ -427,6 +466,14 @@ export function MeaningsBoard({
         {!shut.has(id) && (
           <>
             {all.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
+            {done.length > 0 && (
+              <div className="board-part board-done">
+                <button className="board-done-toggle" onClick={() => setOpenOk((s) => setIn(s, id, !s.has(id)))} aria-expanded={openOk.has(id)}>
+                  {openOk.has(id) ? '▾' : '▸'} {t('confirmed')} <span className="hint">{done.length}</span>
+                </button>
+                {openOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
+              </div>
+            )}
             {[true, false].map((common) => {
               const part = list.filter((w) => w.common === common)
               if (!part.length) return null
@@ -439,14 +486,6 @@ export function MeaningsBoard({
                 </div>
               )
             })}
-            {done.length > 0 && (
-              <div className="board-part board-done">
-                <button className="board-done-toggle" onClick={() => setOpenOk((s) => setIn(s, id, !s.has(id)))} aria-expanded={openOk.has(id)}>
-                  {openOk.has(id) ? '▾' : '▸'} {t('confirmed')} <span className="hint">{done.length}</span>
-                </button>
-                {openOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
-              </div>
-            )}
           </>
         )}
         {!shut.has(id) && extra}
@@ -468,9 +507,16 @@ export function MeaningsBoard({
           </span>
         )}
       </div>
+      {followUp && <p className="board-followup">{t('followUp')}</p>}
+      {skipped.size > 0 && <p className="board-skipnote">{t('skippedNote', { n: skipped.size })}</p>}
       {groups.map((g, i) =>
         bucket(
           g.id,
+          followUp ? (
+            <div className="board-fixed">
+              <b>{g.en}</b> {g.bg && <span className="hint">{g.bg}</span>}
+            </div>
+          ) : (
           <div className="board-labels">
             <input className="assoc-text board-en" value={g.en} placeholder={t('en')} aria-label={t('en')} maxLength={40} onChange={(e) => setGroup(i, { en: e.target.value })} />
             <input className="assoc-text" value={g.bg ?? ''} placeholder={t('bg')} aria-label={t('bg')} maxLength={40} onChange={(e) => setGroup(i, { bg: e.target.value || null })} />
@@ -478,10 +524,11 @@ export function MeaningsBoard({
             <button className="clear" onClick={() => removeGroup(i)}>
               {t('remove')}
             </button>
-          </div>,
+          </div>
+          ),
         ),
       )}
-      {groups.length < 6 && (
+      {!followUp && groups.length < 6 && (
         <button className="clear board-add" onClick={addGroup}>
           + {t('addGroup')}
         </button>
@@ -497,7 +544,7 @@ export function MeaningsBoard({
         <div className="board-fixed">
           <b>{t('none')}</b> <span className="hint">{t('noneHint')}</span>
         </div>,
-        rareLeft > 0 && (
+        !followUp && rareLeft > 0 && (
           <button className="clear board-more" onClick={moreRare}>
             {t('moreRare', { n: Math.min(RARE_PAGE, rareLeft), left: rareLeft })}
           </button>
@@ -524,6 +571,31 @@ export function MeaningsBoard({
               {label}
             </button>
           ))}
+          <hr />
+          {menu.ids.every((id) => skipped.has(id)) ? (
+            <button
+              role="menuitem"
+              onClick={() => {
+                onSkip(menu.ids, false)
+                setMenu(null)
+              }}
+            >
+              {t('unskip')}
+            </button>
+          ) : (
+            <button
+              role="menuitem"
+              className="board-menu-skip"
+              onClick={() => {
+                onSkip(menu.ids, true)
+                unconfirm(menu.ids)
+                setPicked(new Set())
+                setMenu(null)
+              }}
+            >
+              {menu.ids.length > 1 ? t('skipMany', { n: menu.ids.length }) : t('skip')}
+            </button>
+          )}
         </div>
       )}
     </div>

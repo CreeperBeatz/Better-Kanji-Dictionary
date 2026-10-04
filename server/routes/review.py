@@ -44,7 +44,7 @@ def item(item_id: str, _: dict = Depends(reviewer)) -> dict:
 @router.post("/items/{item_id}/decide")
 def decide(item_id: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
     return {"item": review.decide(item_id, payload.get("action", ""), me["id"], payload.get("value"), payload.get("reason"),
-                                  payload.get("words"))}
+                                  payload.get("words"), payload.get("skip"))}
 
 
 @router.get("/words/{char}")

@@ -25,6 +25,8 @@ export interface ItemDraft {
   draft?: TaskValue
   reason?: string
   placements?: Record<number, string | null>
+  /** Meanings: the words left for later. */
+  skipped?: number[]
   board?: BoardDraft
 }
 

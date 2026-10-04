@@ -86,11 +86,18 @@ words with a red edge are the ones it was unsure of, so look at those first.
 
 - **Move words** by dragging them, right-clicking one to pick its group, or
   tapping several and pressing *move here* on a group (works on a phone too).
-- **Confirm as you go.** Tick a box's *confirmed* once its label and scope are
-  right; then tick each word you have checked (hover a card for its
-  checkbox; a word can only be confirmed in a confirmed box). Confirmed words
+- **Confirm as you go.** Tick a group's *confirmed* once you are sure the
+  group the model suggested is real (its label and scope, not made up); then
+  tick each word you have checked (hover a card for its checkbox; in a
+  suggested group a word can only be confirmed once the group is). *The kanji
+  brings no meaning* and *Not in a group* are not suggestions, so they have no
+  box checkbox: their words can be ticked straight away. Confirmed words
   fold into a *confirmed* part of the box, shut by default, so what is left
   in view is what still needs a look. Moving a word clears its tick.
+- **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
+  submit, the groups and every other word are decided, and the skipped words
+  come back together as a follow-up for the same kanji at the very end of the
+  queue (*left for later*), each where you had it, with the groups fixed.
 - **Your work is kept** in this browser until you decide the item: reload,
   close the tab or come back tomorrow, and the board is as you left it. The
   address names the item (/review/queue/meanings/…), so it can be reopened.
