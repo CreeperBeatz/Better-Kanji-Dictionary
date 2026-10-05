@@ -769,8 +769,13 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
         raise _bad("bad_origin", "origin is proposal or suggestion")
     with _change() as data:
         proposed = validate(type_, subject, proposed, data, pending_ok=origin == "proposal", machine=origin == "proposal")
+        moves = evidence.get("moves") if isinstance(evidence, dict) else None
+        if moves is not None:
+            moves = _moves(subject, proposed, moves)
+            evidence = {**evidence, "moves": moves}
         for i in data["items"].values():
-            if i["status"] == "open" and i["type"] == type_ and i["subject"] == subject and i["proposed"] == proposed:
+            if (i["status"] == "open" and i["type"] == type_ and i["subject"] == subject and i["proposed"] == proposed
+                    and ((i.get("evidence") or {}).get("moves") if isinstance(i.get("evidence"), dict) else None) == moves):
                 return dict(i)
         if origin == "suggestion":
             mine = sum(1 for i in data["items"].values() if i["status"] == "open" and i["created_by"] == by)
@@ -779,6 +784,21 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
         item = _new_item(data, type_, subject, proposed, source, origin,
                          (reason or "").strip()[:MAX_TEXT] or None, evidence, by, priority, **extra)
         return dict(item)
+
+
+def _moves(char: str, groups: Any, moves: Any) -> dict[str, str | None]:
+    """A suggestion's word moves, cleaned: word id (as text) -> one of the
+    suggested groups, the catch-all, or None (in no group)."""
+    if not isinstance(moves, dict) or len(moves) > 5000:
+        raise _bad("words_invalid", "words are a map of word id to group")
+    ids = {g["id"] for g in groups or []} | {CATCH_ALL}
+    known = _word_ids(char)
+    out = {}
+    for k, v in moves.items():
+        if not str(k).isdigit() or int(k) not in known or not (v is None or v in ids):
+            raise _bad("words_invalid", "words are a map of word id to group")
+        out[str(k)] = v
+    return out
 
 
 def add_items(rows: list[dict]) -> tuple[int, int]:
@@ -960,16 +980,29 @@ def _place_words(data: dict, char: str, words: dict, user_id: str, parent: str) 
     return n
 
 
-def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | None = None) -> dict:
-    """A reviewer's or the admin's own change, from the page: live at once, logged like any other."""
+def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | None = None,
+           words: dict | None = None) -> dict:
+    """A reviewer's or the admin's own change, from the page: live at once, logged like any other.
+
+    `words`, for a kanji's meanings edited on the page's board: word id -> group
+    (None: in no group), as the reviewer left them. As in `decide`, each word
+    that moves is a decision under this one, reverted with it.
+    """
     with _change() as data:
         after = validate(type_, subject, value, data)
         before = live_value(type_, subject, data)
-        if before == after:
+        explicit = type_ == "kanji_senses" and words is not None
+        if explicit and not isinstance(words, dict):
+            raise _bad("words_invalid", "words are a map of word id to group")
+        if before == after and not explicit:
             return {"unchanged": True}
         d = _decision("direct", type_, subject, before, after, user_id, None,
                       (reason or "").strip()[:MAX_TEXT] or None)
-        _apply(data, type_, subject, after, d["id"])
+        if before != after:
+            _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
+        moved = _place_words(data, subject, words, user_id, d["id"]) if explicit else 0
+        if before == after and not moved:
+            return {"unchanged": True}
         data["decisions"].append(d)
         return dict(d)
 
@@ -1135,6 +1168,11 @@ def item(item_id: str) -> dict:
     view["context"] = context(it["type"], it["subject"], data)
     if (only := follow_up_words(it)) is not None:
         view["context"]["board"] = board(it["subject"], data, only)
+    moves = (it.get("evidence") or {}).get("moves") if isinstance(it.get("evidence"), dict) else None
+    if moves and view["context"].get("board"):
+        # A suggestion from the page's board: its words start where the person put them.
+        view["context"]["board"] = [{**w, "group": moves[str(w["id"])]} if str(w["id"]) in moves else w
+                                    for w in view["context"]["board"]]
     if it["type"] == "decomposition" and isinstance(it["proposed"], list):
         view["impact"] = impact(it["subject"], it["proposed"])
     view["history"] = [d for d in data["decisions"] if d["type"] == it["type"] and d["subject"] == it["subject"]][-10:]
@@ -1293,6 +1331,43 @@ def board(char: str, data: dict | None = None, only: dict[str, str | None] | Non
         out.append(_board_word(w, group, it))
     return out
 
+
+
+def page_kanji(char: str) -> dict:
+    """What the page's Edit / Suggest changes needs for a kanji's meanings: its
+    accepted groups (or, when none are, the open draft, marked as such) and
+    the board's words, each in the group it is in now."""
+    if len(char) != 1:
+        raise _bad("bad_subject", "senses are of one kanji")
+    data = _read()
+    senses = (data["live"]["kanji_senses"].get(char) or {}).get("senses")
+    drafted = False
+    if not senses:
+        drafts = [i for i in data["items"].values()
+                  if i["type"] == "kanji_senses" and i["subject"] == char and i["status"] == "open" and i["proposed"]]
+        if drafts:
+            senses, drafted = max(drafts, key=lambda i: i["created"])["proposed"], True
+    return {"char": char, "senses": senses, "drafted": drafted, "board": board(char, data)}
+
+
+def page_word(word_id: int) -> dict:
+    """What the page's Edit / Suggest changes needs for a word: for each of its
+    kanji, the kanji's accepted groups and the one this word is in; and the
+    machine Bulgarian under any correction."""
+    from .routes.search import _fetch_words
+
+    data = _read()
+    w = _fetch_words([word_id]).get(word_id)
+    if not w:
+        raise AppError(404, "word_not_found", "no such word")
+    kanji = []
+    for c in dict.fromkeys(_headword(word_id)):
+        if word_id not in _word_ids(c):
+            continue
+        senses = (data["live"]["kanji_senses"].get(c) or {}).get("senses")
+        group = (data["live"]["word_sense"].get(f"{c}|{word_id}") or {}).get("sense")
+        kanji.append({"char": c, "senses": senses, "group": group})
+    return {"word": w, "kanji": kanji, "bgBuilt": _bg_built(f"word:{word_id}")}
 
 
 def history(user_id: str | None, limit: int = 100, type_: str | None = None, by: str | None = None,

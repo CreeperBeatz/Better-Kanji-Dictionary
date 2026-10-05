@@ -11,10 +11,8 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
-import { useAuth } from '../account/auth'
 import { strings, useLang } from '../i18n'
-import { SuggestDialog, type SuggestTarget } from '../review/Suggest'
-import { KanjiEditButton } from '../review/KanjiEdit'
+import { KanjiEditButton } from '../review/PageEdit'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 
 const S = strings(
@@ -28,8 +26,6 @@ const S = strings(
     openKanji: 'open {char}',
     offline: 'Offline: only the most common words.',
     loading: 'looking',
-    wrongGroup: 'wrong meaning?',
-    wrongGroupTitle: 'Suggest which meaning of {char} this word uses',
     noMeaning: '{char} brings no meaning to these words',
     noMeaningHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
   },
@@ -43,8 +39,6 @@ const S = strings(
     openKanji: 'отворете {char}',
     offline: 'Без връзка: само най-честите думи.',
     loading: 'търсене',
-    wrongGroup: 'грешно значение?',
-    wrongGroupTitle: 'Предложете кое значение на {char} използва думата',
     noMeaning: '{char} не внася значение в тези думи',
     noMeaningHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните кандзи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
   },
@@ -69,10 +63,8 @@ export function WordsWith({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const { user } = useAuth()
   const [data, setData] = useState<WordsWithResponse | null>(null)
   const [offline, setOffline] = useState(false)
-  const [suggest, setSuggest] = useState<SuggestTarget | null>(null)
   const [more, setMore] = useState(false)
 
   useEffect(() => {
@@ -110,15 +102,6 @@ export function WordsWith({
 
   const senses: MeaningGroup[] | null = data?.senses ?? null
   const total = data ? data.groups.reduce((n, g) => n + g.words.length, 0) + data.rest.total : 0
-  const moveLink = (w: Word, current: string) => (
-    <button
-      className="clear word-move"
-      title={t('wrongGroupTitle', { char })}
-      onClick={() => setSuggest({ type: 'word_sense', subject: `${char}|${w.id}`, value: current, groups: senses })}
-    >
-      {t('wrongGroup')}
-    </button>
-  )
 
   return (
     <section className="rail-section search-page words-with" aria-label={t('title', { char })} aria-busy={!data}>
@@ -133,7 +116,7 @@ export function WordsWith({
               {t('count', { n: total })} · {offline ? t('offline') : senses ? t('byMeaning', { char }) : t('notYet', { char })}
             </p>
           )}
-          {!offline && <KanjiEditButton char={char} />}
+
         </div>
       </header>
       {tools}
@@ -146,7 +129,7 @@ export function WordsWith({
             {g.note && <span className="hint"> — {g.note}</span>}
             {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
           </h3>
-          <ol className="words">{g.words.map((w) => row(w, user ? moveLink(w, g.id) : undefined))}</ol>
+          <ol className="words">{g.words.map((w) => row(w))}</ol>
         </div>
       ))}
 
@@ -154,7 +137,7 @@ export function WordsWith({
         <div className="meaning-group">
           {data.groups.length > 0 && <h3>{t('others')}</h3>}
           <ol className="words">
-            {data.rest.words.map((w) => row(w, senses && user ? moveLink(w, CATCH_ALL) : undefined))}
+            {data.rest.words.map((w) => row(w))}
           </ol>
           {!offline && data.rest.words.length < data.rest.total && (
             <button className="clear words-more" disabled={more} onClick={loadMore}>
@@ -164,7 +147,7 @@ export function WordsWith({
         </div>
       )}
 
-      {suggest && <SuggestDialog target={suggest} onClose={() => setSuggest(null)} />}
+      {!offline && data && <KanjiEditButton char={char} />}
     </section>
   )
 }

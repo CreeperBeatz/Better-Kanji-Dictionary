@@ -6988,14 +6988,30 @@ button.review-part {
   flex-basis: 100%;
 }
 
-/* The page's one way to change a kanji: Edit, or Suggest changes. */
-.kanji-edit-link {
-  margin-top: 6px;
-  padding: 0;
-  font-size: 12px;
+/* The one way to change a kanji or a word, at the bottom of its page. */
+.page-edit {
+  margin: 22px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
 }
 
-.kanji-edit-section {
+.page-edit-link {
+  padding: 0;
+  font-size: 12.5px;
+}
+
+.page-edit-panel {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+/* A kanji's: wide enough for the meanings board. */
+.page-edit-panel[data-wide] {
+  width: min(1040px, 100%);
+}
+
+.page-edit-section {
   margin: 0 0 10px;
   padding: 6px 12px 10px;
   border: 1px solid var(--rule);
@@ -7003,65 +7019,80 @@ button.review-part {
   min-width: 0;
 }
 
-.kanji-edit-section[data-on] {
+.page-edit-section[data-on] {
   border-color: var(--rule-bright);
 }
 
-.kanji-edit-section legend {
+.page-edit-section legend {
   padding: 0 4px;
   font-size: 13px;
 }
 
-.kanji-edit-section legend label {
+.page-edit-section legend label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
 }
 
-.kanji-edit-section[disabled] {
+.page-edit-section[disabled] {
   opacity: 0.7;
 }
 
-.kanji-edit-forms {
+.page-edit-forms {
   margin: 0;
   font-size: 13px;
 }
 
-.kanji-edit-forms div {
+.page-edit-forms div {
   display: flex;
   gap: 10px;
 }
 
-.kanji-edit-forms dt {
+.page-edit-forms dt {
   color: var(--muted);
   min-width: 9em;
 }
 
-.kanji-edit-forms dd {
+.page-edit-forms dd {
   margin: 0;
 }
 
-.kanji-edit-english {
+.page-edit-english {
   margin: 0 0 6px;
   font-size: 13px;
 }
 
-.kanji-edit-outcomes {
+.page-edit-outcomes {
   margin: 0 0 10px;
   padding-left: 18px;
   font-size: 13.5px;
 }
 
-.kanji-edit {
-  width: min(640px, 100%);
-  max-height: calc(100dvh - 32px);
-  overflow-y: auto;
+.page-edit-groups,
+.page-edit-word-bg {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
-.kanji-edit .review-senses input {
-  width: 100%;
-  min-width: 0;
+.page-edit-words {
+  color: var(--paper-dim);
+}
+
+.page-edit-word-kanji {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 4px 0 8px;
+  font-size: 13px;
+}
+
+.page-edit-char {
+  font-family: var(--mincho);
+  font-size: 22px;
+  line-height: 1;
 }
 
 .suggest-panel {
@@ -7191,24 +7222,6 @@ button.review-part {
   color: var(--paper-dim);
   border-bottom: 1px solid var(--rule);
   padding-bottom: 4px;
-}
-
-.word-move {
-  font-size: 11px;
-  margin: 0 0 4px 12px;
-  opacity: 0;
-  transition: opacity 120ms var(--ease);
-}
-
-.word:hover .word-move,
-.word-move:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .word-move {
-    opacity: 1;
-  }
 }
 
 .words-more {

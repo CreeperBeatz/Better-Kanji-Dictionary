@@ -169,6 +169,7 @@ export function MeaningsBoard({
   onSkip,
   followUp = false,
   onWork,
+  plain = false,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -186,6 +187,8 @@ export function MeaningsBoard({
   followUp?: boolean
   /** Told whether the board holds work of its own (confirmed words, folded boxes), for the reset button. */
   onWork?: (has: boolean) => void
+  /** On a page, not in the queue: no ticks to confirm words, nothing to leave for later. */
+  plain?: boolean
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -355,6 +358,7 @@ export function MeaningsBoard({
         title={unsure ? t('unsure') : undefined}
       >
         <span className="board-head" lang="ja">
+          {!plain && (
           <label
             className="board-check"
             title={t('confirmWord')}
@@ -363,6 +367,7 @@ export function MeaningsBoard({
           >
             <input type="checkbox" checked={ok} disabled={!boxOk} aria-label={t('confirmWord')} onChange={() => toggleWord(w.id)} />
           </label>
+          )}
           {w.headword}
         </span>
         <span className="board-reading" lang="ja">
@@ -534,8 +539,8 @@ export function MeaningsBoard({
               {label}
             </button>
           ))}
-          <hr />
-          {(() => {
+          {!plain && <hr />}
+          {!plain && (() => {
             const ids = menu.ids
             const done = ids.filter((id) => okWords.has(id))
             if (done.length === ids.length)
@@ -568,7 +573,7 @@ export function MeaningsBoard({
               </button>
             )
           })()}
-          {menu.ids.every((id) => skipped.has(id)) ? (
+          {plain ? null : menu.ids.every((id) => skipped.has(id)) ? (
             <button
               role="menuitem"
               onClick={() => {

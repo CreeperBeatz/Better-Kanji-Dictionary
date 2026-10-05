@@ -1,8 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
+import { realMeanings } from './meanings'
+import { KanjiEditButton } from '../review/PageEdit'
 import { FontStrip } from './FontStrip'
 import { Forms, useForms } from './Forms'
 import { StrokeOrder } from './StrokeOrder'
@@ -80,21 +82,14 @@ interface Props {
   onKanji: (char: string) => void
   /** Shows the focus graph, from the map or on a phone; left out when it is already on screen. */
   onComponents?: () => void
+  /** Opens sign-in, for someone signed out who wants to suggest a change. */
+  onSignIn?: () => void
   /** Runs a search, as if typed: "see all words" searches *生*. */
   onSearch?: (q: string) => void
 }
 
 // The page shows only the most common few; the rest are a search away, by meaning.
 const PAGE_WORDS = 8
-
-// "Radical Number 9", "Variant Of Radical 125": a number where a meaning would be.
-// A radical's name ("Dotted Cliff Radical (no. 53)") says something and stays.
-const FILLER = /\b(radical|number|variant|of)\b|\bno\.|[\d().,\s-]+/gi
-
-/** KANJIDIC's meanings without the bare radical numbers it files as meanings (server/forms.py does the same). */
-export function realMeanings(meanings: string[]): string[] {
-  return meanings.filter((m) => m.replace(FILLER, '').trim() !== '')
-}
 
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
@@ -106,7 +101,7 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
 }
 
 /** A character as it looks, and what it means: the top of its page, above both tabs. */
-export function KanjiHead({ node, action }: { node: KanjiNode; action?: ReactNode }) {
+export function KanjiHead({ node }: { node: KanjiNode }) {
   const lang = useLang()
   const t = S(lang)
   // KANJIDIC files a radical's name where a meaning would be ("Radical Number 9");
@@ -133,14 +128,13 @@ export function KanjiHead({ node, action }: { node: KanjiNode; action?: ReactNod
             </>
           )}
         </p>
-        {action}
       </div>
       <KanjiMeta node={node} />
     </div>
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSearch }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onSearch }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -303,6 +297,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSe
           )}
         </p>
       )}
+
+      {!isPreview && <KanjiEditButton char={data.focus.char} onSignIn={onSignIn} />}
     </section>
   )
 }

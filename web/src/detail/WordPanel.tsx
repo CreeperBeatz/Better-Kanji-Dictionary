@@ -14,6 +14,7 @@ import { Pitch } from '../search/Pitch'
 import { transitivity } from '../search/transitivity'
 import { Valency } from '../search/Valency'
 import { WordMeta } from './HeadMeta'
+import { WordEditButton } from '../review/PageEdit'
 
 const S = strings(
   {
@@ -62,6 +63,8 @@ interface Props {
   from?: string
   onPick: (char: string) => void
   onWord: (w: Word) => void
+  /** Opens sign-in, for someone signed out who wants to suggest a change. */
+  onSignIn?: () => void
 }
 
 const KANJI = /[㐀-䶿一-鿿]/
@@ -131,7 +134,7 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
   )
 }
 
-export function WordPanel({ id, word, from, onPick, onWord }: Props) {
+export function WordPanel({ id, word, from, onPick, onWord, onSignIn }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [entry, setEntry] = useState<WordEntry | null>(null)
@@ -276,6 +279,8 @@ export function WordPanel({ id, word, from, onPick, onWord }: Props) {
           {entry ? t('needsConnection') : t('restFailed')}
         </p>
       )}
+
+      {!failed && <WordEditButton id={w.id} headword={w.headword} onSignIn={onSignIn} />}
     </section>
   )
 }

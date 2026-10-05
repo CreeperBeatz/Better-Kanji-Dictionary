@@ -858,12 +858,23 @@ export const api = {
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
 
   /** A reviewer's own change, live at once. */
-  reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string) =>
-    send<Decision | { unchanged: true }>('/api/review/edit', 'POST', { type, subject, value, reason }),
+  /** `words`, for a kanji's meanings edited on the page's board: word id -> group. */
+  reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string, words?: Record<number, string | null>) =>
+    send<Decision | { unchanged: true }>('/api/review/edit', 'POST', { type, subject, value, reason, words }),
 
   /** From a user, queued for a reviewer; from a reviewer, made. */
-  suggest: (type: TaskType, subject: string, value: TaskValue, reason: string) =>
-    send<{ applied: boolean; item?: { id: string; status: string } }>('/api/review/suggest', 'POST', { type, subject, value, reason }),
+  suggest: (type: TaskType, subject: string, value: TaskValue, reason: string, words?: Record<number, string | null>) =>
+    send<{ applied: boolean; item?: { id: string; status: string } }>('/api/review/suggest', 'POST', { type, subject, value, reason, words }),
+
+  /** For a kanji page's Edit / Suggest changes: its groups (or the open draft) and the board's words. */
+  pageKanji: (char: string) =>
+    get<{ char: string; senses: MeaningGroup[] | null; drafted: boolean; board: BoardWord[] }>(`/api/review/page/kanji/${encodeURIComponent(char)}`),
+
+  /** For a word page's Edit / Suggest changes: each of its kanji's groups and the one it is in. */
+  pageWord: (id: number) =>
+    get<{ word: Word; kanji: { char: string; senses: MeaningGroup[] | null; group: string | null }[]; bgBuilt: string[] | null }>(
+      `/api/review/page/word/${id}`,
+    ),
 
   impact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),
 

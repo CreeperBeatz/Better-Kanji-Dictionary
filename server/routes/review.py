@@ -57,7 +57,8 @@ def progress(_: dict = Depends(reviewer)) -> dict:
 @router.post("/edit")
 def edit(payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
     """A reviewer's own change: live at once, logged."""
-    return review.direct(payload.get("type", ""), payload.get("subject", ""), payload.get("value"), me["id"], payload.get("reason"))
+    return review.direct(payload.get("type", ""), payload.get("subject", ""), payload.get("value"), me["id"], payload.get("reason"),
+                         payload.get("words"))
 
 
 @router.post("/suggest")
@@ -65,12 +66,26 @@ def suggest(payload: dict = Body(...), me: dict = Depends(require_user)) -> dict
     """Ask for a change from the page. From a reviewer or the admin it is simply made."""
     type_, subject, value = payload.get("type", ""), payload.get("subject", ""), payload.get("value")
     reason = payload.get("reason")
+    words = payload.get("words") if type_ == "kanji_senses" else None
     if auth.has_role(me, "reviewer"):
-        return {"applied": True, "decision": review.direct(type_, subject, value, me["id"], reason)}
+        return {"applied": True, "decision": review.direct(type_, subject, value, me["id"], reason, words)}
     if not (reason or "").strip():
         raise AppError(400, "suggest_reason", "say why, so a reviewer can check it")
-    item = review.add_item(type_, subject, value, f"human:{me['id']}", "suggestion", reason, by=me["id"], priority=1.0)
+    item = review.add_item(type_, subject, value, f"human:{me['id']}", "suggestion", reason,
+                           evidence={"moves": words} if words else None, by=me["id"], priority=1.0)
     return {"applied": False, "item": {"id": item["id"], "status": item["status"]}}
+
+
+@router.get("/page/kanji/{char}")
+def page_kanji(char: str, _: dict = Depends(require_user)) -> dict:
+    """For the kanji page's Edit / Suggest changes: its meaning groups with their words."""
+    return review.page_kanji(char)
+
+
+@router.get("/page/word/{word_id}")
+def page_word(word_id: int, _: dict = Depends(require_user)) -> dict:
+    """For the word page's Edit / Suggest changes: its kanji's groups, and its Bulgarian."""
+    return review.page_word(word_id)
 
 
 @router.get("/mine")
