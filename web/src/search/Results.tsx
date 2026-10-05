@@ -26,6 +26,7 @@ import type { Level } from '../nav'
 import { Pitch } from './Pitch'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
+import { oneKanji, scopedKanji, setByMeaning, useByMeaning } from './view'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -41,6 +42,11 @@ const S = strings(
     sortNewsTitle: 'Sort by how often newspapers use the word',
     sortJlpt: 'JLPT',
     sortJlptTitle: 'Sort by JLPT level',
+    viewLabel: 'Show the words',
+    viewList: 'List',
+    viewListTitle: 'Every word, the common ones starting with {char} first',
+    viewMeaning: 'By meaning',
+    viewMeaningTitle: 'Every word with {char}, grouped by the meaning {char} has in it',
     newsAsc: 'Most frequent first',
     newsDesc: 'Least frequent first',
     jlptAsc: 'N5 first',
@@ -84,6 +90,11 @@ const S = strings(
     sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
     sortJlpt: 'JLPT',
     sortJlptTitle: 'Подреждане по ниво от JLPT',
+    viewLabel: 'Как да се покажат думите',
+    viewList: 'Списък',
+    viewListTitle: 'Всички думи, първо честите, които започват с {char}',
+    viewMeaning: 'По значение',
+    viewMeaningTitle: 'Всички думи с {char}, групирани по значението, което {char} има в тях',
     newsAsc: 'Първо най-честите',
     newsDesc: 'Първо най-редките',
     jlptAsc: 'Първо N5',
@@ -361,12 +372,6 @@ interface SearchProps {
   onMap: () => void
 }
 
-/** The kanji of a `*生*` query, which lists every word written with it. */
-export function scopedKanji(q: string): string | null {
-  const m = /^[*＊](\p{Script=Han})[*＊]$/u.exec(q.trim())
-  return m ? m[1] : null
-}
-
 /** How many words a result shows before the rest are added. */
 const FIRST_ROWS = 10
 // Words per screen, and how many more each "more" asks for; the server stops at a thousand.
@@ -377,7 +382,12 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
-  const scoped = scopedKanji(term)
+  // One kanji can be shown by meaning instead: a switch, kept like the sort.
+  // `*生*` is the old way of asking for that, and still works.
+  const byMeaning = useByMeaning()
+  const legacy = scopedKanji(term)
+  const kanjiQ = legacy ?? (oneKanji(term) ? term : null)
+  const scoped = legacy ?? (kanjiQ && byMeaning ? kanjiQ : null)
   const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
   const [[sort, order], setSort] = useState(savedSort)
   // "more" asks again for 30 more, kept per query, so going back keeps what was opened.
@@ -421,7 +431,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key, limit])
+  }, [term, lang, common, sort, order, key, limit, scoped])
 
   // The first screen of words is put up at once; the rest follow in a spare
   // moment, so a result never costs a keystroke more than a screenful.
@@ -453,7 +463,33 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
 
   const tools = (
     <div className="search-tools">
-      <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
+      <div className="search-tools-start">
+        {kanjiQ && (
+          <div className="view-switch" role="group" aria-label={t('viewLabel')}>
+            <button
+              aria-pressed={!scoped}
+              data-on={!scoped || undefined}
+              title={t('viewListTitle', { char: kanjiQ })}
+              onClick={() => {
+                setByMeaning(false)
+                if (legacy) onSearch(legacy)
+              }}
+            >
+              {t('viewList')}
+            </button>
+            <button
+              aria-pressed={!!scoped}
+              data-on={scoped || undefined}
+              title={t('viewMeaningTitle', { char: kanjiQ })}
+              onClick={() => setByMeaning(true)}
+            >
+              {t('viewMeaning')}
+            </button>
+          </div>
+        )}
+        {/* By meaning, the groups keep their own order. */}
+        {!scoped && <SortPill sort={sort} order={order} onPick={pickSort} t={t} />}
+      </div>
       <button
         className="search-filter"
         aria-pressed={common}
@@ -466,7 +502,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
     </div>
   )
 
-  // *生*: every word written with that kanji, by the meaning it has in each.
+  // One kanji by meaning: every word written with it, by the meaning it has in each.
   if (scoped)
     return (
       <WordsWith

@@ -5,6 +5,7 @@ import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage } from './search/Results'
+import { unscope } from './search/view'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
@@ -886,7 +887,9 @@ export function App() {
 
   // Typing is a search: the first key starts a new stack, the rest change it.
   const type = useCallback(
-    (text: string) => {
+    (typed: string) => {
+      // *生*, the old way to see 生 by meaning, becomes 生 with the switch on.
+      const text = unscope(typed)
       setQ(text)
       toDictionary()
       const page: Page = { kind: 'search', q: text }

@@ -11,6 +11,7 @@ import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency, ValencyMark } from '../search/Valency'
+import { setByMeaning } from '../search/view'
 
 const S = strings(
   {
@@ -84,7 +85,7 @@ interface Props {
   onComponents?: () => void
   /** Opens sign-in, for someone signed out who wants to suggest a change. */
   onSignIn?: () => void
-  /** Runs a search, as if typed: "see all words" searches *生*. */
+  /** Runs a search, as if typed: "see all words" searches 生, by meaning. */
   onSearch?: (q: string) => void
 }
 
@@ -266,7 +267,10 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             ))}
           </ul>
           {onSearch && (
-            <button className="clear vocab-all" onClick={() => onSearch(`*${data.focus.char}*`)}>
+            <button className="clear vocab-all" onClick={() => {
+                setByMeaning(true)
+                onSearch(data.focus.char)
+              }}>
               {t('allWords', { char: data.focus.char })}
             </button>
           )}

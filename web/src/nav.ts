@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Word } from './api'
 import type { StageView } from './StageControls'
 import { leftReview, reviewTabInState } from './review/route'
+import { unscope } from './search/view'
 
 export type Level = 1 | 2 | 3 | 4 | 5
 
@@ -114,7 +115,8 @@ export function pageInUrl(): Page | null {
   const l = path.match(LEVEL_PATH)
   if (l) return { kind: 'level', level: Number(l[1]) as Level }
   if (path === '/search' || path === '/search/') {
-    return { kind: 'search', q: new URLSearchParams(window.location.search).get('q') ?? '' }
+    // An old *生* link opens 生 by meaning.
+    return { kind: 'search', q: unscope(new URLSearchParams(window.location.search).get('q') ?? '') }
   }
   return null
 }

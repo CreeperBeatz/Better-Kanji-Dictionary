@@ -1,5 +1,5 @@
 /**
- * The search for `*生*`: every word written with one kanji, divided by the
+ * A search for one kanji, by meaning: every word written with it, divided by the
  * meaning the kanji carries in each word -- 生活 and 生まれる under "life",
  * 生野菜 under "raw", 生憎 under "brings no meaning" -- once reviewers have
  * accepted the kanji's meaning groups and placed the word. The kanji page
