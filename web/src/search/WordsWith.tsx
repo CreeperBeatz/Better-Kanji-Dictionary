@@ -43,7 +43,9 @@ const S = strings(
   },
 )
 
-const PAGE = 50
+// Words shown per group at first, and how many more each "more" shows.
+const PAGE = 30
+const REST = 'rest'
 
 export function WordsWith({
   char,
@@ -65,6 +67,28 @@ export function WordsWith({
   const [data, setData] = useState<WordsWithResponse | null>(null)
   const [offline, setOffline] = useState(false)
   const [more, setMore] = useState(false)
+  // Per group: how many words are shown, and whether it is folded.
+  const [shown, setShown] = useState<Record<string, number>>({})
+  const [shut, setShut] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    setShown({})
+    setShut(new Set())
+  }, [char])
+  const fold = (id: string) =>
+    setShut((s) => {
+      const n = new Set(s)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  const head = (id: string, n: number, label: ReactNode) => (
+    <button className="meaning-group-toggle" aria-expanded={!shut.has(id)} onClick={() => fold(id)}>
+      <span className="meaning-group-caret" aria-hidden>
+        {shut.has(id) ? '▸' : '▾'}
+      </span>
+      {label} <span className="hint">{n}</span>
+    </button>
+  )
 
   useEffect(() => {
     let stale = false
@@ -121,27 +145,43 @@ export function WordsWith({
       {tools}
       {!data && <p className="hint">{t('loading')}</p>}
 
-      {data?.groups.map((g) => (
-        <div key={g.id} className="meaning-group">
-          <h3>
-            {g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang)}
-            {g.note && <span className="hint"> — {g.note}</span>}
-            {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
-          </h3>
-          <ol className="words">{g.words.map((w) => row(w))}</ol>
-        </div>
-      ))}
+      {data?.groups.map((g) => {
+        const n = shown[g.id] ?? PAGE
+        return (
+          <div key={g.id} className="meaning-group" data-shut={shut.has(g.id) || undefined}>
+            <h3>
+              {head(g.id, g.words.length, g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang))}
+              {g.note && <span className="hint"> — {g.note}</span>}
+              {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
+            </h3>
+            {!shut.has(g.id) && (
+              <>
+                <ol className="words">{g.words.slice(0, n).map((w) => row(w))}</ol>
+                {g.words.length > n && (
+                  <button className="clear words-more" onClick={() => setShown({ ...shown, [g.id]: n + PAGE })}>
+                    {t('more')} ({g.words.length - n})
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )
+      })}
 
       {data && data.rest.words.length > 0 && (
-        <div className="meaning-group">
-          {data.groups.length > 0 && <h3>{t('others')}</h3>}
-          <ol className="words">
-            {data.rest.words.map((w) => row(w))}
-          </ol>
-          {!offline && data.rest.words.length < data.rest.total && (
-            <button className="clear words-more" disabled={more} onClick={loadMore}>
-              {t('more')} ({data.rest.total - data.rest.words.length})
-            </button>
+        <div className="meaning-group" data-shut={shut.has(REST) || undefined}>
+          {data.groups.length > 0 && <h3>{head(REST, data.rest.total, t('others'))}</h3>}
+          {!shut.has(REST) && (
+            <>
+              <ol className="words">
+                {data.rest.words.map((w) => row(w))}
+              </ol>
+              {!offline && data.rest.words.length < data.rest.total && (
+                <button className="clear words-more" disabled={more} onClick={loadMore}>
+                  {t('more')} ({data.rest.total - data.rest.words.length})
+                </button>
+              )}
+            </>
           )}
         </div>
       )}

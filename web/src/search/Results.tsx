@@ -57,6 +57,7 @@ const S = strings(
     alternativeTitle: 'Search for {q} in Bulgarian',
     nothing: 'Nothing matched {q}.',
     looking: 'looking',
+    more: 'more',
     recentSearches: 'Recent searches',
     clearHistory: 'clear the history',
     browse: 'Browse a JLPT level',
@@ -99,6 +100,7 @@ const S = strings(
     alternativeTitle: 'Търсете {q} на български',
     nothing: 'Нищо не отговаря на {q}.',
     looking: 'търсене',
+    more: 'още',
     recentSearches: 'Скорошни търсения',
     clearHistory: 'изчистете историята',
     browse: 'Разгледайте ниво от JLPT',
@@ -367,6 +369,9 @@ export function scopedKanji(q: string): string | null {
 
 /** How many words a result shows before the rest are added. */
 const FIRST_ROWS = 10
+// Words per screen, and how many more each "more" asks for; the server stops at a thousand.
+const PAGE = 30
+const MOST = 1000
 
 export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap }: SearchProps) {
   const lang = useLang()
@@ -375,7 +380,11 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const scoped = scopedKanji(term)
   const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
   const [[sort, order], setSort] = useState(savedSort)
-  const key = keyOf(lang, common, `${sort}:${order}`, term)
+  // "more" asks again for 30 more, kept per query, so going back keeps what was opened.
+  const base = keyOf(lang, common, `${sort}:${order}`, term)
+  const [opened, setOpened] = useState<{ base: string; n: number } | null>(null)
+  const limit = opened?.base === base ? opened.n : PAGE
+  const key = `${base} #${limit}`
   const [result, setResult] = useState<SearchResponse | null>(() => found.get(key) ?? null)
   const [busy, setBusy] = useState(false)
 
@@ -394,7 +403,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
     let stale = false
     setBusy(true)
     const timer = setTimeout(() => {
-      api.search(term, lang, { common, sort, order }).then(
+      api.search(term, lang, { common, sort, order, limit }).then(
         (d) => {
           remember(key, d)
           // As a transition: the rows are rendered between keystrokes, and a
@@ -412,19 +421,20 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key])
+  }, [term, lang, common, sort, order, key, limit])
 
   // The first screen of words is put up at once; the rest follow in a spare
   // moment, so a result never costs a keystroke more than a screenful.
   const [allRows, setAllRows] = useState(false)
   useEffect(() => {
-    setAllRows(false)
-    if (!result || result.words.length <= FIRST_ROWS) return
+    // After a "more" the rows are on screen already; drawing only the first again would jump.
+    setAllRows(limit > PAGE)
+    if (limit > PAGE || !result || result.words.length <= FIRST_ROWS) return
     const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 120))
     const cancel = window.cancelIdleCallback ?? window.clearTimeout
     const id = idle(() => startTransition(() => setAllRows(true)), { timeout: 600 })
     return () => cancel(id)
-  }, [result])
+  }, [result, limit])
 
   function pickSort(next: SearchSort, nextOrder: SearchOrder) {
     localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
@@ -511,6 +521,11 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
             <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} />
           ))}
         </ol>
+      )}
+      {result && result.words.length >= limit && limit < MOST && (
+        <button className="clear words-more" disabled={busy} onClick={() => setOpened({ base, n: Math.min(limit + PAGE, MOST) })}>
+          {busy ? t('looking') : t('more')}
+        </button>
       )}
       {/* When semantic search takes over, it says what it found instead; it
           hands the line back when it will not run (signed out, offline, off). */}

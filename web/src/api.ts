@@ -179,6 +179,8 @@ export interface SearchOptions {
   common: boolean
   sort: SearchSort
   order: SearchOrder
+  /** How many words: 30, and 30 more for each "more". */
+  limit?: number
 }
 
 export interface SearchResponse {
@@ -638,6 +640,7 @@ export const api = {
         ['common', o.common ? '1' : '0'],
         ['sort', o.sort],
         ['order', o.order],
+        ['limit', String(o.limit ?? 30)],
       ]),
     ),
 

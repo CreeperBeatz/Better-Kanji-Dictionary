@@ -251,7 +251,7 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
   switch (method) {
     case 'search': {
       const o = (args[2] ?? {}) as Partial<SearchOptions>
-      return e.search(args[0] as string, 30, (args[1] as string) ?? 'en', !!o.common, o.sort, o.order)
+      return e.search(args[0] as string, o.limit ?? 30, (args[1] as string) ?? 'en', !!o.common, o.sort, o.order)
     }
     case 'recognize':
       return {

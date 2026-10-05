@@ -7264,3 +7264,31 @@ button.review-part {
 .words-more {
   margin-top: 8px;
 }
+
+/* A group's title folds it away. */
+.meaning-group-toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.meaning-group-toggle:hover {
+  color: var(--paper);
+}
+
+.meaning-group-caret {
+  width: 1em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.meaning-group[data-shut] h3 {
+  margin-bottom: 0;
+}

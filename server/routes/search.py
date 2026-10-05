@@ -265,7 +265,7 @@ def _bg_tier(exact: bool, same_spelling: bool, place: int) -> int:
 @router.get("")
 def search(
     q: str = Query(min_length=1, max_length=200),
-    limit: int = Query(30, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=1000, description="the search page asks again for 30 more each time"),
     lang: str = Query("en", pattern="^(en|bg)$"),
     common: bool = Query(False, description="only words JMdict marks as common"),
     sort: str = Query("news", pattern="^(news|jlpt)$", description="newspaper rank or JLPT level"),
