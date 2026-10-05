@@ -41,7 +41,7 @@ const S = strings(
     save: 'save',
     profileHint:
       'Your name, username and picture show beside your public notes and replies. Your email is never shown. Notes are private unless you mark one public.',
-    logOut: 'log out',
+    logOut: 'Log out',
     helpTitle: 'Help fix the data',
     helpHint:
       'Reviewers check and correct how kanji break into parts, their old forms and which meaning each word uses. Dani approves reviewers by hand.',
@@ -52,8 +52,7 @@ const S = strings(
     cannotAsk: 'could not send your request',
     roleReviewer: 'You are a reviewer.',
     roleAdmin: 'You run this site.',
-    openReview: 'review queue',
-    openPeople: 'reviewers and requests',
+    reviewMode: 'Review Mode',
   },
   {
     moving: 'Бележките от този браузър се преместват в профила ви',
@@ -87,7 +86,7 @@ const S = strings(
     save: 'запазете',
     profileHint:
       'Името, потребителското име и снимката ви се виждат до публичните ви бележки и отговори. Имейлът ви не се показва никога. Бележките са лични, освен ако не отбележите някоя като публична.',
-    logOut: 'изход',
+    logOut: 'Изход',
     helpTitle: 'Помогнете да поправим данните',
     helpHint:
       'Рецензентите проверяват и поправят как се разделят кандзитата на части, старите им форми и кое значение използва всяка дума. Дани одобрява рецензентите лично.',
@@ -98,8 +97,7 @@ const S = strings(
     cannotAsk: 'заявката не можа да бъде изпратена',
     roleReviewer: 'Вие сте рецензент.',
     roleAdmin: 'Вие управлявате този сайт.',
-    openReview: 'опашка за преглед',
-    openPeople: 'рецензенти и заявки',
+    reviewMode: 'Режим преглед',
   },
 )
 
@@ -184,7 +182,7 @@ export function AccountDialog({
           ×
         </button>
         {user ? (
-          <Profile onClose={onClose} onWorkbench={onWorkbench} />
+          <Profile onWorkbench={onWorkbench} />
         ) : sent ? (
           <>
             <h2>{t('checkEmail')}</h2>
@@ -197,9 +195,6 @@ export function AccountDialog({
             <p className="assoc-actions">
               <button className="clear" onClick={() => setSent(null)}>
                 {t('otherAddress')}
-              </button>
-              <button className="clear" onClick={onClose}>
-                {t('close')}
               </button>
             </p>
           </>
@@ -225,11 +220,6 @@ export function AccountDialog({
               </div>
             </form>
             {(problem || error) && <p className="account-problem">{problem ?? error}</p>}
-            <p className="assoc-actions">
-              <button className="clear" onClick={onClose}>
-                {t('close')}
-              </button>
-            </p>
           </>
         )}
         <p className="account-language">
@@ -238,6 +228,18 @@ export function AccountDialog({
         </p>
         <OfflineSetting />
         <Credits />
+        {/* Last, on its own: leaving the account. */}
+        {user && (
+          <button
+            className="account-logout"
+            onClick={async () => {
+              await logout()
+              onClose()
+            }}
+          >
+            {t('logOut')}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -245,7 +247,7 @@ export function AccountDialog({
 
 const USERNAME = /^[a-z0-9_-]{3,24}$/
 
-function Profile({ onClose, onWorkbench }: { onClose: () => void; onWorkbench?: (tab: WorkbenchTab) => void }) {
+function Profile({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
   const lang = useLang()
   const t = S(lang)
   const { user } = useAuth()
@@ -378,20 +380,6 @@ function Profile({ onClose, onWorkbench }: { onClose: () => void; onWorkbench?: 
       <p className="hint">{t('profileHint')}</p>
       {problem && <p className="account-problem">{problem}</p>}
       <Contribute onWorkbench={onWorkbench} />
-      <p className="assoc-actions">
-        <button
-          className="clear"
-          onClick={async () => {
-            await logout()
-            onClose()
-          }}
-        >
-          {t('logOut')}
-        </button>
-        <button className="clear" onClick={onClose}>
-          {t('close')}
-        </button>
-      </p>
     </>
   )
 }
@@ -412,16 +400,9 @@ function Contribute({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void
         <h3>{t('helpTitle')}</h3>
         <p className="hint">{t(user.role === 'admin' ? 'roleAdmin' : 'roleReviewer')}</p>
         {onWorkbench && (
-          <p className="assoc-actions">
-            <button className="clear" onClick={() => onWorkbench('queue')}>
-              {t('openReview')}
-            </button>
-            {user.role === 'admin' && (
-              <button className="clear" onClick={() => onWorkbench('people')}>
-                {t('openPeople')}
-              </button>
-            )}
-          </p>
+          <button className="account-submit account-review" onClick={() => onWorkbench('queue')}>
+            {t('reviewMode')}
+          </button>
         )}
       </section>
     )
