@@ -47,7 +47,7 @@ const S = strings(
     handbook: 'Handbook',
     progress: 'Progress',
     mode: 'Review mode',
-    exit: 'Exit',
+    exit: 'Exit review mode',
     reviewer: 'Reviewer',
     anyone: 'everyone',
     me: 'me',
@@ -92,7 +92,7 @@ const S = strings(
     handbook: 'Наръчник',
     progress: 'Напредък',
     mode: 'Режим преглед',
-    exit: 'Изход',
+    exit: 'Изход от режим преглед',
     reviewer: 'Рецензент',
     anyone: 'всички',
     me: 'аз',
@@ -162,7 +162,6 @@ export function Workbench({
           </nav>
           <ProgressMini data={progress} onOpen={() => onTab('progress')} />
           <div className="workbench-mode">
-            <h2>{t('mode')}</h2>
             <button className="workbench-exit" onClick={onClose} title="Esc">
               {t('exit')}
             </button>
