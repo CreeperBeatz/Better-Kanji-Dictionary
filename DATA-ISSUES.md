@@ -83,7 +83,8 @@ or rated (server/scope.py). 396 words in scope have no Bulgarian gloss:
 mostly words on a JLPT list that JMdict does not mark common, which the
 translation run (jmdict-kanjidic-bg) did not take in.
 Source: the Bulgarian translation's selection, not a mistake in a gloss.
-**Status: open.** They get no Bulgarian card until they are translated.
+**Status: fixed** (2026-10-05). Translated as chunks words-s001..s004
+(pipeline/translate/out), built in, and queued as 396 Bulgarian cards.
 
 ### D-014 · Words filed under kanji they are not written with
 *Found 2026-10-05,* drafting meanings for the widened scope. A kanji's word
