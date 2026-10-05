@@ -12,7 +12,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
 import { strings, useLang } from '../i18n'
-import { KanjiEditButton } from '../review/PageEdit'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 
 const S = strings(
@@ -147,7 +146,6 @@ export function WordsWith({
         </div>
       )}
 
-      {!offline && data && <KanjiEditButton char={char} />}
     </section>
   )
 }
