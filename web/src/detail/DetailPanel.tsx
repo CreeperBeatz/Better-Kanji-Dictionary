@@ -34,6 +34,7 @@ const S = strings(
     notInGroup: 'Not in a group',
     catchAll: 'No meaning of its own',
     allWords: 'See all words with {char} →',
+    hidden: '{n} hidden, see all words',
     formOf: 'a form of {char}',
     openEntry: 'Open this entry',
     openReading: 'Open {word}, read {reading}',
@@ -62,6 +63,7 @@ const S = strings(
     notInGroup: 'Извън групите',
     catchAll: 'Без собствено значение',
     allWords: 'Всички думи с {char} →',
+    hidden: '{n} скрити, вижте всички думи',
     formOf: 'форма на {char}',
     openEntry: 'Отворете тази статия',
     openReading: 'Отворете {word}, четено {reading}',
@@ -220,6 +222,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           </button>
         </h4>
         {open && <ul>{ws.slice(0, GROUP_WORDS).map(vocabRow)}</ul>}
+        {open && onWordsWith && n > Math.min(GROUP_WORDS, ws.length) && (
+          <button className="clear vocab-hidden" onClick={() => onWordsWith(data.focus.char)}>
+            {t('hidden', { n: n - Math.min(GROUP_WORDS, ws.length) })}
+          </button>
+        )}
       </div>
     )
   }
