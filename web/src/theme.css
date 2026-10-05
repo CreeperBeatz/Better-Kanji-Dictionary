@@ -6827,6 +6827,51 @@ html[data-nav]::view-transition-old(tabs):only-child {
   background: var(--sumi);
 }
 
+/* The start guide's door, under the handbook's introduction. */
+.handbook-guide {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin: 16px 0 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--ai-deep);
+  border-radius: 3px;
+  background: var(--ai-wash);
+  color: var(--paper);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease);
+}
+
+.handbook-guide:hover,
+.handbook-guide:focus-visible {
+  border-color: var(--ai);
+}
+
+.handbook-guide-glyph {
+  flex: none;
+  font-family: var(--mincho);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.handbook-guide-text {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+
+.handbook-guide-text b {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--paper);
+}
+
 /* Each worked case on a card of its own. */
 .handbook-case {
   margin-top: 16px;
@@ -6868,87 +6913,38 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
 }
 
-/* ---------------------------------------------------------------- start here (onboarding cards) */
+/* ---------------------------------------------------------------- start guide (onboarding popup) */
 
-.onb {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 680px);
-  gap: 40px;
-  align-items: start;
+/* Above the review screen, which is an overlay of its own. */
+.onb-overlay {
+  z-index: 45;
+  align-items: center;
+  padding: 20px;
 }
 
-.onb-rail {
-  position: sticky;
-  top: 0;
-  padding-top: 6px;
-}
-
-.onb-rail ol {
-  list-style: none;
-  margin: 0;
+.onb-panel {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: min(820px, 92vh);
+  max-height: min(820px, 92dvh);
   padding: 0;
+  overflow: hidden;
+  outline: none;
 }
 
-.onb-rail button {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  width: 100%;
-  padding: 4px 8px;
-  border: 0;
-  border-left: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
+.onb-panel > .account-x {
+  top: 12px;
+  right: 12px;
+  z-index: 1;
 }
 
-.onb-rail button:hover {
-  color: var(--paper);
-}
-
-.onb-rail button[data-seen] {
-  color: var(--paper-dim);
-}
-
-.onb-rail button[data-on] {
-  color: var(--paper);
-  border-left-color: var(--ai);
-  background: var(--sumi-lift);
-}
-
-.onb-rail-n {
-  flex: none;
-  width: 16px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--faint);
-}
-
-.onb-rail button[data-on] .onb-rail-n {
-  color: var(--ai);
-}
-
-.onb-rail-keys {
-  margin-top: 14px;
-  padding-left: 10px;
-  font-size: 11.5px;
-}
-
-.onb-stage-area {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+/* The card scrolls inside the popup; the nav stays at its foot. */
 .onb-card {
-  padding: 26px 30px 24px;
-  border: 1px solid var(--rule-bright);
-  border-radius: 4px;
-  background: var(--sumi-lift);
-  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 28px 30px 22px;
   animation: onb-in 260ms var(--ease);
 }
 
@@ -6981,8 +6977,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   color: var(--ai);
 }
 
-.workbench .onb-card h2 {
-  display: block;
+.onb-card h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 500;
@@ -6993,6 +6988,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .onb-glyph {
   flex: none;
+  margin-right: 28px;
   font-family: var(--mincho);
   font-size: 64px;
   line-height: 1;
@@ -7143,9 +7139,13 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .onb-nav {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 12px 30px;
+  border-top: 1px solid var(--rule);
+  background: var(--sumi);
 }
 
 .onb-nav .account-submit {
@@ -7160,17 +7160,32 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .onb-dots {
   display: flex;
-  gap: 5px;
 }
 
-.onb-dots i {
-  width: 6px;
-  height: 6px;
+/* Each dot opens its card; the hit area is bigger than the dot. */
+.onb-dots button {
+  width: 14px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.onb-dots button::after {
+  content: '';
+  position: absolute;
+  inset: 6px 4px;
   border-radius: 50%;
   background: var(--faint);
 }
 
-.onb-dots i[data-on] {
+.onb-dots button:hover::after {
+  background: var(--paper-dim);
+}
+
+.onb-dots button[data-on]::after {
   background: var(--ai);
 }
 
@@ -7178,22 +7193,31 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 900px) {
-  .onb {
-    grid-template-columns: minmax(0, 1fr);
+@media (max-width: 640px) {
+  .onb-overlay {
+    padding: 0;
+    align-items: stretch;
   }
 
-  .onb-rail {
+  .onb-panel {
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+  }
+
+  .onb-card {
+    padding: 20px 16px;
+  }
+
+  .onb-nav {
+    padding: 10px 16px;
+  }
+
+  .onb-dots {
     display: none;
   }
-}
 
-@media (max-width: 640px) {
-  .onb-card {
-    padding: 18px 16px;
-  }
-
-  .workbench .onb-card h2 {
+  .onb-card h2 {
     font-size: 20px;
   }
 

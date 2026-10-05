@@ -1,16 +1,16 @@
 /**
- * "Start here": a reviewer's onboarding, as a deck of cards. What reviewing
- * is, how the queue works, each kind of task, what you can do and what to look
- * out for, then the way into the queue. For reviewers: nothing here is about
- * the admin's tools or how a user suggests a change.
+ * The start guide: a reviewer's onboarding, as a deck of cards in a popup.
+ * What reviewing is, how the queue works, each kind of task, what you can do
+ * and what to look out for, then the way into the queue. For reviewers:
+ * nothing here is about the admin's tools or how a user suggests a change.
  *
  * It opens by itself the first time a reviewer enters review mode
- * (Workbench), and stays a tab. The handbook has the full rules; the cards
- * are the short version. The cards are in English, like the handbook.
+ * (Workbench), and again from the handbook. The handbook has the full rules;
+ * the cards are the short version. The cards are in English, like the handbook.
  *
- * Keyboard: ← / → turn the cards.
+ * Keyboard: ← / → turn the cards, Esc closes.
  */
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { strings, useLang } from '../i18n'
 import { markOnboarded } from './onboarded'
 
@@ -19,19 +19,19 @@ const S = strings(
     back: 'back',
     next: 'next',
     of: '{n} of {m}',
-    cards: 'The cards',
+    guide: 'Start guide',
+    close: 'close',
     queue: 'Open the queue',
     handbook: 'Read the handbook',
-    keys: '← → turn the cards',
   },
   {
     back: 'назад',
     next: 'напред',
     of: '{n} от {m}',
-    cards: 'Картите',
+    guide: 'Първи стъпки',
+    close: 'затворете',
     queue: 'Към опашката',
     handbook: 'Към наръчника',
-    keys: '← → обръщат картите',
   },
 )
 
@@ -394,24 +394,44 @@ function cards(go: (i: number) => void): Card[] {
       kicker: 'Ready',
       title: 'That’s all you need',
       glyph: '始',
-      lead: <>Start with a stage you know well. The handbook is one tab away whenever a card makes you stop and think.</>,
+      lead: (
+        <>
+          Start with a stage you know well. The handbook is one tab away whenever a card makes you stop and think, and
+          this guide waits at the top of it.
+        </>
+      ),
     },
   ]
 }
 
-export default function Onboarding({ onQueue, onHandbook }: { onQueue: () => void; onHandbook: (section?: string) => void }) {
+export default function Onboarding({
+  onClose,
+  onQueue,
+  onHandbook,
+}: {
+  onClose: () => void
+  onQueue: () => void
+  onHandbook: (section?: string) => void
+}) {
   const t = S(useLang())
   const [at, setAt] = useState(0)
+  const panel = useRef<HTMLDivElement>(null)
   const deck = cards(setAt)
   const card = deck[at]
   const last = at === deck.length - 1
 
   useEffect(markOnboarded, [])
 
+  // Focus moves into the guide, and back to what had it when the guide closes.
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null
+    panel.current?.focus()
+    return () => before?.focus?.()
+  }, [])
+
+  // Escape is the review screen's (Workbench): with the guide open it closes the guide.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const el = e.target as HTMLElement | null
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
       if (e.key === 'ArrowRight') setAt((i) => Math.min(i + 1, deck.length - 1))
       else if (e.key === 'ArrowLeft') setAt((i) => Math.max(i - 1, 0))
     }
@@ -420,22 +440,11 @@ export default function Onboarding({ onQueue, onHandbook }: { onQueue: () => voi
   }, [deck.length])
 
   return (
-    <div className="onb">
-      <nav className="onb-rail" aria-label={t('cards')}>
-        <ol>
-          {deck.map((c, i) => (
-            <li key={c.title}>
-              <button data-on={i === at || undefined} data-seen={i < at || undefined} onClick={() => setAt(i)}>
-                <span className="onb-rail-n">{i + 1}</span>
-                {c.title}
-              </button>
-            </li>
-          ))}
-        </ol>
-        <p className="hint onb-rail-keys">{t('keys')}</p>
-      </nav>
-
-      <div className="onb-stage-area">
+    <div className="overlay onb-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="overlay-panel onb-panel" role="dialog" aria-modal="true" aria-label={t('guide')} tabIndex={-1} ref={panel}>
+        <button className="account-x" onClick={onClose} aria-label={t('close')} title={`${t('close')} (Esc)`}>
+          ×
+        </button>
         <article className="onb-card" lang="en" key={at} aria-live="polite">
           <header className="onb-card-head">
             <div>
@@ -471,9 +480,9 @@ export default function Onboarding({ onQueue, onHandbook }: { onQueue: () => voi
           <button className="workbench-exit" disabled={at === 0} onClick={() => setAt(at - 1)}>
             ← {t('back')}
           </button>
-          <span className="onb-dots" aria-hidden="true">
+          <span className="onb-dots">
             {deck.map((c, i) => (
-              <i key={c.title} data-on={i === at || undefined} />
+              <button key={c.title} data-on={i === at || undefined} onClick={() => setAt(i)} title={c.title} aria-label={c.title} />
             ))}
           </span>
           <span className="hint onb-count">{t('of', { n: at + 1, m: deck.length })}</span>

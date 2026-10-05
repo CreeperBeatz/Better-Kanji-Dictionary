@@ -131,7 +131,7 @@ function message(err: unknown, fallback: Key, lang: Lang) {
   return err instanceof Error ? errorText(err, lang) : S(lang)(fallback)
 }
 
-export type WorkbenchTab = 'queue' | 'history' | 'progress' | 'people' | 'start' | 'handbook'
+export type WorkbenchTab = 'queue' | 'history' | 'progress' | 'people' | 'handbook'
 
 /** Mounted only while open, so each opening starts from a clean form. */
 export function AccountDialog({

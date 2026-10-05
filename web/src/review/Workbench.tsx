@@ -10,7 +10,6 @@ import { ValueView } from './editors'
 import { ProgressMini, ProgressPage, useProgress } from './Progress'
 import { Queue } from './Queue'
 import { onboarded } from './onboarded'
-import { queueRouteInUrl } from './route'
 
 const Handbook = lazy(() => import('./Handbook'))
 const Onboarding = lazy(() => import('./Onboarding'))
@@ -48,7 +47,6 @@ const S = strings(
     a_revert: 'reverted',
     a_reopen: 'reopened',
     handbook: 'Handbook',
-    start: 'Start here',
     progress: 'Progress',
     mode: 'Review mode',
     exit: 'Exit review mode',
@@ -94,7 +92,6 @@ const S = strings(
     a_revert: 'върнато',
     a_reopen: 'отворено отново',
     handbook: 'Наръчник',
-    start: 'Първи стъпки',
     progress: 'Напредък',
     mode: 'Режим преглед',
     exit: 'Изход от режим преглед',
@@ -132,27 +129,31 @@ export function Workbench({
   const [version, setVersion] = useState(0)
   const decided = useCallback(() => setVersion((v) => v + 1), [])
   const progress = useProgress(version)
-  // The handbook section a card asked for, scrolled to when the handbook opens.
-  const [section, setSection] = useState<string | undefined>()
+  // The handbook section a card asked for: the handbook opens afresh at it, even when it is already open.
+  const [jump, setJump] = useState<{ section?: string; n: number }>({ n: 0 })
 
-  // A reviewer's first time here starts on the cards, unless the address names a card to open.
+  // The start guide, over whatever tab is open. A reviewer's first time here opens it by itself
+  // (once the account is known: it can arrive after the screen opens).
   const role = user?.role
-  useEffect(() => {
-    if (role === 'reviewer' && tab === 'queue' && !onboarded() && !queueRouteInUrl().item) onTab('start')
-    // Only on opening: after that the tabs are the reviewer's to choose.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role])
+  const [guide, setGuide] = useState(false)
+  const [roleSeen, setRoleSeen] = useState<string | undefined>()
+  if (role !== roleSeen) {
+    setRoleSeen(role)
+    if (role === 'reviewer' && !onboarded()) setGuide(true)
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault()
-        onClose()
+        // With the guide open, Escape closes the guide, not the review screen.
+        if (guide) setGuide(false)
+        else onClose()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, guide])
 
   if (!user || user.role === 'user') return null
   const tabs: [WorkbenchTab, Key][] = [
@@ -160,7 +161,6 @@ export function Workbench({
     ['history', 'history'],
     ['progress', 'progress'],
     ...(user.role === 'admin' ? ([['people', 'people']] as [WorkbenchTab, Key][]) : []),
-    ['start', 'start'],
     ['handbook', 'handbook'],
   ]
 
@@ -188,24 +188,29 @@ export function Workbench({
           {tab === 'history' && <History admin={user.role === 'admin'} />}
           {tab === 'progress' && <ProgressPage data={progress} />}
           {tab === 'people' && user.role === 'admin' && <People />}
-          {tab === 'start' && (
-            <Suspense fallback={<p className="hint">{t('loading')}</p>}>
-              <Onboarding
-                onQueue={() => onTab('queue')}
-                onHandbook={(s) => {
-                  setSection(s)
-                  onTab('handbook')
-                }}
-              />
-            </Suspense>
-          )}
           {tab === 'handbook' && (
             <Suspense fallback={<p className="hint">{t('loading')}</p>}>
-              <Handbook section={section} onStart={() => onTab('start')} />
+              <Handbook key={jump.n} section={jump.section} onStart={() => setGuide(true)} />
             </Suspense>
           )}
         </div>
       </div>
+      {guide && (
+        <Suspense fallback={null}>
+          <Onboarding
+            onClose={() => setGuide(false)}
+            onQueue={() => {
+              setGuide(false)
+              onTab('queue')
+            }}
+            onHandbook={(s) => {
+              setGuide(false)
+              setJump((j) => ({ section: s, n: j.n + 1 }))
+              onTab('handbook')
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

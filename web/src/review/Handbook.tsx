@@ -5,7 +5,8 @@
  *
  * The markdown is cut at its ## headings into sections, and the Cases into
  * one card per case. Contents beside it (a fold above it on a phone) list the
- * sections and their ### headings, and mark the one being read.
+ * sections and their ### headings, and mark the one being read. The start
+ * guide (Onboarding.tsx) opens from the top and from the contents.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Components } from 'react-markdown'
@@ -14,8 +15,16 @@ import { strings, useLang } from '../i18n'
 import text from './handbook.md?raw'
 
 const S = strings(
-  { contents: 'Contents', newHere: 'New here? Start with the cards' },
-  { contents: 'Съдържание', newHere: 'Нови сте? Започнете с картите' },
+  {
+    contents: 'Contents',
+    guide: 'Start guide',
+    guideText: 'Twelve short cards for a new reviewer: your tasks, what you can do, what to look out for.',
+  },
+  {
+    contents: 'Съдържание',
+    guide: 'Първи стъпки',
+    guideText: 'Дванадесет кратки карти за нов рецензент: задачите ви, какво можете да правите и за какво да внимавате.',
+  },
 )
 
 interface Heading {
@@ -189,7 +198,7 @@ export default function Handbook({ section, onStart }: { section?: string; onSta
   const start = onStart && (
     <li className="handbook-toc-start">
       <button className="clear" onClick={onStart}>
-        {t('newHere')} →
+        {t('guide')} →
       </button>
     </li>
   )
@@ -205,6 +214,18 @@ export default function Handbook({ section, onStart }: { section?: string; onSta
       <article className="handbook" lang="en">
         <h1>{title}</h1>
         <Markdown text={intro} />
+        {onStart && (
+          <button className="handbook-guide" onClick={onStart}>
+            <span className="handbook-guide-glyph" lang="ja" aria-hidden="true">
+              始
+            </span>
+            <span className="handbook-guide-text">
+              <b>{t('guide')}</b>
+              <span>{t('guideText')}</span>
+            </span>
+            <span aria-hidden="true">→</span>
+          </button>
+        )}
         <details className="handbook-fold" ref={fold}>
           <summary>{t('contents')}</summary>
           <Toc sections={sections} at={at} onGo={go}>

@@ -1,7 +1,7 @@
 // Usage: node scripts/onboarding-check.mjs [base]  (against tests/sandbox.py, default http://127.0.0.1:8010)
-// A new reviewer opens review mode: the "Start here" cards open by themselves,
-// turn with the keys, and a card's handbook link lands on its section. The
-// handbook's contents follow the scroll. Then the same on a phone.
+// A new reviewer opens review mode: the start guide pops up by itself, turns
+// with the keys, closes with Esc, opens again from the handbook, and a card's
+// handbook link lands on its section. The contents follow the scroll. Then a phone.
 import { chromium } from 'playwright'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
 const SHOTS = process.env.SHOTS ?? 'C:/tmp/shots'
@@ -51,8 +51,7 @@ async function reviewer(viewport) {
 const r = await reviewer()
 await r.goto(`${BASE}/review`, { waitUntil: 'networkidle' })
 await wait(900)
-console.log('first visit lands on:', new URL(r.url()).pathname)
-console.log('cards:', await r.locator('.onb-rail li').count())
+console.log('first visit: guide open over', new URL(r.url()).pathname, await r.locator('.onb-panel').count())
 await r.screenshot({ path: `${SHOTS}/onb-1-welcome.png` })
 await r.keyboard.press('ArrowRight')
 await r.keyboard.press('ArrowRight')
@@ -61,39 +60,51 @@ await r.screenshot({ path: `${SHOTS}/onb-2-stages.png` })
 await r.locator('.onb-stage', { hasText: 'Meanings' }).click()
 await wait(400)
 console.log('stage tile opens:', await r.locator('.onb-card h2').textContent())
-await r.screenshot({ path: `${SHOTS}/onb-3-meanings.png`, fullPage: true })
-await r.locator('.onb-rail button', { hasText: 'What you can do' }).click()
+await r.screenshot({ path: `${SHOTS}/onb-3-meanings.png` })
+await r.keyboard.press('Escape')
+await wait(300)
+console.log('Esc closes the guide only:', (await r.locator('.onb-panel').count()) === 0 && (await r.locator('.workbench').count()) === 1)
+
+await r.locator('.workbench .overlay-tabs button', { hasText: 'Handbook' }).click()
+await wait(700)
+await r.screenshot({ path: `${SHOTS}/onb-4-handbook.png` })
+await r.locator('.handbook-guide').click()
 await wait(400)
-await r.screenshot({ path: `${SHOTS}/onb-4-tools.png`, fullPage: true })
-await r.locator('.onb-rail button', { hasText: 'Parts' }).click()
+await r.locator('.onb-dots button[title="Parts"]').click()
 await wait(300)
 await r.locator('.onb-more').click()
 await wait(900)
-console.log('handbook link lands on:', await r.locator('.handbook-toc-list > li[data-on] > a').first().textContent())
-await r.screenshot({ path: `${SHOTS}/onb-5-handbook-parts.png` })
+console.log('handbook link closes the guide and lands on:', await r.locator('.handbook-toc-list > li[data-on] > a').first().textContent(), (await r.locator('.onb-panel').count()) === 0)
+await r.locator('.handbook-toc .handbook-toc-start button').click()
+await wait(300)
+await r.locator('.onb-dots button').last().click()
+await wait(300)
+await r.screenshot({ path: `${SHOTS}/onb-5-last.png` })
+await r.locator('.onb-finish .account-submit').click()
+await wait(600)
+console.log('last card opens the queue:', new URL(r.url()).pathname)
+await r.locator('.workbench .overlay-tabs button', { hasText: 'Handbook' }).click()
+await wait(500)
 await r.locator('.handbook-toc-list a', { hasText: '従: the old form picks the grouping' }).first().click()
 await wait(1200)
 console.log('contents now mark:', await r.locator('.handbook-toc-list ol li[data-on] a').first().textContent())
-await r.screenshot({ path: `${SHOTS}/onb-6-handbook-cases.png` })
 
-// A second visit goes to the queue as before.
+// A second visit does not open the guide.
 await r.goto(`${BASE}/review`, { waitUntil: 'networkidle' })
 await wait(800)
-console.log('second visit lands on:', new URL(r.url()).pathname)
+console.log('second visit: guide open?', (await r.locator('.onb-panel').count()) > 0)
 
 const phone = await reviewer({ width: 390, height: 844 })
 await phone.goto(`${BASE}/review`, { waitUntil: 'networkidle' })
 await wait(900)
-await phone.locator('.onb-nav .account-submit').click()
-await phone.locator('.onb-nav .account-submit').click()
-await phone.locator('.onb-nav .account-submit').click()
+for (let i = 0; i < 3; i++) await phone.locator('.onb-nav .account-submit').click()
 await wait(400)
-await phone.screenshot({ path: `${SHOTS}/onb-7-phone-parts.png`, fullPage: true })
+await phone.screenshot({ path: `${SHOTS}/onb-6-phone-parts.png` })
+await phone.locator('.onb-panel .account-x').click()
+await wait(300)
 await phone.locator('.workbench .overlay-tabs button', { hasText: 'Handbook' }).click()
 await wait(700)
-await phone.locator('.handbook-fold summary').click()
-await wait(300)
-await phone.screenshot({ path: `${SHOTS}/onb-8-phone-handbook.png` })
+await phone.screenshot({ path: `${SHOTS}/onb-7-phone-handbook.png` })
 
 console.log(errors.length ? 'ERRORS:\n' + errors.join('\n') : 'no page errors')
 await browser.close()
