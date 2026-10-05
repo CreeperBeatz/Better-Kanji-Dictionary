@@ -30,11 +30,21 @@ shaped until they are right, then accepted, or skipped.
 
 ## Parts (decomposition)
 
-Question: which parts does this character visibly contain, as written today?
+Question: which parts is this character built from, as written today?
 
 - **Each part should mean something in this character.** A data source that
   splits a shape into stroke groups (IDS often does) is describing the
   drawing, not the character. Reject it.
+- **Start from the simplest part, not a stroke.** A learner begins with the
+  smallest piece that is a kanji or a real part. If a character can't be
+  split into such pieces, it has no parts (it is atomic), and that is fine:
+  a small picture like 午 is learned as one piece.
+- **A lookalike is not a part.** 午 visibly contains 干, but 干 (a shield)
+  does nothing in 午 (a pestle). Ask what the piece does in this character:
+  meaning, sound, or a squashed form of its source kanji. If it does none of
+  these, it only looks alike. Lookalikes go in *Similar → looks*, where a
+  learner sees them side by side. Your own way of seeing a shape (決 as
+  person + ユ) goes in your associations, not in the parts.
 - **Bare strokes are parts only when they mean something.** Data sources love
   to chop real parts into strokes (口 → 丨一), so their stroke splits are
   refused outright. You can still use a stroke (一 丨 丶 丿 乙 亅 …) after a
@@ -215,3 +225,23 @@ another position* if you like, as 亻 has for 人).
 fragments, reject it. When the current part is a bent or squashed version of
 a real kanji, keep it if it still looks like it, and make sure the form link
 exists.
+
+### 午: a lookalike inside an atom
+
+*Seen 2026-10-05.* 午 had the part 干. IDS proposed 𠂉 + 十 (`⿱𠂉十`);
+KanjiVG and KRADFILE split it as 丿 + 干.
+
+- **The proposal is a stroke split.** 𠂉 is not a part of 午 the way it is
+  in 年 or 矢; IDS is cutting the drawing.
+- **The current part is a lookalike.** 午 is 丿 over 干 stroke for stroke,
+  but 午 is a pestle (it is the 午 in 杵 "pestle") and 干 is a shield. All
+  66 kanji built on 午 (許 缶 陶 謡 遥 御 …) would depend on "shield".
+- **Nothing smaller does a job in 午**, so it is atomic.
+
+**Decision:** clear the parts field (no parts, atomic) and save. The
+likeness to 干 千 牛 belongs in *Similar → looks*.
+
+**General lesson:** a character can visibly contain a kanji without being
+built from it. Strict order is about the parts a character is built from,
+not every shape it contains. When neither the proposal nor the current
+parts do a job in the character, make it atomic.

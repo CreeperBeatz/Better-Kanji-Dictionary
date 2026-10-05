@@ -52,10 +52,15 @@ kanji have this kind of noise is not known.
 - 段 has only 殳; the left half is missing.
 - 為 is only 灬.
 - 並 is only 二.
+- 午 → 干: a lookalike (午 is a pestle, 干 a shield); all 66 kanji on 午
+  inherit 干. 午 should be atomic (handbook case, 2026-10-05).
+- 牛 → 二: a stroke split; 牛 should most likely be atomic.
 
 Source: cjk-decomp / topokanji, through pipeline/decomp.py.
 **Status: in review.** 並 has an IDS proposal (䒑 业) in the queue. 五, 段 and
 為 were added to the queue as checks on 2026-10-05.
+午 has an IDS proposal (𠂉 十) in the queue, save it with the parts cleared
+(atomic). 牛 is not in the queue yet.
 
 ### D-005 · 龰 has no form link to 止
 *Found 2026-10-04.* 龰 (the bottom of 足 走 定) is 止 written at the bottom,
