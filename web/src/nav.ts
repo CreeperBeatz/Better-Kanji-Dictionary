@@ -20,10 +20,13 @@ import { leftReview, reviewTabInState } from './review/route'
 export type Level = 1 | 2 | 3 | 4 | 5
 
 export type Page =
-  | { kind: 'search'; q: string }
+  /**
+   * `words`: the search shows every word with that kanji, by the meaning it
+   * has in each, in place of its results -- a mode of the search, never a page
+   * beside it.
+   */
+  | { kind: 'search'; q: string; words?: string }
   | { kind: 'level'; level: Level }
-  /** Every word with a kanji, by the meaning it has in each. */
-  | { kind: 'words'; char: string }
   /**
    * `centre` is the character the graph was centred on when this one was
    * picked there, which it stays centred on while this page is up.
@@ -65,17 +68,14 @@ const HOME: Page = { kind: 'search', q: '' }
 const KANJI_PATH = /^\/kanji\/([^/]+)\/?$/
 const WORD_PATH = /^\/word\/(\d+)\/?$/
 const LEVEL_PATH = /^\/level\/([1-5])\/?$/
-const WORDS_PATH = /^\/words\/([^/]+)\/?$/
 
 export function samePage(a: Page, b: Page): boolean {
   if (a.kind !== b.kind) return false
   switch (a.kind) {
     case 'search':
-      return a.q === (b as typeof a).q
+      return a.q === (b as typeof a).q && a.words === (b as typeof a).words
     case 'level':
       return a.level === (b as typeof a).level
-    case 'words':
-      return a.char === (b as typeof a).char
     case 'kanji':
       return a.char === (b as typeof a).char
     case 'word':
@@ -91,14 +91,15 @@ function sameStack(a: Stack, b: Stack): boolean {
 export function urlOf(p: Page): string {
   const params = new URLSearchParams(window.location.search)
   params.delete('q')
+  params.delete('words')
   let path = '/'
   if (p.kind === 'kanji') path = `/kanji/${encodeURIComponent(p.char)}`
   else if (p.kind === 'word') path = `/word/${p.id}`
   else if (p.kind === 'level') path = `/level/${p.level}`
-  else if (p.kind === 'words') path = `/words/${encodeURIComponent(p.char)}`
-  else if (p.q) {
+  else if (p.q || p.words) {
     path = '/search'
-    params.set('q', p.q)
+    if (p.q) params.set('q', p.q)
+    if (p.words) params.set('words', p.words)
   }
   const query = params.toString()
   return path + (query ? `?${query}` : '') + window.location.hash
@@ -117,19 +118,16 @@ export function pageInUrl(): Page | null {
   }
   const w = path.match(WORD_PATH)
   if (w) return { kind: 'word', id: Number(w[1]) }
-  try {
-    const ws = path.match(WORDS_PATH)
-    if (ws) {
-      const c = decodeURIComponent(ws[1])
-      return [...c].length === 1 ? { kind: 'words', char: c } : null
-    }
-  } catch {
-    return null
-  }
   const l = path.match(LEVEL_PATH)
   if (l) return { kind: 'level', level: Number(l[1]) as Level }
   if (path === '/search' || path === '/search/') {
-    return { kind: 'search', q: new URLSearchParams(window.location.search).get('q') ?? '' }
+    const params = new URLSearchParams(window.location.search)
+    const words = params.get('words')
+    return {
+      kind: 'search',
+      q: params.get('q') ?? '',
+      ...(words && [...words].length === 1 ? { words } : {}),
+    }
   }
   return null
 }

@@ -4,7 +4,7 @@ import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } fro
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
-import { LevelPage, SearchPage, WordsWithPage } from './search/Results'
+import { LevelPage, SearchPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
@@ -46,7 +46,6 @@ const S = strings(
     back: 'Back (Backspace)',
     backTo: 'back to {page}',
     theWord: 'the word',
-    wordsWith: 'words with {char}',
     search: 'search',
     thisWord: 'this word',
     hideLegend: 'Hide the legend',
@@ -70,7 +69,6 @@ const S = strings(
     back: 'Назад (Backspace)',
     backTo: 'назад към {page}',
     theWord: 'думата',
-    wordsWith: 'думи с {char}',
     search: 'търсенето',
     thisWord: 'тази дума',
     hideLegend: 'Скрийте легендата',
@@ -362,7 +360,6 @@ function nameOf(p: Page, t: T) {
   if (p.kind === 'kanji') return <span className="back-glyph">{p.char}</span>
   if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? t('theWord')}</span>
   if (p.kind === 'level') return <>N{p.level}</>
-  if (p.kind === 'words') return <>{t('wordsWith', { char: p.char })}</>
   if (!p.q) return <>{t('search')}</>
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
@@ -383,7 +380,6 @@ function titleOf(p: Page): string {
   if (p.kind === 'kanji') return `${p.char} · ${TITLE}`
   if (p.kind === 'word' && p.word) return `${p.word.headword} · ${TITLE}`
   if (p.kind === 'level') return `N${p.level} · ${TITLE}`
-  if (p.kind === 'words') return `${p.char} · ${TITLE}`
   if (p.kind === 'search' && p.q) return `${p.q} · ${TITLE}`
   return TITLE
 }
@@ -788,20 +784,6 @@ export function App() {
     },
   )
 
-  // Every word with a kanji, by meaning: a page on top, from the kanji's page or
-  // from the search with the kanji open beside it, or marked in it on a phone.
-  const openWords = useStable((char: string) => {
-    setHovered(null)
-    leaveSearchTab()
-    keepSearch()
-    animateNav('forward', () => {
-      setSearchOver(null)
-      leaveStage('replace')
-      toDictionary()
-      push({ kind: 'words', char })
-    })
-  })
-
   // A word, like a character, goes to its graph -- of its kanji -- when it has one.
   const openWord = useStable(
     (w: Word) => {
@@ -886,12 +868,16 @@ export function App() {
     setView('map')
   }, [setView])
 
+  // The search under the pages, as it stands: its query, and its mode.
+  const searchBase: Page = root.kind === 'search' ? { ...root, q } : { kind: 'search', q }
+  const searchWords = root.kind === 'search' ? root.words : undefined
+
   // A pick from the search column replaces what is open beside it.
   function openOverSearch(p: Picked) {
     setHovered(null)
     if (p.kind === 'kanji' || HAN.test(p.word.headword)) setViewState('focus')
     rememberSearch(q)
-    openOver({ kind: 'search', q }, p)
+    openOver(searchBase, p)
   }
   const listKanji = useStable((char: string) => openOverSearch(kanjiPage(char)))
   const listWord = useStable((w: Word) => openOverSearch(wordPage(w)))
@@ -899,7 +885,7 @@ export function App() {
   const deselect = useStable(() => {
     setHovered(null)
     setFocus(null)
-    if (top.kind === 'kanji') reset({ kind: 'search', q })
+    if (top.kind === 'kanji') reset(searchBase)
   })
 
   // Typing is a search: the first key starts a new stack, the rest change it.
@@ -1037,18 +1023,18 @@ export function App() {
         return (
           <SearchPage
             q={p.q}
+            words={p.words}
             onKanji={openKanji}
             onWord={openWord}
             onSearch={type}
             asked={asked}
             onAsk={setAsked}
             onMap={browseMap}
+            onWordsWith={showWords}
           />
         )
       case 'level':
         return <LevelPage level={p.level} onKanji={openKanji} />
-      case 'words':
-        return <WordsWithPage key={p.char} char={p.char} onKanji={openKanji} onWord={openWord} />
       case 'word':
         return (
           <WordPanel
@@ -1071,7 +1057,7 @@ export function App() {
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
             onSignIn={signIn}
-            onWordsWith={openWords}
+            onWordsWith={showWords}
           />
         ) : null
       }
@@ -1188,6 +1174,21 @@ export function App() {
       openOverSearch(p)
     })
   }
+  // "All words with 日": the search itself turns to them, by meaning, and the
+  // card stays where it is -- beside it, or on a phone, a tab away. Null turns
+  // it back to its results.
+  const showWords = useStable((char: string | null) => {
+    const page: Page = char ? { kind: 'search', q, words: char } : { kind: 'search', q }
+    setHovered(null)
+    if (split || top.kind === 'search') return rebase(page)
+    if (mobile) {
+      rebase(page)
+      if (!searchShown) tapPhoneTab('search')
+      return
+    }
+    // One column and no tabs: the search is the page.
+    reset(page)
+  })
   const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
   const searchTabWord = useStable((w: Word) => openFromSearchTab(wordPage(w)))
   // The search page itself: a swipe from the left there raises the keyboard.
@@ -1607,7 +1608,8 @@ export function App() {
                 onAsk={setAsked}
                 onMap={browseMap}
                 open={openIn(picked)}
-                onWordsWith={openWords}
+                words={searchWords}
+                onWordsWith={showWords}
               />
             </div>
           </aside>
@@ -1663,7 +1665,8 @@ export function App() {
                   onAsk={setAsked}
                   onMap={browseMap}
                   open={openIn(top)}
-                  onWordsWith={openWords}
+                  words={searchWords}
+                  onWordsWith={showWords}
                 />
               )}
               {tab === 'dictionary' &&

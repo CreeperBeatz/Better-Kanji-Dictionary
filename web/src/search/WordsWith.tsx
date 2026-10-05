@@ -53,6 +53,7 @@ export function WordsWith({
   onKanji,
   row,
   tools,
+  back,
 }: {
   char: string
   common: boolean
@@ -61,6 +62,8 @@ export function WordsWith({
   row: (w: Word, extra?: ReactNode) => ReactNode
   /** The common-only control, as on a search. */
   tools: ReactNode
+  /** The way back to the search's results. */
+  back?: ReactNode
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -133,6 +136,7 @@ export function WordsWith({
 
   return (
     <section className="rail-section search-page words-with" aria-label={t('title', { char })} aria-busy={!data}>
+      {back}
       <header className="words-with-head">
         <button className="words-with-kanji" onClick={() => onKanji(char)} title={t('openKanji', { char })} lang="ja">
           {char}

@@ -52,6 +52,8 @@ const S = strings(
     notTranslated: 'not translated into Bulgarian yet',
     inN: 'in {n}',
     allWithKanji: 'See all words with {char}, by meaning',
+    backToResults: 'Back to the results for “{q}”',
+    backToSearch: 'Back to the search',
     resultsFor: 'Results for {q}',
     readAs: 'read as {r}',
     alternative: 'in Bulgarian: {q}',
@@ -96,6 +98,8 @@ const S = strings(
     notTranslated: 'още не е преведено на български',
     inN: 'в {n}',
     allWithKanji: 'Всички думи с {char}, по значение',
+    backToResults: 'Обратно към резултатите за „{q}“',
+    backToSearch: 'Обратно към търсенето',
     resultsFor: 'Резултати за {q}',
     readAs: 'прочетено като {r}',
     alternative: 'на български: {q}',
@@ -251,36 +255,6 @@ function CommonFilter({ on, onToggle, t }: { on: boolean; onToggle: () => void; 
   )
 }
 
-/** Every word with one kanji, by the meaning it has in each: a page of its own, with the search's rows. */
-export function WordsWithPage({
-  char,
-  onKanji,
-  onWord,
-  open,
-}: {
-  char: string
-  onKanji: (c: string) => void
-  onWord: (w: Word) => void
-  open?: number
-}) {
-  const t = S(useLang())
-  const [common, toggleCommon] = useCommon()
-  return (
-    <WordsWith
-      char={char}
-      common={common}
-      onKanji={onKanji}
-      tools={
-        <div className="search-tools">
-          <span />
-          <CommonFilter on={common} onToggle={toggleCommon} t={t} />
-        </div>
-      }
-      row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open === w.id} extra={extra} />}
-    />
-  )
-}
-
 /** JMdict nf buckets are 500 words wide: nf12 is the top 6,000. */
 export function newsRank(nf: number): string {
   const n = nf * 500
@@ -410,8 +384,10 @@ interface SearchProps {
   open?: { kanji?: string; word?: number }
   /** Shows the map of every character, from the empty search. */
   onMap: () => void
-  /** Opens every word with a kanji, by meaning: offered once a found kanji is open beside the list. */
-  onWordsWith?: (char: string) => void
+  /** The kanji whose words, by meaning, the search shows in place of its results. */
+  words?: string
+  /** Turns the search to every word with a kanji, by meaning, or (null) back to its results. */
+  onWordsWith?: (char: string | null) => void
 }
 
 /** How many words a result shows before the rest are added. */
@@ -420,7 +396,7 @@ const FIRST_ROWS = 10
 const PAGE = 30
 const MOST = 1000
 
-export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, onWordsWith }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -435,7 +411,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!term) {
+    if (!term || words) {
       setResult(null)
       setBusy(false)
       return
@@ -467,7 +443,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key, limit])
+  }, [term, lang, common, sort, order, key, limit, words])
 
   // The first screen of words is put up at once; the rest follow in a spare
   // moment, so a result never costs a keystroke more than a screenful.
@@ -486,6 +462,30 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
     localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
     setSort([next, nextOrder])
   }
+
+  // Every word with one kanji, by meaning: the search's own mode.
+  if (words)
+    return (
+      <WordsWith
+        char={words}
+        common={common}
+        onKanji={onKanji}
+        back={
+          onWordsWith && (
+            <button className="back-link words-with-back" onClick={() => onWordsWith(null)}>
+              <span aria-hidden>←</span> {term ? t('backToResults', { q: term }) : t('backToSearch')}
+            </button>
+          )
+        }
+        tools={
+          <div className="search-tools">
+            <span />
+            <CommonFilter on={common} onToggle={toggleCommon} t={t} />
+          </div>
+        }
+        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} />}
+      />
+    )
 
   if (!term) return <HomePage onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} open={open?.kanji} />
 
