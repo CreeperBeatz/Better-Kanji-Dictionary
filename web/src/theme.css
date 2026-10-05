@@ -1308,6 +1308,18 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0;
 }
 
+/* On a kanji's page, a few words under each of its meaning groups. */
+.vocab-group + .vocab-group {
+  margin-top: 10px;
+}
+
+.vocab-group h4 {
+  margin: 0 0 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
 .vocab-row {
   display: grid;
   grid-template-columns: auto auto 1fr auto;

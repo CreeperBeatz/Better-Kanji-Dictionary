@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
+import { api, type GraphResponse, type KanjiNode, type Word, type WordsWithResponse } from '../api'
+import { CATCH_ALL, groupLabel } from '../review/editors'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
@@ -30,7 +31,9 @@ const S = strings(
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
-    allWords: 'See all words with {char}, by meaning',
+    notInGroup: 'Not in a group',
+    catchAll: 'No meaning of its own',
+    allWords: 'See all words with {char} →',
     formOf: 'a form of {char}',
     openEntry: 'Open this entry',
     openReading: 'Open {word}, read {reading}',
@@ -56,7 +59,9 @@ const S = strings(
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
-    allWords: 'Всички думи с {char}, по значение',
+    notInGroup: 'Извън групите',
+    catchAll: 'Без собствено значение',
+    allWords: 'Всички думи с {char} →',
     formOf: 'форма на {char}',
     openEntry: 'Отворете тази статия',
     openReading: 'Отворете {word}, четено {reading}',
@@ -90,6 +95,8 @@ interface Props {
 
 // The page shows only the most common few; the rest are a search away, by meaning.
 const PAGE_WORDS = 8
+// Once the kanji's meanings are grouped: this many common words under each.
+const GROUP_WORDS = 5
 
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
@@ -138,6 +145,9 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
+  // Its common words by meaning group, once reviewers have grouped them; null
+  // while on the way, and with no groups (or no server) the plain list shows.
+  const [grouped, setGrouped] = useState<{ char: string; data: WordsWithResponse | null } | null>(null)
   const [byReading, setByReading] = useState<{ char: string; words: Record<string, Word> } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
@@ -150,6 +160,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
     api.wordsFor(data.focus.char).then(
       (d) => !stale && setWords(d.words),
       () => {},
+    )
+    const char = data.focus.char
+    api.wordsWith(char, true, 0, GROUP_WORDS).then(
+      (d) => !stale && setGrouped({ char, data: d }),
+      () => !stale && setGrouped({ char, data: null }),
     )
     return () => {
       stale = true
@@ -174,6 +189,22 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const isPreview = hovered !== null && hovered.char !== data.focus.char
 
   const formed = byReading?.char === n.char ? byReading.words : {}
+  // The words: by group once the kanji has groups, else the plain list -- decided
+  // once the groups have answered, so the list does not turn into groups under you.
+  const groupedData = grouped?.char === data.focus.char ? grouped.data : null
+  const vocabReady = grouped?.char === data.focus.char
+  const groups = (groupedData?.groups ?? []).filter((g) => g.words.length > 0)
+  const rest = groups.length ? (groupedData?.rest.words ?? []) : []
+  const vocabRow = (w: Word) => (
+    <li key={w.id}>
+      <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
+        <span className="vocab-word">{w.headword}</span>
+        <span className="vocab-reading">{w.reading}</span>
+        <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
+        <Valency word={w} />
+      </button>
+    </li>
+  )
   // Every reading, since the verbs tend to come last; one for a prefix or
   // suffix form and the plain one -- うえ, -うえ -- linked to whichever forms a word.
   // A kun reading that is a verb says whether it takes が or を: あ.く, あ.ける.
@@ -250,21 +281,27 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       {!isPreview && <StrokeOrder char={data.focus.char} strokes={data.strokes} />}
       {!isPreview && <FontStrip char={data.focus.char} />}
 
-      {!isPreview && words.length > 0 && (
+      {!isPreview && vocabReady && (groups.length > 0 || words.length > 0) && (
         <div className="vocab">
           <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
-          <ul>
-            {words.slice(0, PAGE_WORDS).map((w) => (
-              <li key={w.id}>
-                <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
-                  <span className="vocab-word">{w.headword}</span>
-                  <span className="vocab-reading">{w.reading}</span>
-                  <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
-                  <Valency word={w} />
-                </button>
-              </li>
-            ))}
-          </ul>
+          {groups.length > 0 ? (
+            <>
+              {groups.map((g) => (
+                <div key={g.id} className="vocab-group">
+                  <h4>{g.id === CATCH_ALL ? t('catchAll') : groupLabel(g.id, groupedData?.senses ?? null, lang)}</h4>
+                  <ul>{g.words.slice(0, GROUP_WORDS).map(vocabRow)}</ul>
+                </div>
+              ))}
+              {rest.length > 0 && (
+                <div className="vocab-group">
+                  <h4>{t('notInGroup')}</h4>
+                  <ul>{rest.slice(0, GROUP_WORDS).map(vocabRow)}</ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <ul>{words.slice(0, PAGE_WORDS).map(vocabRow)}</ul>
+          )}
           {onWordsWith && (
             <button className="clear vocab-all" onClick={() => onWordsWith(data.focus.char)}>
               {t('allWords', { char: data.focus.char })}
