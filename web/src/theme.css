@@ -7265,14 +7265,22 @@ button.review-part {
   margin-top: 8px;
 }
 
-/* A group's title folds it away. */
+/* A group's whole title bar folds it away. */
+.meaning-group h3:has(.meaning-group-toggle) {
+  display: block;
+  padding-bottom: 0;
+}
+
 .meaning-group-toggle {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
-  padding: 0;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 2px 4px 5px 0;
   background: none;
   border: 0;
+  border-radius: 3px;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -7281,12 +7289,32 @@ button.review-part {
 
 .meaning-group-toggle:hover {
   color: var(--paper);
+  background: var(--sumi-lift);
+}
+
+.meaning-group-toggle:focus-visible {
+  outline: 1px solid var(--ai);
 }
 
 .meaning-group-caret {
-  width: 1em;
-  font-size: 11px;
-  color: var(--muted);
+  flex: none;
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms var(--ease);
+}
+
+.meaning-group-toggle[aria-expanded='true'] .meaning-group-caret {
+  transform: rotate(90deg);
+}
+
+.meaning-group-label {
+  font-weight: 500;
 }
 
 .meaning-group[data-shut] h3 {
