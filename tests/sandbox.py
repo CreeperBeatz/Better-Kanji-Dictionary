@@ -38,7 +38,9 @@ def main() -> None:
     os.environ.pop("RESEND_API_KEY", None)
     os.environ.pop("APP_URL", None)
 
-    from server import auth, store
+    from harness import use_sandbox
+
+    from server import auth, offline
 
     real_avatars = auth.AVATARS
     auth.AUTH_DIR = tmp / "auth"
@@ -48,14 +50,7 @@ def main() -> None:
     if real_avatars.exists() and not auth.AVATARS.exists():
         shutil.copytree(real_avatars, auth.AVATARS)
 
-    assoc = tmp / "associations"
-    if not assoc.exists() and store.ASSOC_DIR.exists():
-        shutil.copytree(store.ASSOC_DIR, assoc)
-    store.ASSOC_DIR, store.STORE, store.IMAGES = assoc, assoc / "store.json", assoc / "images"
-
-    from server import offline, review
-
-    review.use_dir(tmp / "review")
+    use_sandbox(tmp, copy_notes=True)
     # A pack built from the sandbox's decompositions is the sandbox's own.
     offline.OUT = tmp / "offline"
     offline.CURRENT = offline.OUT / "current.json"

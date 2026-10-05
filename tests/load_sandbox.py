@@ -13,15 +13,14 @@ The real data/review and data/associations are not touched.
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+from harness import ROOT, use_sandbox
+
 sys.path.insert(0, str(ROOT / "pipeline"))
 
-from server import review, store  # noqa: E402
+from server import review  # noqa: E402
 
 
 def main() -> None:
@@ -29,11 +28,7 @@ def main() -> None:
     ap.add_argument("--dir", required=True)
     tmp = Path(ap.parse_args().dir)
     tmp.mkdir(parents=True, exist_ok=True)
-    assoc = tmp / "associations"
-    if not assoc.exists() and store.ASSOC_DIR.exists():
-        shutil.copytree(store.ASSOC_DIR, assoc)
-    store.ASSOC_DIR, store.STORE, store.IMAGES = assoc, assoc / "store.json", assoc / "images"
-    review.use_dir(tmp / "review")
+    use_sandbox(tmp, copy_notes=True)
     review._schedule_pack = lambda: None  # no offline pack rebuilds from a loader
 
     import form_drafts

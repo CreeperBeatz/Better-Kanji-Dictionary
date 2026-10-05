@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from harness import Checks, Server
+from harness import Checks, Server, use_sandbox
 
 from server import review, store
 from server.errors import AppError
@@ -24,9 +24,7 @@ check = Checks()
 
 def main() -> int:
     srv = Server(review_routes.router, decomp.router, graph.router)
-    a = srv.tmp / "associations"
-    store.ASSOC_DIR, store.STORE, store.IMAGES = a, a / "store.json", a / "images"
-    review.use_dir(srv.tmp / "review")
+    use_sandbox(srv.tmp)
     review.PACK_DELAY = 0.05
     flushed: list[int] = []
     review._flush_pack = lambda: flushed.append(1)  # the real one rebuilds the offline pack
@@ -108,7 +106,7 @@ def main() -> int:
 
         print("meanings: senses, then words, and reopening")
         senses = [{"id": "life", "en": "life, birth"}, {"id": "raw", "en": "raw, fresh"}]
-        check("one sense is too few", call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": senses[:1]})[0] == 400)
+        check("no senses is too few", call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": []})[0] == 400)
         _, wrow = call("GET", "/api/review/queue", "reviewer")
         from server.db import query
 

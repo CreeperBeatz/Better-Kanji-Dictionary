@@ -52,6 +52,13 @@ VISIBILITIES = ("private", "public")
 _lock = threading.Lock()
 
 
+def use_dir(path: Path) -> None:
+    """Keep the store somewhere else (tests/sandbox.py)."""
+    global ASSOC_DIR, STORE, IMAGES, _snapshot
+    ASSOC_DIR, STORE, IMAGES = path, path / "store.json", path / "images"
+    _snapshot = None
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Body, Depends, Query
 
 from .. import auth, review
 from ..errors import AppError
-from .auth import require_role, require_user
+from .auth import check_role, require_role, require_user
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
@@ -25,10 +25,6 @@ def queue(
     skipped: bool = Query(False, description="only the items you skipped"),
     me: dict = Depends(reviewer),
 ) -> dict:
-    if type is not None and type not in review.TYPES:
-        raise AppError(400, "bad_type", "unknown task type")
-    if origin is not None and origin not in review.ORIGINS:
-        raise AppError(400, "bad_origin", "origin is proposal or suggestion")
     return review.queue(me["id"], type, origin, limit, skipped)
 
 
@@ -46,7 +42,6 @@ def item(item_id: str, _: dict = Depends(reviewer)) -> dict:
 def decide(item_id: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
     return {"item": review.decide(item_id, payload.get("action", ""), me["id"], payload.get("value"), payload.get("reason"),
                                   payload.get("words"), payload.get("skip"), payload.get("labels"), payload.get("notes"))}
-
 
 
 @router.get("/progress")
@@ -69,15 +64,17 @@ def suggest(payload: dict = Body(...), me: dict = Depends(require_user)) -> dict
     words = payload.get("words") if type_ == "kanji_senses" else None
     if type_ == "en_report":
         # Reviewers too: the English is JMdict's, so a report is checked, never made live.
-        item = review.add_item(type_, subject, value, f"human:{me['id']}", "suggestion", reason or value,
-                               by=me["id"], priority=1.0)
-        return {"applied": False, "item": {"id": item["id"], "status": item["status"]}}
+        return _queued(me, type_, subject, value, reason or value)
     if auth.has_role(me, "reviewer"):
         return {"applied": True, "decision": review.direct(type_, subject, value, me["id"], reason, words)}
     if not (reason or "").strip():
         raise AppError(400, "suggest_reason", "say why, so a reviewer can check it")
+    return _queued(me, type_, subject, value, reason, {"moves": words} if words else None)
+
+
+def _queued(me: dict, type_: str, subject: str, value, reason, evidence: dict | None = None) -> dict:
     item = review.add_item(type_, subject, value, f"human:{me['id']}", "suggestion", reason,
-                           evidence={"moves": words} if words else None, by=me["id"], priority=1.0)
+                           evidence=evidence, by=me["id"], priority=1.0)
     return {"applied": False, "item": {"id": item["id"], "status": item["status"]}}
 
 
@@ -117,8 +114,8 @@ def history(
     limit: int = Query(100, ge=1, le=500),
     me: dict = Depends(reviewer),
 ) -> dict:
-    if (everyone or by) and not auth.has_role(me, "admin"):
-        raise AppError(403, "admin_only", "only the site's owner can do this")
+    if everyone or by:
+        check_role(me, "admin")
     return review.history(None if everyone or by else me["id"], limit, type, by, since, until)
 
 

@@ -27,35 +27,30 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
-import zipfile
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))
-DB = ROOT / "data" / "betterrtk.sqlite"
-DRAFTS = ROOT / "data" / "drafts" / "forms"
-IN, OUT = DRAFTS / "in", DRAFTS / "out"
-SOURCE = "ai:claude-sonnet"
-KINDS = ("positional", "old", "form_of", "looks_like", "none")
+
+import forms  # noqa: E402
+import proposals  # noqa: E402
+import review_sources as rs  # noqa: E402
+from proposals import ROOT, SOURCE, review  # noqa: E402
+
+from server import scope as review_scope  # noqa: E402
+from server.forms import real_meanings  # noqa: E402
+
+DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "forms")
 PARTS_PER_BATCH, PAIRS_PER_BATCH = 30, 80
 
 
 def _unihan_fields() -> dict[tuple[str, str], str]:
     out: dict[tuple[str, str], str] = {}
-    with zipfile.ZipFile(ROOT / "pipeline" / "data" / "Unihan.zip") as z:
-        for line in z.read("Unihan_Variants.txt").decode("utf-8").splitlines():
-            if not line.startswith("U+"):
-                continue
-            cp, field, value = line.split("\t")
-            a = chr(int(cp[2:], 16))
-            for v in value.split():
-                b = chr(int(v.split("<")[0][2:], 16))
-                out.setdefault((a, b), field)
-                out.setdefault((b, a), field + " (reverse)")
+    for a, field, others in forms.unihan_variants():
+        for b in others:
+            out.setdefault((a, b), field)
+            out.setdefault((b, a), field + " (reverse)")
     return out
 
 
@@ -65,25 +60,16 @@ def _write(path: Path, data: dict) -> None:
 
 
 def prepare() -> None:
-    import review_sources as rs
-    from server.forms import real_meanings
-
-    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    db = proposals.connect()
     children, nodes = rs.graph(db)
-    from server import review, scope as review_scope
-
     targets = review_scope.kanji(db)
     scope = rs.closure(children, targets)
     # Asked before: in another drafts folder, or a form link in the queue.
     asked_parts: set[str] = set()
     asked_pairs: set[tuple[str, str]] = set()
-    for folder in (ROOT / "data" / "drafts").glob("forms*"):
-        if folder == DRAFTS:
-            continue
-        for f in (folder / "in").glob("F-*.json"):
-            b = json.loads(f.read_text(encoding="utf-8"))
-            asked_parts |= {p["part"] for p in b["parts"]}
-            asked_pairs |= {tuple(p["pair"]) for p in b["pairs"]}
+    for b in proposals.asked_before("forms", "F-*.json", DRAFTS):
+        asked_parts |= {p["part"] for p in b["parts"]}
+        asked_pairs |= {tuple(p["pair"]) for p in b["pairs"]}
     for i in review._read()["items"].values():
         if i["type"] == "form_link":
             x, _, y = i["subject"].partition("|")
@@ -127,24 +113,14 @@ def prepare() -> None:
 
 def read(only: str | None = None) -> tuple[list[dict], list[str]]:
     good, problems = [], []
-    for inp in sorted(IN.glob(f"{only or 'F-*'}.json")):
-        batch = json.loads(inp.read_text(encoding="utf-8"))
-        out_path = OUT / inp.name
-        if not out_path.exists():
-            problems.append(f"{inp.stem}: no output")
-            continue
-        try:
-            out = json.loads(out_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            problems.append(f"{inp.stem}: not JSON ({e})")
-            continue
+    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or 'F-*'}.json", problems):
         parts = {p["part"] for p in batch["parts"]}
         pairs = {f"{p['pair'][0]}|{p['pair'][1]}" for p in batch["pairs"]}
         seen_pairs, seen_form_of = set(), set()
         for link in out.get("links", []):
             subj, kind = str(link.get("subject", "")), link.get("kind")
             x, _, y = subj.partition("|")
-            ok = len(x) == 1 and len(y) == 1 and x != y and kind in KINDS
+            ok = len(x) == 1 and len(y) == 1 and x != y and kind in review.FORM_KINDS
             ok = ok and (subj in pairs or (x in parts and kind in ("form_of", "looks_like")))
             try:
                 conf = float(link.get("confidence"))
@@ -182,10 +158,7 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     print(f"\nwould load {len(keep)} form_link proposals ({len(good) - len(keep)} 'none' dropped)")
     if dry_run:
         return
-    from server import review
-
-    if review_dir:
-        review.use_dir(review_dir)
+    proposals.use_review_dir(review_dir)
     added, refused = review.add_items([
         {"type": "form_link", "subject": l["subject"], "proposed": {"kind": l["kind"], "note": l["note"]},
          "source": SOURCE, "reason": l["note"], "evidence": {"confidence": l["confidence"], "batch": l["batch"]},
@@ -197,20 +170,16 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
 
 
 def main() -> int:
+    global DRAFTS, IN, OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--drafts", type=Path, help="keep these drafts in another folder (default data/drafts/forms)")
+    proposals.drafts_arg(ap, "data/drafts/forms")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("prepare")
     c = sub.add_parser("check")
     c.add_argument("--batch")
-    l = sub.add_parser("load")
-    l.add_argument("--dry-run", action="store_true")
-    l.add_argument("--review-dir", type=Path)
+    proposals.load_parser(sub, "load")
     args = ap.parse_args()
-    if args.drafts:
-        global DRAFTS, IN, OUT
-        DRAFTS = args.drafts if args.drafts.is_absolute() else ROOT / args.drafts
-        IN, OUT = DRAFTS / "in", DRAFTS / "out"
+    DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
         prepare()
     elif args.cmd == "check":

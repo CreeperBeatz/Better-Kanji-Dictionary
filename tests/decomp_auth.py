@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import sys
 
-from harness import Checks, Server
+from harness import Checks, Server, use_sandbox
 
 from server import review, store
 from server.routes import decomp
@@ -25,9 +25,7 @@ check = Checks()
 
 def main() -> int:
     srv = Server(decomp.router)
-    a = srv.tmp / "associations"
-    store.ASSOC_DIR, store.STORE, store.IMAGES = a, a / "store.json", a / "images"
-    review.use_dir(srv.tmp / "review")
+    use_sandbox(srv.tmp)
     review._schedule_pack = lambda: None
     call = srv.call
     put = lambda who=None: call("PUT", "/api/decomp/%E9%9D%92", who, {"components": ["生", "月"]})  # 青

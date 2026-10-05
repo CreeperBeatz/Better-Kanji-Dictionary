@@ -48,13 +48,15 @@ import zipfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))
 DATA = Path(__file__).parent / "data"
-DB = ROOT / "data" / "betterrtk.sqlite"
 
+import proposals  # noqa: E402
 from decomp import ALIASES, BARE_STROKES, is_stroke  # noqa: E402
+from proposals import ROOT, review  # noqa: E402
+
+from server import scope as review_scope  # noqa: E402
+from server import store  # noqa: E402
 
 IDC = set(chr(c) for c in range(0x2FF0, 0x3000)) | {"㇯"}
 ARITY = {c: 3 if c in "⿲⿳" else 2 for c in IDC}
@@ -174,8 +176,6 @@ def kradfile() -> dict[str, list[str]]:
 
 def graph(db: sqlite3.Connection) -> tuple[dict[str, list[str]], set[str]]:
     """Direct parts of every node, with the live overrides; and every node there is."""
-    from server import store
-
     children: dict[str, list[str]] = defaultdict(list)
     for p, c in db.execute("SELECT parent, child FROM edge"):
         children[p].append(c)
@@ -256,15 +256,11 @@ def _ours(parts: list[str], nodes: set[str], eq: dict[str, str], prefer: dict[st
 
 def _known() -> set[tuple[str, str]]:
     """(type, subject) of every item in the review store, open or decided."""
-    from server import review
-
     return {(i["type"], i["subject"]) for i in review._read()["items"].values()}
 
 
 def collect() -> dict:
-    from server import scope as review_scope
-
-    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    db = proposals.connect()
     targets = review_scope.kanji(db)
     known = _known()
     children, nodes = graph(db)
@@ -372,8 +368,6 @@ def count() -> dict:
 
 
 def load(review_dir: Path | None) -> None:
-    from server import review, store
-
     if review_dir:
         # An auto-accepted split is written to the associations store, which
         # use_dir does not move: loading into another review folder against
@@ -381,7 +375,7 @@ def load(review_dir: Path | None) -> None:
         # it. Point the store elsewhere first (tests/load_sandbox.py does).
         if store.ASSOC_DIR.resolve() == (ROOT / "data" / "associations").resolve():
             raise SystemExit("--review-dir with the real associations store: use tests/load_sandbox.py")
-        review.use_dir(review_dir)
+    proposals.use_review_dir(review_dir)
     c = collect()
     n = Counter()
     for d in c["decomposition"]:

@@ -9,23 +9,18 @@ running sandbox picks the items up on its next read.
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+from harness import use_sandbox
 
-from server import review, store  # noqa: E402
-from server.db import query  # noqa: E402
+from server import review
+from server.db import query
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", required=True)
-    tmp = Path(ap.parse_args().dir)
-    review.use_dir(tmp / "review")
-    a = tmp / "associations"
-    store.ASSOC_DIR, store.STORE, store.IMAGES = a, a / "store.json", a / "images"
+    use_sandbox(Path(ap.parse_args().dir))
 
     review.add_item("form_link", "罒|四", {"kind": "looks_like", "note": "looks like 四; it is 网, a net"},
                     "ai:sample", reason="learners often read it as four", priority=2)

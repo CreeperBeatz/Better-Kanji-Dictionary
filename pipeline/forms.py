@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import zipfile
+from collections.abc import Iterator
 from pathlib import Path
 
 DATA = Path(__file__).parent / "data"
@@ -85,18 +86,25 @@ OLD: dict[str, tuple[str, str | None]] = {
 }
 
 
-def unihan_old() -> dict[str, list[str]]:
-    out: dict[str, list[str]] = {}
+def unihan_variants() -> Iterator[tuple[str, str, list[str]]]:
+    """(char, field, its variants) for each line of Unihan_Variants.txt."""
     with zipfile.ZipFile(DATA / "Unihan.zip") as z:
         for line in z.read("Unihan_Variants.txt").decode("utf-8").splitlines():
             if not line.startswith("U+"):
                 continue
             cp, field, value = line.split("\t")
-            if field != "kJapaneseOldVariant":
-                continue
-            a = chr(int(cp[2:], 16))
-            out[a] = [chr(int(v.split("<")[0][2:], 16)) for v in value.split()]
-    return out
+            yield chr(int(cp[2:], 16)), field, [chr(int(v.split("<")[0][2:], 16)) for v in value.split()]
+
+
+def unihan_old() -> dict[str, list[str]]:
+    return {a: olds for a, field, olds in unihan_variants() if field == "kJapaneseOldVariant"}
+
+
+def _form_of(out: dict, part: str, whole: str, value: tuple[str, str | None]) -> None:
+    """A bound part is a form of one thing: a new form_of takes the place of any other."""
+    for key in [k for k in out if k[0] == part and k[2] == "form_of"]:
+        del out[key]
+    out[(part, whole, "form_of")] = value
 
 
 def rows(joyo: set[str]) -> list[tuple[str, str, str, str, str | None]]:
@@ -115,9 +123,7 @@ def rows(joyo: set[str]) -> list[tuple[str, str, str, str, str | None]]:
         if len(heads) == 1 and part != heads[0] and part not in joyo:
             out[(part, heads[0], "form_of")] = ("curated", None)
     for part, (whole, note) in FORM_OF.items():
-        for key in [k for k in out if k[0] == part and k[2] == "form_of"]:
-            del out[key]
-        out[(part, whole, "form_of")] = ("curated", note)
+        _form_of(out, part, whole, ("curated", note))
     for part, like, note in LOOKS_LIKE:
         out[(part, like, "looks_like")] = ("curated", note)
 
@@ -133,10 +139,11 @@ def rows(joyo: set[str]) -> list[tuple[str, str, str, str, str | None]]:
         for r in ov.get("removed", []):
             out.pop((r["char"], r["other"], r["kind"]), None)
         for r in ov.get("links", []):
+            value = (f"review:{r['decision']}", r.get("note"))
             if r["kind"] == "form_of":
-                for key in [k for k in out if k[0] == r["char"] and k[2] == "form_of"]:
-                    del out[key]
-            out[(r["char"], r["other"], r["kind"])] = (f"review:{r['decision']}", r.get("note"))
+                _form_of(out, r["char"], r["other"], value)
+            else:
+                out[(r["char"], r["other"], r["kind"])] = value
 
     return [(a, b, kind, src, note) for (a, b, kind), (src, note) in sorted(out.items())]
 

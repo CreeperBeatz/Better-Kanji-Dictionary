@@ -23,25 +23,21 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
 from collections import defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
-DB = ROOT / "data" / "betterrtk.sqlite"
-DRAFTS = ROOT / "data" / "drafts" / "meanings-prune"
-IN, OUT = DRAFTS / "in", DRAFTS / "out"
-SOURCE = "ai:claude-sonnet"
-CATCH_ALL = "catch-all"
+sys.path.insert(0, str(Path(__file__).parent))
+
+import proposals  # noqa: E402
+from proposals import CATCH_ALL, ROOT, SOURCE, review, sense_id, short_id  # noqa: E402
+
+DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "meanings-prune")
 BATCH = 10
 SHOWN = 25  # words shown per group: enough to judge it, the rest counted
 
 
 def _candidates() -> list[dict]:
-    from server import review
-
     data = review._read()
     decided = {d["subject"] for d in data["decisions"] if d["type"] == "kanji_senses"}
     words: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(list))
@@ -66,7 +62,7 @@ def _candidates() -> list[dict]:
 
 def prepare() -> None:
     cands = _candidates()
-    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    db = proposals.connect()
     head = {r[0]: (r[1], r[2], (r[3] or "").split(";")[0][:60]) for r in db.execute(
         "SELECT w.id, w.headword, w.reading, (SELECT s.gloss FROM sense s WHERE s.word_id = w.id ORDER BY s.ord LIMIT 1) FROM word w")}
     meanings = {c: json.loads(m or "[]") for c, m in db.execute("SELECT char, meanings FROM kanji")}
@@ -80,7 +76,7 @@ def prepare() -> None:
             for g in k["groups"]:
                 ws = k["words"][g["id"]]
                 groups.append({
-                    "id": g["id"].split(".", 1)[1], "en": g["en"], **({"note": g["note"]} if g.get("note") else {}),
+                    "id": short_id(g["id"]), "en": g["en"], **({"note": g["note"]} if g.get("note") else {}),
                     "count": len(ws),
                     "words": [[w, *head[w]] for w in ws[:SHOWN] if w in head],
                 })
@@ -93,17 +89,8 @@ def prepare() -> None:
 def read(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
     """Each kanji's verdict: the groups kept (ids, maybe relabelled) and where the dropped ones' words go."""
     good, problems = {}, []
-    for inp in sorted(IN.glob(f"{only or 'P-*'}.json")):
-        batch = json.loads(inp.read_text(encoding="utf-8"))
-        path = OUT / inp.name
-        if not path.exists():
-            problems.append(f"{inp.stem}: no output")
-            continue
-        try:
-            got = json.loads(path.read_text(encoding="utf-8")).get("kanji") or {}
-        except json.JSONDecodeError as e:
-            problems.append(f"{inp.stem}: not JSON ({e})")
-            continue
+    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or 'P-*'}.json", problems):
+        got = out.get("kanji") or {}
         for k in batch["kanji"]:
             c, v = k["char"], got.get(k["char"])
             ids = {g["id"] for g in k["groups"]}
@@ -145,8 +132,6 @@ def check(only: str | None = None) -> dict:
 
 
 def apply(dry_run: bool) -> None:
-    from server import review
-
     good = check()
     cands = {k["char"] for k in _candidates()}
     with review._change() as data:
@@ -158,19 +143,17 @@ def apply(dry_run: bool) -> None:
             v = good[c]
             if not v["dropped"] and not v["labels"]:
                 continue
-            short = lambda gid: gid.split(".", 1)[1]  # noqa: E731
-            kept = [{**g, **({"en": v["labels"][short(g["id"])]} if short(g["id"]) in v["labels"] else {})}
-                    for g in item["proposed"] if short(g["id"]) in v["keep"]]
+            kept = [{**g, **({"en": v["labels"][short_id(g["id"])]} if short_id(g["id"]) in v["labels"] else {})}
+                    for g in item["proposed"] if short_id(g["id"]) in v["keep"]]
             value = review.validate("kanji_senses", c, kept, data, pending_ok=True, machine=True)
             dropped = {f"{c}.{g}" for g in v["dropped"]}
-            target = lambda g: g if g == CATCH_ALL else f"{c}.{g}"  # noqa: E731
-            rest = target(v["rest"]) if v.get("rest") else None
+            rest = sense_id(c, v["rest"]) if v.get("rest") else None
             for w in list(data["items"].values()):
                 if w["type"] != "word_sense" or w["status"] != "open" or not w["subject"].startswith(f"{c}|"):
                     continue
                 if w["proposed"] in dropped:
                     wid = int(w["subject"].split("|")[1])
-                    new = target(v["moves"][wid]) if wid in v["moves"] else rest
+                    new = sense_id(c, v["moves"][wid]) if wid in v["moves"] else rest
                     if new and not dry_run:
                         review._update(data, w, proposed=new)
                     words += 1
@@ -188,8 +171,7 @@ def main() -> int:
     sub.add_parser("prepare")
     c = sub.add_parser("check")
     c.add_argument("--batch")
-    a = sub.add_parser("apply")
-    a.add_argument("--dry-run", action="store_true")
+    proposals.load_parser(sub, "apply", review_dir=False)
     args = ap.parse_args()
     if args.cmd == "prepare":
         prepare()

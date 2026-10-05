@@ -35,17 +35,13 @@ def require_user(authorization: str | None = Header(None)) -> dict:
     return user
 
 
-def is_admin(user: dict | None) -> bool:
-    """The site's owner, named by BETTERRTK_OWNER_EMAIL. Unset means nobody:
-    unlike claiming legacy notes, this never falls back to whoever came first."""
-    return auth.role_of(user) == "admin" if user else False
-
-
-def require_admin(authorization: str | None = Header(None)) -> dict:
-    user = require_user(authorization)
-    if not is_admin(user):
-        raise AppError(403, "admin_only", "only the site's owner can do this")
-    return user
+def check_role(user: dict, role: str) -> None:
+    """403 unless `user` has `role` or one above it. Admin is the site's owner,
+    named by BETTERRTK_OWNER_EMAIL; unset means nobody (server/auth.py)."""
+    if not auth.has_role(user, role):
+        if role == "admin":
+            raise AppError(403, "admin_only", "only the site's owner can do this")
+        raise AppError(403, "reviewers_only", "only reviewers can do this")
 
 
 def require_role(role: str):
@@ -54,10 +50,7 @@ def require_role(role: str):
 
     def dep(authorization: str | None = Header(None)) -> dict:
         user = require_user(authorization)
-        if not auth.has_role(user, role):
-            if role == "admin":
-                raise AppError(403, "admin_only", "only the site's owner can do this")
-            raise AppError(403, "reviewers_only", "only reviewers can do this")
+        check_role(user, role)
         return user
 
     return dep

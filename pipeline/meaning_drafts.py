@@ -49,29 +49,27 @@ from __future__ import annotations
 import argparse
 import json
 import random
-import re
 import sqlite3
 import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(Path(__file__).parent))
+
+import proposals  # noqa: E402
+from proposals import CATCH_ALL, ROOT, SOURCE, review, sense_id, short_id  # noqa: E402
+
 from server import scope  # noqa: E402
-DB = ROOT / "data" / "betterrtk.sqlite"
-DRAFTS = ROOT / "data" / "drafts" / "meanings"
-IN, OUT = DRAFTS / "in", DRAFTS / "out"
+
+DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "meanings")
 
 BATCH_WORDS = 400  # words per batch: one kanji with more gets a batch of its own
 BATCH_KANJI = 20  # and at most this many kanji, each a set of groups to draft
-SOURCE = "ai:claude-sonnet"
-SENSE_ID = re.compile(r"^[a-z0-9-]{1,24}$")
-CATCH_ALL = "catch-all"
-HIGH = 0.8  # a confidence this high, from both runs, may let the §6 rule accept a word
+HIGH = review.AUTO_CONFIDENCE  # a confidence this high, from both runs, may let the §6 rule accept a word
 
 
 def _db() -> sqlite3.Connection:
-    db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+    db = proposals.connect()
     db.row_factory = sqlite3.Row
     return db
 
@@ -110,14 +108,9 @@ def _kanji(db: sqlite3.Connection, levels: list[int], chars: str | None = None) 
 
 def _unasked() -> list[str]:
     """The kanji in scope that no meanings task or earlier draft covers."""
-    from server import review
-
-    asked = {i["subject"] for i in review._read()["items"].values() if i["type"] == "kanji_senses"}
-    for folder in (ROOT / "data" / "drafts").glob("meanings*"):
-        if folder == DRAFTS:
-            continue
-        for f in (folder / "in").glob("A-*.json"):
-            asked |= {k["char"] for k in json.loads(f.read_text(encoding="utf-8"))["kanji"]}
+    asked = review.subjects("kanji_senses")
+    for b in proposals.asked_before("meanings", "A-*.json", DRAFTS):
+        asked |= {k["char"] for k in b["kanji"]}
     with _db() as db:
         return [c for c in scope.kanji(db) if c not in asked]
 
@@ -178,7 +171,7 @@ def _valid_senses(senses) -> list[dict] | None:
         if not isinstance(s, dict):
             return None
         sid, en = str(s.get("id", "")).strip().lower(), (s.get("en") or "").strip()
-        if not SENSE_ID.match(sid) or sid == CATCH_ALL or sid in ids or not en or len(en.split()) > 4 or len(en) > 40:
+        if not review.SENSE_ID.match(sid) or sid == CATCH_ALL or sid in ids or not en or len(en.split()) > 4 or len(en) > 40:
             return None
         ids.add(sid)
         out.append({"id": sid, "en": en, "bg": (s.get("bg") or "").strip()[:40] or None, "note": (s.get("note") or "").strip()[:200] or None})
@@ -203,10 +196,8 @@ def _valid_words(words, wanted: set[int], ids: set[str]) -> dict[int, tuple[str,
     return out if set(out) == wanted else None
 
 
-def read_run(run: str, senses_from: dict[str, list[dict]] | None = None, only: str | None = None) -> tuple[dict[str, dict], list[str]]:
-    """Every valid kanji of a run's outputs (or one batch's), and what was wrong with the rest."""
-    good: dict[str, dict] = {}
-    problems: list[str] = []
+def _outputs(run: str, only: str | None, problems: list[str]):
+    """Each of a run's input batches (or one batch) with the kanji its subagent wrote."""
     for inp in sorted(IN.glob(f"{run}-{only or '*'}.json")):
         batch = _load_json(inp)
         out = _load_json(OUT / inp.name) if (OUT / inp.name).exists() else None
@@ -215,7 +206,14 @@ def read_run(run: str, senses_from: dict[str, list[dict]] | None = None, only: s
         if out is None:
             problems.append(f"{inp.stem}: no output")
             continue
-        got = out.get("kanji") or {}
+        yield inp, batch, out.get("kanji") or {}
+
+
+def read_run(run: str, senses_from: dict[str, list[dict]] | None = None, only: str | None = None) -> tuple[dict[str, dict], list[str]]:
+    """Every valid kanji of a run's outputs (or one batch's), and what was wrong with the rest."""
+    good: dict[str, dict] = {}
+    problems: list[str] = []
+    for inp, batch, got in _outputs(run, only, problems):
         for k in batch["kanji"]:
             c = k["char"]
             entry = got.get(c)
@@ -301,29 +299,30 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     print(f"\nwould load {n_senses} kanji_senses and {n_words} word_sense proposals (source {SOURCE})")
     if dry_run:
         return
-    from server import review
-
-    if review_dir:
-        review.use_dir(review_dir)
+    proposals.use_review_dir(review_dir)
     rows = []
     for c, v in a.items():
         f = freq.get(c) or 3000
         rows.append({"type": "kanji_senses", "subject": c, "proposed": v["senses"], "source": SOURCE,
                      "priority": round(10 - f / 500, 2), "reason": "drafted from its common words"})
-        for wid, (sense, conf) in v["words"].items():
-            runs = [{"run": "A", "sense": f"{c}.{sense}" if sense != CATCH_ALL else sense, "confidence": conf}]
-            if c in b and wid in b[c]["words"]:
-                sb, cb = b[c]["words"][wid]
-                runs.append({"run": "B", "sense": f"{c}.{sb}" if sb != CATCH_ALL else sb, "confidence": cb})
-            rows.append({
-                "type": "word_sense", "subject": f"{c}|{wid}", "proposed": runs[0]["sense"], "source": SOURCE,
-                "evidence": {"runs": runs, "confidence": min(r["confidence"] for r in runs),
-                             "agree": len(runs) == 2 and runs[0]["sense"] == runs[1]["sense"]},
-                "priority": round(5 - (nf.get(wid) or 48) / 10, 2),
-            })
+        second = b[c]["words"] if c in b else {}
+        rows += [_word_row(c, wid, pick, second.get(wid), nf) for wid, pick in v["words"].items()]
     added, refused = review.add_items(rows)
     print(f"added {added}, refused {refused}")
     print("loaded:", review.counts()["items"])
+
+
+def _word_row(c: str, wid: int, first: tuple[str, float], second: tuple[str, float] | None, nf: dict[int, int]) -> dict:
+    """A word's placement as a proposal: the first run's pick, with the second's, when there is one, as evidence."""
+    runs = [{"run": "A", "sense": sense_id(c, first[0]), "confidence": first[1]}]
+    if second:
+        runs.append({"run": "B", "sense": sense_id(c, second[0]), "confidence": second[1]})
+    return {
+        "type": "word_sense", "subject": f"{c}|{wid}", "proposed": runs[0]["sense"], "source": SOURCE,
+        "evidence": {"runs": runs, "confidence": min(r["confidence"] for r in runs),
+                     "agree": len(runs) == 2 and runs[0]["sense"] == runs[1]["sense"]},
+        "priority": round(5 - (nf.get(wid) or 48) / 10, 2),
+    }
 
 
 # ---------------------------------------------------------------- kanji with no word in scope
@@ -366,8 +365,6 @@ def prepare_thin(wiktionary: Path) -> None:
 def replace(dry_run: bool) -> None:
     """Put this folder's groups in place of each kanji's open meanings draft,
     where no one has touched it: still open, drafted by the model, no decision."""
-    from server import review
-
     a, problems = read_run("A")
     print(f"run A: {len(a)} kanji valid, {len(problems)} problems")
     for p in problems[:20]:
@@ -407,8 +404,6 @@ def _groups_now(data: dict) -> dict[str, list[dict]]:
 
 
 def prepare_extra() -> None:
-    from server import review
-
     data = review._read()
     groups = _groups_now(data)
     placed = {i["subject"] for i in data["items"].values() if i["type"] == "word_sense"} | set(data["live"]["word_sense"])
@@ -420,7 +415,7 @@ def prepare_extra() -> None:
         words = [w for w in k["words"] if f"{k['char']}|{w[0]}" not in placed and k["char"] in w[1]]
         if not words:
             continue
-        senses = [{"id": g["id"].split(".", 1)[1], "en": g["en"], **({"note": g["note"]} if g.get("note") else {})} for g in groups[k["char"]]]
+        senses = [{"id": short_id(g["id"]), "en": g["en"], **({"note": g["note"]} if g.get("note") else {})} for g in groups[k["char"]]]
         k.pop("freq", None)
         todo.append({**k, "words": words, "senses": senses})
     batches = _batches(todo)
@@ -434,15 +429,7 @@ def prepare_extra() -> None:
 def _read_placing(run: str, only: str | None = None) -> tuple[dict[str, dict[int, tuple[str, float]]], list[str]]:
     good: dict[str, dict[int, tuple[str, float]]] = {}
     problems: list[str] = []
-    for inp in sorted(IN.glob(f"{run}-{only or '*'}.json")):
-        batch = _load_json(inp)
-        out = _load_json(OUT / inp.name) if (OUT / inp.name).exists() else None
-        if batch is None:
-            continue
-        if out is None:
-            problems.append(f"{inp.stem}: no output")
-            continue
-        got = out.get("kanji") or {}
+    for inp, batch, got in _outputs(run, only, problems):
         for k in batch["kanji"]:
             entry = got.get(k["char"])
             words = _valid_words(entry.get("words") if isinstance(entry, dict) else None,
@@ -475,34 +462,19 @@ def load_extra(dry_run: bool, review_dir: Path | None) -> None:
     x, y = check_extra()
     with _db() as db:
         nf = {r["id"]: r["nf"] for r in db.execute(f"SELECT w.id, w.nf FROM word w WHERE {scope.WORDS}")}
-    full = lambda c, s: f"{c}.{s}" if s != CATCH_ALL else s  # noqa: E731
-    rows = []
-    for c, v in x.items():
-        for wid, (sense, conf) in v.items():
-            runs = [{"run": "A", "sense": full(c, sense), "confidence": conf}]
-            if c in y and wid in y[c]:
-                sy, cy = y[c][wid]
-                runs.append({"run": "B", "sense": full(c, sy), "confidence": cy})
-            rows.append({
-                "type": "word_sense", "subject": f"{c}|{wid}", "proposed": runs[0]["sense"], "source": SOURCE,
-                "evidence": {"runs": runs, "confidence": min(r["confidence"] for r in runs),
-                             "agree": len(runs) == 2 and runs[0]["sense"] == runs[1]["sense"]},
-                "priority": round(5 - (nf.get(wid) or 48) / 10, 2),
-            })
+    rows = [_word_row(c, wid, pick, y.get(c, {}).get(wid), nf) for c, v in x.items() for wid, pick in v.items()]
     print(f"\nwould load {len(rows)} word_sense proposals (source {SOURCE})")
     if dry_run:
         return
-    from server import review
-
-    if review_dir:
-        review.use_dir(review_dir)
+    proposals.use_review_dir(review_dir)
     added, refused = review.add_items(rows)
     print(f"added {added}, refused {refused}")
 
 
 def main() -> int:
+    global DRAFTS, IN, OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--drafts", type=Path, help="keep these drafts in another folder (default data/drafts/meanings)")
+    proposals.drafts_arg(ap, "data/drafts/meanings")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--levels", default="5,4,3,2")
@@ -513,24 +485,16 @@ def main() -> int:
     pb.add_argument("--batch", help="just this batch's number, e.g. 007")
     ck = sub.add_parser("check")
     ck.add_argument("--batch", help="just this batch's number, e.g. 007")
-    l = sub.add_parser("load")
-    l.add_argument("--dry-run", action="store_true")
-    l.add_argument("--review-dir", type=Path)
+    proposals.load_parser(sub, "load")
     pt = sub.add_parser("prepare-thin")
     pt.add_argument("--wiktionary", type=Path, required=True, help="the kanji's Wiktionary entries, as gathered from the dump")
-    rp = sub.add_parser("replace")
-    rp.add_argument("--dry-run", action="store_true")
+    proposals.load_parser(sub, "replace", review_dir=False)
     sub.add_parser("prepare-extra")
     ce = sub.add_parser("check-extra")
     ce.add_argument("--batch", help="just this batch's number, e.g. 007")
-    le = sub.add_parser("load-extra")
-    le.add_argument("--dry-run", action="store_true")
-    le.add_argument("--review-dir", type=Path)
+    proposals.load_parser(sub, "load-extra")
     args = ap.parse_args()
-    if args.drafts:
-        global DRAFTS, IN, OUT
-        DRAFTS = args.drafts if args.drafts.is_absolute() else ROOT / args.drafts
-        IN, OUT = DRAFTS / "in", DRAFTS / "out"
+    DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
         chars = "".join(_unasked()) if args.scope else args.chars
         prepare([int(x) for x in args.levels.split(",")], args.sample, chars)

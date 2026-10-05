@@ -48,9 +48,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import auth, bg_overlay, forms, store
+from . import auth, bg_overlay, forms, scope, store
 from .db import query, query_one
 from .errors import AppError
+from .routes.graph import children_of, parents_of
+from .routes.search import _fetch_words
 
 ROOT = Path(__file__).parent.parent
 REVIEW_DIR = ROOT / "data" / "review"
@@ -70,8 +72,6 @@ TYPES = ("decomposition", "form_link", "kanji_senses", "word_sense", "bg", "en_r
 # to be fixed at the source (Dani, 2026-10-05).
 EN_REPORT_MAX = 1000
 ORIGINS = ("proposal", "suggestion")
-# open: waiting. The rest say how it was closed.
-STATUSES = ("open", "auto-accepted", "accepted", "edited", "rejected")
 ACTIONS = ("accept", "edit", "reject", "skip")
 CATCH_ALL = "catch-all"
 FORM_KINDS = (*forms.KINDS, "none")
@@ -108,7 +108,6 @@ def _now() -> str:
 
 def _empty() -> dict:
     return {
-        "version": 1,
         "items": {},
         "decisions": [],
         "live": {"form_link": {}, "kanji_senses": {}, "word_sense": {}, "bg": {}},
@@ -269,12 +268,15 @@ def _write(conn: sqlite3.Connection, base: dict, work: dict) -> None:
                      "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (work["pack_key"],))
 
 
+def _put(data: dict, item: dict) -> dict:
+    data["items"][item["id"]] = item
+    data["_dirty"]["items"][item["id"]] = None
+    return item
+
+
 def _update(data: dict, item: dict, **fields) -> dict:
     """`item` with `fields` changed, as a new dict in its place (see _change)."""
-    new = {**item, **fields}
-    data["items"][new["id"]] = new
-    data["_dirty"]["items"][new["id"]] = None
-    return new
+    return _put(data, {**item, **fields})
 
 
 def _update_decision(data: dict, d: dict, **fields) -> dict:
@@ -314,15 +316,11 @@ def _known(char: str) -> bool:
 
 
 def _children(char: str) -> list[str]:
-    from .routes.graph import children_of
-
     return children_of([char]).get(char, [])
 
 
 def _closure(start: list[str], skip: str | None = None) -> set[str]:
     """Everything below `start`, any depth; `skip` is never walked through."""
-    from .routes.graph import children_of
-
     seen: set[str] = set()
     level = [c for c in start if c != skip]
     while level:
@@ -335,8 +333,6 @@ def _closure(start: list[str], skip: str | None = None) -> set[str]:
 
 
 def _ancestors(char: str) -> set[str]:
-    from .routes.graph import parents_of
-
     seen: set[str] = set()
     level = [char]
     while level:
@@ -402,9 +398,18 @@ def _bad(code: str, detail: str, **params) -> AppError:
     return AppError(400, code, detail, **params)
 
 
-def _word(word_id: int) -> dict | None:
-    r = query_one("SELECT id, headword FROM word WHERE id = ?", (word_id,))
-    return dict(r) if r else None
+def _bad_words() -> AppError:
+    return _bad("words_invalid", "words are a map of word id to group")
+
+
+def _known_type(type_: str) -> None:
+    if type_ not in TYPES:
+        raise _bad("bad_type", "unknown task type")
+
+
+def _known_origin(origin: str) -> None:
+    if origin not in ORIGINS:
+        raise _bad("bad_origin", "origin is proposal or suggestion")
 
 
 @functools.lru_cache(maxsize=256)
@@ -422,6 +427,42 @@ def _split(subject: str, n: int = 2) -> list[str]:
     return parts
 
 
+def _char(subject: str) -> str:
+    """The kanji of a meanings subject: 生 itself, or the 生 of 生|1234567."""
+    return subject.split("|")[0]
+
+
+def _word_of(subject: str) -> int:
+    """The word of a word_sense subject, 生|1234567."""
+    return int(subject.split("|")[1])
+
+
+def _target(subject: str) -> tuple[str, str]:
+    """A Bulgarian card's or a report's subject, word:1234567 or kanji:生, as (kind, key)."""
+    kind, _, key = subject.partition(":")
+    return kind, key
+
+
+def _text(reason: str | None) -> str | None:
+    return (reason or "").strip()[:MAX_TEXT] or None
+
+
+def _senses(data: dict, char: str) -> list[dict] | None:
+    """A kanji's accepted meaning groups."""
+    return (data["live"]["kanji_senses"].get(char) or {}).get("senses")
+
+
+def _placed(data: dict, subject: str) -> str | None:
+    """The group a word is accepted in (subject 生|1234567)."""
+    return (data["live"]["word_sense"].get(subject) or {}).get("sense")
+
+
+def _placements(data: dict, char: str) -> dict[int, str]:
+    """word id -> group, for this kanji's accepted words."""
+    prefix = f"{char}|"
+    return {int(k[len(prefix):]): v["sense"] for k, v in data["live"]["word_sense"].items() if k.startswith(prefix)}
+
+
 def validate(type_: str, subject: str, value: Any, data: dict | None = None, pending_ok: bool = False,
              machine: bool = False) -> Any:
     """`value` cleaned, or an AppError saying what is wrong with it. None clears an override.
@@ -434,8 +475,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
     `pending_ok`: a word's meaning may be proposed before its kanji's meanings
     are accepted (the AI drafts both at once); it waits, out of the queue, until they are.
     """
-    if type_ not in TYPES:
-        raise _bad("bad_type", "unknown task type")
+    _known_type(type_)
     data = data or _read()
 
     if type_ == "decomposition":
@@ -502,7 +542,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         return out
 
     if type_ == "bg":
-        kind, _, key = subject.partition(":")
+        kind, key = _target(subject)
         if kind == "word" and key.isdigit():
             n = query_one("SELECT COUNT(*) AS n FROM sense WHERE word_id = ?", (int(key),))["n"]
             if not n:
@@ -528,7 +568,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         raise _bad("bad_subject", "that is not a subject of this type")
 
     if type_ == "en_report":
-        kind, _, key = subject.partition(":")
+        kind, key = _target(subject)
         if kind != "word" or not key.isdigit() or not query_one("SELECT 1 AS x FROM word WHERE id = ?", (int(key),)):
             raise _bad("bad_subject", "no such word")
         if value is None:
@@ -546,12 +586,12 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         raise _bad("word_not_with", "that word is not written with this kanji")
     if value is None:
         return None
-    senses = data["live"]["kanji_senses"].get(char)
+    senses = _senses(data, char)
     if not senses:
         if pending_ok and isinstance(value, str) and (value == CATCH_ALL or value.startswith(f"{char}.")):
             return value
         raise AppError(409, "senses_not_accepted", "this kanji's meanings are not accepted yet")
-    ids = {s["id"] for s in senses["senses"]} | {CATCH_ALL}
+    ids = {s["id"] for s in senses} | {CATCH_ALL}
     if value not in ids:
         raise _bad("sense_unknown", "not one of this kanji's meanings")
     return value
@@ -593,7 +633,7 @@ def current(type_: str, subject: str, data: dict | None = None) -> Any:
 
 def _bg_built(subject: str) -> list[str] | None:
     """The machine-translated Bulgarian a card starts from, as built."""
-    kind, _, key = subject.partition(":")
+    kind, key = _target(subject)
     if kind == "word":
         rows = query("SELECT s.ord, b.gloss FROM sense s LEFT JOIN sense_bg b ON b.word_id = s.word_id AND b.ord = s.ord "
                      "WHERE s.word_id = ? ORDER BY s.ord", (int(key),))
@@ -604,7 +644,7 @@ def _bg_built(subject: str) -> list[str] | None:
 
 def _bg_shown(subject: str) -> list[str] | None:
     """What the site shows now: reviewed, else built."""
-    kind, _, key = subject.partition(":")
+    kind, key = _target(subject)
     if kind == "word":
         wid = int(key)
         built = _bg_built(subject) or []
@@ -637,7 +677,7 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
     elif type_ == "form_link":
         _set_live(data, type_, subject, {**value, "decision": decision})
     elif type_ == "kanji_senses":
-        before = data["live"][type_].get(subject, {}).get("senses") or []
+        before = _senses(data, subject) or []
         _set_live(data, type_, subject, {"senses": value, "decision": decision})
         if not explicit_words:
             _reopen_words(data, subject, before, value, decision)
@@ -648,7 +688,7 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
 
 def _bg_live(subject: str, value: list[str] | None) -> None:
     """Show reviewed Bulgarian at once, everywhere it is read (server/bg_overlay.py)."""
-    kind, _, key = subject.partition(":")
+    kind, key = _target(subject)
     if kind == "word":
         bg_overlay.set_word(int(key), value)
         return
@@ -656,15 +696,15 @@ def _bg_live(subject: str, value: list[str] | None) -> None:
     from . import recognize
 
     if key in recognize._meta:  # handwriting candidates carry the meanings too
-        freq, meanings, built = recognize._meta[key]
+        freq, meanings, _ = recognize._meta[key]
         recognize._meta[key] = (freq, meanings, value or _bg_built(subject))
 
 
 def load_bg_overlay() -> None:
     """At startup: the reviewed Bulgarian in the store becomes what pages show."""
     words, kanji = {}, {}
-    for subject, entry in _read()["live"].get("bg", {}).items():
-        kind, _, key = subject.partition(":")
+    for subject, entry in _read()["live"]["bg"].items():
+        kind, key = _target(subject)
         if kind == "word":
             words[int(key)] = entry["value"]
         else:
@@ -693,7 +733,7 @@ def _reopen_words(data: dict, char: str, before: list[dict], after: list[dict], 
         ))
         item = _latest_item(data, "word_sense", subject)
         if item:
-            _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
+            _reopen_item(data, item)
         else:
             _new_item(data, "word_sense", subject, None, "reopened", "proposal", None, None, "auto", 0.0)
 
@@ -728,7 +768,7 @@ def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
         d = _decision("auto", "word_sense", item["subject"], before, item["proposed"], "auto", item["id"],
                       "two runs agree, both confident")
         _set_live(data, "word_sense", item["subject"], {"sense": item["proposed"], "decision": d["id"]})
-        _update(data, item, status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
+        _close(data, item, "auto-accepted", d)
         data["decisions"].append(d)
 
 
@@ -758,6 +798,21 @@ def _latest_item(data: dict, type_: str, subject: str) -> dict | None:
     return max(mine, key=lambda i: i["created"]) if mine else None
 
 
+def _close(data: dict, item: dict, status: str, d: dict) -> dict:
+    """`item` decided by `d`: accepted, edited, rejected or auto-accepted."""
+    return _update(data, item, status=status, decided_by=d["by"], decided_at=d["at"], decision=d["id"])
+
+
+def _reopen_item(data: dict, item: dict) -> dict:
+    return _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
+
+
+def _moves_of(item: dict) -> dict | None:
+    """A suggestion's word moves, from the page's board (see _moves)."""
+    ev = item.get("evidence")
+    return ev.get("moves") if isinstance(ev, dict) else None
+
+
 def _new_item(data: dict, type_: str, subject: str, proposed: Any, source: str, origin: str,
               reason: str | None, evidence: Any, by: str, priority: float, **extra) -> dict:
     item = {
@@ -779,17 +834,14 @@ def _new_item(data: dict, type_: str, subject: str, proposed: Any, source: str, 
         "skipped_by": [],
         **extra,
     }
-    data["items"][item["id"]] = item
-    data["_dirty"]["items"][item["id"]] = None
-    return item
+    return _put(data, item)
 
 
 def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str = "proposal",
              reason: str | None = None, evidence: Any = None, by: str = "system",
              priority: float = 0.0, **extra) -> dict:
     """Put a change in the queue; an identical open one is returned instead of a twin."""
-    if origin not in ORIGINS:
-        raise _bad("bad_origin", "origin is proposal or suggestion")
+    _known_origin(origin)
     with _change() as data:
         proposed = validate(type_, subject, proposed, data, pending_ok=origin == "proposal", machine=origin == "proposal")
         moves = evidence.get("moves") if isinstance(evidence, dict) else None
@@ -798,14 +850,13 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
             evidence = {**evidence, "moves": moves}
         for i in data["items"].values():
             if (i["status"] == "open" and i["type"] == type_ and i["subject"] == subject and i["proposed"] == proposed
-                    and ((i.get("evidence") or {}).get("moves") if isinstance(i.get("evidence"), dict) else None) == moves):
+                    and _moves_of(i) == moves):
                 return dict(i)
         if origin == "suggestion":
             mine = sum(1 for i in data["items"].values() if i["status"] == "open" and i["created_by"] == by)
             if mine >= MAX_OPEN_SUGGESTIONS:
                 raise AppError(429, "too_many_suggestions", "you have {n} suggestions waiting already", n=mine)
-        item = _new_item(data, type_, subject, proposed, source, origin,
-                         (reason or "").strip()[:MAX_TEXT] or None, evidence, by, priority, **extra)
+        item = _new_item(data, type_, subject, proposed, source, origin, _text(reason), evidence, by, priority, **extra)
         return dict(item)
 
 
@@ -813,13 +864,13 @@ def _moves(char: str, groups: Any, moves: Any) -> dict[str, str | None]:
     """A suggestion's word moves, cleaned: word id (as text) -> one of the
     suggested groups, the catch-all, or None (in no group)."""
     if not isinstance(moves, dict) or len(moves) > 5000:
-        raise _bad("words_invalid", "words are a map of word id to group")
+        raise _bad_words()
     ids = {g["id"] for g in groups or []} | {CATCH_ALL}
     known = _word_ids(char)
     out = {}
     for k, v in moves.items():
         if not str(k).isdigit() or int(k) not in known or not (v is None or v in ids):
-            raise _bad("words_invalid", "words are a map of word id to group")
+            raise _bad_words()
         out[str(k)] = v
     return out
 
@@ -847,8 +898,7 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
                 continue
             open_keys.add(key)
             _new_item(data, r["type"], r["subject"], proposed, r["source"], "proposal",
-                      (r.get("reason") or "").strip()[:MAX_TEXT] or None, r.get("evidence"), "system",
-                      r.get("priority", 0.0))
+                      _text(r.get("reason")), r.get("evidence"), "system", r.get("priority", 0.0))
             added += 1
         return added, refused
 
@@ -874,7 +924,7 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     """
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, reject or skip")
-    reason = (reason or "").strip()[:MAX_TEXT] or None
+    reason = _text(reason)
     with _change() as data:
         item = data["items"].get(item_id)
         if not item:
@@ -890,7 +940,7 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
 
         if action == "reject":
             d = _decision("reject", type_, subject, None, None, user_id, item_id, reason)
-            item = _update(data, item, status="rejected", decided_by=user_id, decided_at=d["at"], decision=d["id"])
+            item = _close(data, item, "rejected", d)
             data["decisions"].append(d)
             return dict(item)
 
@@ -900,16 +950,10 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
         if after is None:
             raise _bad("needs_value", "pick a value")
         before = live_value(type_, subject, data)
-        explicit = type_ == "kanji_senses" and words is not None
-        if explicit and not isinstance(words, dict):
-            raise _bad("words_invalid", "words are a map of word id to group")
+        explicit = _on_the_board(type_, words)
         d = _decision(action, type_, subject, before, after, user_id, item_id, reason)
         _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
-        item = _update(
-            data, item,
-            status="accepted" if action == "accept" else "edited",
-            decided_by=user_id, decided_at=d["at"], decision=d["id"],
-        )
+        item = _close(data, item, "accepted" if action == "accept" else "edited", d)
         data["decisions"].append(d)
         if explicit:
             held = _skipped(skip)
@@ -918,7 +962,7 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
                 _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
                           f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
         if type_ == "bg" and (labels or notes) and subject.startswith("kanji:"):
-            _label_groups(data, subject[6:], labels or {}, user_id, d["id"], notes or {})
+            _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], notes or {})
         return dict(item)
 
 
@@ -943,16 +987,25 @@ def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str,
     data["decisions"].append(c)
 
 
+def _on_the_board(type_: str, words: Any) -> bool:
+    """Whether the reviewer placed a kanji's words themselves: `words` from the meanings board."""
+    if type_ != "kanji_senses" or words is None:
+        return False
+    if not isinstance(words, dict):
+        raise _bad_words()
+    return True
+
+
 def _skipped(skip: Any) -> dict[str, str | None]:
     """The skip map, cleaned: word id (as text) -> the group it sat in, or None."""
     if not skip:
         return {}
     if not isinstance(skip, dict):
-        raise _bad("words_invalid", "words are a map of word id to group")
+        raise _bad_words()
     out = {}
     for k, v in skip.items():
         if not str(k).isdigit() or not (v is None or isinstance(v, str)):
-            raise _bad("words_invalid", "words are a map of word id to group")
+            raise _bad_words()
         out[str(k)] = v
     return out
 
@@ -982,7 +1035,7 @@ def _place_words(data: dict, char: str, words: dict, user_id: str, parent: str) 
     for key, group in words.items():
         wid = str(key)
         if not wid.isdigit():
-            raise _bad("words_invalid", "words are a map of word id to group")
+            raise _bad_words()
         subject = f"{char}|{wid}"
         value = validate("word_sense", subject, group, data)
         before = live_value("word_sense", subject, data)
@@ -990,13 +1043,12 @@ def _place_words(data: dict, char: str, words: dict, user_id: str, parent: str) 
         item = item if item and item["status"] == "open" else None
         if item and value is None:
             c = _decision("reject", "word_sense", subject, None, None, user_id, item["id"], None)
-            _update(data, item, status="rejected", decided_by=user_id, decided_at=c["at"], decision=c["id"])
+            _close(data, item, "rejected", c)
         elif item:
             act = "accept" if item["proposed"] == value else "edit"
             c = _decision(act, "word_sense", subject, before, value, user_id, item["id"], None)
             _apply(data, "word_sense", subject, value, c["id"])
-            _update(data, item, status="accepted" if act == "accept" else "edited",
-                    decided_by=user_id, decided_at=c["at"], decision=c["id"])
+            _close(data, item, "accepted" if act == "accept" else "edited", c)
         elif before != value:
             c = _decision("direct", "word_sense", subject, before, value, user_id, None, None)
             _apply(data, "word_sense", subject, value, c["id"])
@@ -1023,13 +1075,10 @@ def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | Non
     with _change() as data:
         after = validate(type_, subject, value, data)
         before = live_value(type_, subject, data)
-        explicit = type_ == "kanji_senses" and words is not None
-        if explicit and not isinstance(words, dict):
-            raise _bad("words_invalid", "words are a map of word id to group")
+        explicit = _on_the_board(type_, words)
         if before == after and not explicit:
             return {"unchanged": True}
-        d = _decision("direct", type_, subject, before, after, user_id, None,
-                      (reason or "").strip()[:MAX_TEXT] or None)
+        d = _decision("direct", type_, subject, before, after, user_id, None, _text(reason))
         if before != after:
             _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
         moved = _place_words(data, subject, words, user_id, d["id"]) if explicit else 0
@@ -1049,7 +1098,7 @@ def auto_accept(item_id: str, why: str) -> dict:
         before = live_value(item["type"], item["subject"], data)
         d = _decision("auto", item["type"], item["subject"], before, after, "auto", item_id, why)
         _apply(data, item["type"], item["subject"], after, d["id"])
-        item = _update(data, item, status="auto-accepted", decided_by="auto", decided_at=d["at"], decision=d["id"])
+        item = _close(data, item, "auto-accepted", d)
         data["decisions"].append(d)
         return dict(item)
 
@@ -1064,37 +1113,39 @@ def revert(decision_id: str, user_id: str) -> dict:
             raise AppError(409, "not_revertible", "that decision changed nothing, or was already reverted")
         if live_value(d["type"], d["subject"], data) != d["after"]:
             raise AppError(409, "changed_since", "this was changed again since; revert the later change first")
-        r = _decision("revert", d["type"], d["subject"], d["after"], d["before"], user_id, d["item"],
-                      f"revert {decision_id}", supersedes=decision_id)
+        r = _undo(d, user_id)
         if d["before"] is not None or d["type"] == "decomposition":
             validate(d["type"], d["subject"], d["before"], data)
         children = [c for c in data["decisions"] if c.get("parent") == decision_id and not c.get("reverted_by")]
         _apply(data, d["type"], d["subject"], d["before"], r["id"], explicit_words=bool(children))
-        d = _update_decision(data, d, reverted_by=r["id"])
-        _reopen(data, d)
-        data["decisions"].append(r)
+        _reverted(data, d, r)
         # The words placed on the meanings board go back with it.
         for c in children:
             if c["action"] == "reject":
-                rc = _decision("revert", c["type"], c["subject"], None, None, user_id, c["item"],
-                               f"revert {c['id']}", supersedes=c["id"])
+                rc = _undo(c, user_id)
             elif c["action"] in CHANGES and live_value(c["type"], c["subject"], data) == c["after"]:
-                rc = _decision("revert", c["type"], c["subject"], c["after"], c["before"], user_id, c["item"],
-                               f"revert {c['id']}", supersedes=c["id"])
+                rc = _undo(c, user_id)
                 _apply(data, c["type"], c["subject"], c["before"], rc["id"], explicit_words=True)
             else:
                 continue
             rc["parent"] = r["id"]
-            c = _update_decision(data, c, reverted_by=rc["id"])
-            _reopen(data, c)
-            data["decisions"].append(rc)
+            _reverted(data, c, rc)
         return dict(r)
 
 
-def _reopen(data: dict, d: dict) -> None:
+def _undo(d: dict, user_id: str) -> dict:
+    """The decision reverting `d`: its value from before put back."""
+    return _decision("revert", d["type"], d["subject"], d["after"], d["before"], user_id, d["item"],
+                     f"revert {d['id']}", supersedes=d["id"])
+
+
+def _reverted(data: dict, d: dict, r: dict) -> None:
+    """Log `r` as reverting `d`, and reopen the item `d` decided."""
+    d = _update_decision(data, d, reverted_by=r["id"])
     item = data["items"].get(d["item"]) if d["item"] else None
     if item and item["decision"] == d["id"]:
-        _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
+        _reopen_item(data, item)
+    data["decisions"].append(r)
 
 
 # ---------------------------------------------------------------- reading the queue
@@ -1106,15 +1157,19 @@ def _names(ids: set[str]) -> dict[str, dict]:
     return cards
 
 
+def _label(word_id: int) -> str | None:
+    r = query_one("SELECT headword FROM word WHERE id = ?", (word_id,))
+    return r["headword"] if r else None
+
+
 def _view(item: dict, names: dict, data: dict) -> dict:
     out = {k: v for k, v in item.items() if k != "skipped_by"}
     out["current"] = current(item["type"], item["subject"], data)
-    if item["type"] in ("bg", "en_report") and item["subject"].startswith("word:"):
-        r = query_one("SELECT headword, reading FROM word WHERE id = ?", (int(item["subject"][5:]),))
-        out["label"] = f"{r['headword']}" if r else item["subject"]
+    kind, key = _target(item["subject"])
+    if item["type"] in ("bg", "en_report") and kind == "word":
+        out["label"] = _label(int(key)) or item["subject"]
     elif item["type"] == "word_sense":
-        r = query_one("SELECT headword FROM word WHERE id = ?", (int(item["subject"].split("|")[1]),))
-        out["label"] = r["headword"] if r else None
+        out["label"] = _label(_word_of(item["subject"]))
     out["createdBy"] = names.get(item["created_by"])
     out["decidedBy"] = names.get(item["decided_by"]) if item["decided_by"] else None
     return out
@@ -1125,6 +1180,10 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     """Open items, worst first: highest priority, then oldest; your skips left
     out, or only your skips with `skipped`. `types` counts what waits per type
     (for the filter, before the type is picked), `skipped` how many you skipped."""
+    if type_ is not None:
+        _known_type(type_)
+    if origin is not None:
+        _known_origin(origin)
     data = _read()
     accepted = data["live"]["kanji_senses"]
     # Words waiting in a follow-up are decided there, not one by one.
@@ -1138,7 +1197,7 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         if i["status"] == "open"
         and i["subject"] not in held
         # A word's meaning waits until its kanji's meanings are accepted.
-        and (i["type"] != "word_sense" or i["subject"].split("|")[0] in accepted)
+        and (i["type"] != "word_sense" or _char(i["subject"]) in accepted)
         # Bulgarian waits for the meanings too: the groups are its context.
         and (i["type"] != "bg" or not _bg_waits(i["subject"], pending))
         and (origin is None or i["origin"] == origin)
@@ -1170,12 +1229,12 @@ def _by_kanji(rows: list[dict]) -> list[dict]:
     first: dict[str, int] = {}
     for n, i in enumerate(rows):
         if i["type"] in meaning:
-            first.setdefault(i["subject"].split("|")[0], n)
+            first.setdefault(_char(i["subject"]), n)
 
     def key(p: tuple[int, dict]) -> tuple[int, int, int]:
         n, i = p
         if i["type"] in meaning:
-            return (first[i["subject"].split("|")[0]], i["type"] != "kanji_senses", n)
+            return (first[_char(i["subject"])], i["type"] != "kanji_senses", n)
         return (n, 0, n)
 
     return [i for _, i in sorted(enumerate(rows), key=key)]
@@ -1183,8 +1242,7 @@ def _by_kanji(rows: list[dict]) -> list[dict]:
 
 def _meanings_pending(data: dict) -> set[str]:
     """Kanji that have a meanings task whose groups are not accepted yet."""
-    has = {i["subject"] for i in data["items"].values() if i["type"] == "kanji_senses"}
-    return has - set(data["live"]["kanji_senses"])
+    return subjects("kanji_senses", data) - set(data["live"]["kanji_senses"])
 
 
 _headwords: dict[int, str] | None = None
@@ -1201,10 +1259,15 @@ def _headword(word_id: int) -> str:
 
 def _bg_waits(subject: str, pending: set[str]) -> bool:
     """A Bulgarian card waits while its kanji's groups, or any of its word's kanji's, are still to be made."""
-    kind, _, key = subject.partition(":")
+    kind, key = _target(subject)
     if kind == "kanji":
         return key in pending
     return any(c in pending for c in _headword(int(key)))
+
+
+def subjects(type_: str, data: dict | None = None) -> set[str]:
+    """Every subject with an item of this type, open or decided."""
+    return {i["subject"] for i in (data or _read())["items"].values() if i["type"] == type_}
 
 
 def counts() -> dict:
@@ -1226,7 +1289,7 @@ def item(item_id: str) -> dict:
     view["context"] = context(it["type"], it["subject"], data)
     if (only := follow_up_words(it)) is not None:
         view["context"]["board"] = board(it["subject"], data, only)
-    moves = (it.get("evidence") or {}).get("moves") if isinstance(it.get("evidence"), dict) else None
+    moves = _moves_of(it)
     if moves and view["context"].get("board"):
         # A suggestion from the page's board: its words start where the person put them.
         view["context"]["board"] = [{**w, "group": moves[str(w["id"])]} if str(w["id"]) in moves else w
@@ -1241,68 +1304,56 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
     """What a reviewer needs beside the item: the word, the kanji's meanings, the forms."""
     data = data or _read()
     if type_ in ("kanji_senses", "word_sense"):
-        char = subject.split("|")[0]
-        k = query_one("SELECT meanings, on_yomi, kun_yomi FROM kanji WHERE char = ?", (char,))
-        cur = query_one("SELECT meaning FROM kanji_curated WHERE char = ?", (char,))
-        out = {
-            "char": char,
-            "kanjidic": json.loads(k["meanings"]) if k else [],
-            "curated": cur["meaning"] if cur else None,
-            "on": json.loads(k["on_yomi"]) if k and k["on_yomi"] else [],
-            "kun": json.loads(k["kun_yomi"]) if k and k["kun_yomi"] else [],
-            "senses": (data["live"]["kanji_senses"].get(char) or {}).get("senses"),
-        }
-        from .routes.search import _fetch_words
-
+        char = _char(subject)
+        out = {"char": char, **_kanji_info(char), "senses": _senses(data, char)}
         if type_ == "word_sense":
-            wid = int(subject.split("|")[1])
-            out["word"] = _fetch_words([wid]).get(wid)
+            wid = _word_of(subject)
+            out["word"] = _fetch_word(wid)
             # The kanji's board around it, to place the one word among the others;
             # a rare word not on the board is added to it.
             out["board"] = board(char, data)
             if out["word"] and not any(w["id"] == wid for w in out["board"]):
-                group = (data["live"]["word_sense"].get(subject) or {}).get("sense")
-                out["board"].append(_board_word(out["word"], group, _latest_item(data, "word_sense", subject)))
+                out["board"].append(_board_word(out["word"], _placed(data, subject), _latest_item(data, "word_sense", subject)))
         else:
             out["board"] = board(char, data)
         return out
     if type_ == "form_link":
         a, b = subject.split("|")
         return {"a": forms.forms_of(a), "b": forms.forms_of(b)}
+    kind, key = _target(subject)
     if type_ == "en_report":
-        from .routes.search import _fetch_words
-
-        wid = int(subject.split(":")[1])
-        return {"word": _fetch_words([wid]).get(wid)}
+        return {"word": _fetch_word(int(key))}
     if type_ == "bg":
-        from .routes.search import _fetch_words
-
-        kind, _, key = subject.partition(":")
         if kind == "word":
             wid = int(key)
-            live = data["live"]
             # For each of the word's kanji with accepted groups: the group it is in here.
             groups = []
             for c in dict.fromkeys(_headword(wid)):
-                senses = (live["kanji_senses"].get(c) or {}).get("senses")
+                senses = _senses(data, c)
                 if not senses:
                     continue
-                placed = (live["word_sense"].get(f"{c}|{wid}") or {}).get("sense")
+                placed = _placed(data, f"{c}|{wid}")
                 g = next((x for x in senses if x["id"] == placed), None)
                 groups.append({"char": c, "group": placed, "en": g["en"] if g else None, "bg": g.get("bg") if g else None})
-            return {"word": _fetch_words([wid]).get(wid), "built": _bg_built(subject), "groups": groups}
-        k = query_one("SELECT meanings, on_yomi, kun_yomi, jlpt, grade, freq FROM kanji WHERE char = ?", (key,))
-        cur = query_one("SELECT meaning FROM kanji_curated WHERE char = ?", (key,))
-        return {
-            "char": key,
-            "kanjidic": json.loads(k["meanings"]) if k else [],
-            "curated": cur["meaning"] if cur else None,
-            "on": json.loads(k["on_yomi"]) if k and k["on_yomi"] else [],
-            "kun": json.loads(k["kun_yomi"]) if k and k["kun_yomi"] else [],
-            "built": _bg_built(subject),
-            "senses": (data["live"]["kanji_senses"].get(key) or {}).get("senses"),
-        }
+            return {"word": _fetch_word(wid), "built": _bg_built(subject), "groups": groups}
+        return {"char": key, **_kanji_info(key), "built": _bg_built(subject), "senses": _senses(data, key)}
     return {"forms": forms.forms_of(subject)}
+
+
+def _kanji_info(char: str) -> dict:
+    """KANJIDIC's meanings and readings of a kanji, and Kanji Alive's curated line."""
+    k = query_one("SELECT meanings, on_yomi, kun_yomi FROM kanji WHERE char = ?", (char,))
+    cur = query_one("SELECT meaning FROM kanji_curated WHERE char = ?", (char,))
+    return {
+        "kanjidic": json.loads(k["meanings"]) if k else [],
+        "curated": cur["meaning"] if cur else None,
+        "on": json.loads(k["on_yomi"]) if k and k["on_yomi"] else [],
+        "kun": json.loads(k["kun_yomi"]) if k and k["kun_yomi"] else [],
+    }
+
+
+def _fetch_word(word_id: int) -> dict | None:
+    return _fetch_words([word_id]).get(word_id)
 
 
 _grades: dict[str, int] | None = None
@@ -1373,11 +1424,8 @@ def board(char: str, data: dict | None = None, only: dict[str, str | None] | Non
 
     `only`, for a follow-up: just these words, each where the reviewer left it
     when skipping (unless it was placed since)."""
-    from .routes.search import _fetch_words
-
     data = data or _read()
-    prefix = f"{char}|"
-    placed = {int(k[len(prefix):]): v["sense"] for k, v in data["live"]["word_sense"].items() if k.startswith(prefix)}
+    placed = _placements(data, char)
     items = _word_items(data, char)
     rows = _words_of(char)
     if only is not None:
@@ -1401,7 +1449,6 @@ def board(char: str, data: dict | None = None, only: dict[str, str | None] | Non
     return out
 
 
-
 def page_kanji(char: str) -> dict:
     """What the page's Edit / Suggest changes needs for a kanji's meanings: its
     accepted groups (or, when none are, the open draft, marked as such) and
@@ -1409,7 +1456,7 @@ def page_kanji(char: str) -> dict:
     if len(char) != 1:
         raise _bad("bad_subject", "senses are of one kanji")
     data = _read()
-    senses = (data["live"]["kanji_senses"].get(char) or {}).get("senses")
+    senses = _senses(data, char)
     drafted = False
     if not senses:
         drafts = [i for i in data["items"].values()
@@ -1423,19 +1470,14 @@ def page_word(word_id: int) -> dict:
     """What the page's Edit / Suggest changes needs for a word: for each of its
     kanji, the kanji's accepted groups and the one this word is in; and the
     machine Bulgarian under any correction."""
-    from .routes.search import _fetch_words
-
     data = _read()
-    w = _fetch_words([word_id]).get(word_id)
+    w = _fetch_word(word_id)
     if not w:
         raise AppError(404, "word_not_found", "no such word")
-    kanji = []
-    for c in dict.fromkeys(_headword(word_id)):
-        if word_id not in _word_ids(c):
-            continue
-        senses = (data["live"]["kanji_senses"].get(c) or {}).get("senses")
-        group = (data["live"]["word_sense"].get(f"{c}|{word_id}") or {}).get("sense")
-        kanji.append({"char": c, "senses": senses, "group": group})
+    kanji = [
+        {"char": c, "senses": _senses(data, c), "group": _placed(data, f"{c}|{word_id}")}
+        for c in dict.fromkeys(_headword(word_id)) if word_id in _word_ids(c)
+    ]
     return {"word": w, "kanji": kanji, "bgBuilt": _bg_built(f"word:{word_id}")}
 
 
@@ -1481,8 +1523,6 @@ def progress() -> dict:
     counted apart (`words`), not as tasks; only a word on its own (a user's
     suggestion, a word reopened when its group changed) is a task.
     """
-    from .routes.graph import children_of
-
     data = _read()
     stages = {t: {"done": 0, "total": 0} for t in TYPES}
     words = {"done": 0, "total": 0}
@@ -1496,7 +1536,7 @@ def progress() -> dict:
         if i["status"] != "open":
             count["done"] += 1
     # The kanji in scope (server/scope.py) that have a meanings task.
-    targets = sorted({i["subject"] for i in data["items"].values() if i["type"] == "kanji_senses"})
+    targets = sorted(subjects("kanji_senses", data))
 
     # Every part below every target, a level at a time, then each closure from that map.
     kids: dict[str, list[str]] = {}
@@ -1515,7 +1555,7 @@ def progress() -> dict:
         return memo[c]
 
     open_forms = {c for s in open_by["form_link"] for c in s.split("|")}
-    open_words = {s.split("|")[0] for s in open_by["word_sense"]}
+    open_words = {_char(s) for s in open_by["word_sense"]}
     senses = data["live"]["kanji_senses"]
     verified = sum(
         1 for c in targets
@@ -1550,29 +1590,33 @@ def suggestions_of(user_id: str) -> dict:
 
 
 def senses_of(char: str) -> list[dict] | None:
-    entry = _read()["live"]["kanji_senses"].get(char)
-    return entry["senses"] if entry else None
+    return _senses(_read(), char)
 
 
 def word_senses(char: str) -> dict[int, str]:
     """word id -> sense id, for this kanji's accepted word assignments."""
-    prefix = f"{char}|"
-    return {int(k[len(prefix):]): v["sense"] for k, v in _read()["live"]["word_sense"].items() if k.startswith(prefix)}
+    return _placements(_read(), char)
+
+
+def _form_link_rows(subject: str, v: dict) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
+    """What an accepted form link does to the built ones: the (char, other) rows
+    it adds -- none for "none", both ways round for a positional form -- and the
+    (char, other, kind) rows it takes the place of, every kind both ways."""
+    a, b = subject.split("|")
+    replaced = [(x, y, k) for k in forms.KINDS for x, y in ((a, b), (b, a))]
+    if v["kind"] == "none":
+        return [], replaced
+    return ([(a, b), (b, a)] if v["kind"] == "positional" else [(a, b)]), replaced
 
 
 def _form_overlay() -> tuple[list[dict], set[tuple[str, str, str]]]:
     added: list[dict] = []
     removed: set[tuple[str, str, str]] = set()
     for subject, v in _read()["live"]["form_link"].items():
-        a, b = subject.split("|")
-        for k in forms.KINDS:
-            removed |= {(a, b, k), (b, a, k)}
-        if v["kind"] == "none":
-            continue
-        row = {"char": a, "other": b, "kind": v["kind"], "source": f"review:{v['decision']}", "note": v.get("note")}
-        added.append(row)
-        if v["kind"] == "positional":
-            added.append({**row, "char": b, "other": a})
+        rows, replaced = _form_link_rows(subject, v)
+        removed.update(replaced)
+        added += [{"char": x, "other": y, "kind": v["kind"], "source": f"review:{v['decision']}", "note": v.get("note")}
+                  for x, y in rows]
     return added, removed
 
 
@@ -1630,12 +1674,9 @@ def export() -> dict[str, int]:
 
     links, removed = [], []
     for subject, v in sorted(data["live"]["form_link"].items()):
-        a, b = subject.split("|")
-        removed += [{"char": x, "other": y, "kind": k} for k in forms.KINDS for x, y in ((a, b), (b, a))]
-        if v["kind"] != "none":
-            links.append({"char": a, "other": b, "kind": v["kind"], "note": v.get("note"), "decision": v["decision"]})
-            if v["kind"] == "positional":
-                links.append({"char": b, "other": a, "kind": "positional", "note": v.get("note"), "decision": v["decision"]})
+        rows, replaced = _form_link_rows(subject, v)
+        removed += [{"char": x, "other": y, "kind": k} for x, y, k in replaced]
+        links += [{"char": x, "other": y, "kind": v["kind"], "note": v.get("note"), "decision": v["decision"]} for x, y in rows]
     EXPORTS["form_link"].write_text(
         json.dumps({"links": links, "removed": removed}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
@@ -1654,9 +1695,7 @@ def load_bg(dry_run: bool = False) -> dict[str, int]:
     per kanji in scope (server/scope.py), most frequent first, kanji before
     words, all after the other stages in the "all" list. A subject that has a
     card already, open or decided, is not queued again."""
-    from . import scope
-
-    known = {i["subject"] for i in _read()["items"].values() if i["type"] == "bg"}
+    known = subjects("bg")
     rows = []
     for r in query(f"SELECT k.char, k.freq FROM kanji k JOIN kanji_bg b ON b.char = k.char WHERE {scope.KANJI}"):
         subject = f"kanji:{r['char']}"

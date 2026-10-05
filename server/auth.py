@@ -317,15 +317,14 @@ def _log_role(data: dict, user_id: str, before: str, after: str, by: str, reason
     })
 
 
+def _public_card(user: dict) -> dict:
+    """What anyone may see of an account: no email, no role."""
+    return {"id": user["id"], "name": user["name"], "username": user.get("username"), "avatar": user.get("avatar")}
+
+
 def _card(user: dict) -> dict:
     """What the admin page shows of an account. Only ever sent to the admin."""
-    return {
-        "id": user["id"],
-        "name": user["name"],
-        "username": user.get("username"),
-        "avatar": user.get("avatar"),
-        "email": user["email"],
-    }
+    return {**_public_card(user), "email": user["email"]}
 
 
 def own_request(user_id: str) -> dict | None:
@@ -345,9 +344,7 @@ def request_contribution(user_id: str, text: str) -> dict:
         user = data["users"].get(user_id)
         if not user:
             raise NotFound()
-        if role_of(user) != "user":
-            raise AlreadyAsked()
-        if any(r["user"] == user_id and r["status"] == "open" for r in data["requests"].values()):
+        if role_of(user) != "user" or any(r["user"] == user_id and r["status"] == "open" for r in data["requests"].values()):
             raise AlreadyAsked()
         req = {
             "id": f"r-{uuid.uuid4().hex[:12]}",
@@ -425,10 +422,6 @@ def role_log(limit: int = 100) -> list[dict]:
 
 
 def names_for(user_ids: set[str]) -> dict[str, dict]:
-    """Public cards (no email, no role) for the given accounts."""
+    """Public cards for the given accounts."""
     data = _load()
-    return {
-        uid: {"id": uid, "name": u["name"], "username": u.get("username"), "avatar": u.get("avatar")}
-        for uid in user_ids
-        if (u := data["users"].get(uid))
-    }
+    return {uid: _public_card(u) for uid in user_ids if (u := data["users"].get(uid))}

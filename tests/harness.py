@@ -2,13 +2,16 @@
 
 Shared by the access tests (tests/roles.py, tests/review_access.py, ...).
 Accounts live in a temporary directory, one per role, so nothing in data/auth
-is read or written; each test fakes or redirects whatever else it touches.
+is read or written; each test fakes or redirects whatever else it touches,
+the association store and the review state with `use_sandbox`, as the
+sandbox scripts do.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import sys
 import tempfile
@@ -25,11 +28,21 @@ sys.path.insert(0, str(ROOT))
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 
-from server import auth  # noqa: E402
+from server import auth, review, store  # noqa: E402
 from server.errors import AppError, app_error_handler  # noqa: E402
 
 OWNER = "owner@example.com"
 WHO = ("admin", "reviewer", "user", "other")
+
+
+def use_sandbox(tmp: Path, copy_notes: bool = False) -> None:
+    """The association store and the review state in `tmp`, so data/ is never
+    written. `copy_notes`: start the store from a copy of data/associations."""
+    assoc = tmp / "associations"
+    if copy_notes and not assoc.exists() and store.ASSOC_DIR.exists():
+        shutil.copytree(store.ASSOC_DIR, assoc)
+    store.use_dir(assoc)
+    review.use_dir(tmp / "review")
 
 
 class Checks:
