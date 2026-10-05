@@ -31,6 +31,8 @@ export interface KanjiNode {
   upFreq?: boolean
   /** On containers: the easiest JLPT level above, however far up (5 is easiest). */
   upJlpt?: number | null
+  /** On containers: the other form of the focus it is built from -- 糹 for 細 under 糸. */
+  form?: string
 }
 
 export interface GraphResponse {
@@ -102,6 +104,8 @@ export interface FormsResponse {
   forms: FormItem[]
   looksLike: FormItem[]
   lookalikeOf: FormItem[]
+  /** The same thing drawn differently: 隹 for 鳥. */
+  kin: FormItem[]
   variants: FormItem[]
 }
 
@@ -318,7 +322,7 @@ export interface AssociationView {
 
 export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense' | 'bg' | 'en_report'
 export type Origin = 'proposal' | 'suggestion'
-export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'none'
+export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'kin' | 'none'
 
 /** One meaning group of a kanji, as the words it is used in divide it. */
 export interface MeaningGroup {

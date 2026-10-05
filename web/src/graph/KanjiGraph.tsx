@@ -47,6 +47,7 @@ const S = strings(
     legendHover: 'hover one above to see what contains it in turn',
     legendVia: 'dashed, not at this level itself, but inside characters that are',
     via: 'not at this level itself, but inside characters that are',
+    form: 'built from {f}, another form of it',
   },
   {
     joyo: 'джойо',
@@ -65,6 +66,7 @@ const S = strings(
     legendHover: 'посочете някой отгоре, за да видите какво на свой ред го съдържа',
     legendVia: 'с прекъсната линия - не е от това ниво, но е част от йероглифи, които са',
     via: 'не е от това ниво, но е част от йероглифи, които са',
+    form: 'съставен от {f}, друга негова форма',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -696,6 +698,8 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
 ${levelOf(n, t)}`}
           {n.via && `
 ${t('via')}`}
+          {n.form && `
+${t('form', { f: n.form })}`}
         </title>
 
         <circle className="plate" r={n.radius} strokeWidth={n.kind === 'focus' ? 1 : 0.75} />

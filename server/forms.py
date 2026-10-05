@@ -4,7 +4,9 @@ Built offline into `char_form` (pipeline/forms.py); accepted `form_link`
 review decisions lie over it live (server/review.py registers them here), so
 a reviewer's change shows at once and a rebuild keeps it via the export.
 
-None of this touches containment: the graph and the order never read it.
+None of this touches containment: the order never reads it, and the graph
+reads only `graph_families` -- which characters to show above a focus, never
+an edge.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from typing import Callable
 from . import bg_overlay
 from .db import query
 
-KINDS = ("positional", "old", "form_of", "looks_like")
+KINDS = ("positional", "old", "form_of", "looks_like", "kin")
 
 # Set by server/review.py: (char) -> (added rows, removed (char, other, kind) keys).
 overlay: Callable[[], tuple[list[dict], set[tuple[str, str, str]]]] | None = None
@@ -62,6 +64,24 @@ def shape_groups() -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for r in _links():
         if r["kind"] in ("positional", "form_of", "looks_like"):
+            a, b = r["char"], r["other"]
+            out.setdefault(a, {a}).add(b)
+            out.setdefault(b, {b}).add(a)
+    return out
+
+
+def graph_families() -> dict[str, set[str]]:
+    """What the graph shows above a focus besides its own containers: 細 is
+    built from 糹, which is 糸 written at the left, so focusing 糸 shows it.
+
+    Only positional links without a note. A note marks a grouping that would
+    otherwise surprise (月 at the left of 腕 is 肉), and those stay apart:
+    focusing 肉 must not show the moon in 明. Kin (隹 鳥) never merge -- 鳴
+    does not look like it contains 隹.
+    """
+    out: dict[str, set[str]] = {}
+    for r in _links():
+        if r["kind"] == "positional" and not r["note"]:
             a, b = r["char"], r["other"]
             out.setdefault(a, {a}).add(b)
             out.setdefault(b, {b}).add(a)
@@ -114,6 +134,7 @@ def forms_of(char: str) -> dict:
 
     out: dict[str, list] = {
         "positional": [], "old": [], "new": [], "formOf": [], "forms": [], "looksLike": [], "lookalikeOf": [],
+        "kin": [],
     }
     for r in links:
         mine = r["char"] == char
@@ -126,6 +147,8 @@ def forms_of(char: str) -> dict:
             out["formOf" if mine else "forms"].append(item(other, r))
         elif r["kind"] == "looks_like":
             out["looksLike" if mine else "lookalikeOf"].append(item(other, r))
+        elif r["kind"] == "kin" and other not in {i["char"] for i in out["kin"]}:
+            out["kin"].append(item(other, r))
     for group in out.values():
         group.sort(key=lambda i: (not i["known"], i["char"]))
 

@@ -216,6 +216,12 @@ each one separately.
   (亻→人); 阝 is in two groups (阜, 邑), so it gets none. A part whose KANJIDIC
   meanings are only radical names borrows the `form_of` meaning in the page
   head ("a form of 人 · person"); see `realMeanings` / `real_meanings`.
+- Added 2026-10-05: kind `kin` ("Related": the same thing drawn differently,
+  隹·鳥; stored once, read both ways; never on the graph). And the graph's
+  containers take in the other positional forms of the focus: 糸 shows 細
+  (built from 糹, marked on the node's title and the hold card). Only groups
+  without a note merge (`forms.graph_families`), so 肉/月, 玉/王, 阜/邑/阝, 小/⺌
+  stay apart. Display only: no edge, fan-out or order changes.
 - Old forms not in our DB (靑) show as dashed, unclickable glyphs. Curated
   notes are English only for now (data, like glosses).
 - Offline: the offline page shows no similar-kanji rows, so forms are not in

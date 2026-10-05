@@ -37,6 +37,8 @@ export interface PositionedNode {
   weight?: number
   /** A container shown not for itself but for what it leads up to at the level. */
   via?: boolean
+  /** The other form of the focus a container is built from: 糹 for 細 under 糸. */
+  form?: string
 }
 
 export interface PositionedEdge {
@@ -130,6 +132,7 @@ function placeContainers(containers: KanjiNode[], via: Set<string>): PositionedN
         ring,
         weight,
         via: via.has(node.char),
+        form: node.form,
       })
     })
 

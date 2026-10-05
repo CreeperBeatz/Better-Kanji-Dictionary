@@ -506,7 +506,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if value is None:
             return None
         if not isinstance(value, dict) or value.get("kind") not in FORM_KINDS:
-            raise _bad("form_kind", "kind must be one of positional, old, form_of, looks_like, none")
+            raise _bad("form_kind", "kind must be one of positional, old, form_of, looks_like, kin, none")
         note = (value.get("note") or "").strip()[:300] or None
         if value["kind"] == "form_of" and not note:
             # The rule: a form_of needs historical support, and the note is where it goes.

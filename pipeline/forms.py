@@ -19,6 +19,8 @@ contains 月 because that is what is on the page, and its old form 靑 (生 over
                 亻 → 人. One per bound part; it lends the part its meaning.
     looks_like  a popular lookalike, `char` → `other`: 龶 → 王. A mnemonic,
                 always labelled as one, never as where the part comes from.
+    kin         two characters for the same thing, drawn differently: 隹 鳥.
+                Neither is a form of the other. Stored once, read both ways.
 
 `source` is `unihan`, `curated` or `review:<decision id>`. Accepted review
 decisions are exported to data/form_overrides.json (server/review.py), the
@@ -36,10 +38,12 @@ from pathlib import Path
 DATA = Path(__file__).parent / "data"
 OVERRIDES = Path(__file__).parent.parent / "data" / "form_overrides.json"
 
-KINDS = ("positional", "old", "form_of", "looks_like")
+KINDS = ("positional", "old", "form_of", "looks_like", "kin")
 
 # The forms one component takes, its standalone form first. A note says what
-# the grouping means where it would otherwise surprise.
+# the grouping means where it would otherwise surprise -- and a group with a
+# note stays apart on the graph: focusing 糸 also shows what is built from 糹,
+# but focusing 肉 does not show the moon in 明 (server/forms.py graph_families).
 POSITIONAL: list[tuple[str, str | None]] = [
     ("人亻", None),
     ("水氵氺", None),
@@ -77,6 +81,12 @@ FORM_OF: dict[str, tuple[str, str | None]] = {
 LOOKS_LIKE: list[tuple[str, str, str | None]] = [
     ("龶", "王", "often called “king”, but it is a squashed 生"),
     ("䒑", "艹", None),
+]
+
+# Kin: the same thing, drawn two ways. Shown on the Forms block, never merged
+# on the graph -- 鳴 does not look like it contains 隹.
+KIN: list[tuple[str, str, str | None]] = [
+    ("鳥", "隹", "both began as drawings of a bird; 鶏's old form 鷄 is also written 雞"),
 ]
 
 # Old forms Unihan does not link: modern -> (old, note).
@@ -126,6 +136,8 @@ def rows(joyo: set[str]) -> list[tuple[str, str, str, str, str | None]]:
         _form_of(out, part, whole, ("curated", note))
     for part, like, note in LOOKS_LIKE:
         out[(part, like, "looks_like")] = ("curated", note)
+    for a, b, note in KIN:
+        out[(a, b, "kin")] = ("curated", note)
 
     for modern, olds in unihan_old().items():
         for o in olds:
@@ -155,7 +167,7 @@ def build(db: sqlite3.Connection) -> None:
         CREATE TABLE char_form (
             char   TEXT NOT NULL,
             other  TEXT NOT NULL,
-            kind   TEXT NOT NULL,   -- positional | old | form_of | looks_like
+            kind   TEXT NOT NULL,   -- positional | old | form_of | looks_like | kin
             source TEXT NOT NULL,   -- unihan | curated | review:<decision id>
             note   TEXT,
             PRIMARY KEY (char, other, kind)

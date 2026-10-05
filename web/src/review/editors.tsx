@@ -30,6 +30,7 @@ const S = strings(
     k_old: 'its old form',
     k_form_of: 'is a form of (lends its meaning)',
     k_looks_like: 'looks like (a mnemonic only)',
+    k_kin: 'the same thing, drawn differently',
     k_none: 'no relation',
     note: 'Note',
     noteHint: 'For “a form of”, say where it comes from: the old form, or a reference.',
@@ -61,6 +62,7 @@ const S = strings(
     k_old: 'старата му форма',
     k_form_of: 'е форма на (заема значението му)',
     k_looks_like: 'прилича на (само мнемоника)',
+    k_kin: 'същото нещо, нарисувано различно',
     k_none: 'няма връзка',
     note: 'Бележка',
     noteHint: 'За „форма на“ кажете откъде идва: старата форма или справочник.',
@@ -80,7 +82,7 @@ const S = strings(
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'none']
+const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'kin', 'none']
 
 /**
  * Single strokes (server/review.py STROKES). The server refuses them as parts

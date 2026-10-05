@@ -7,8 +7,8 @@ import { meaningsOf } from '../i18n/content'
 const HALF_WIDTH = 130
 
 const S = strings(
-  { none: 'no recorded meaning', on: 'On', kun: 'Kun', strokes: 'Strokes', level: 'Level' },
-  { none: 'няма записано значение', on: 'Он', kun: 'Кун', strokes: 'Черти', level: 'Ниво' },
+  { none: 'no recorded meaning', on: 'On', kun: 'Kun', strokes: 'Strokes', level: 'Level', form: 'Built from' },
+  { none: 'няма записано значение', on: 'Он', kun: 'Кун', strokes: 'Черти', level: 'Ниво', form: 'Съставен от' },
 )
 
 interface Props {
@@ -72,6 +72,12 @@ export const HoldCard = forwardRef<HTMLDivElement, Props>(function HoldCard(
         )}
         <dt>{t('level')}</dt>
         <dd>{levelOf(node, lang)}</dd>
+        {node.form && (
+          <>
+            <dt>{t('form')}</dt>
+            <dd lang="ja">{node.form}</dd>
+          </>
+        )}
       </dl>
       <button className="see-components hold-card-open" onClick={onOpen}>
         {openLabel}

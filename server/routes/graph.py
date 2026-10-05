@@ -4,7 +4,9 @@ GET /api/kanji/{char} returns everything one focus view needs:
 
   focus       the selected character and its metadata
   containers  characters that DIRECTLY contain it, one level up only,
-              ordered by frequency so the client can map rank -> orbit radius
+              ordered by frequency so the client can map rank -> orbit radius;
+              with those of its other positional forms (細 for 糸, through
+              糹), each marked with the form it is built from
   components  its full decomposition down to atoms, as a layered DAG
               (a component can be shared between branches, so nodes + edges,
               not a tree)
@@ -58,6 +60,19 @@ def parents_of(char: str) -> list[str]:
     base = {p for p in base if p not in ov or char in ov[p]}
     base |= {p for p, comps in ov.items() if char in comps}
     return sorted(base)
+
+
+def parents_with_forms(char: str, families: dict[str, set[str]]) -> dict[str, str | None]:
+    """Containers of `char` and of its other positional forms (forms.graph_families):
+    each container with the form it is built from, None where that is `char` itself."""
+    out: dict[str, str | None] = {p: None for p in parents_of(char)}
+    family = families.get(char, {char})
+    for form in sorted(family - {char}):
+        for p in parents_of(form):
+            out.setdefault(p, form)
+    for form in family:  # 糸 is not above 糹; they are the focus, twice
+        out.pop(form, None)
+    return out
 
 
 # --- what lies above a character, however far up.
@@ -128,6 +143,14 @@ def _with_reach(nodes: list[dict]) -> list[dict]:
     return nodes
 
 
+def _with_forms(nodes: list[dict], via_form: dict[str, str | None]) -> list[dict]:
+    """Say on a container built from another form of the focus which one: 細 from 糹."""
+    for n in nodes:
+        if via_form.get(n["char"]):
+            n["form"] = via_form[n["char"]]
+    return nodes
+
+
 def _node(row) -> dict:
     """Shape one character row for the client."""
     return {
@@ -178,8 +201,10 @@ def containers_of(c: list[str] = Query(default=[], max_length=64)) -> dict:
     request and the peek opens without a round trip.
     """
     out: dict[str, dict] = {}
+    families = forms.graph_families()
     for char in dict.fromkeys(ch for ch in c if len(ch) == 1):
-        parents = parents_of(char)
+        via_form = parents_with_forms(char, families)
+        parents = list(via_form)
         if not parents:
             out[char] = {"total": 0, "containers": []}
             continue
@@ -193,7 +218,7 @@ def containers_of(c: list[str] = Query(default=[], max_length=64)) -> dict:
             tuple(parents),
         )
         total = query_one(f"SELECT COUNT(*) AS n FROM kanji WHERE char IN ({ph})", tuple(parents))["n"]
-        out[char] = {"total": total, "containers": _with_reach([_node(r) for r in rows])}
+        out[char] = {"total": total, "containers": _with_forms(_with_reach([_node(r) for r in rows]), via_form)}
     return out
 
 
@@ -318,8 +343,10 @@ def get_kanji(char: str) -> dict:
     if focus_row is None:
         raise HTTPException(404, f"{char} is not in the graph")
 
-    # --- containers: one level up only, frequency-ordered (NULL freq = rarest)
-    parent_chars = parents_of(char)
+    # --- containers: one level up only, frequency-ordered (NULL freq = rarest),
+    # with those of its other positional forms: 糸 shows 細, built from 糹.
+    via_form = parents_with_forms(char, forms.graph_families())
+    parent_chars = list(via_form)
     containers: list[dict] = []
     if parent_chars:
         ph = ",".join("?" * len(parent_chars))
@@ -330,7 +357,7 @@ def get_kanji(char: str) -> dict:
             f"ORDER BY k.freq IS NULL, k.freq, k.strokes, k.char",
             tuple(parent_chars),
         )
-        containers = _with_reach([_node(r) for r in container_rows])
+        containers = _with_forms(_with_reach([_node(r) for r in container_rows]), via_form)
 
     # --- components: full descent to atoms, depth = longest path from focus
     depth: dict[str, int] = {char: 0}

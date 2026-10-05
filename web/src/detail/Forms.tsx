@@ -23,6 +23,8 @@ const S = strings(
     looksLike: 'Looks like',
     looksLikeHint: 'a mnemonic, not its origin',
     lookalikeOf: 'Mistaken for it',
+    kin: 'Related',
+    kinHint: 'the same thing, drawn differently',
     variants: 'Other variants',
     notAPage: '{char} has no page of its own',
     noForms: 'No forms recorded yet.',
@@ -37,6 +39,8 @@ const S = strings(
     looksLike: 'Прилича на',
     looksLikeHint: 'мнемоника, а не произход',
     lookalikeOf: 'Бъркат го с него',
+    kin: 'Сродни',
+    kinHint: 'същото нещо, нарисувано различно',
     variants: 'Други варианти',
     notAPage: '{char} няма собствена страница',
     noForms: 'Още няма записани форми.',
@@ -52,6 +56,7 @@ const ROWS: [keyof Omit<FormsResponse, 'char' | 'meaning'>, Key][] = [
   ['forms', 'forms'],
   ['looksLike', 'looksLike'],
   ['lookalikeOf', 'lookalikeOf'],
+  ['kin', 'kin'],
   ['variants', 'variants'],
 ]
 
@@ -106,12 +111,13 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
             <dt>
               {t(label)}
               {k === 'looksLike' && <span className="forms-hint"> ({t('looksLikeHint')})</span>}
+              {k === 'kin' && <span className="forms-hint"> ({t('kinHint')})</span>}
             </dt>
             <dd>
               {data[k].map((i) => (
                 <span key={i.char} className="forms-item">
                   {glyph(i)}
-                  {(k === 'formOf' || k === 'looksLike') && meaningsOf(i, lang).value[0] && (
+                  {(k === 'formOf' || k === 'looksLike' || k === 'kin') && meaningsOf(i, lang).value[0] && (
                     <span className="forms-meaning">{meaningsOf(i, lang).value[0]}</span>
                   )}
                   {i.note && <span className="forms-note">{i.note}</span>}
