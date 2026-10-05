@@ -6,11 +6,10 @@
  */
 import { useEffect, useState } from 'react'
 import { api, type ReviewProgress, type TaskType } from '../api'
-import { strings, useLang } from '../i18n'
+import { localeOf, strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    title: 'Progress',
     tasks: '{done} of {total} review tasks done',
     tasksShort: '{done} / {total} tasks',
     verified: '{pct} of the dictionary verified',
@@ -36,7 +35,6 @@ const S = strings(
     loading: 'loading',
   },
   {
-    title: 'Напредък',
     tasks: '{done} от {total} задачи за преглед са готови',
     tasksShort: '{done} / {total} задачи',
     verified: '{pct} от речника е проверен',
@@ -99,7 +97,7 @@ export function useProgress(version: number): ReviewProgress | null {
 
 function useNumber() {
   const lang = useLang()
-  return (x: number) => x.toLocaleString(lang === 'bg' ? 'bg-BG' : 'en-GB')
+  return (x: number) => x.toLocaleString(localeOf(lang))
 }
 
 /** The bar in the top bar; a click opens the Progress tab. */

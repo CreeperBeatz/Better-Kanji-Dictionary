@@ -10,13 +10,17 @@
  * or with a newspaper rank or a JLPT level (server/review.py `_on_board`).
  * The rest are a separate task, later.
  *
- * The board only edits; the queue decides. `finalizeBoard` turns it into what
- * the server takes: the groups with their final ids, and word id -> group id.
+ * The board only edits; the queue decides. `finalizeBoard` (review/board.ts)
+ * turns it into what the server takes: the groups with their final ids, and
+ * word id -> group id.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type BoardWord, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
+import { useKey } from '../keys'
 import { newsRank } from '../search/Results'
+import { toggled, withIds } from '../sets'
+import type { Placements } from './board'
 import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
 
@@ -27,7 +31,6 @@ const S = strings(
     tickHint: 'Tick each word as you check it: the card can be accepted once every word in the groups is ticked.',
     allConfirmed: 'every word confirmed',
     en: 'English label',
-    bg: 'Bulgarian',
     note: 'Note',
     remove: 'remove group',
     addGroup: 'add a group',
@@ -74,7 +77,6 @@ const S = strings(
     tickHint: 'Отмятайте всяка дума, щом я проверите: картата може да се приеме, когато всички думи в групите са отметнати.',
     allConfirmed: 'всички думи са потвърдени',
     en: 'Английски етикет',
-    bg: 'Български',
     note: 'Бележка',
     remove: 'махнете групата',
     addGroup: 'добавете група',
@@ -137,31 +139,6 @@ function byNews(a: BoardWord, b: BoardWord): number {
   )
 }
 
-/** Groups with their final ids (new ones named from their English label) and every placement under them. */
-export function finalizeBoard(char: string, groups: MeaningGroup[], placements: Record<number, Bucket>) {
-  const taken = new Set(groups.filter((g) => !isNew(g.id)).map((g) => g.id))
-  const rename: Record<string, string> = {}
-  const out = groups.map((g, i) => {
-    if (!isNew(g.id)) return g
-    const base = g.en.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || `g${i + 1}`
-    let id = `${char}.${base}`
-    for (let n = 2; taken.has(id); n++) id = `${char}.${base}-${n}`
-    taken.add(id)
-    rename[g.id] = id
-    return { ...g, id }
-  })
-  // A word left in a group that is gone is in no group.
-  const ids = new Set([...out.map((g) => g.id), CATCH_ALL])
-  const words: Record<number, Bucket> = {}
-  for (const [id, b] of Object.entries(placements)) {
-    const to = b && rename[b] ? rename[b] : b
-    words[Number(id)] = to && ids.has(to) ? to : null
-  }
-  return { groups: out, words }
-}
-
-const isNew = (id: string) => /\.new\d+$/.test(id)
-
 /** Mounted once per item (keyed by it), so its state starts from what was kept for that item. */
 export function MeaningsBoard({
   cacheKey,
@@ -186,7 +163,7 @@ export function MeaningsBoard({
   onGroups: (g: MeaningGroup[]) => void
   /** The board's words: the kanji's common or ranked words, and any already placed. */
   words: BoardWord[]
-  placements: Record<number, Bucket>
+  placements: Placements
   onPlace: (ids: number[], to: Bucket) => void
   /** Words the reviewer is not sure of; on submit they come back as a follow-up. */
   skipped: Set<number>
@@ -230,24 +207,25 @@ export function MeaningsBoard({
       if (e instanceof MouseEvent && menuRef.current?.contains(e.target as Node)) return
       setMenu(null)
     }
-    // Escape closes the menu, not the review screen behind it.
-    const key = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.stopPropagation()
-      setMenu(null)
-    }
     window.addEventListener('mousedown', close)
     window.addEventListener('scroll', close, true)
     window.addEventListener('resize', close)
-    window.addEventListener('keydown', key, true)
     menuRef.current?.querySelector('button')?.focus()
     return () => {
       window.removeEventListener('mousedown', close)
       window.removeEventListener('scroll', close, true)
       window.removeEventListener('resize', close)
-      window.removeEventListener('keydown', key, true)
     }
   }, [menu])
+  // Escape closes the menu, not the review screen behind it.
+  useKey(
+    (e) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setMenu(null)
+    },
+    { on: !!menu, capture: true },
+  )
 
   useEffect(() => {
     const empty = !okWords.size && !shutOk.size && !shut.size
@@ -284,13 +262,8 @@ export function MeaningsBoard({
   useEffect(() => onUnconfirmed?.(unconfirmed), [unconfirmed, onUnconfirmed])
 
   // A word that moves is no longer confirmed: it was confirmed where it was.
-  const unconfirm = (ids: number[]) =>
-    setOkWords((s) => {
-      if (!ids.some((id) => s.has(id))) return s
-      const n = new Set(s)
-      for (const id of ids) n.delete(id)
-      return n
-    })
+  const unconfirm = (ids: number[]) => setOkWords((s) => (ids.some((id) => s.has(id)) ? withIds(s, ids, false) : s))
+  const setConfirmed = (ids: number[], on: boolean) => setOkWords((s) => withIds(s, ids, on))
 
   function move(to: Bucket, ids?: number[]) {
     const list = ids ?? [...picked]
@@ -299,44 +272,6 @@ export function MeaningsBoard({
     unconfirm(list)
     if (list.some((id) => skipped.has(id))) onSkip(list, false)
     setPicked(new Set())
-  }
-
-  // A word left for later is not confirmed.
-  const canConfirm = (id: number) => !skipped.has(id)
-  function setConfirmed(ids: number[], on: boolean) {
-    setOkWords((s) => {
-      const n = new Set(s)
-      for (const id of ids) {
-        if (on) n.add(id)
-        else n.delete(id)
-      }
-      return n
-    })
-  }
-
-  function toggleWord(id: number) {
-    setOkWords((s) => {
-      const n = new Set(s)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
-  }
-
-  const setIn = (set: Set<string>, id: string, on: boolean) => {
-    const n = new Set(set)
-    if (on) n.add(id)
-    else n.delete(id)
-    return n
-  }
-
-  function toggle(id: number) {
-    setPicked((p) => {
-      const n = new Set(p)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
   }
 
   const setGroup = (i: number, patch: Partial<MeaningGroup>) => onGroups(groups.map((g, j) => (j === i ? { ...g, ...patch } : g)))
@@ -354,20 +289,12 @@ export function MeaningsBoard({
   }
 
   const gloss = (w: BoardWord) => (lang === 'bg' && w.glossBg) || w.gloss
-  const toggleShut = (id: string) =>
-    setShut((s) => {
-      const n = new Set(s)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
 
   function card(w: BoardWord, from: Bucket) {
     // With one word to place, the others are only there to be seen.
     if (only !== undefined && w.id !== only) return contextCard(w)
     const unsure = isUnsure(w)
     const isSkipped = skipped.has(w.id)
-    const boxOk = !isSkipped
     const ok = okWords.has(w.id)
     return (
       <li
@@ -384,7 +311,7 @@ export function MeaningsBoard({
           e.dataTransfer.setData('text/plain', ids.join(','))
           e.dataTransfer.effectAllowed = 'move'
         }}
-        onClick={() => toggle(w.id)}
+        onClick={() => setPicked((p) => toggled(p, w.id))}
         onContextMenu={(e) => {
           e.preventDefault()
           const ids = picked.has(w.id) ? [...picked] : [w.id]
@@ -394,14 +321,15 @@ export function MeaningsBoard({
       >
         <span className="board-head" lang="ja">
           {!plain && (
-          <label
-            className="board-check"
-            title={t('confirmWord')}
-            data-off={!boxOk || undefined}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <input type="checkbox" checked={ok} disabled={!boxOk} aria-label={t('confirmWord')} onChange={() => toggleWord(w.id)} />
-          </label>
+            <label className="board-check" title={t('confirmWord')} data-off={isSkipped || undefined} onClick={(e) => e.stopPropagation()}>
+              <input
+                type="checkbox"
+                checked={ok}
+                disabled={isSkipped}
+                aria-label={t('confirmWord')}
+                onChange={() => setOkWords((s) => toggled(s, w.id))}
+              />
+            </label>
           )}
           {w.headword}
         </span>
@@ -447,6 +375,48 @@ export function MeaningsBoard({
     )
   }
 
+  // The menu's confirming and leaving for later, in the queue only. Each item
+  // closes the menu and, but for "decide it now", clears the selection.
+  function menuChecks(ids: number[]) {
+    const then = (run: () => void, unpick = true) => () => {
+      run()
+      if (unpick) setPicked(new Set())
+      setMenu(null)
+    }
+    // A word left for later is not confirmed.
+    const ok = ids.filter((id) => !okWords.has(id) && !skipped.has(id))
+    return (
+      <>
+        <hr />
+        {ids.every((id) => okWords.has(id)) ? (
+          <button role="menuitem" onClick={then(() => setConfirmed(ids, false))}>
+            {ids.length > 1 ? t('unconfirmMany', { n: ids.length }) : t('unconfirmOne')}
+          </button>
+        ) : (
+          <button role="menuitem" className="board-menu-ok" disabled={!ok.length} onClick={then(() => setConfirmed(ok, true))}>
+            {ids.length === 1 ? t('confirmOne') : t('confirmMany', { n: ok.length })}
+          </button>
+        )}
+        {ids.every((id) => skipped.has(id)) ? (
+          <button role="menuitem" onClick={then(() => onSkip(ids, false), false)}>
+            {t('unskip')}
+          </button>
+        ) : (
+          <button
+            role="menuitem"
+            className="board-menu-skip"
+            onClick={then(() => {
+              onSkip(ids, true)
+              unconfirm(ids)
+            })}
+          >
+            {ids.length > 1 ? t('skipMany', { n: ids.length }) : t('skip')}
+          </button>
+        )}
+      </>
+    )
+  }
+
   // The word to place, in sight when the board opens.
   const boardRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -488,7 +458,7 @@ export function MeaningsBoard({
         }}
       >
         <header className="board-group-head">
-          <button className="board-caret" onClick={() => toggleShut(id)} aria-expanded={!shut.has(id)} title={t(shut.has(id) ? 'expand' : 'collapse')}>
+          <button className="board-caret" onClick={() => setShut((s) => toggled(s, id))} aria-expanded={!shut.has(id)} title={t(shut.has(id) ? 'expand' : 'collapse')}>
             {shut.has(id) ? '▸' : '▾'}
           </button>
           {head}
@@ -502,7 +472,7 @@ export function MeaningsBoard({
             {all.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
             {done.length > 0 && (
               <div className="board-part board-done">
-                <button className="board-done-toggle" onClick={() => setShutOk((s) => setIn(s, id, !s.has(id)))} aria-expanded={!shutOk.has(id)}>
+                <button className="board-done-toggle" onClick={() => setShutOk((s) => toggled(s, id))} aria-expanded={!shutOk.has(id)}>
                   {shutOk.has(id) ? '▸' : '▾'} {t('confirmed')} <span className="hint">{done.length}</span>
                 </button>
                 {!shutOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
@@ -602,64 +572,7 @@ export function MeaningsBoard({
               {label}
             </button>
           ))}
-          {!plain && <hr />}
-          {!plain && (() => {
-            const ids = menu.ids
-            const done = ids.filter((id) => okWords.has(id))
-            if (done.length === ids.length)
-              return (
-                <button
-                  role="menuitem"
-                  onClick={() => {
-                    setConfirmed(ids, false)
-                    setPicked(new Set())
-                    setMenu(null)
-                  }}
-                >
-                  {ids.length > 1 ? t('unconfirmMany', { n: ids.length }) : t('unconfirmOne')}
-                </button>
-              )
-            const ok = ids.filter((id) => !okWords.has(id) && canConfirm(id))
-            const label = ids.length === 1 ? t('confirmOne') : t('confirmMany', { n: ok.length })
-            return (
-              <button
-                role="menuitem"
-                className="board-menu-ok"
-                disabled={!ok.length}
-                onClick={() => {
-                  setConfirmed(ok, true)
-                  setPicked(new Set())
-                  setMenu(null)
-                }}
-              >
-                {label}
-              </button>
-            )
-          })()}
-          {plain ? null : menu.ids.every((id) => skipped.has(id)) ? (
-            <button
-              role="menuitem"
-              onClick={() => {
-                onSkip(menu.ids, false)
-                setMenu(null)
-              }}
-            >
-              {t('unskip')}
-            </button>
-          ) : (
-            <button
-              role="menuitem"
-              className="board-menu-skip"
-              onClick={() => {
-                onSkip(menu.ids, true)
-                unconfirm(menu.ids)
-                setPicked(new Set())
-                setMenu(null)
-              }}
-            >
-              {menu.ids.length > 1 ? t('skipMany', { n: menu.ids.length }) : t('skip')}
-            </button>
-          )}
+          {!plain && menuChecks(menu.ids)}
         </div>
       )}
     </div>

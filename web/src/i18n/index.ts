@@ -40,6 +40,9 @@ export function getLang(): Lang {
   return current
 }
 
+/** The locale dates and numbers are written in: day before month in English too. */
+export const localeOf = (lang: Lang) => (lang === 'bg' ? 'bg-BG' : 'en-GB')
+
 export function setLang(lang: Lang): void {
   if (lang === current) return
   current = lang

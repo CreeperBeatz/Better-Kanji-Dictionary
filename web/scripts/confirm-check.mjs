@@ -2,22 +2,14 @@
 // A meanings card can't be accepted until every word in its groups is
 // confirmed; confirmed words stay in sight, in an open "confirmed" part.
 import { chromium } from 'playwright'
+import { signedIn } from './session.mjs'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
 const SHOTS = process.env.SHOTS ?? 'C:/tmp/shots'
 const browser = await chromium.launch()
 const errors = []
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const ctx = await browser.newContext({ viewport: { width: 1400, height: 950 } })
-const page = await ctx.newPage()
-page.on('pageerror', (e) => errors.push(String(e)))
-page.on('console', (m) => m.type() === 'error' && !/avatar/.test(m.text()) && errors.push(m.text()))
-const res = await fetch(`${BASE}/api/auth/request`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', Origin: BASE },
-  body: JSON.stringify({ email: 'admin@example.com' }),
-}).then((r) => r.json())
-await page.goto(res.devLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' })
+const page = await signedIn(browser, BASE, 'admin@example.com', errors, { viewport: { width: 1400, height: 950 }, settle: 0, label: '' })
 await page.goto(`${BASE}/review/queue/meanings`, { waitUntil: 'networkidle' })
 await wait(1500)
 

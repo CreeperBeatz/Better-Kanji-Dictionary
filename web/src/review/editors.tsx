@@ -8,7 +8,7 @@
  *   word_sense     one of the kanji's groups, or the catch-all
  */
 import { lazy, Suspense, useState } from 'react'
-import { type FormKind, type MeaningGroup, type TaskType, type TaskValue } from '../api'
+import { type FormKind, type ItemDetail, type MeaningGroup, type TaskType, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
 
 // Not needed until its button is pressed.
@@ -42,6 +42,9 @@ const S = strings(
     remove: 'remove',
     catchAll: 'the kanji brings no meaning to the word',
     noGroups: 'This kanji has no accepted meaning groups yet.',
+    kanjidic: 'KANJIDIC',
+    curated: 'Kanji Alive',
+    readings: 'Readings',
   },
   {
     atomic: 'без части (неделим)',
@@ -70,11 +73,14 @@ const S = strings(
     remove: 'махнете',
     catchAll: 'канджито не внася значение в думата',
     noGroups: 'Това канджи още няма приети групи значения.',
+    kanjidic: 'KANJIDIC',
+    curated: 'Kanji Alive',
+    readings: 'Четения',
   },
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-export const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'none']
+const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'none']
 
 /**
  * Single strokes (server/review.py STROKES). The server refuses them as parts
@@ -95,6 +101,52 @@ export function groupLabel(id: string, groups: MeaningGroup[] | null | undefined
   return g ? (lang === 'bg' && g.bg) || g.en : id
 }
 
+/** What the dictionaries say of a kanji, as rows of a <dl>: what a card on it is judged by. */
+export function KanjiFacts({ context: c }: { context: ItemDetail['context'] }) {
+  const t = S(useLang())
+  return (
+    <>
+      {c.curated && (
+        <>
+          <dt>{t('curated')}</dt>
+          <dd>{c.curated}</dd>
+        </>
+      )}
+      {c.kanjidic && c.kanjidic.length > 0 && (
+        <>
+          <dt>{t('kanjidic')}</dt>
+          <dd>{c.kanjidic.join(', ')}</dd>
+        </>
+      )}
+      {(c.on?.length || c.kun?.length) && (
+        <>
+          <dt>{t('readings')}</dt>
+          <dd lang="ja">{[...(c.on ?? []), ...(c.kun ?? [])].join('、')}</dd>
+        </>
+      )}
+    </>
+  )
+}
+
+/** Characters as tiles, as parts are shown; with `onKanji`, each opens its page. */
+export function PartTiles({ chars, onKanji }: { chars: string[]; onKanji?: (char: string) => void }) {
+  return (
+    <span className="review-parts" lang="ja">
+      {chars.map((c, i) =>
+        onKanji ? (
+          <button key={i} className="review-part" onClick={() => onKanji(c)}>
+            {c}
+          </button>
+        ) : (
+          <span key={i} className="review-part">
+            {c}
+          </span>
+        ),
+      )}
+    </span>
+  )
+}
+
 /** A value, read-only. */
 export function ValueView({ type, value, groups }: { type: TaskType; value: TaskValue; groups?: MeaningGroup[] | null }) {
   const lang = useLang()
@@ -103,17 +155,7 @@ export function ValueView({ type, value, groups }: { type: TaskType; value: Task
     return <span className="hint">{t(type === 'decomposition' || type === 'form_link' ? 'sourceData' : 'noneYet')}</span>
   if (type === 'decomposition') {
     const parts = value as string[]
-    return parts.length ? (
-      <span className="review-parts" lang="ja">
-        {parts.map((c, i) => (
-          <span key={i} className="review-part">
-            {c}
-          </span>
-        ))}
-      </span>
-    ) : (
-      <span className="hint">{t('atomic')}</span>
-    )
+    return parts.length ? <PartTiles chars={parts} /> : <span className="hint">{t('atomic')}</span>
   }
   if (type === 'form_link') {
     const v = value as { kind: FormKind; note: string | null }

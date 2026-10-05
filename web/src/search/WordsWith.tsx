@@ -13,6 +13,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, groupLabel } from '../review/editors'
+import { toggled } from '../sets'
 
 const S = strings(
   {
@@ -47,6 +48,39 @@ const S = strings(
 const PAGE = 30
 const REST = 'rest'
 
+/**
+ * A meaning group's title bar, which folds it: a chevron, > when folded,
+ * pointing down when open. The kanji page's few words by group fold the same way.
+ */
+export function GroupToggle({
+  open,
+  onToggle,
+  label,
+  n,
+  className,
+  children,
+}: {
+  open: boolean
+  onToggle: () => void
+  label: ReactNode
+  /** How many words it holds. */
+  n: number
+  className?: string
+  /** After the count: a note, a hint. */
+  children?: ReactNode
+}) {
+  return (
+    <button className={className ? `meaning-group-toggle ${className}` : 'meaning-group-toggle'} aria-expanded={open} onClick={onToggle}>
+      <svg className="meaning-group-caret" viewBox="0 0 12 12" aria-hidden>
+        <path d="M4 2.5 7.5 6 4 9.5" />
+      </svg>
+      <span className="meaning-group-label">{label}</span>
+      <span className="hint">{n}</span>
+      {children}
+    </button>
+  )
+}
+
 export function WordsWith({
   char,
   common,
@@ -77,24 +111,11 @@ export function WordsWith({
     setShown({})
     setShut(new Set())
   }, [char])
-  const fold = (id: string) =>
-    setShut((s) => {
-      const n = new Set(s)
-      if (n.has(id)) n.delete(id)
-      else n.add(id)
-      return n
-    })
-  // The whole title bar folds its group: a chevron, > when folded, pointing down when open.
   const head = (id: string, n: number, label: ReactNode, extra?: ReactNode) => (
     <h3>
-      <button className="meaning-group-toggle" aria-expanded={!shut.has(id)} onClick={() => fold(id)}>
-        <svg className="meaning-group-caret" viewBox="0 0 12 12" aria-hidden>
-          <path d="M4 2.5 7.5 6 4 9.5" />
-        </svg>
-        <span className="meaning-group-label">{label}</span>
-        <span className="hint">{n}</span>
+      <GroupToggle open={!shut.has(id)} onToggle={() => setShut((s) => toggled(s, id))} label={label} n={n}>
         {extra}
-      </button>
+      </GroupToggle>
     </h3>
   )
 

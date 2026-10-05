@@ -18,19 +18,22 @@ import {
   dataChanged,
   type BoardWord,
   type FormKind,
-  type FormsResponse,
   type MeaningGroup,
   type TaskType,
   type TaskValue,
   type Word,
 } from '../api'
 import { useAuth } from '../account/auth'
-import { useForms } from '../detail/Forms'
+import { FormsSummary, useForms } from '../detail/Forms'
 import { realMeanings } from '../detail/meanings'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { Overlay } from '../Overlay'
+import { toggled } from '../sets'
+import { BgLabels, BgMeanings, BgSenses } from './BgCard'
+import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
 import { CATCH_ALL, groupLabel, strokesOk, ValueEditor, ValueView } from './editors'
-import { finalizeBoard, MeaningsBoard } from './MeaningsBoard'
+import { MeaningsBoard } from './MeaningsBoard'
 
 const S = strings(
   {
@@ -53,21 +56,16 @@ const S = strings(
     noSenses: 'No accepted meaning groups yet.',
     drafted: 'Not reviewed yet: these groups are drafts waiting in the review queue.',
     words: '{n} words',
-    noForms: 'No forms recorded yet.',
     noBg: 'No Bulgarian meanings yet.',
     formHint: 'Add or change how {char} relates to one other character.',
     other: 'The other character',
     english: 'English',
-    bgHint: 'One meaning per field, short: what the kanji means, as the English says it.',
     bgLabels: 'Group labels and notes',
-    noteBg: 'the note in Bulgarian',
-    noNote: 'no English note',
     wordBgHint: 'One Bulgarian gloss per sense, beside the English.',
     noKanji: 'This word has no kanji.',
     noGroupsFor: '{char} has no accepted meaning groups yet.',
     notPlaced: 'not placed yet',
     add: 'add',
-    remove: 'remove',
     reason: 'Why?',
     reasonHint: 'What is wrong now, and how you know: the old form, a dictionary, a teacher.',
     reasonOptional: 'Why? (kept with the change)',
@@ -84,14 +82,6 @@ const S = strings(
     signIn: 'Sign in to suggest a change.',
     logIn: 'log in',
     failed: 'could not send this',
-    f_old: 'Old form',
-    f_new: 'Today’s form',
-    f_formOf: 'A form of',
-    f_positional: 'In other positions',
-    f_forms: 'Its squashed or moved forms',
-    f_looksLike: 'Looks like',
-    f_lookalikeOf: 'Mistaken for it',
-    f_variants: 'Other variants',
   },
   {
     suggest: 'Предложете промени',
@@ -113,21 +103,16 @@ const S = strings(
     noSenses: 'Още няма приети групи значения.',
     drafted: 'Още не е прегледано: тези групи са чернови, които чакат в опашката за преглед.',
     words: '{n} думи',
-    noForms: 'Още няма записани форми.',
     noBg: 'Още няма значения на български.',
     formHint: 'Добавете или променете как {char} се свързва с един друг знак.',
     other: 'Другият знак',
     english: 'Английски',
-    bgHint: 'По едно кратко значение в поле: какво значи канджито, както го казва английският.',
     bgLabels: 'Етикети и бележки на групите',
-    noteBg: 'бележката на български',
-    noNote: 'няма английска бележка',
     wordBgHint: 'По една българска глоса за всяко значение, до английската.',
     noKanji: 'Тази дума няма канджи.',
     noGroupsFor: '{char} още няма приети групи значения.',
     notPlaced: 'още не е поставена',
     add: 'добавете',
-    remove: 'махнете',
     reason: 'Защо?',
     reasonHint: 'Какво не е наред сега и откъде знаете: старата форма, речник, учител.',
     reasonOptional: 'Защо? (пази се с промяната)',
@@ -144,20 +129,11 @@ const S = strings(
     signIn: 'Влезте, за да предложите промяна.',
     logIn: 'вход',
     failed: 'не можа да бъде изпратено',
-    f_old: 'Стара форма',
-    f_new: 'Днешна форма',
-    f_formOf: 'Форма на',
-    f_positional: 'В други позиции',
-    f_forms: 'Сбитите или преместени форми',
-    f_looksLike: 'Прилича на',
-    f_lookalikeOf: 'Бъркат го с него',
-    f_variants: 'Други варианти',
   },
 )
 
 type T = ReturnType<typeof S>
 type Key = Parameters<T>[0]
-type Placements = Record<number, string | null>
 type Outcome = 'sent' | 'saved' | 'unchanged' | { problem: string }
 
 /** One request the dialog will send; `section` is where its outcome shows. */
@@ -170,7 +146,6 @@ interface Change {
   words?: Placements
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const isDone = (o: Outcome | undefined) => o === 'sent' || o === 'saved' || o === 'unchanged'
 
 /** The button at the bottom of a page: Edit for reviewers, Suggest changes for everyone else. */
@@ -244,17 +219,6 @@ function EditShell({
   const [busy, setBusy] = useState(false)
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({})
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && !e.defaultPrevented) {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const live = changes.filter((c) => on.has(c.section))
   const pending = live.filter((c) => !isDone(outcomes[c.key]))
   // What is made at once, as against sent: a reviewer's changes, but never a report.
@@ -264,14 +228,8 @@ function EditShell({
   const allDone = live.length > 0 && pending.length === 0
 
   function toggle(id: string) {
-    const off = on.has(id)
-    setOn((o) => {
-      const n = new Set(o)
-      if (off) n.delete(id)
-      else n.add(id)
-      return n
-    })
-    if (off) onReset(id)
+    setOn((o) => toggled(o, id))
+    if (on.has(id)) onReset(id)
   }
 
   async function submit(e: React.FormEvent) {
@@ -345,85 +303,73 @@ function EditShell({
   }
 
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div
-        className="overlay-panel account-panel suggest-panel page-edit-panel"
-        data-wide={wide || undefined}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
-          ×
-        </button>
-        <h2>{title}</h2>
-        {!user ? (
-          <>
-            <p className="hint">{t('signIn')}</p>
-            <p className="assoc-actions">
-              {onSignIn && (
-                <button className="account-submit" onClick={onSignIn}>
-                  {t('logIn')}
-                </button>
-              )}
-              <button className="clear" onClick={onClose}>
-                {t('close')}
+    <Overlay panel="account-panel page-edit-panel" data-wide={wide || undefined} label={title} onClose={onClose}>
+      <h2>{title}</h2>
+      {!user ? (
+        <>
+          <p className="hint">{t('signIn')}</p>
+          <p className="assoc-actions">
+            {onSignIn && (
+              <button className="account-submit" onClick={onSignIn}>
+                {t('logIn')}
               </button>
-            </p>
-          </>
-        ) : allDone ? (
-          <>
-            <ul className="page-edit-outcomes">
-              {[...new Set(live.map((c) => c.section))].map((id) => (
-                <li key={id}>
-                  <b>{t(`s_${id}` as Key)}</b>: {t(outcomeOf(id) as 'sent' | 'saved' | 'unchanged')}
-                </li>
-              ))}
-            </ul>
-            <p className="hint">{t(Object.values(outcomes).some((o) => o === 'sent') ? 'sentAll' : 'savedAll')}</p>
-            <p className="assoc-actions">
-              <button className="clear" onClick={onClose}>
-                {t('close')}
-              </button>
-            </p>
-          </>
-        ) : !ready ? (
-          <p className="hint">{loadError ? (loadError instanceof Error ? errorText(loadError, lang) : t('failed')) : t('loading')}</p>
-        ) : (
-          <form className="account-form" onSubmit={submit}>
-            <p className="hint">{t('pick')}</p>
-            {children({ on, section })}
-            <label className="review-field">
-              <span>{needsReason ? t('reason') : t('reasonOptional')}</span>
-              <textarea className="assoc-text" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
-              {needsReason && <span className="hint">{t('reasonHint')}</span>}
-            </label>
-            <div className="account-row profile-save">
-              <button type="button" className="clear" onClick={onClose}>
-                {t('cancel')}
-              </button>
-              <button className="account-submit" disabled={busy || !pending.length || (needsReason && !reason.trim())}>
-                {makes ? t('save') : t('send')}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
+            )}
+            <button className="clear" onClick={onClose}>
+              {t('close')}
+            </button>
+          </p>
+        </>
+      ) : allDone ? (
+        <>
+          <ul className="page-edit-outcomes">
+            {[...new Set(live.map((c) => c.section))].map((id) => (
+              <li key={id}>
+                <b>{t(`s_${id}` as Key)}</b>: {t(outcomeOf(id) as 'sent' | 'saved' | 'unchanged')}
+              </li>
+            ))}
+          </ul>
+          <p className="hint">{t(Object.values(outcomes).some((o) => o === 'sent') ? 'sentAll' : 'savedAll')}</p>
+          <p className="assoc-actions">
+            <button className="clear" onClick={onClose}>
+              {t('close')}
+            </button>
+          </p>
+        </>
+      ) : !ready ? (
+        <p className="hint">{loadError ? (loadError instanceof Error ? errorText(loadError, lang) : t('failed')) : t('loading')}</p>
+      ) : (
+        <form className="account-form" onSubmit={submit}>
+          <p className="hint">{t('pick')}</p>
+          {children({ on, section })}
+          <label className="review-field">
+            <span>{needsReason ? t('reason') : t('reasonOptional')}</span>
+            <textarea className="assoc-text" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+            {needsReason && <span className="hint">{t('reasonHint')}</span>}
+          </label>
+          <div className="account-row profile-save">
+            <button type="button" className="clear" onClick={onClose}>
+              {t('cancel')}
+            </button>
+            <button className="account-submit" disabled={busy || !pending.length || (needsReason && !reason.trim())}>
+              {makes ? t('save') : t('send')}
+            </button>
+          </div>
+        </form>
+      )}
+    </Overlay>
   )
 }
 
-/** Where each word on the board starts: its group, if that group is one of `groups`. */
-function startPlacements(board: BoardWord[], groups: MeaningGroup[] | null): Placements {
-  const ids = new Set((groups ?? []).map((g) => g.id))
-  const p: Placements = {}
-  for (const w of board) p[w.id] = w.group && (w.group === CATCH_ALL || ids.has(w.group)) ? w.group : null
-  return p
-}
+// A kanji's groups' Bulgarian labels and notes as stored, by group id.
+const labelsOf = (gs: MeaningGroup[] | null) => Object.fromEntries((gs ?? []).map((s) => [s.id, s.bg ?? '']))
+const notesOf = (gs: MeaningGroup[] | null) => Object.fromEntries((gs ?? []).map((s) => [s.id, s.noteBg ?? '']))
+const NO_FORM = { other: '', kind: 'looks_like' as FormKind, note: null as string | null }
 
 interface KanjiNow {
   senses: MeaningGroup[] | null
   drafted: boolean
+  /** The groups as accepted; null while they are only drafts. */
+  accepted: MeaningGroup[] | null
   board: BoardWord[]
   start: Placements
   parts: string[]
@@ -443,7 +389,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   const [labels, setLabels] = useState<Record<string, string>>({})
   const [notesBg, setNotesBg] = useState<Record<string, string>>({})
   const [parts, setParts] = useState<string[]>([])
-  const [form, setForm] = useState<{ other: string; kind: FormKind; note: string | null }>({ other: '', kind: 'looks_like', note: null })
+  const [form, setForm] = useState(NO_FORM)
   const [bg, setBg] = useState<string[]>([])
   const [fresh, setFresh] = useState(0)
 
@@ -457,6 +403,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
         const n: KanjiNow = {
           senses: p.senses,
           drafted: p.drafted,
+          accepted,
           board: p.board,
           start: startPlacements(p.board, accepted),
           parts: g.components.nodes.filter((x) => x.depth === 1).map((x) => x.char),
@@ -466,8 +413,8 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
         setNow(n)
         setGroups(accepted ?? [])
         setPlacements(n.start)
-        setLabels(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.bg ?? ''])))
-        setNotesBg(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.noteBg ?? ''])))
+        setLabels(labelsOf(accepted))
+        setNotesBg(notesOf(accepted))
         setParts(n.parts)
         setBg(n.bg)
       },
@@ -480,24 +427,23 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
 
   function reset(section: string) {
     if (!now) return
-    const accepted = now.drafted ? null : now.senses
     if (section === 'senses') {
-      setGroups(accepted ?? [])
+      setGroups(now.accepted ?? [])
       setPlacements(now.start)
       setFresh((n) => n + 1)
     }
     if (section === 'parts') setParts(now.parts)
-    if (section === 'form') setForm({ other: '', kind: 'looks_like', note: null })
+    if (section === 'form') setForm(NO_FORM)
     if (section === 'bg') {
       setBg(now.bg)
-      setLabels(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.bg ?? ''])))
-      setNotesBg(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.noteBg ?? ''])))
+      setLabels(labelsOf(now.accepted))
+      setNotesBg(notesOf(now.accepted))
     }
   }
 
   // What each section would send, if it is ticked and differs.
   const changes: Change[] = []
-  const accepted = now && !now.drafted ? now.senses : null
+  const accepted = now?.accepted ?? null
   if (now) {
     if (accepted) {
       // Bulgarian labels and notes over the board's groups; a note only once it changed, so an untouched group stays as stored.
@@ -560,8 +506,8 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                     onGroups={setGroups}
                     words={now.board}
                     placements={placements}
-                    onPlace={(ids, to) => setPlacements((p) => ({ ...p, ...Object.fromEntries(ids.map((id) => [id, to])) }))}
-                    skipped={NONE}
+                    onPlace={(ids, to) => setPlacements((p) => placed(p, ids, to))}
+                    skipped={NO_WORDS}
                     onSkip={() => {}}
                   />
                 </>
@@ -575,7 +521,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
               'form',
               t('s_form'),
               <>
-                <FormsNow forms={forms} t={t} />
+                <FormsSummary forms={forms} />
                 {on.has('form') && (
                   <>
                     <p className="hint">{t('formHint', { char })}</p>
@@ -603,64 +549,17 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                 )}
                 {on.has('bg') ? (
                   <>
-                    <div className="review-field">
-                      <span className="hint">{t('bgHint')}</span>
-                      <div className="bg-meanings">
-                        {bg.map((m, i) => (
-                          <span key={i} className="bg-meaning">
-                            <input
-                              className="assoc-text"
-                              lang="bg"
-                              value={m}
-                              maxLength={60}
-                              aria-label={`${t('s_bg')} ${i + 1}`}
-                              onChange={(e) => setBg(bg.map((x, j) => (j === i ? e.target.value : x)))}
-                            />
-                            <button type="button" className="clear" onClick={() => setBg(bg.filter((_, j) => j !== i))}>
-                              {t('remove')}
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      {bg.length < 12 && (
-                        <span className="bg-meaning-tools">
-                          <button type="button" className="clear" onClick={() => setBg([...bg, ''])}>
-                            + {t('add')}
-                          </button>
-                        </span>
-                      )}
-                    </div>
+                    <BgMeanings value={bg} onChange={setBg} name={t('s_bg')} add={t('add')} />
                     {accepted && groups.length > 0 && (
-                      <div className="bg-groups">
-                        <span>{t('bgLabels')}</span>
-                        <ul className="bg-labels">
-                          {groups.map((g) => (
-                            <li key={g.id}>
-                              <span className="bg-label-en">
-                                <b>{g.en}</b>
-                              </span>
-                              <input
-                                className="assoc-text"
-                                lang="bg"
-                                maxLength={40}
-                                value={labels[g.id] ?? g.bg ?? ''}
-                                aria-label={g.en}
-                                onChange={(e) => setLabels({ ...labels, [g.id]: e.target.value })}
-                              />
-                              <span className="bg-label-note hint">{g.note ?? t('noNote')}</span>
-                              <input
-                                className="assoc-text bg-note-input"
-                                lang="bg"
-                                maxLength={200}
-                                value={notesBg[g.id] ?? g.noteBg ?? ''}
-                                placeholder={t('noteBg')}
-                                aria-label={`${g.en}: ${t('noteBg')}`}
-                                onChange={(e) => setNotesBg({ ...notesBg, [g.id]: e.target.value })}
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      // A label or note not typed yet shows the group's own.
+                      <BgLabels
+                        groups={groups}
+                        labels={Object.fromEntries(groups.map((g) => [g.id, labels[g.id] ?? g.bg ?? '']))}
+                        onLabels={setLabels}
+                        notes={Object.fromEntries(groups.map((g) => [g.id, notesBg[g.id] ?? g.noteBg ?? '']))}
+                        onNotes={setNotesBg}
+                        title={t('bgLabels')}
+                      />
                     )}
                   </>
                 ) : now.bg.length ? (
@@ -676,8 +575,6 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     </EditShell>
   )
 }
-
-const NONE = new Set<number>()
 
 /** The groups, read-only, each with how many words are in it and the first few. */
 function GroupsSummary({ groups, board, start, t }: { groups: MeaningGroup[]; board: BoardWord[]; start: Placements; t: T }) {
@@ -701,31 +598,6 @@ function GroupsSummary({ groups, board, start, t }: { groups: MeaningGroup[]; bo
         )
       })}
     </ul>
-  )
-}
-
-const FORM_ROWS = ['old', 'new', 'formOf', 'positional', 'forms', 'looksLike', 'lookalikeOf', 'variants'] as const
-
-/** The forms recorded now, read-only, so a change starts from what is there. */
-function FormsNow({ forms, t }: { forms: FormsResponse | null; t: T }) {
-  const rows = forms ? FORM_ROWS.filter((k) => forms[k].length > 0) : []
-  if (!rows.length) return <p className="hint">{t('noForms')}</p>
-  return (
-    <dl className="page-edit-forms">
-      {rows.map((k) => (
-        <div key={k}>
-          <dt>{t(`f_${k}` as Key)}</dt>
-          <dd lang="ja">
-            {forms![k].map((i) => (
-              <span key={i.char}>
-                {i.char}
-                {i.note && <span className="hint"> ({i.note})</span>}{' '}
-              </span>
-            ))}
-          </dd>
-        </div>
-      ))}
-    </dl>
   )
 }
 
@@ -835,23 +707,7 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
               on.has('bg') ? (
                 <div className="review-field">
                   <span className="hint">{t('wordBgHint')}</span>
-                  <ol className="bg-senses">
-                    {now.word.senses.map((s, i) => (
-                      <li key={i} className="bg-sense">
-                        <div className="bg-en">
-                          {s.pos.length > 0 && <span className="bg-pos">{s.pos.join(', ')}</span>}
-                          {s.gloss}
-                        </div>
-                        <input
-                          className="assoc-text bg-input"
-                          lang="bg"
-                          value={bg[i] ?? ''}
-                          aria-label={`${t('s_bg')} ${i + 1}`}
-                          onChange={(e) => setBg(bg.map((x, j) => (j === i ? e.target.value : x)))}
-                        />
-                      </li>
-                    ))}
-                  </ol>
+                  <BgSenses senses={now.word.senses} value={bg} onChange={setBg} />
                 </div>
               ) : now.bg.some(Boolean) ? (
                 <ol className="page-edit-word-bg">

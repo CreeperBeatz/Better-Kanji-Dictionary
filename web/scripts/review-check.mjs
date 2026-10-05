@@ -3,26 +3,14 @@
 // queue with the keyboard; the page shows the new parts; the admin reverts it.
 // Also opens the meaning items that tests/seed_review.py puts in the queue.
 import { chromium } from 'playwright'
+import { signedIn as signIn } from './session.mjs'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
 const SHOTS = process.env.SHOTS ?? 'C:/tmp/shots'
 const browser = await chromium.launch()
 const errors = []
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function signedIn(email) {
-  const ctx = await browser.newContext({ viewport: { width: 1300, height: 950 } })
-  const page = await ctx.newPage()
-  page.on('pageerror', (e) => errors.push(`${email}: ${e}`))
-  page.on('console', (m) => m.type() === 'error' && !/avatar/.test(m.text()) && errors.push(`${email}: ${m.text()}`))
-  const res = await fetch(`${BASE}/api/auth/request`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: BASE },
-    body: JSON.stringify({ email }),
-  }).then((r) => r.json())
-  await page.goto(res.devLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' })
-  await wait(600)
-  return page
-}
+const signedIn = (email) => signIn(browser, BASE, email, errors, { viewport: { width: 1300, height: 950 } })
 
 const user = await signedIn(`learner${Date.now()}@example.com`)
 await user.goto(`${BASE}/kanji/${encodeURIComponent('青')}`, { waitUntil: 'networkidle' })

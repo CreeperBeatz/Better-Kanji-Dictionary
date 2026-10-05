@@ -20,9 +20,12 @@ import {
 } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { typing, useKey } from '../keys'
+import { withIds } from '../sets'
 import { FontStrip } from '../detail/FontStrip'
-import { CATCH_ALL, strokesOk, ValueEditor, ValueView } from './editors'
-import { finalizeBoard, MeaningsBoard } from './MeaningsBoard'
+import { CATCH_ALL, KanjiFacts, PartTiles, strokesOk, ValueEditor, ValueView } from './editors'
+import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
+import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard } from './BgCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { queueRouteInUrl, replaceQueueRoute } from './route'
@@ -78,10 +81,6 @@ const S = strings(
     notes: '{n} public notes mention a part it would lose:',
     oldForm: 'Old form',
     oldHint: 'Evidence for the story, not for the parts: judge the parts by the shape written today.',
-    kanjidic: 'KANJIDIC',
-    curated: 'Kanji Alive',
-    readings: 'Readings',
-    word: 'The word',
     pickHint: 'Pick what {char} contributes to the word, not what the word means overall.',
     left: '{n} waiting',
     confidence: 'model confidence {n}',
@@ -137,10 +136,6 @@ const S = strings(
     notes: '{n} публични бележки споменават част, която би изчезнала:',
     oldForm: 'Стара форма',
     oldHint: 'Доказателство за историята, не за частите: частите се съдят по днешната форма.',
-    kanjidic: 'KANJIDIC',
-    curated: 'Kanji Alive',
-    readings: 'Четения',
-    word: 'Думата',
     pickHint: 'Изберете какво внася {char} в думата, а не какво значи думата като цяло.',
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
@@ -152,27 +147,17 @@ type Key = Parameters<ReturnType<typeof S>>[0]
 const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg', 'en_report']
 // The stages to pick from: a single word's meaning is under meanings, with its kanji's card.
 const STAGES = TYPES.filter((k) => k !== 'word_sense')
-const NO_SKIPS = new Set<number>()
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
 const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link', 'bg']
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-
-function typing(e: KeyboardEvent) {
-  const el = e.target as HTMLElement | null
-  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)
-}
-
-type Placements = Record<number, string | null>
+/** A single word's item: the word's id, from its subject 生|1234567. */
+const wordOf = (i: QueueItem) => Number(i.subject.split('|')[1])
 
 /**
  * Reject is for proposals that can be wrong as a whole: a decomposition, a
  * form link, or anything a person suggested. Meanings and Bulgarian are
  * shaped until right, then accepted, or skipped.
  */
-/** A single word's item: the word's id, from its subject 生|1234567. */
-const wordOf = (i: QueueItem) => Number(i.subject.split('|')[1])
-
 const canReject = (i: QueueItem) => i.type === 'decomposition' || i.type === 'form_link' || i.origin === 'suggestion'
 
 /** `onDecided` is told after each decision, so the progress can count again. */
@@ -271,6 +256,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       (d) => {
         if (stale) return
         setDetail(d)
+        const kept = readDraft(d.id)
         if (d.type === 'bg' && d.context.senses) {
           const l: Record<string, string> = {}
           const n: Record<string, string> = {}
@@ -278,16 +264,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             l[g.id] = g.bg ?? ''
             n[g.id] = g.noteBg ?? ''
           }
-          setLabels(readDraft(d.id)?.labels ?? l)
+          setLabels(kept?.labels ?? l)
           setLabelsFrom(l)
-          setNotes(readDraft(d.id)?.notes ?? n)
+          setNotes(kept?.notes ?? n)
           setNotesFrom(n)
         }
         if (d.type === 'kanji_senses' && d.context.board) {
-          const ids = new Set(((d.proposed ?? d.current ?? []) as MeaningGroup[]).map((g) => g.id))
-          const p: Placements = {}
-          for (const w of d.context.board) p[w.id] = w.group && (w.group === CATCH_ALL || ids.has(w.group)) ? w.group : null
-          setPlacements(readDraft(d.id)?.placements ?? p)
+          const p = startPlacements(d.context.board, (d.proposed ?? d.current) as MeaningGroup[] | null)
+          setPlacements(kept?.placements ?? p)
           setPlacedFrom(p)
         }
       },
@@ -331,12 +315,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
   const relabelled = item?.type === 'bg' && (!same(labels, labelsFrom) || !same(notes, notesFrom))
+  const edited = !!item && (moved || relabelled || !same(draft, open ? item.current : item.proposed))
   // Anything to throw away: the answer, the reason, words moved or left for later, labels, board ticks.
-  const changed = !!item && (edited0() || !!reason.trim() || skipped.size > 0 || boardWork)
-  function edited0() {
-    if (!item) return false
-    return moved || relabelled || (item.proposed === null ? !same(draft, item.current) : !same(draft, item.proposed))
-  }
+  const changed = !!item && (edited || !!reason.trim() || skipped.size > 0 || boardWork)
   function reset() {
     if (!item || !window.confirm(t('confirmReset'))) return
     clearDraft(item.id)
@@ -350,7 +331,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setFresh((n) => n + 1)
   }
   const blocked = board && unconfirmed > 0
-  const edited = item ? moved || relabelled || (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
   const decideDraft = useCallback(
     (value: TaskValue = draft) => {
       if (!item) return
@@ -365,11 +345,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         const later = Object.keys(skip).length ? skip : undefined
         return same(fin.groups, item.proposed) ? decide('accept', undefined, words, later) : decide('edit', fin.groups, words, later)
       }
-      if (item.proposed === null) {
-        if (same(value, item.current)) return decide('reject')
-        return item.type === 'decomposition' && !strokesOk(value, lang) ? undefined : decide('edit', value)
-      }
-      if (same(value, item.proposed)) return decide('accept')
+      // Left as it was: a check is rejected (nothing to change), a proposal accepted.
+      if (same(value, item.proposed === null ? item.current : item.proposed)) return decide(item.proposed === null ? 'reject' : 'accept')
       return item.type === 'decomposition' && !strokesOk(value, lang) ? undefined : decide('edit', value)
     },
     [item, draft, decide, detail, placements, lang, skipped],
@@ -389,29 +366,13 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     })
   }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom, notes, notesFrom])
 
-  const skip = useCallback((ids: number[], on: boolean) => {
-    setSkipped((s) => {
-      const n = new Set(s)
-      for (const id of ids) {
-        if (on) n.add(id)
-        else n.delete(id)
-      }
-      return n
-    })
-  }, [])
+  const skip = useCallback((ids: number[], on: boolean) => setSkipped((s) => withIds(s, ids, on)), [])
   const isFollowUp = (i: QueueItem) => i.type === 'kanji_senses' && !!(i.evidence as { words?: unknown } | null)?.words
 
-  const place = useCallback((ids: number[], to: string | null) => {
-    setPlacements((p) => {
-      const n = { ...p }
-      for (const id of ids) n[id] = to
-      return n
-    })
-  }, [])
+  const place = useCallback((ids: number[], to: string | null) => setPlacements((p) => placed(p, ids, to)), [])
 
-  const keys = useRef<(e: KeyboardEvent) => void>(() => {})
-  keys.current = (e: KeyboardEvent) => {
-    if (typing(e) || e.ctrlKey || e.metaKey || e.altKey || !item) return
+  useKey((e) => {
+    if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey || !item) return
     if (e.key === 'a' || e.key === 'Enter') {
       if (!blocked) decideDraft()
     }
@@ -425,12 +386,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       if (pick) decideDraft(pick)
     } else return
     e.preventDefault()
-  }
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => keys.current(e)
-    window.addEventListener('keydown', on)
-    return () => window.removeEventListener('keydown', on)
-  }, [])
+  })
 
   const waitingIn = (k: TaskType) => (types[k] ?? 0) + (k === 'kanji_senses' ? (types.word_sense ?? 0) : 0)
 
@@ -621,7 +577,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     onPlace={(ids, to) => {
                       if (to !== null && ids.includes(wordOf(item))) setDraft(to)
                     }}
-                    skipped={NO_SKIPS}
+                    skipped={NO_WORDS}
                     onSkip={() => {}}
                     only={wordOf(item)}
                     plain
@@ -683,21 +639,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 function Evidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: string) => void }) {
   const lang = useLang()
   const t = S(lang)
-  const glyphs = (chars: string[]) => (
-    <span className="review-parts" lang="ja">
-      {chars.map((c) =>
-        onKanji ? (
-          <button key={c} className="review-part" onClick={() => onKanji(c)}>
-            {c}
-          </button>
-        ) : (
-          <span key={c} className="review-part">
-            {c}
-          </span>
-        ),
-      )}
-    </span>
-  )
+  const glyphs = (chars: string[]) => <PartTiles chars={chars} onKanji={onKanji} />
 
   if (detail.type === 'decomposition') {
     const imp = detail.impact
@@ -777,24 +719,7 @@ function Evidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: st
   return (
     <div className="queue-evidence">
       <dl className="queue-compare">
-        {c.curated && (
-          <>
-            <dt>{t('curated')}</dt>
-            <dd>{c.curated}</dd>
-          </>
-        )}
-        {c.kanjidic && c.kanjidic.length > 0 && (
-          <>
-            <dt>{t('kanjidic')}</dt>
-            <dd>{c.kanjidic.join(', ')}</dd>
-          </>
-        )}
-        {(c.on?.length || c.kun?.length) && (
-          <>
-            <dt>{t('readings')}</dt>
-            <dd lang="ja">{[...(c.on ?? []), ...(c.kun ?? [])].join('、')}</dd>
-          </>
-        )}
+        <KanjiFacts context={c} />
       </dl>
       {detail.type === 'en_report' && c.word && (
         <div className="queue-word">

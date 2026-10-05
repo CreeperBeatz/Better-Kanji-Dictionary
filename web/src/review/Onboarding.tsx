@@ -12,6 +12,8 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { strings, useLang } from '../i18n'
+import { useKey } from '../keys'
+import { Overlay } from '../Overlay'
 import { markOnboarded } from './onboarded'
 
 const S = strings(
@@ -432,68 +434,68 @@ export default function Onboarding({
     return () => before?.focus?.()
   }, [])
 
+  useKey((e) => {
+    if (e.key === 'ArrowRight') setAt((i) => Math.min(i + 1, deck.length - 1))
+    else if (e.key === 'ArrowLeft') setAt((i) => Math.max(i - 1, 0))
+  })
+
   // Escape is the review screen's (Workbench): with the guide open it closes the guide.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'ArrowRight') setAt((i) => Math.min(i + 1, deck.length - 1))
-      else if (e.key === 'ArrowLeft') setAt((i) => Math.max(i - 1, 0))
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [deck.length])
-
   return (
-    <div className="overlay onb-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="overlay-panel onb-panel" role="dialog" aria-modal="true" aria-label={t('guide')} tabIndex={-1} ref={panel}>
-        <button className="account-x" onClick={onClose} aria-label={t('close')} title={`${t('close')} (Esc)`}>
-          ×
-        </button>
-        <article className="onb-card" lang="en" key={at} aria-live="polite">
-          <header className="onb-card-head">
-            <div>
-              <p className="onb-kicker">{card.kicker}</p>
-              <h2>{card.title}</h2>
-            </div>
-            {card.glyph && (
-              <span className="onb-glyph" lang="ja" aria-hidden="true">
-                {card.glyph}
-              </span>
-            )}
-          </header>
-          <p className="onb-lead">{card.lead}</p>
-          {card.body && <div className="onb-body">{card.body}</div>}
-          {card.more && (
-            <button className="clear onb-more" onClick={() => onHandbook(card.more)}>
-              {card.more} in the handbook →
+    <Overlay
+      className="onb-overlay"
+      panel="onb-panel"
+      label={t('guide')}
+      onClose={onClose}
+      escape={false}
+      closeTitle={`${t('close')} (Esc)`}
+      tabIndex={-1}
+      ref={panel}
+    >
+      <article className="onb-card" lang="en" key={at} aria-live="polite">
+        <header className="onb-card-head">
+          <div>
+            <p className="onb-kicker">{card.kicker}</p>
+            <h2>{card.title}</h2>
+          </div>
+          {card.glyph && (
+            <span className="onb-glyph" lang="ja" aria-hidden="true">
+              {card.glyph}
+            </span>
+          )}
+        </header>
+        <p className="onb-lead">{card.lead}</p>
+        {card.body && <div className="onb-body">{card.body}</div>}
+        {card.more && (
+          <button className="clear onb-more" onClick={() => onHandbook(card.more)}>
+            {card.more} in the handbook →
+          </button>
+        )}
+        {last && (
+          <div className="onb-finish">
+            <button className="account-submit" onClick={onQueue}>
+              {t('queue')}
             </button>
-          )}
-          {last && (
-            <div className="onb-finish">
-              <button className="account-submit" onClick={onQueue}>
-                {t('queue')}
-              </button>
-              <button className="workbench-exit" onClick={() => onHandbook()}>
-                {t('handbook')}
-              </button>
-            </div>
-          )}
-        </article>
+            <button className="workbench-exit" onClick={() => onHandbook()}>
+              {t('handbook')}
+            </button>
+          </div>
+        )}
+      </article>
 
-        <footer className="onb-nav">
-          <button className="workbench-exit" disabled={at === 0} onClick={() => setAt(at - 1)}>
-            ← {t('back')}
-          </button>
-          <span className="onb-dots">
-            {deck.map((c, i) => (
-              <button key={c.title} data-on={i === at || undefined} onClick={() => setAt(i)} title={c.title} aria-label={c.title} />
-            ))}
-          </span>
-          <span className="hint onb-count">{t('of', { n: at + 1, m: deck.length })}</span>
-          <button className="account-submit" disabled={last} onClick={() => setAt(at + 1)}>
-            {t('next')} →
-          </button>
-        </footer>
-      </div>
-    </div>
+      <footer className="onb-nav">
+        <button className="workbench-exit" disabled={at === 0} onClick={() => setAt(at - 1)}>
+          ← {t('back')}
+        </button>
+        <span className="onb-dots">
+          {deck.map((c, i) => (
+            <button key={c.title} data-on={i === at || undefined} onClick={() => setAt(i)} title={c.title} aria-label={c.title} />
+          ))}
+        </span>
+        <span className="hint onb-count">{t('of', { n: at + 1, m: deck.length })}</span>
+        <button className="account-submit" disabled={last} onClick={() => setAt(at + 1)}>
+          {t('next')} →
+        </button>
+      </footer>
+    </Overlay>
   )
 }

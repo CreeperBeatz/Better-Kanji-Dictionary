@@ -30,7 +30,7 @@ const kanji = (c: string): Target => ({ href: `/kanji/${encodeURIComponent(c)}`,
 const word = (id: string, headword?: string): Target => ({ href: `/word/${id}`, glyph: headword ?? null })
 
 /** The dictionary pages an item is about, the main one first. */
-export function dictTargets(type: TaskType, subject: string, label?: string): Target[] {
+function dictTargets(type: TaskType, subject: string, label?: string): Target[] {
   if (type === 'bg' || type === 'en_report') {
     const [kind, rest] = subject.split(':')
     if (!rest) return []

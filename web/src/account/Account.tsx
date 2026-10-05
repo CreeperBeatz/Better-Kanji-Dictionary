@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { contribute, logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
 import { Credits } from '../About'
 import { strings, useLang, type Lang } from '../i18n'
@@ -7,6 +7,7 @@ import { LangSwitch } from '../i18n/LangSwitch'
 import { OfflineSetting } from '../local/OfflineSetting'
 import { Avatar, squareAvatar } from './Avatar'
 import { GoogleButton } from './GoogleButton'
+import { Overlay } from '../Overlay'
 
 const S = strings(
   {
@@ -19,7 +20,6 @@ const S = strings(
     devLink: 'No mail is set up on this server, so here is the link instead:',
     openLink: 'open sign-in link',
     otherAddress: 'use another address',
-    close: 'close',
     logInHint:
       'Continue with Google, or we email you a link; there is no password. Notes you wrote in this browser move into your account, as private notes.',
     sending: 'sending',
@@ -64,7 +64,6 @@ const S = strings(
     devLink: 'На този сървър няма настроена поща, затова ето връзката направо:',
     openLink: 'отворете връзката за вход',
     otherAddress: 'използвайте друг адрес',
-    close: 'затворете',
     logInHint:
       'Продължете с Google или ще ви изпратим връзка по имейл; парола няма. Бележките, писани в този браузър, се преместват в профила ви като лични бележки.',
     sending: 'изпращане',
@@ -150,17 +149,6 @@ export function AccountDialog({
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   async function send(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
@@ -176,72 +164,67 @@ export function AccountDialog({
   }
 
   return (
-    <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="overlay-panel account-panel" role="dialog" aria-modal="true" aria-label={t('account')}>
-        <button className="account-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
-          ×
-        </button>
-        {user ? (
-          <Profile onWorkbench={onWorkbench} />
-        ) : sent ? (
-          <>
-            <h2>{t('checkEmail')}</h2>
-            <p className="hint">{t('linkSent', { email: sent.email })}</p>
-            {sent.devLink && (
-              <p className="account-dev">
-                {t('devLink')} <a href={sent.devLink}>{t('openLink')}</a>
-              </p>
-            )}
-            <p className="assoc-actions">
-              <button className="clear" onClick={() => setSent(null)}>
-                {t('otherAddress')}
-              </button>
+    <Overlay panel="account-panel" label={t('account')} onClose={onClose}>
+      {user ? (
+        <Profile onWorkbench={onWorkbench} />
+      ) : sent ? (
+        <>
+          <h2>{t('checkEmail')}</h2>
+          <p className="hint">{t('linkSent', { email: sent.email })}</p>
+          {sent.devLink && (
+            <p className="account-dev">
+              {t('devLink')} <a href={sent.devLink}>{t('openLink')}</a>
             </p>
-          </>
-        ) : (
-          <>
-            <h2>{t('logIn')}</h2>
-            <p className="hint">{t('logInHint')}</p>
-            <GoogleButton onError={setProblem} />
-            <form className="account-form" onSubmit={send}>
-              <div className="account-row">
-                <input
-                  className="assoc-text"
-                  type="email"
-                  required
-                  autoFocus
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <button className="account-submit" disabled={busy || !email.trim()}>
-                  {busy ? t('sending') : t('sendLink')}
-                </button>
-              </div>
-            </form>
-            {(problem || error) && <p className="account-problem">{problem ?? error}</p>}
-          </>
-        )}
-        <p className="account-language">
-          <span>{t('language')}</span>
-          <LangSwitch />
-        </p>
-        <OfflineSetting />
-        <Credits />
-        {/* Last, on its own: leaving the account. */}
-        {user && (
-          <button
-            className="account-logout"
-            onClick={async () => {
-              await logout()
-              onClose()
-            }}
-          >
-            {t('logOut')}
-          </button>
-        )}
-      </div>
-    </div>
+          )}
+          <p className="assoc-actions">
+            <button className="clear" onClick={() => setSent(null)}>
+              {t('otherAddress')}
+            </button>
+          </p>
+        </>
+      ) : (
+        <>
+          <h2>{t('logIn')}</h2>
+          <p className="hint">{t('logInHint')}</p>
+          <GoogleButton onError={setProblem} />
+          <form className="account-form" onSubmit={send}>
+            <div className="account-row">
+              <input
+                className="assoc-text"
+                type="email"
+                required
+                autoFocus
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <button className="account-submit" disabled={busy || !email.trim()}>
+                {busy ? t('sending') : t('sendLink')}
+              </button>
+            </div>
+          </form>
+          {(problem || error) && <p className="account-problem">{problem ?? error}</p>}
+        </>
+      )}
+      <p className="account-language">
+        <span>{t('language')}</span>
+        <LangSwitch />
+      </p>
+      <OfflineSetting />
+      <Credits />
+      {/* Last, on its own: leaving the account. */}
+      {user && (
+        <button
+          className="account-logout"
+          onClick={async () => {
+            await logout()
+            onClose()
+          }}
+        >
+          {t('logOut')}
+        </button>
+      )}
+    </Overlay>
   )
 }
 

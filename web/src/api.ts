@@ -839,8 +839,6 @@ export const api = {
       ['limit', String(limit)],
     ]),
 
-  reviewCounts: () => get<{ items: Record<string, Record<string, number>>; decisions: number }>('/api/review/counts'),
-
   reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
 
   /**
@@ -861,11 +859,9 @@ export const api = {
     notes?: Record<string, string>,
   ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip, labels, notes }),
 
-
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
 
-  /** A reviewer's own change, live at once. */
-  /** `words`, for a kanji's meanings edited on the page's board: word id -> group. */
+  /** A reviewer's own change, live at once. `words`, for a kanji's meanings edited on the page's board: word id -> group. */
   reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string, words?: Record<number, string | null>) =>
     send<Decision | { unchanged: true }>('/api/review/edit', 'POST', { type, subject, value, reason, words }),
 
@@ -883,8 +879,6 @@ export const api = {
       `/api/review/page/word/${id}`,
     ),
 
-  impact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),
-
   reviewHistory: (f: HistoryFilter = {}, limit = 200) =>
     get<{ items: Decision[]; people: Author[] }>('/api/review/history', [
       ['all', f.all ? 'true' : 'false'],
@@ -893,7 +887,6 @@ export const api = {
       ...(f.to ? [['to', f.to] as [string, string]] : []),
       ['limit', String(limit)],
     ]),
-
 
   revert: (decisionId: string) => send<{ decision: Decision }>(`/api/review/decisions/${encodeURIComponent(decisionId)}/revert`, 'POST'),
 

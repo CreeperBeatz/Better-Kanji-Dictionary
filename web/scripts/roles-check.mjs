@@ -1,26 +1,14 @@
 // Usage: node scripts/roles-check.mjs [base]  (against tests/sandbox.py, default http://127.0.0.1:8010)
 // A user asks to review, the admin approves on the People tab, the user then sees the review button.
 import { chromium } from 'playwright'
+import { signedIn as signIn } from './session.mjs'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
 const SHOTS = process.env.SHOTS ?? '/tmp/shots'
 const browser = await chromium.launch()
 const errors = []
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function signedIn(email) {
-  const ctx = await browser.newContext({ viewport: { width: 1300, height: 900 } })
-  const page = await ctx.newPage()
-  page.on('pageerror', (e) => errors.push(`${email}: ${e}`))
-  page.on('console', (m) => m.type() === 'error' && errors.push(`${email}: ${m.text()}`))
-  const res = await fetch(`${BASE}/api/auth/request`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: BASE },
-    body: JSON.stringify({ email }),
-  }).then((r) => r.json())
-  await page.goto(res.devLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' })
-  await wait(800)
-  return page
-}
+const signedIn = (email) => signIn(browser, BASE, email, errors, { settle: 800 })
 
 const user = await signedIn(`learner${Date.now()}@example.com`)
 await user.locator('.profile-button').first().click()

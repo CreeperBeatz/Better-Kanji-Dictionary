@@ -25,6 +25,7 @@ const S = strings(
     lookalikeOf: 'Mistaken for it',
     variants: 'Other variants',
     notAPage: '{char} has no page of its own',
+    noForms: 'No forms recorded yet.',
   },
   {
     title: 'Форми',
@@ -38,6 +39,7 @@ const S = strings(
     lookalikeOf: 'Бъркат го с него',
     variants: 'Други варианти',
     notAPage: '{char} няма собствена страница',
+    noForms: 'Още няма записани форми.',
   },
 )
 
@@ -120,5 +122,29 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
         ))}
       </dl>
     </div>
+  )
+}
+
+/** The forms recorded now, read-only and compact, so a change in a page's Edit dialog starts from what is there. */
+export function FormsSummary({ forms }: { forms: FormsResponse | null }) {
+  const t = S(useLang())
+  const rows = forms ? ROWS.filter(([k]) => forms[k].length > 0) : []
+  if (!rows.length) return <p className="hint">{t('noForms')}</p>
+  return (
+    <dl className="page-edit-forms">
+      {rows.map(([k, label]) => (
+        <div key={k}>
+          <dt>{t(label)}</dt>
+          <dd lang="ja">
+            {forms![k].map((i) => (
+              <span key={i.char}>
+                {i.char}
+                {i.note && <span className="hint"> ({i.note})</span>}{' '}
+              </span>
+            ))}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }

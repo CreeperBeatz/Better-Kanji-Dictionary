@@ -3,38 +3,14 @@
 // with the keys, closes with Esc, opens again from the handbook, and a card's
 // handbook link lands on its section. The contents follow the scroll. Then a phone.
 import { chromium } from 'playwright'
+import { call, signedIn as signIn } from './session.mjs'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
 const SHOTS = process.env.SHOTS ?? 'C:/tmp/shots'
 const browser = await chromium.launch()
 const errors = []
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function signedIn(email, viewport = { width: 1300, height: 900 }) {
-  const ctx = await browser.newContext({ viewport })
-  const page = await ctx.newPage()
-  page.on('pageerror', (e) => errors.push(`${email}: ${e}`))
-  page.on('console', (m) => m.type() === 'error' && !/avatar/.test(m.text()) && errors.push(`${email}: ${m.text()}`))
-  const res = await fetch(`${BASE}/api/auth/request`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Origin: BASE },
-    body: JSON.stringify({ email }),
-  }).then((r) => r.json())
-  await page.goto(res.devLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' })
-  await wait(600)
-  return page
-}
-
-// The session is a bearer token in localStorage, as the app sends it.
-const call = (page, path, body) =>
-  page.evaluate(
-    ([p, b]) =>
-      fetch(p, {
-        method: b === undefined ? 'GET' : 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('betterrtk:session')}` },
-        body: b === undefined ? undefined : JSON.stringify(b),
-      }).then((r) => r.json()),
-    [path, body],
-  )
+const signedIn = (email, viewport) => signIn(browser, BASE, email, errors, { viewport })
 const post = call
 
 // Make a reviewer: ask, and the admin approves.

@@ -4,8 +4,9 @@ import { api, dataChanged, type AdminPeople, type Author, type Decision, type Hi
 import { useAuth } from '../account/auth'
 import type { WorkbenchTab } from '../account/Account'
 import { Avatar } from '../account/Avatar'
-import { strings, useLang } from '../i18n'
+import { localeOf, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { useKey } from '../keys'
 import { ValueView } from './editors'
 import { ProgressMini, ProgressPage, useProgress } from './Progress'
 import { Queue } from './Queue'
@@ -29,7 +30,6 @@ const S = strings(
     log: 'Changes of role',
     logLine: '{by} made {user} {after} (was {before})',
     loading: 'loading',
-    failed: 'could not load this',
     role_user: 'a user',
     role_reviewer: 'a reviewer',
     role_admin: 'admin',
@@ -74,7 +74,6 @@ const S = strings(
     log: 'Промени на ролите',
     logLine: '{by} направи {user} {after} (беше {before})',
     loading: 'зареждане',
-    failed: 'не можа да се зареди',
     role_user: 'потребител',
     role_reviewer: 'рецензент',
     role_admin: 'администратор',
@@ -142,27 +141,16 @@ export function Workbench({
     if (role === 'reviewer' && !onboarded()) setGuide(true)
   }
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        // With the guide open, Escape closes the guide, not the review screen.
-        if (guide) setGuide(false)
-        else onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, guide])
+  useKey((e) => {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    // With the guide open, Escape closes the guide, not the review screen.
+    if (guide) setGuide(false)
+    else onClose()
+  })
 
   if (!user || user.role === 'user') return null
-  const tabs: [WorkbenchTab, Key][] = [
-    ['queue', 'queue'],
-    ['history', 'history'],
-    ['progress', 'progress'],
-    ...(user.role === 'admin' ? ([['people', 'people']] as [WorkbenchTab, Key][]) : []),
-    ['handbook', 'handbook'],
-  ]
+  const tabs: WorkbenchTab[] = ['queue', 'history', 'progress', ...(user.role === 'admin' ? (['people'] as const) : []), 'handbook']
 
   // The whole screen: the queue needs the room, and its list and item scroll on their own.
   return (
@@ -170,9 +158,9 @@ export function Workbench({
       <div className="overlay-panel workbench" role="dialog" aria-modal="true" aria-label={t('mode')}>
         <header className="workbench-head">
           <nav className="overlay-tabs" role="tablist">
-            {tabs.map(([k, label]) => (
+            {tabs.map((k) => (
               <button key={k} role="tab" aria-selected={tab === k} data-on={tab === k} onClick={() => onTab(k)}>
-                {t(label)}
+                {t(k)}
               </button>
             ))}
           </nav>
@@ -241,7 +229,7 @@ function People() {
   }
 
   if (!data) return <p className="hint">{problem ?? t('loading')}</p>
-  const date = (iso: string) => new Date(iso).toLocaleDateString(lang === 'bg' ? 'bg-BG' : 'en-GB')
+  const date = (iso: string) => new Date(iso).toLocaleDateString(localeOf(lang))
 
   return (
     <>
@@ -353,8 +341,7 @@ function History({ admin }: { admin: boolean }) {
     }
   }
 
-  const when = (iso: string) =>
-    new Date(iso).toLocaleString(lang === 'bg' ? 'bg-BG' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })
+  const when = (iso: string) => new Date(iso).toLocaleString(localeOf(lang), { dateStyle: 'short', timeStyle: 'short' })
   const filtered = !!(by || from || to)
   const who = (p: Author) => (p.id === 'auto' ? t('autoRule') : p.username ? '@' + p.username : p.name)
   return (

@@ -332,6 +332,18 @@ export class Engine {
     return [news[0], desc ? -news[1] : news[1], ...level, common, this.hwlen[i]]
   }
 
+  /** The first `n` of `words` in the order asked for (`orderKey`), then by id. */
+  private inOrder(words: Iterable<number>, sort: SearchSort, desc: boolean, n: number): number[] {
+    return [...words]
+      .map((w) => [w, ...this.orderKey(w, sort, desc), this.ids[w]])
+      .sort((a, b) => {
+        for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
+        return 0
+      })
+      .slice(0, n)
+      .map((r) => r[0])
+  }
+
   /** How many Bulgarian glosses and kanji hold a stem: the server's fts5vocab sum. */
   private bgDocs = (stem: string): number => this.bgGloss.docs(stem) + this.bgKfts.docs(stem)
 
@@ -462,31 +474,15 @@ export class Engine {
         for (let f = lo; f < hi; f++) {
           for (const w of this.wordsOfForm(f)) if (!present.has(w) && (!common || this.common[w])) found.add(w)
         }
-        const desc = order === 'desc'
-        const extra = [...found]
-          .map((w) => [w, ...this.orderKey(w, sort, desc), this.ids[w]])
-          .sort((a, b) => {
-            for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
-            return 0
-          })
-          .slice(0, limit * 6)
-        for (const [w] of extra) wordIdx.push(w)
+        wordIdx.push(...this.inOrder(found, sort, order === 'desc', limit * 6))
       }
 
       // One kanji: after the common words that start with it, the common words
       // that have it further in (技術, 芸術 for 術), then the rare ones that start with it.
       if (bgStems === null && [...target].length === 1 && japanese && !isKana(target)) {
         const present = new Set(wordIdx)
-        const desc = order === 'desc'
-        const inner = [...new Set((this.pack.inner?.[target] ?? []).map((id) => this.indexOfId(id)))]
-          .filter((w) => w >= 0 && !present.has(w))
-          .map((w) => [w, ...this.orderKey(w, sort, desc), this.ids[w]])
-          .sort((a, b) => {
-            for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
-            return 0
-          })
-          .slice(0, limit * 6)
-          .map((r) => r[0])
+        const further = [...new Set((this.pack.inner?.[target] ?? []).map((id) => this.indexOfId(id)))].filter((w) => w >= 0 && !present.has(w))
+        const inner = this.inOrder(further, sort, order === 'desc', limit * 6)
         const first = wordIdx.filter((w) => this.common[w])
         const rest = wordIdx.filter((w) => !this.common[w])
         wordIdx = [...first, ...inner, ...rest]

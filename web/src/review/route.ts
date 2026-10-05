@@ -37,7 +37,7 @@ export interface QueueRoute {
 // Where the queue was, so coming back to its tab from History lands there again.
 let lastQueue: QueueRoute = {}
 
-export function queuePath(r: QueueRoute): string {
+function queuePath(r: QueueRoute): string {
   const path = `/review/queue/${r.type ? SLUGS[r.type] : 'all'}${r.item ? `/${r.item}` : ''}`
   const q = new URLSearchParams()
   if (r.origin) q.set('origin', r.origin)
@@ -68,7 +68,7 @@ export function replaceQueueRoute(r: QueueRoute) {
   window.history.replaceState(window.history.state, '', queuePath(r))
 }
 
-export function reviewPath(tab: WorkbenchTab): string {
+function reviewPath(tab: WorkbenchTab): string {
   return tab === 'queue' ? queuePath(lastQueue) : `/review/${tab}`
 }
 

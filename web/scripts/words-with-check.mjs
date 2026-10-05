@@ -2,6 +2,7 @@
 // The kanji page's short list and its "see all" button; *生* in the search bar,
 // first as one list, then divided by meaning once the admin accepts the groups.
 import { chromium } from 'playwright'
+import { call, logIn } from './session.mjs'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
 const SHOTS = process.env.SHOTS ?? 'C:/tmp/shots'
 const browser = await chromium.launch()
@@ -11,19 +12,8 @@ const ctx = await browser.newContext({ viewport: { width: 1300, height: 1000 } }
 const page = await ctx.newPage()
 page.on('pageerror', (e) => errors.push(String(e)))
 
-const login = await fetch(`${BASE}/api/auth/request`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json', Origin: BASE },
-  body: JSON.stringify({ email: 'admin@example.com' }),
-}).then((r) => r.json())
-await page.goto(login.devLink.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'networkidle' })
-const session = await page.evaluate(() => localStorage.getItem('betterrtk:session'))
-const api = (path, body) =>
-  fetch(`${BASE}${path}`, {
-    method: body ? 'POST' : 'GET',
-    headers: { Authorization: `Bearer ${session}`, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  }).then((r) => r.json())
+await logIn(page, BASE, 'admin@example.com')
+const api = (path, body) => call(page, path, body)
 
 await page.goto(`${BASE}/kanji/${encodeURIComponent('生')}`, { waitUntil: 'networkidle' })
 await wait(800)

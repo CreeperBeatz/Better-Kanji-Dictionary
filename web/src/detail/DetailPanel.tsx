@@ -12,6 +12,8 @@ import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency, ValencyMark } from '../search/Valency'
+import { GroupToggle } from '../search/WordsWith'
+import { toggled } from '../sets'
 
 const S = strings(
   {
@@ -201,25 +203,19 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const groups = (groupedData?.groups ?? []).filter((g) => g.words.length > 0)
   const rest = groups.length ? (groupedData?.rest.words ?? []) : []
   const shutHere = shut.char === data.focus.char ? shut.ids : new Set<string>()
-  const fold = (id: string) => {
-    const ids = new Set(shutHere)
-    if (ids.has(id)) ids.delete(id)
-    else ids.add(id)
-    setShut({ char: data.focus.char, ids })
-  }
   // A group as a box of its own: its title bar folds it, > folded, pointing down open.
   const vocabGroup = (id: string, label: ReactNode, n: number, ws: Word[]) => {
     const open = !shutHere.has(id)
     return (
       <div key={id} className="vocab-group" data-shut={!open || undefined}>
         <h4>
-          <button className="meaning-group-toggle vocab-group-toggle" aria-expanded={open} onClick={() => fold(id)}>
-            <svg className="meaning-group-caret" viewBox="0 0 12 12" aria-hidden>
-              <path d="M4 2.5 7.5 6 4 9.5" />
-            </svg>
-            <span className="meaning-group-label">{label}</span>
-            <span className="hint">{n}</span>
-          </button>
+          <GroupToggle
+            className="vocab-group-toggle"
+            open={open}
+            onToggle={() => setShut({ char: data.focus.char, ids: toggled(shutHere, id) })}
+            label={label}
+            n={n}
+          />
         </h4>
         {open && <ul>{ws.slice(0, GROUP_WORDS).map(vocabRow)}</ul>}
         {open && onWordsWith && n > Math.min(GROUP_WORDS, ws.length) && (
