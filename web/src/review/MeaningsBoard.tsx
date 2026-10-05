@@ -53,6 +53,7 @@ const S = strings(
     skippedTitle: 'Left for later: on submit it comes back at the end of the queue',
     skippedNote: '{n} words left for later: when you submit, they come back together at the end of the queue.',
     followUp: 'Left for later: only the words skipped last time. The groups are already decided.',
+    oneWord: 'One word to place: move {word} to the group it belongs in. The groups are decided; the other words show what each holds.',
     unsure: 'the drafting model was unsure here',
     words: '{n} words',
     common: 'common',
@@ -97,6 +98,7 @@ const S = strings(
     skippedTitle: 'Оставена за по-късно: при изпращане се връща в края на опашката',
     skippedNote: 'Оставени за по-късно думи: {n}. При изпращане се връщат заедно в края на опашката.',
     followUp: 'Оставени за по-късно: само пропуснатите миналия път думи. Групите вече са решени.',
+    oneWord: 'Една дума за подреждане: преместете {word} в групата, към която принадлежи. Групите са решени; другите думи показват какво съдържа всяка.',
     unsure: 'моделът не беше сигурен тук',
     words: '{n} думи',
     common: 'чести',
@@ -170,6 +172,7 @@ export function MeaningsBoard({
   followUp = false,
   onWork,
   plain = false,
+  only,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -189,6 +192,11 @@ export function MeaningsBoard({
   onWork?: (has: boolean) => void
   /** On a page, not in the queue: no ticks to confirm words, nothing to leave for later. */
   plain?: boolean
+  /**
+   * One word to place: the groups are fixed, only this word moves, and the
+   * others stay in sight for what each group holds.
+   */
+  only?: number
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -331,6 +339,8 @@ export function MeaningsBoard({
     })
 
   function card(w: BoardWord, from: Bucket) {
+    // With one word to place, the others are only there to be seen.
+    if (only !== undefined && w.id !== only) return contextCard(w)
     const unsure = isUnsure(w)
     const isSkipped = skipped.has(w.id)
     const boxOk = !isSkipped
@@ -343,6 +353,7 @@ export function MeaningsBoard({
         data-unsure={unsure || undefined}
         data-ok={ok || undefined}
         data-skipped={isSkipped || undefined}
+        data-focus={w.id === only || undefined}
         draggable
         onDragStart={(e) => {
           const ids = picked.has(w.id) ? [...picked] : [w.id]
@@ -397,6 +408,27 @@ export function MeaningsBoard({
       </li>
     )
   }
+
+  function contextCard(w: BoardWord) {
+    return (
+      <li key={w.id} className="board-word" data-context>
+        <span className="board-head" lang="ja">
+          {w.headword}
+        </span>
+        <span className="board-reading" lang="ja">
+          {w.reading}
+        </span>
+        <span className="board-gloss">{gloss(w)}</span>
+      </li>
+    )
+  }
+
+  // The word to place, in sight when the board opens.
+  const boardRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (only !== undefined) boardRef.current?.querySelector('[data-focus]')?.scrollIntoView({ block: 'nearest' })
+  }, [only])
+  const onlyWord = only !== undefined ? words.find((w) => w.id === only) : undefined
 
   function bucket(key: Bucket, head: React.ReactNode, extra?: React.ReactNode) {
     const all = byBucket.get(key) ?? []
@@ -469,7 +501,7 @@ export function MeaningsBoard({
   }
 
   return (
-    <div className="board">
+    <div className="board" ref={boardRef} data-only={only !== undefined || undefined}>
       <div className="board-top">
         <h4>{t('groups')}</h4>
         <span className="hint">{t('groupsHint')}</span>
@@ -482,11 +514,12 @@ export function MeaningsBoard({
         </span>
       </div>
       {followUp && <p className="board-followup">{t('followUp')}</p>}
+      {onlyWord && <p className="board-followup">{t('oneWord', { word: onlyWord.headword })}</p>}
       {skipped.size > 0 && <p className="board-skipnote">{t('skippedNote', { n: skipped.size })}</p>}
       {groups.map((g, i) =>
         bucket(
           g.id,
-          followUp ? (
+          followUp || only !== undefined ? (
             <div className="board-fixed">
               <b>{g.en}</b>
             </div>
@@ -501,7 +534,7 @@ export function MeaningsBoard({
           ),
         ),
       )}
-      {!followUp && groups.length < 6 && (
+      {!followUp && only === undefined && groups.length < 6 && (
         <button className="clear board-add" onClick={addGroup}>
           + {t('addGroup')}
         </button>

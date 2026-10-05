@@ -1111,6 +1111,9 @@ def _view(item: dict, names: dict, data: dict) -> dict:
     if item["type"] in ("bg", "en_report") and item["subject"].startswith("word:"):
         r = query_one("SELECT headword, reading FROM word WHERE id = ?", (int(item["subject"][5:]),))
         out["label"] = f"{r['headword']}" if r else item["subject"]
+    elif item["type"] == "word_sense":
+        r = query_one("SELECT headword FROM word WHERE id = ?", (int(item["subject"].split("|")[1]),))
+        out["label"] = r["headword"] if r else None
     out["createdBy"] = names.get(item["created_by"])
     out["decidedBy"] = names.get(item["decided_by"]) if item["decided_by"] else None
     return out
@@ -1143,15 +1146,38 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     types = {t: 0 for t in TYPES}
     for i in mine:
         types[i["type"]] += 1
-    rows = [i for i in mine if type_ is None or i["type"] == type_]
+    # The meanings stage holds a kanji's groups and its single words both.
+    def wanted(i: dict) -> bool:
+        return type_ is None or i["type"] == type_ or (type_ == "kanji_senses" and i["type"] == "word_sense")
+
+    rows = [i for i in mine if wanted(i)]
     rows.sort(key=lambda i: (-(i.get("priority") or 0), i["created"]))
+    rows = _by_kanji(rows)
     names = _names({i["created_by"] for i in rows[:limit]})
     return {
         "total": len(rows),
         "items": [_view(i, names, data) for i in rows[:limit]],
         "types": types,
-        "skipped": sum(1 for i in waiting if user_id in i["skipped_by"] and (type_ is None or i["type"] == type_)),
+        "skipped": sum(1 for i in waiting if user_id in i["skipped_by"] and wanted(i)),
     }
+
+
+def _by_kanji(rows: list[dict]) -> list[dict]:
+    """A kanji's meanings card and its single words one after another, at the
+    place the first of them had; the card before its words."""
+    meaning = ("kanji_senses", "word_sense")
+    first: dict[str, int] = {}
+    for n, i in enumerate(rows):
+        if i["type"] in meaning:
+            first.setdefault(i["subject"].split("|")[0], n)
+
+    def key(p: tuple[int, dict]) -> tuple[int, int, int]:
+        n, i = p
+        if i["type"] in meaning:
+            return (first[i["subject"].split("|")[0]], i["type"] != "kanji_senses", n)
+        return (n, 0, n)
+
+    return [i for _, i in sorted(enumerate(rows), key=key)]
 
 
 def _meanings_pending(data: dict) -> set[str]:
@@ -1230,6 +1256,12 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
         if type_ == "word_sense":
             wid = int(subject.split("|")[1])
             out["word"] = _fetch_words([wid]).get(wid)
+            # The kanji's board around it, to place the one word among the others;
+            # a rare word not on the board is added to it.
+            out["board"] = board(char, data)
+            if out["word"] and not any(w["id"] == wid for w in out["board"]):
+                group = (data["live"]["word_sense"].get(subject) or {}).get("sense")
+                out["board"].append(_board_word(out["word"], group, _latest_item(data, "word_sense", subject)))
         else:
             out["board"] = board(char, data)
         return out

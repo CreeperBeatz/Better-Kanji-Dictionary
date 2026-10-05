@@ -35,7 +35,7 @@ const S = strings(
     t_decomposition: 'parts',
     t_form_link: 'forms',
     t_kanji_senses: 'meanings',
-    t_word_sense: 'words',
+    t_word_sense: 'one word',
     t_bg: 'Bulgarian translations',
     t_en_report: 'reports',
     reported: 'What is wrong, says the report',
@@ -93,7 +93,7 @@ const S = strings(
     t_decomposition: 'части',
     t_form_link: 'форми',
     t_kanji_senses: 'значения',
-    t_word_sense: 'думи',
+    t_word_sense: 'една дума',
     t_bg: 'преводи на български',
     t_en_report: 'доклади',
     reported: 'Какво не е наред според доклада',
@@ -148,6 +148,9 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg', 'en_report']
+// The stages to pick from: a single word's meaning is under meanings, with its kanji's card.
+const STAGES = TYPES.filter((k) => k !== 'word_sense')
+const NO_SKIPS = new Set<number>()
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
 const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link', 'bg']
 
@@ -165,6 +168,9 @@ type Placements = Record<number, string | null>
  * form link, or anything a person suggested. Meanings and Bulgarian are
  * shaped until right, then accepted, or skipped.
  */
+/** A single word's item: the word's id, from its subject 生|1234567. */
+const wordOf = (i: QueueItem) => Number(i.subject.split('|')[1])
+
 const canReject = (i: QueueItem) => i.type === 'decomposition' || i.type === 'form_link' || i.origin === 'suggestion'
 
 /** `onDecided` is told after each decision, so the progress can count again. */
@@ -419,11 +425,13 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     return () => window.removeEventListener('keydown', on)
   }, [])
 
+  const waitingIn = (k: TaskType) => (types[k] ?? 0) + (k === 'kanji_senses' ? (types.word_sense ?? 0) : 0)
+
   const subjectGlyphs = (i: QueueItem) => {
     const [a] = i.subject.split('|')
     const b = i.type === 'bg' || i.type === 'en_report' ? i.subject.split(':')[1] : i.subject.split('|')[1]
     if (i.type === 'form_link') return `${a} · ${b}`
-    if (i.type === 'word_sense') return a
+    if (i.type === 'word_sense') return i.label ? `${a} · ${i.label}` : a
     if (i.type === 'bg' || i.type === 'en_report') return i.label ?? b ?? i.subject.split(':')[1]
     return a
   }
@@ -434,7 +442,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       <nav className="overlay-tabs queue-filters">
         <button
           data-on={!type && !showSkipped}
-          data-empty={TYPES.every((k) => types[k] === 0) || undefined}
+          data-empty={(!showSkipped && TYPES.every((k) => types[k] === 0)) || undefined}
           onClick={() => {
             setType(undefined)
             setShowSkipped(false)
@@ -454,11 +462,11 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
           {t('skippedTab')}
         </button>
         <span className="overlay-tab-rule" />
-        {TYPES.map((k) => (
+        {STAGES.map((k) => (
           <button
             key={k}
             data-on={type === k && !showSkipped}
-            data-empty={types[k] === 0 || undefined}
+            data-empty={(!showSkipped && waitingIn(k) === 0) || undefined}
             onClick={() => {
               setType(k)
               setShowSkipped(false)
@@ -593,6 +601,23 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   ) : (
                     <p className="hint">{t('loading')}</p>
                   )
+                ) : item.type === 'word_sense' && detail?.id === item.id && detail.context.board && groups ? (
+                  <MeaningsBoard
+                    key={`${item.id}:${fresh}`}
+                    cacheKey={item.id}
+                    char={item.subject.split('|')[0]}
+                    groups={groups}
+                    onGroups={() => {}}
+                    words={detail.context.board}
+                    placements={{ [wordOf(item)]: (draft as string | null) ?? null }}
+                    onPlace={(ids, to) => {
+                      if (to !== null && ids.includes(wordOf(item))) setDraft(to)
+                    }}
+                    skipped={NO_SKIPS}
+                    onSkip={() => {}}
+                    only={wordOf(item)}
+                    plain
+                  />
                 ) : (
                   <>
                     {item.type !== 'word_sense' && <h4>{t('yourValue')}</h4>}

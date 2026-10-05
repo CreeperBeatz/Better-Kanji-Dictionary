@@ -165,13 +165,15 @@ If yes, even loosely, it belongs in a real group. If not, it goes here.
   have one kanji in this box and another in a real group: each kanji is
   judged on its own.
 
-## Word meanings (word_sense)
+## One word (word_sense, under meanings)
 
 Question: in this word, which of the kanji's groups is the kanji using?
 
-Words are normally placed on the meanings board, so this tab is mostly empty.
-It holds what comes up afterwards: a user's suggestion for one word, or a word
-whose group changed.
+Words are normally placed on the meanings board, so there are few of these.
+They come up afterwards: a user's suggestion for one word, or a word whose group
+changed. They wait under **meanings**, right after their kanji's card, and open
+on the same board: the groups are fixed, the one word stands out, and the other
+words are there to show what each group holds. Move the word, then accept.
 
 - Pick what the kanji contributes, not what the word means overall.
 - A word with two kanji is two items, one per kanji, and they can land in
@@ -207,7 +209,7 @@ carry; the word's own English is still what you translate.
 - **Not sure?** *Skip* it. Skipped cards wait under *skipped* in the queue
   bar, for when there is nothing else to do.
 
-## English reports (en_report)
+## Reports (en_report)
 
 Question: is the English JMdict gives this word actually wrong?
 

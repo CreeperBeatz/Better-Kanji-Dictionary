@@ -48,7 +48,9 @@ export function queuePath(r: QueueRoute): string {
 export function queueRouteInUrl(): QueueRoute {
   const m = window.location.pathname.match(QUEUE_PATH)
   if (!m) return lastQueue
-  const type = (Object.keys(SLUGS) as TaskType[]).find((k) => SLUGS[k] === m[1])
+  const found = (Object.keys(SLUGS) as TaskType[]).find((k) => SLUGS[k] === m[1])
+  // Single words are reviewed under meanings now; an old address still lands there.
+  const type = found === 'word_sense' ? 'kanji_senses' : found
   const params = new URLSearchParams(window.location.search)
   const origin = params.get('origin')
   return {

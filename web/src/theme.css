@@ -6503,6 +6503,17 @@ html[data-nav]::view-transition-old(tabs):only-child {
   gap: 4px 6px;
 }
 
+/* One word to place: it stands out, the others are only context. */
+.board-word[data-focus] {
+  outline: 1px solid var(--ai);
+  background: var(--ai-wash);
+}
+
+.board-word[data-context] {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .board-word {
   display: grid;
   grid-template-columns: auto 1fr auto;
