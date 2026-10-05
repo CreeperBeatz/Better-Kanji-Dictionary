@@ -59,7 +59,9 @@ const S = strings(
     other: 'The other character',
     english: 'English',
     bgHint: 'One meaning per field, short: what the kanji means, as the English says it.',
-    bgLabels: 'Group labels',
+    bgLabels: 'Group labels and notes',
+    noteBg: 'the note in Bulgarian',
+    noNote: 'no English note',
     wordBgHint: 'One Bulgarian gloss per sense, beside the English.',
     noKanji: 'This word has no kanji.',
     noGroupsFor: '{char} has no accepted meaning groups yet.',
@@ -117,7 +119,9 @@ const S = strings(
     other: 'Другият знак',
     english: 'Английски',
     bgHint: 'По едно кратко значение в поле: какво значи кандзито, както го казва английският.',
-    bgLabels: 'Етикети на групите',
+    bgLabels: 'Етикети и бележки на групите',
+    noteBg: 'бележката на български',
+    noNote: 'няма английска бележка',
     wordBgHint: 'По една българска глоса за всяко значение, до английската.',
     noKanji: 'Тази дума няма кандзи.',
     noGroupsFor: '{char} още няма приети групи значения.',
@@ -437,6 +441,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   const [groups, setGroups] = useState<MeaningGroup[]>([])
   const [placements, setPlacements] = useState<Placements>({})
   const [labels, setLabels] = useState<Record<string, string>>({})
+  const [notesBg, setNotesBg] = useState<Record<string, string>>({})
   const [parts, setParts] = useState<string[]>([])
   const [form, setForm] = useState<{ other: string; kind: FormKind; note: string | null }>({ other: '', kind: 'looks_like', note: null })
   const [bg, setBg] = useState<string[]>([])
@@ -462,6 +467,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
         setGroups(accepted ?? [])
         setPlacements(n.start)
         setLabels(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.bg ?? ''])))
+        setNotesBg(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.noteBg ?? ''])))
         setParts(n.parts)
         setBg(n.bg)
       },
@@ -485,6 +491,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     if (section === 'bg') {
       setBg(now.bg)
       setLabels(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.bg ?? ''])))
+      setNotesBg(Object.fromEntries((accepted ?? []).map((s) => [s.id, s.noteBg ?? ''])))
     }
   }
 
@@ -493,13 +500,20 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   const accepted = now && !now.drafted ? now.senses : null
   if (now) {
     if (accepted) {
-      const withLabels = groups.map((g) => (g.id in labels ? { ...g, bg: labels[g.id].trim() || null } : g))
+      // Bulgarian labels and notes over the board's groups; a note only once it changed, so an untouched group stays as stored.
+      const withLabels = groups.map((g) => {
+        let out = g.id in labels ? { ...g, bg: labels[g.id].trim() || null } : g
+        const note = notesBg[g.id]?.trim()
+        if (note !== undefined && note !== (g.noteBg ?? '')) out = { ...out, noteBg: note || null }
+        return out
+      })
       const fin = finalizeBoard(char, withLabels, placements)
       const moved: Placements = {}
       for (const [id, g] of Object.entries(fin.words)) if (now.start[Number(id)] !== g) moved[Number(id)] = g
       if (!same(fin.groups, accepted) || Object.keys(moved).length) {
         // Labels alone are the Bulgarian section's; anything else is the board's.
-        const boardChanged = Object.keys(moved).length > 0 || !same(fin.groups.map((g) => ({ ...g, bg: null })), accepted.map((g) => ({ ...g, bg: null })))
+        const plain = (gs: MeaningGroup[]) => gs.map((g) => ({ ...g, bg: null, noteBg: null }))
+        const boardChanged = Object.keys(moved).length > 0 || !same(plain(fin.groups), plain(accepted))
         changes.push({
           key: 'senses',
           section: boardChanged ? 'senses' : 'bg',
@@ -624,7 +638,6 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                             <li key={g.id}>
                               <span className="bg-label-en">
                                 <b>{g.en}</b>
-                                {g.note && <span className="hint"> — {g.note}</span>}
                               </span>
                               <input
                                 className="assoc-text"
@@ -633,6 +646,16 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                                 value={labels[g.id] ?? g.bg ?? ''}
                                 aria-label={g.en}
                                 onChange={(e) => setLabels({ ...labels, [g.id]: e.target.value })}
+                              />
+                              <span className="bg-label-note hint">{g.note ?? t('noNote')}</span>
+                              <input
+                                className="assoc-text bg-note-input"
+                                lang="bg"
+                                maxLength={200}
+                                value={notesBg[g.id] ?? g.noteBg ?? ''}
+                                placeholder={t('noteBg')}
+                                aria-label={`${g.en}: ${t('noteBg')}`}
+                                onChange={(e) => setNotesBg({ ...notesBg, [g.id]: e.target.value })}
                               />
                             </li>
                           ))}

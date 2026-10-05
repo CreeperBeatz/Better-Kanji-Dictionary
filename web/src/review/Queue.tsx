@@ -191,6 +191,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
   const [labelsFrom, setLabelsFrom] = useState<Record<string, string>>({})
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [notesFrom, setNotesFrom] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -245,6 +247,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setPlacedFrom({})
     setLabels({})
     setLabelsFrom({})
+    setNotes({})
+    setNotesFrom({})
     setBoardWork(false)
     if (!item) return
     let stale = false
@@ -254,9 +258,15 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setDetail(d)
         if (d.type === 'bg' && d.context.senses) {
           const l: Record<string, string> = {}
-          for (const g of d.context.senses) l[g.id] = g.bg ?? ''
+          const n: Record<string, string> = {}
+          for (const g of d.context.senses) {
+            l[g.id] = g.bg ?? ''
+            n[g.id] = g.noteBg ?? ''
+          }
           setLabels(readDraft(d.id)?.labels ?? l)
           setLabelsFrom(l)
+          setNotes(readDraft(d.id)?.notes ?? n)
+          setNotesFrom(n)
         }
         if (d.type === 'kanji_senses' && d.context.board) {
           const ids = new Set(((d.proposed ?? d.current ?? []) as MeaningGroup[]).map((g) => g.id))
@@ -280,7 +290,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       setProblem(null)
       try {
         const withLabels = item.type === 'bg' && Object.keys(labels).length ? labels : undefined
-        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels)
+        const withNotes = item.type === 'bg' && Object.keys(notes).length ? notes : undefined
+        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withNotes)
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         if (action !== 'skip') onDecided?.()
@@ -296,7 +307,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setBusy(false)
       }
     },
-    [item, busy, reason, items, lang, onDecided, showSkipped, labels],
+    [item, busy, reason, items, lang, onDecided, showSkipped, labels, notes],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
@@ -304,7 +315,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const open = item?.proposed === null
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
-  const relabelled = item?.type === 'bg' && !same(labels, labelsFrom)
+  const relabelled = item?.type === 'bg' && (!same(labels, labelsFrom) || !same(notes, notesFrom))
   // Anything to throw away: the answer, the reason, words moved or left for later, labels, board ticks.
   const changed = !!item && (edited0() || !!reason.trim() || skipped.size > 0 || boardWork)
   function edited0() {
@@ -319,6 +330,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setPlacements(placedFrom)
     setSkipped(new Set())
     setLabels(labelsFrom)
+    setNotes(notesFrom)
     setBoardWork(false)
     setFresh((n) => n + 1)
   }
@@ -357,8 +369,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       placements: board && !same(placements, placedFrom) ? placements : undefined,
       skipped: skipped.size ? [...skipped] : undefined,
       labels: item.type === 'bg' && !same(labels, labelsFrom) ? labels : undefined,
+      notes: item.type === 'bg' && !same(notes, notesFrom) ? notes : undefined,
     })
-  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom])
+  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom, notes, notesFrom])
 
   const skip = useCallback((ids: number[], on: boolean) => {
     setSkipped((s) => {
@@ -524,7 +537,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               <div className="queue-edit">
                 {item.type === 'bg' ? (
                   detail?.id === item.id ? (
-                    <BgCard detail={detail} value={(draft ?? []) as string[]} onChange={setDraft} labels={labels} onLabels={setLabels} />
+                    <BgCard detail={detail} value={(draft ?? []) as string[]} onChange={setDraft} labels={labels} onLabels={setLabels} notes={notes} onNotes={setNotes} />
                   ) : (
                     <p className="hint">{t('loading')}</p>
                   )

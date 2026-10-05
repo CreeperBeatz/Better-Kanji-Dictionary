@@ -25,6 +25,8 @@ export interface ItemDraft {
   skipped?: number[]
   /** A kanji's Bulgarian card: the groups' Bulgarian labels as edited. */
   labels?: Record<string, string>
+  /** And their Bulgarian notes. */
+  notes?: Record<string, string>
   board?: BoardDraft
 }
 

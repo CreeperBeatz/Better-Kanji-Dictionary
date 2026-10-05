@@ -496,6 +496,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
                 "en": en,
                 "bg": (s.get("bg") or "").strip()[:40] or None,
                 "note": (s.get("note") or "").strip()[:200] or None,
+                "noteBg": (s.get("noteBg") or "").strip()[:200] or None,
             })
         return out
 
@@ -855,12 +856,14 @@ FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
-           words: dict | None = None, skip: dict | None = None, labels: dict | None = None) -> dict:
+           words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
+           notes: dict | None = None) -> dict:
     """`words`, for a kanji's meanings: word id -> group id (None: in no group),
     as the reviewer left them on the board. Each becomes a decision of its own,
     under this one, and is reverted with it.
 
-    `labels`, for a kanji's Bulgarian card: group id -> its Bulgarian label.
+    `labels`, for a kanji's Bulgarian card: group id -> its Bulgarian label;
+    `notes` likewise, its Bulgarian note.
     Bulgarian is labelled in the Bulgarian stage, not on the meanings board,
     so the groups' labels are set here, as a decision under this one.
 
@@ -913,20 +916,23 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
             if held:
                 _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
                           f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
-        if type_ == "bg" and labels and subject.startswith("kanji:"):
-            _label_groups(data, subject[6:], labels, user_id, d["id"])
+        if type_ == "bg" and (labels or notes) and subject.startswith("kanji:"):
+            _label_groups(data, subject[6:], labels or {}, user_id, d["id"], notes or {})
         return dict(item)
 
 
-def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str) -> None:
-    """Set the Bulgarian labels of a kanji's accepted groups (a decision under `parent`)."""
-    if not isinstance(labels, dict):
+def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str, notes: Any = None) -> None:
+    """Set the Bulgarian labels and notes of a kanji's accepted groups (a decision under `parent`)."""
+    notes = notes or {}
+    if not isinstance(labels, dict) or not isinstance(notes, dict):
         raise _bad("bg_invalid", "one Bulgarian gloss per sense")
     before = live_value("kanji_senses", char, data)
     if not before:
         return
+    clean = lambda v, n: " ".join(str(v).split())[:n] or None  # noqa: E731
     after = validate("kanji_senses", char, [
-        {**g, "bg": (" ".join(str(labels.get(g["id"], g.get("bg") or "")).split())[:40] or None)} for g in before
+        {**g, "bg": clean(labels.get(g["id"], g.get("bg") or ""), 40), "noteBg": clean(notes.get(g["id"], g.get("noteBg") or ""), 200)}
+        for g in before
     ], data)
     if after == before:
         return

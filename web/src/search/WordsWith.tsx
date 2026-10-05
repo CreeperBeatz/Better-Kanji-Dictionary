@@ -20,7 +20,7 @@ const S = strings(
     count: '{n} words',
     byMeaning: 'Divided by the meaning {char} has in each word.',
     notYet: 'The meanings of {char} are not reviewed yet, so its words are in one list, the most common first.',
-    others: 'Not placed in a meaning yet',
+    others: 'Not in a group',
     more: 'more',
     openKanji: 'open {char}',
     offline: 'Offline: only the most common words.',
@@ -33,7 +33,7 @@ const S = strings(
     count: '{n} думи',
     byMeaning: 'Разделени по значението, което {char} има във всяка дума.',
     notYet: 'Значенията на {char} още не са прегледани, затова думите са в един списък, най-честите първо.',
-    others: 'Още неразпределени по значение',
+    others: 'Извън групите',
     more: 'още',
     openKanji: 'отворете {char}',
     offline: 'Без връзка: само най-честите думи.',
@@ -159,7 +159,7 @@ export function WordsWith({
               g.words.length,
               g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang),
               <>
-                {g.note && <span className="hint">— {g.note}</span>}
+                {((lang === 'bg' && g.noteBg) || g.note) && <span className="hint">{(lang === 'bg' && g.noteBg) || g.note}</span>}
                 {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
               </>,
             )}
@@ -177,7 +177,8 @@ export function WordsWith({
         )
       })}
 
-      {data && data.rest.words.length > 0 && (
+      {/* Always there once there are groups, even empty: the end of the list. */}
+      {data && (data.rest.words.length > 0 || data.groups.length > 0) && (
         <div className="meaning-group" data-shut={shut.has(REST) || undefined}>
           {data.groups.length > 0 && head(REST, data.rest.total, t('others'))}
           {!shut.has(REST) && (

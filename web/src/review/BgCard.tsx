@@ -23,7 +23,9 @@ const S = strings(
     remove: 'remove',
     hint: 'Check each Bulgarian gloss against the English beside it. Fix what is wrong or unnatural; leave what is right.',
     groups: 'Its meaning groups: give each its Bulgarian label',
-    groupsHint: 'Short, natural Bulgarian for what the group stands for. The meanings above can start from them.',
+    groupsHint: 'Short, natural Bulgarian for what the group stands for, and its note in Bulgarian. The meanings above can start from them.',
+    noteBg: 'the note in Bulgarian',
+    noNote: 'no English note',
     fromGroups: 'fill from the group labels below',
     inGroups: 'What its kanji bring here',
     noMeaning: 'brings no meaning to this word',
@@ -43,7 +45,9 @@ const S = strings(
     remove: 'махнете',
     hint: 'Сверете всеки български превод с английския до него. Поправете грешното или неестественото; оставете вярното.',
     groups: 'Групите му значения: дайте на всяка български етикет',
-    groupsHint: 'Кратко, естествено на български, какво обхваща групата. Значенията по-горе могат да тръгнат от тях.',
+    groupsHint: 'Кратко, естествено на български, какво обхваща групата, и бележката ѝ на български. Значенията по-горе могат да тръгнат от тях.',
+    noteBg: 'бележката на български',
+    noNote: 'няма английска бележка',
     fromGroups: 'попълнете от етикетите на групите по-долу',
     inGroups: 'Какво внасят кандзитата му тук',
     noMeaning: 'не внася значение в тази дума',
@@ -57,6 +61,8 @@ export function BgCard({
   onChange,
   labels,
   onLabels,
+  notes,
+  onNotes,
 }: {
   detail: ItemDetail
   value: string[]
@@ -64,6 +70,9 @@ export function BgCard({
   /** A kanji card: its groups' Bulgarian labels, by group id. */
   labels: Record<string, string>
   onLabels: (l: Record<string, string>) => void
+  /** And their Bulgarian notes, beside the English ones. */
+  notes: Record<string, string>
+  onNotes: (n: Record<string, string>) => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -191,7 +200,6 @@ export function BgCard({
               <li key={g.id} data-changed={(labels[g.id] ?? '') !== (g.bg ?? '') || undefined}>
                 <span className="bg-label-en">
                   <b>{g.en}</b>
-                  {g.note && <span className="hint"> — {g.note}</span>}
                 </span>
                 <input
                   className="assoc-text"
@@ -200,6 +208,17 @@ export function BgCard({
                   value={labels[g.id] ?? ''}
                   aria-label={g.en}
                   onChange={(e) => onLabels({ ...labels, [g.id]: e.target.value })}
+                />
+                <span className="bg-label-note hint">{g.note ?? t('noNote')}</span>
+                <input
+                  className="assoc-text bg-note-input"
+                  lang="bg"
+                  maxLength={200}
+                  value={notes[g.id] ?? ''}
+                  placeholder={t('noteBg')}
+                  aria-label={`${g.en}: ${t('noteBg')}`}
+                  data-changed={(notes[g.id] ?? '') !== (g.noteBg ?? '') || undefined}
+                  onChange={(e) => onNotes({ ...notes, [g.id]: e.target.value })}
                 />
               </li>
             ))}

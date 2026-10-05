@@ -327,6 +327,8 @@ export interface MeaningGroup {
   en: string
   bg: string | null
   note: string | null
+  /** The note in Bulgarian, set on the Bulgarian card. */
+  noteBg?: string | null
 }
 
 /**
@@ -855,7 +857,9 @@ export const api = {
     skip?: Record<number, string | null>,
     /** A kanji's Bulgarian card: group id -> the group's Bulgarian label. */
     labels?: Record<string, string>,
-  ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip, labels }),
+    /** Likewise, group id -> the group's Bulgarian note. */
+    notes?: Record<string, string>,
+  ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip, labels, notes }),
 
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),

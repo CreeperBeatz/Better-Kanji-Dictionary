@@ -1979,8 +1979,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 5px 8px;
 }
 
-.bg-labels li[data-changed] .assoc-text {
+.bg-labels li[data-changed] .assoc-text:not(.bg-note-input),
+.bg-labels .bg-note-input[data-changed] {
   border-color: var(--ai);
+}
+
+.bg-label-note {
+  font-size: 12px;
 }
 
 @media (max-width: 640px) {
