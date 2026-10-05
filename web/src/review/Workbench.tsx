@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { DictSubject } from './DictLinks'
 import { api, dataChanged, type AdminPeople, type Author, type Decision, type HistoryFilter } from '../api'
 import { useAuth } from '../account/auth'
 import type { WorkbenchTab } from '../account/Account'
@@ -374,7 +375,9 @@ function History({ admin }: { admin: boolean }) {
           <li key={d.id} data-reverted={!!d.reverted_by || undefined}>
             <span className="hint">{when(d.at)}</span>{' '}
             <span className="decision-subject" lang="ja">
-              {d.subject.split('|')[0]}
+              <DictSubject type={d.type} subject={d.subject}>
+                {d.subject.split('|')[0]}
+              </DictSubject>
             </span>{' '}
             {t(`a_${d.action}` as Key)}
             {d.byCard && <span className="hint"> · @{d.byCard.username ?? d.byCard.name}</span>}

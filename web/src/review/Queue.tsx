@@ -7,6 +7,7 @@
  * j / k move, and for a word's meaning 1-9 picks a group and decides at once.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { DictLinks } from './DictLinks'
 import {
   api,
   dataChanged,
@@ -506,6 +507,13 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     )}
                   </p>
                   {item.reason && <p className="queue-reason">{item.reason}</p>}
+                </div>
+                <div className="queue-dict">
+                  <DictLinks
+                    type={item.type}
+                    subject={item.subject}
+                    label={(detail?.id === item.id ? detail.context?.word?.headword : undefined) ?? item.label}
+                  />
                 </div>
               </header>
 

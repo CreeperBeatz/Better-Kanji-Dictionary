@@ -6850,6 +6850,49 @@ html[data-nav]::view-transition-old(tabs):only-child {
   align-items: flex-start;
 }
 
+/* "Open in dictionary ↗", at the right of an item's head. */
+.queue-dict {
+  margin-left: auto;
+  flex: none;
+  padding-top: 4px;
+}
+
+.dict-open {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--paper-dim);
+  border: 1px solid var(--rule-bright);
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dict-open:hover,
+.dict-open:focus-visible {
+  color: var(--ai);
+  border-color: var(--ai-deep);
+}
+
+.dict-open-many {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.dict-subject {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dict-subject:hover,
+.dict-subject:focus-visible {
+  color: var(--ai);
+}
+
 .queue-big {
   font-family: var(--mincho);
   font-size: 72px;
@@ -7430,4 +7473,9 @@ button.review-part {
 
 .words-with-back {
   margin-bottom: 10px;
+}
+
+/* The arrow in the UI face, not a Japanese one, where it reads as a slash. */
+.dict-open [aria-hidden] {
+  font-family: system-ui, sans-serif;
 }
