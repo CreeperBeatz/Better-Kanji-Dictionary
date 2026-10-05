@@ -10,7 +10,8 @@ thought, add it under **Cases** so the next reviewer decides it the same way.
 - *Parts* answer "what does it look like today?" They drive the graph and the
   study order: a kanji is never taught before one it visibly contains.
 - *Forms* and *meanings* answer "where does it come from, what does each part
-  do?" Old forms are evidence for those, never for parts.
+  do?" Old forms are evidence for those. For parts they do one thing only:
+  break a tie when today's strokes can be grouped two ways (see 従).
 
 **Scope.** Word labeling covers each kanji's *common* words, and words with a
 newspaper rank or a JLPT level. Rarer, unranked words are not labelled here;
@@ -53,6 +54,11 @@ Question: which parts is this character built from, as written today?
   drawing has it, leave it out.
 - **Judge by today's shape.** 青 contains 月, even though the old form 靑 had
   丹 there. The 丹 belongs in a form note, not in the parts.
+- **Two groupings of the same strokes: the old form decides.** Sometimes
+  today's shape allows two splits that use exactly the same strokes, and only
+  the grouping differs. Look at the old form and group the strokes the way it
+  does. The old form only chooses between splits that are visible today. It
+  never adds a part that is no longer visible.
 - **Read the impact.** "This adds a containment edge" means the study order
   moves. "157 kanji contain it" means every one of them gains or loses a
   prerequisite. A change that makes many kanji depend on a part that means
@@ -245,3 +251,26 @@ likeness to 干 千 牛 belongs in *Similar → looks*.
 built from it. Strict order is about the parts a character is built from,
 not every shape it contains. When neither the proposal nor the current
 parts do a job in the character, make it atomic.
+
+### 従: the old form picks the grouping
+
+*Seen 2026-10-05.* The right side of 従 can be read two ways, with the same
+strokes: 䒑 + 龰 (the dots and the line on top, a foot below) or 八 + 𤴓
+(the dots on top, the foot with its line, as in 定 and 是).
+
+- **Today's shape can't decide.** Both splits are visible and use every
+  stroke once. They differ only on where the 一 goes.
+- **The old form can.** 従 was 從: 彳 + 从 (two people, one following the
+  other) + 止 written as 龰. The two people shrank to 䒑, losing a stroke
+  (從 has 11 strokes, 従 has 10). The foot did not change. So the 一 belongs to
+  the top, and the foot is 龰, not 𤴓.
+- **Neither 从 nor 止 becomes a part.** 从 is no longer visible in 従, so the
+  story (䒑 is what is left of the two people) goes in 従's notes and
+  meanings, not in its parts.
+
+**Decision:** 彳 + 䒑 + 龰, which is what the data already has. Reject a
+proposal of 𤴓 or 八 for 従.
+
+**General lesson:** when two splits use the same strokes, follow the old
+form's grouping. The old form chooses between splits that are visible today
+and does not add parts.
