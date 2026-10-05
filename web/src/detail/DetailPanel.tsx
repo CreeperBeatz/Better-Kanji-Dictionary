@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
 import { FontStrip } from './FontStrip'
 import { Forms, useForms } from './Forms'
-import { SuggestDialog, SuggestLink, type SuggestTarget } from '../review/Suggest'
 import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
@@ -81,8 +80,6 @@ interface Props {
   onKanji: (char: string) => void
   /** Shows the focus graph, from the map or on a phone; left out when it is already on screen. */
   onComponents?: () => void
-  /** Opens sign-in, for someone signed out who wants to suggest a change. */
-  onSignIn?: () => void
   /** Runs a search, as if typed: "see all words" searches *生*. */
   onSearch?: (q: string) => void
 }
@@ -109,7 +106,7 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
 }
 
 /** A character as it looks, and what it means: the top of its page, above both tabs. */
-export function KanjiHead({ node }: { node: KanjiNode }) {
+export function KanjiHead({ node, action }: { node: KanjiNode; action?: ReactNode }) {
   const lang = useLang()
   const t = S(lang)
   // KANJIDIC files a radical's name where a meaning would be ("Radical Number 9");
@@ -136,27 +133,20 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
             </>
           )}
         </p>
+        {action}
       </div>
       <KanjiMeta node={node} />
     </div>
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onSearch }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSearch }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
   const [byReading, setByReading] = useState<{ char: string; words: Record<string, Word> } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
-  const [suggest, setSuggest] = useState<SuggestTarget | null>(null)
-  const char = data.focus.char
-  const suggestParts = () =>
-    api.kanji(char).then(
-      (g) => setSuggest({ type: 'decomposition', subject: char, value: g.components.nodes.filter((x) => x.depth === 1).map((x) => x.char) }),
-      () => {},
-    )
-  const suggestForm = () => setSuggest({ type: 'form_link', subject: `${char}|`, value: { kind: 'looks_like', note: null } })
 
   // Vocabulary follows the focus, not the hover -- otherwise it would thrash
   // as the cursor crosses the graph.
@@ -299,7 +289,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </>
       )}
 
-      {!isPreview && forms && <Forms data={forms} onKanji={onKanji} onSuggest={suggestForm} />}
+      {!isPreview && forms && <Forms data={forms} onKanji={onKanji} />}
 
       {!isPreview && counts && (
         <p className="fanout-line">
@@ -310,19 +300,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
               {' '}
               {t.node('containedBy', { all: <b>{counts.containers}</b>, joyo: <b>{counts.containersJoyo}</b> })}
             </>
-          )}{' '}
-          <SuggestLink onOpen={suggestParts} />
+          )}
         </p>
-      )}
-      {suggest && (
-        <SuggestDialog
-          target={suggest}
-          onClose={() => setSuggest(null)}
-          onSignIn={() => {
-            setSuggest(null)
-            onSignIn?.()
-          }}
-        />
       )}
     </section>
   )

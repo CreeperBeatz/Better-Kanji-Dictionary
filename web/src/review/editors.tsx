@@ -155,9 +155,11 @@ interface EditorProps {
   /** kanji_senses: the kanji, to prefix new ids. */
   char?: string
   autoFocus?: boolean
+  /** kanji_senses: a column for each group's Bulgarian label too. */
+  withBg?: boolean
 }
 
-export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: EditorProps) {
+export function ValueEditor({ type, value, onChange, groups, char, autoFocus, withBg }: EditorProps) {
   const lang = useLang()
   const t = S(lang)
 
@@ -199,6 +201,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
             <tr>
               <th>{t('id')}</th>
               <th>{t('en')}</th>
+              {withBg && <th>{t('bg')}</th>}
               <th>{t('note')}</th>
               <th />
             </tr>
@@ -212,11 +215,16 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
                 <td>
                   <input className="assoc-text" value={g.en} autoFocus={autoFocus && i === 0} onChange={(e) => set(i, { en: e.target.value })} />
                 </td>
+                {withBg && (
+                  <td>
+                    <input className="assoc-text" lang="bg" maxLength={40} value={g.bg ?? ''} onChange={(e) => set(i, { bg: e.target.value || null })} />
+                  </td>
+                )}
                 <td>
                   <input className="assoc-text" value={g.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} />
                 </td>
                 <td>
-                  <button className="clear" onClick={() => onChange(list.filter((_, j) => j !== i))}>
+                  <button type="button" className="clear" onClick={() => onChange(list.filter((_, j) => j !== i))}>
                     {t('remove')}
                   </button>
                 </td>
@@ -225,7 +233,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
           </tbody>
         </table>
         {list.length < 6 && (
-          <button className="clear" onClick={() => onChange([...list, { id: `g${list.length + 1}`, en: '', bg: null, note: null }])}>
+          <button type="button" className="clear" onClick={() => onChange([...list, { id: `g${list.length + 1}`, en: '', bg: null, note: null }])}>
             {t('addGroup')}
           </button>
         )}
@@ -238,7 +246,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus }: 
   return (
     <div className="review-pick" role="radiogroup">
       {[...groups.map((g) => g.id), CATCH_ALL].map((id, i) => (
-        <button key={id} role="radio" aria-checked={value === id} data-on={value === id} onClick={() => onChange(id)}>
+        <button type="button" key={id} role="radio" aria-checked={value === id} data-on={value === id} onClick={() => onChange(id)}>
           <kbd>{i + 1}</kbd> {groupLabel(id, groups, lang)}
         </button>
       ))}
@@ -263,7 +271,7 @@ function PartsEditor({ value, onChange, autoFocus }: { value: string[] | null; o
           aria-label={t('parts')}
           onChange={(e) => onChange([...e.target.value.replace(/\s|[,、・]/g, '')])}
         />
-        <button className="searchbar-tool review-draw-toggle" data-on={drawing || undefined} aria-pressed={drawing} onClick={() => setDrawing((d) => !d)} title={t('drawTitle')}>
+        <button type="button" className="searchbar-tool review-draw-toggle" data-on={drawing || undefined} aria-pressed={drawing} onClick={() => setDrawing((d) => !d)} title={t('drawTitle')}>
           <svg viewBox="0 0 20 20" aria-hidden>
             <path d="M3 17c2-.4 3.2-1.2 4.3-2.3L16.5 5.5a1.8 1.8 0 0 0-2.5-2.5L4.8 12.2C3.7 13.3 3.2 14.8 3 17Z" />
           </svg>

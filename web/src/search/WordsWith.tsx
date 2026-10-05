@@ -13,7 +13,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
 import { useAuth } from '../account/auth'
 import { strings, useLang } from '../i18n'
-import { SuggestDialog, SuggestLink, type SuggestTarget } from '../review/Suggest'
+import { SuggestDialog, type SuggestTarget } from '../review/Suggest'
+import { KanjiEditButton } from '../review/KanjiEdit'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 
 const S = strings(
@@ -132,6 +133,7 @@ export function WordsWith({
               {t('count', { n: total })} · {offline ? t('offline') : senses ? t('byMeaning', { char }) : t('notYet', { char })}
             </p>
           )}
+          {!offline && <KanjiEditButton char={char} />}
         </div>
       </header>
       {tools}
@@ -143,9 +145,6 @@ export function WordsWith({
             {g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang)}
             {g.note && <span className="hint"> — {g.note}</span>}
             {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
-            {g.id !== CATCH_ALL && senses && (
-              <SuggestLink onOpen={() => setSuggest({ type: 'kanji_senses', subject: char, value: senses })} />
-            )}
           </h3>
           <ol className="words">{g.words.map((w) => row(w, user ? moveLink(w, g.id) : undefined))}</ol>
         </div>

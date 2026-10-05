@@ -11,6 +11,7 @@ import { Workbench } from './review/Workbench'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
+import { KanjiEditButton } from './review/KanjiEdit'
 import { local } from './local/local'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
@@ -1049,7 +1050,6 @@ export function App() {
             onWord={openWord}
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
-            onSignIn={signIn}
             onSearch={type}
           />
         ) : null
@@ -1101,7 +1101,11 @@ export function App() {
       return (
         <section className="rail-section">
           {node ? (
-            <KanjiHead node={node} />
+            <KanjiHead
+              node={node}
+              // The page's own kanji only, not one hovered on the graph.
+              action={node.char === shownTop.char ? <KanjiEditButton char={node.char} onSignIn={signIn} /> : undefined}
+            />
           ) : (
             <div className="detail-head">
               <span className="detail-glyph">{shownTop.char}</span>

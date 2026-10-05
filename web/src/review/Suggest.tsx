@@ -1,6 +1,7 @@
 /**
- * "Suggest a change", from the page: a small form prefilled with what the
- * page shows now. A user's suggestion goes to the review queue with their
+ * "Suggest a change" to one thing, from the page: a small form prefilled
+ * with what the page shows now. (Which meaning of a kanji a word uses; the
+ * kanji itself is changed from one dialog, review/KanjiEdit.tsx.) A user's suggestion goes to the review queue with their
  * reason; a reviewer's or the admin's is simply made, live at once, and
  * logged like any other decision (Dani, 2026-10-02).
  */
@@ -13,8 +14,6 @@ import { strokesOk, ValueEditor } from './editors'
 
 const S = strings(
   {
-    suggest: 'Suggest a change',
-    edit: 'Change it',
     t_decomposition: 'The parts of {subject}',
     t_form_link: 'How {a} relates to another character',
     t_kanji_senses: 'The meaning groups of {subject}',
@@ -34,8 +33,6 @@ const S = strings(
     failed: 'could not send this',
   },
   {
-    suggest: 'Предложете промяна',
-    edit: 'Променете го',
     t_decomposition: 'Частите на {subject}',
     t_form_link: 'Как {a} се свързва с друг знак',
     t_kanji_senses: 'Групите значения на {subject}',
@@ -64,17 +61,6 @@ export interface SuggestTarget {
   subject: string
   value: TaskValue
   groups?: MeaningGroup[] | null
-}
-
-/** The link that opens the dialog: "suggest a change", or for a reviewer "change it". */
-export function SuggestLink({ onOpen }: { onOpen: () => void }) {
-  const t = S(useLang())
-  const { user } = useAuth()
-  return (
-    <button className="clear suggest-link" onClick={onOpen}>
-      {t(user && user.role !== 'user' ? 'edit' : 'suggest')}
-    </button>
-  )
 }
 
 export function SuggestDialog({

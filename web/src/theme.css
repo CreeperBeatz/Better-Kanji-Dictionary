@@ -6550,12 +6550,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 13px;
 }
 
-.forms-none {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-
 .workbench-section + .workbench-section {
   margin-top: 18px;
 }
@@ -6994,8 +6988,80 @@ button.review-part {
   flex-basis: 100%;
 }
 
-.suggest-link {
+/* The page's one way to change a kanji: Edit, or Suggest changes. */
+.kanji-edit-link {
+  margin-top: 6px;
+  padding: 0;
   font-size: 12px;
+}
+
+.kanji-edit-section {
+  margin: 0 0 10px;
+  padding: 6px 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  min-width: 0;
+}
+
+.kanji-edit-section[data-on] {
+  border-color: var(--rule-bright);
+}
+
+.kanji-edit-section legend {
+  padding: 0 4px;
+  font-size: 13px;
+}
+
+.kanji-edit-section legend label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.kanji-edit-section[disabled] {
+  opacity: 0.7;
+}
+
+.kanji-edit-forms {
+  margin: 0;
+  font-size: 13px;
+}
+
+.kanji-edit-forms div {
+  display: flex;
+  gap: 10px;
+}
+
+.kanji-edit-forms dt {
+  color: var(--muted);
+  min-width: 9em;
+}
+
+.kanji-edit-forms dd {
+  margin: 0;
+}
+
+.kanji-edit-english {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.kanji-edit-outcomes {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 13.5px;
+}
+
+.kanji-edit {
+  width: min(640px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.kanji-edit .review-senses input {
+  width: 100%;
+  min-width: 0;
 }
 
 .suggest-panel {
