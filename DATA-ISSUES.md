@@ -77,6 +77,23 @@ Source: the subagent drafts (`ai:claude-sonnet`).
 **Status: in review.** Every placement is checked on its kanji's meanings
 board. The handbook warns about this box.
 
+### D-013 · In-scope words with no Bulgarian at all
+*Found 2026-10-05,* when review widened from JLPT N5–N2 to everything common
+or rated (server/scope.py). 396 words in scope have no Bulgarian gloss:
+mostly words on a JLPT list that JMdict does not mark common, which the
+translation run (jmdict-kanjidic-bg) did not take in.
+Source: the Bulgarian translation's selection, not a mistake in a gloss.
+**Status: open.** They get no Bulgarian card until they are translated.
+
+### D-014 · Words filed under kanji they are not written with
+*Found 2026-10-05,* drafting meanings for the widened scope. A kanji's word
+list (word_char) takes in every written form of an entry, so 広報 is listed
+under 弘, 町 under 街, 受ける under 請. The drafting runs placed them at low
+confidence; loading drops any word whose headword lacks the kanji (787 of
+10,588), as D-011's rule already does for the kanji page.
+Source: JMdict alternative spellings in word_char.
+**Status: handled at load.** Nothing dropped reaches the queue.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
