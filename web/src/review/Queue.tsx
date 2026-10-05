@@ -30,12 +30,14 @@ import { queueRouteInUrl, replaceQueueRoute } from './route'
 const S = strings(
   {
     all: 'all',
+    any: 'any',
+    originLabel: 'Where the items came from',
     t_decomposition: 'parts',
     t_form_link: 'forms',
     t_kanji_senses: 'meanings',
-    t_word_sense: 'word meanings',
-    t_bg: 'Bulgarian',
-    t_en_report: 'English reports',
+    t_word_sense: 'words',
+    t_bg: 'Bulgarian translations',
+    t_en_report: 'reports',
     reported: 'What is wrong, says the report',
     jmdict: 'The English now (JMdict)',
     confirmReport: 'confirm: a real mistake',
@@ -86,12 +88,14 @@ const S = strings(
   },
   {
     all: 'всички',
+    any: 'всякакви',
+    originLabel: 'Откъде са дошли',
     t_decomposition: 'части',
     t_form_link: 'форми',
     t_kanji_senses: 'значения',
-    t_word_sense: 'значения в думи',
-    t_bg: 'български',
-    t_en_report: 'доклади за английския',
+    t_word_sense: 'думи',
+    t_bg: 'преводи на български',
+    t_en_report: 'доклади',
     reported: 'Какво не е наред според доклада',
     jmdict: 'Английският сега (JMdict)',
     confirmReport: 'потвърдете: истинска грешка',
@@ -426,35 +430,56 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
   return (
     <div className="queue">
+      {/* What to review: any stage, or what you skipped -- then one stage. */}
       <nav className="overlay-tabs queue-filters">
-        <button data-on={!type} data-empty={TYPES.every((k) => types[k] === 0) || undefined} onClick={() => setType(undefined)}>
-          {t('all')}
+        <button
+          data-on={!type && !showSkipped}
+          data-empty={TYPES.every((k) => types[k] === 0) || undefined}
+          onClick={() => {
+            setType(undefined)
+            setShowSkipped(false)
+          }}
+        >
+          {t('any')}
         </button>
-        {TYPES.map((k) => (
-          <button key={k} data-on={type === k} data-empty={types[k] === 0 || undefined} onClick={() => setType(k)}>
-            {t(`t_${k}` as Key)}
-          </button>
-        ))}
-        <span className="overlay-tab-rule" />
-        <button data-on={!origin} onClick={() => setOrigin(undefined)}>
-          {t('all')}
-        </button>
-        {ORIGINS.map((o) => (
-          <button key={o} data-on={origin === o} onClick={() => setOrigin(o)}>
-            {t(`o_${o}` as Key)}
-          </button>
-        ))}
-        <span className="overlay-tab-rule" />
         <button
           data-on={showSkipped}
           data-empty={(!showSkipped && skippedN === 0) || undefined}
           title={t('skippedTitle')}
-          onClick={() => setShowSkipped((v) => !v)}
+          onClick={() => {
+            setType(undefined)
+            setShowSkipped(true)
+          }}
         >
           {t('skippedTab')} {skippedN > 0 && <span className="queue-count">{skippedN}</span>}
         </button>
-        <span className="tally queue-left">{items && t('left', { n: total })}</span>
+        <span className="overlay-tab-rule" />
+        {TYPES.map((k) => (
+          <button
+            key={k}
+            data-on={type === k && !showSkipped}
+            data-empty={types[k] === 0 || undefined}
+            onClick={() => {
+              setType(k)
+              setShowSkipped(false)
+            }}
+          >
+            {t(`t_${k}` as Key)}
+          </button>
+        ))}
       </nav>
+      {/* Where the items came from: a filter over whichever is chosen above. */}
+      <div className="queue-origins" role="group" aria-label={t('originLabel')}>
+        <button className="search-filter" data-on={!origin || undefined} aria-pressed={!origin} onClick={() => setOrigin(undefined)}>
+          {t('all')}
+        </button>
+        {ORIGINS.map((o) => (
+          <button key={o} className="search-filter" data-on={origin === o || undefined} aria-pressed={origin === o} onClick={() => setOrigin(o)}>
+            {t(`o_${o}` as Key)}
+          </button>
+        ))}
+        <span className="tally queue-left">{items && t('left', { n: total })}</span>
+      </div>
 
       {items === null && <p className="hint">{problem ?? t('loading')}</p>}
       {items !== null && items.length === 0 && (

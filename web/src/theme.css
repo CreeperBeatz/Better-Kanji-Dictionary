@@ -6758,6 +6758,15 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin-left: auto;
 }
 
+/* All / proposals / suggestions: filter pills under the stages. */
+.queue-origins {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
 .queue {
   flex: 1;
   display: flex;
