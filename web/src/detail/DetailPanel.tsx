@@ -311,7 +311,14 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
 
       {!isPreview && vocabReady && (groups.length > 0 || words.length > 0) && (
         <div className="vocab">
-          <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
+          <div className="vocab-head">
+            <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
+            {onWordsWith && (
+              <button className="clear vocab-all" onClick={() => onWordsWith(data.focus.char)}>
+                {t('allWords', { char: data.focus.char })}
+              </button>
+            )}
+          </div>
           {groups.length > 0 ? (
             <>
               {groups.map((g) =>
@@ -326,11 +333,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             </>
           ) : (
             <ul>{words.slice(0, PAGE_WORDS).map(vocabRow)}</ul>
-          )}
-          {onWordsWith && (
-            <button className="clear vocab-all" onClick={() => onWordsWith(data.focus.char)}>
-              {t('allWords', { char: data.focus.char })}
-            </button>
           )}
         </div>
       )}

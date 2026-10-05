@@ -7249,9 +7249,22 @@ button.review-part {
 
 /* ---------------------------------------------------------------- words with one kanji (*生*) */
 
+/* "See all words with 日 →", at the right of the section's title. */
+.vocab-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vocab-head h3 {
+  margin: 0;
+}
+
 .vocab-all {
-  margin-top: 6px;
   font-size: 12.5px;
+  white-space: nowrap;
 }
 
 .words-with-head {
