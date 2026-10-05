@@ -9,8 +9,11 @@ import { errorText } from '../i18n/errors'
 import { ValueView } from './editors'
 import { ProgressMini, ProgressPage, useProgress } from './Progress'
 import { Queue } from './Queue'
+import { onboarded } from './onboarded'
+import { queueRouteInUrl } from './route'
 
 const Handbook = lazy(() => import('./Handbook'))
+const Onboarding = lazy(() => import('./Onboarding'))
 
 const S = strings(
   {
@@ -45,6 +48,7 @@ const S = strings(
     a_revert: 'reverted',
     a_reopen: 'reopened',
     handbook: 'Handbook',
+    start: 'Start here',
     progress: 'Progress',
     mode: 'Review mode',
     exit: 'Exit review mode',
@@ -90,6 +94,7 @@ const S = strings(
     a_revert: 'върнато',
     a_reopen: 'отворено отново',
     handbook: 'Наръчник',
+    start: 'Първи стъпки',
     progress: 'Напредък',
     mode: 'Режим преглед',
     exit: 'Изход от режим преглед',
@@ -127,6 +132,16 @@ export function Workbench({
   const [version, setVersion] = useState(0)
   const decided = useCallback(() => setVersion((v) => v + 1), [])
   const progress = useProgress(version)
+  // The handbook section a card asked for, scrolled to when the handbook opens.
+  const [section, setSection] = useState<string | undefined>()
+
+  // A reviewer's first time here starts on the cards, unless the address names a card to open.
+  const role = user?.role
+  useEffect(() => {
+    if (role === 'reviewer' && tab === 'queue' && !onboarded() && !queueRouteInUrl().item) onTab('start')
+    // Only on opening: after that the tabs are the reviewer's to choose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -145,6 +160,7 @@ export function Workbench({
     ['history', 'history'],
     ['progress', 'progress'],
     ...(user.role === 'admin' ? ([['people', 'people']] as [WorkbenchTab, Key][]) : []),
+    ['start', 'start'],
     ['handbook', 'handbook'],
   ]
 
@@ -172,9 +188,20 @@ export function Workbench({
           {tab === 'history' && <History admin={user.role === 'admin'} />}
           {tab === 'progress' && <ProgressPage data={progress} />}
           {tab === 'people' && user.role === 'admin' && <People />}
+          {tab === 'start' && (
+            <Suspense fallback={<p className="hint">{t('loading')}</p>}>
+              <Onboarding
+                onQueue={() => onTab('queue')}
+                onHandbook={(s) => {
+                  setSection(s)
+                  onTab('handbook')
+                }}
+              />
+            </Suspense>
+          )}
           {tab === 'handbook' && (
             <Suspense fallback={<p className="hint">{t('loading')}</p>}>
-              <Handbook />
+              <Handbook section={section} onStart={() => onTab('start')} />
             </Suspense>
           )}
         </div>

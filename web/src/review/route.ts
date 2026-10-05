@@ -12,7 +12,7 @@
 import type { WorkbenchTab } from '../account/Account'
 import type { Origin, TaskType } from '../api'
 
-const TABS: WorkbenchTab[] = ['queue', 'history', 'progress', 'people', 'handbook']
+const TABS: WorkbenchTab[] = ['queue', 'history', 'progress', 'people', 'start', 'handbook']
 const PATH = /^\/review(?:\/([a-z-]+))?(?:\/[^/]*)*\/?$/
 const QUEUE_PATH = /^\/review\/queue(?:\/([a-z-]+))?(?:\/([A-Za-z0-9-]+))?\/?$/
 

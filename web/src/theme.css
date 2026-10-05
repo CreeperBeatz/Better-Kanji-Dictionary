@@ -6603,50 +6603,616 @@ html[data-nav]::view-transition-old(tabs):only-child {
   padding-bottom: 0;
 }
 
+/* ---------------------------------------------------------------- handbook */
+
+/* Contents in a sticky column on the left, the text in a readable measure. */
+.handbook-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 720px);
+  gap: 40px;
+  align-items: start;
+}
+
+.handbook-toc {
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - 120px);
+  overflow-y: auto;
+  padding: 6px 4px 12px 0;
+  font-size: 12.5px;
+  scrollbar-width: thin;
+}
+
+.handbook-toc-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.handbook-toc-list,
+.handbook-toc-list ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-toc-list > li + li {
+  margin-top: 6px;
+}
+
+.handbook-toc-list a {
+  display: block;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid transparent;
+  color: var(--paper-dim);
+  text-decoration: none;
+  line-height: 1.45;
+}
+
+.handbook-toc-list a:hover {
+  color: var(--paper);
+}
+
+.handbook-toc-list > li > a {
+  font-weight: 500;
+}
+
+.handbook-toc-list > li[data-on] > a {
+  color: var(--paper);
+}
+
+.handbook-toc-list ol a {
+  padding-left: 20px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* The bar marks the heading being read: the ### one, or the section when it has none. */
+.handbook-toc-list > li[data-on] > a:only-child,
+.handbook-toc-list ol li[data-on] > a {
+  border-left-color: var(--ai);
+  color: var(--paper);
+}
+
+.handbook-toc-start {
+  margin-top: 16px !important;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.handbook-toc-start .clear {
+  text-align: left;
+  line-height: 1.45;
+}
+
+/* On a narrow screen the contents fold above the text instead. */
+.handbook-fold {
+  display: none;
+  margin: 12px 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--sumi-lift);
+  font-size: 13px;
+}
+
+.handbook-fold summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--paper-dim);
+}
+
+.handbook-fold .handbook-toc-list {
+  padding: 0 12px 12px;
+}
+
 .handbook {
-  max-width: 760px;
-  line-height: 1.6;
-  font-size: 14px;
+  max-width: 720px;
+  line-height: 1.7;
+  font-size: 14.5px;
+  color: var(--paper);
+}
+
+.handbook > p,
+.handbook-section p,
+.handbook-section li {
+  color: #d9d1c4;
 }
 
 .handbook h1 {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 500;
   margin: 4px 0 8px;
 }
 
-.handbook h2 {
-  font-size: 16px;
+.handbook h1 + p {
+  color: var(--paper-dim);
+  margin-top: 0;
+}
+
+.handbook-section {
+  margin-top: 36px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+}
+
+.handbook h2,
+.handbook h3 {
+  scroll-margin-top: 12px;
+}
+
+.workbench .handbook h2 {
+  display: block;
+  font-size: 18px;
+  letter-spacing: 0;
+  text-transform: none;
   font-weight: 500;
   color: var(--paper);
-  margin: 28px 0 6px;
+  margin: 0 0 12px;
 }
 
 .handbook h3 {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 500;
-  margin: 18px 0 4px;
+  color: var(--paper);
+  margin: 26px 0 6px;
+}
+
+.handbook ul {
+  padding-left: 20px;
 }
 
 .handbook li + li {
-  margin-top: 4px;
+  margin-top: 8px;
+}
+
+.handbook strong {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+/* "Question:", "The test:", the one rule, a case's decision and lesson: a callout. */
+.handbook blockquote {
+  margin: 12px 0 16px;
+  padding: 10px 16px;
+  border-left: 3px solid var(--ai);
+  background: var(--ai-wash);
+  border-radius: 0 2px 2px 0;
+}
+
+.handbook blockquote p {
+  margin: 0;
+  color: var(--paper);
+}
+
+.handbook blockquote strong {
+  color: var(--ai);
 }
 
 .handbook table {
   border-collapse: collapse;
-  margin: 10px 0;
+  margin: 12px 0 16px;
+  width: 100%;
+  font-size: 13.5px;
 }
 
 .handbook th,
 .handbook td {
-  border: 1px solid var(--rule);
-  padding: 4px 10px;
+  border-bottom: 1px solid var(--rule);
+  padding: 7px 14px 7px 0;
   text-align: left;
   vertical-align: top;
+  line-height: 1.5;
+}
+
+.handbook th {
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--paper-dim);
+  border-bottom-color: var(--rule-bright);
+}
+
+.handbook td:first-child {
+  white-space: nowrap;
 }
 
 .handbook code {
+  font-size: 12.5px;
+  padding: 1px 5px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  background: var(--sumi);
+}
+
+/* Each worked case on a card of its own. */
+.handbook-case {
+  margin-top: 16px;
+  padding: 4px 20px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi-lift);
+}
+
+.handbook-case h3 {
+  margin-top: 14px;
+}
+
+.handbook-case blockquote {
+  background: var(--sumi);
+}
+
+@media (max-width: 900px) {
+  .handbook-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .handbook-toc {
+    display: none;
+  }
+
+  .handbook-fold {
+    display: block;
+  }
+}
+
+@media (max-width: 640px) {
+  .handbook-case {
+    padding: 2px 14px 4px;
+  }
+
+  .handbook td:first-child {
+    white-space: normal;
+  }
+}
+
+/* ---------------------------------------------------------------- start here (onboarding cards) */
+
+.onb {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 680px);
+  gap: 40px;
+  align-items: start;
+}
+
+.onb-rail {
+  position: sticky;
+  top: 0;
+  padding-top: 6px;
+}
+
+.onb-rail ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.onb-rail button {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.onb-rail button:hover {
+  color: var(--paper);
+}
+
+.onb-rail button[data-seen] {
+  color: var(--paper-dim);
+}
+
+.onb-rail button[data-on] {
+  color: var(--paper);
+  border-left-color: var(--ai);
+  background: var(--sumi-lift);
+}
+
+.onb-rail-n {
+  flex: none;
+  width: 16px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.onb-rail button[data-on] .onb-rail-n {
+  color: var(--ai);
+}
+
+.onb-rail-keys {
+  margin-top: 14px;
+  padding-left: 10px;
+  font-size: 11.5px;
+}
+
+.onb-stage-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onb-card {
+  padding: 26px 30px 24px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 4px;
+  background: var(--sumi-lift);
+  box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  animation: onb-in 260ms var(--ease);
+}
+
+@keyframes onb-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-card {
+    animation: none;
+  }
+}
+
+.onb-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.onb-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ai);
+}
+
+.workbench .onb-card h2 {
+  display: block;
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--paper);
+}
+
+.onb-glyph {
+  flex: none;
+  font-family: var(--mincho);
+  font-size: 64px;
+  line-height: 1;
+  color: var(--paper);
+  opacity: 0.85;
+  margin-top: -4px;
+}
+
+.onb-lead {
+  margin: 14px 0 0;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: var(--paper);
+  max-width: 56ch;
+}
+
+.onb-body {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.onb-list {
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi);
+}
+
+.onb-list[data-tone='watch'] {
+  border-left: 3px solid var(--ai);
+}
+
+.onb-list h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+
+.onb-list ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #d9d1c4;
+}
+
+.onb-list li + li {
+  margin-top: 6px;
+}
+
+.onb-list b,
+.onb-keys b {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.onb-card [lang='ja'] {
+  font-family: var(--mincho);
+  color: var(--paper);
+}
+
+.onb-card kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  background: var(--sumi);
+  color: var(--paper);
+  font-family: var(--gothic);
+  font-size: 11.5px;
+}
+
+/* The five stages on the overview card: each opens its card. */
+.onb-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.onb-stage {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi);
+  color: var(--paper-dim);
+  font: inherit;
   font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.onb-stage b {
+  color: var(--paper);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.onb-stage:hover,
+.onb-stage:focus-visible {
+  border-color: var(--ai-deep);
+  background: var(--ai-wash);
+}
+
+.onb-keys {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi);
+  font-size: 14px;
+}
+
+.onb-keys dt {
+  color: var(--paper);
+  white-space: nowrap;
+}
+
+.onb-keys dd {
+  margin: 0;
+  color: #d9d1c4;
+}
+
+.onb-more {
+  margin-top: 18px;
+  font-size: 12.5px;
+}
+
+.onb-finish {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.onb-finish .account-submit {
+  padding: 7px 16px;
+}
+
+.onb-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.onb-nav .account-submit {
+  padding: 5px 14px;
+  margin-left: auto;
+}
+
+.onb-nav button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.onb-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.onb-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.onb-dots i[data-on] {
+  background: var(--ai);
+}
+
+.onb-count {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .onb {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .onb-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .onb-card {
+    padding: 18px 16px;
+  }
+
+  .workbench .onb-card h2 {
+    font-size: 20px;
+  }
+
+  .onb-glyph {
+    font-size: 44px;
+  }
+
+  .onb-keys {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .onb-keys dd + dt {
+    margin-top: 8px;
+  }
+
+  .onb-count {
+    display: none;
+  }
 }
 
 .workbench-section + .workbench-section {
