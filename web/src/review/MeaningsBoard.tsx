@@ -23,7 +23,9 @@ import { CATCH_ALL } from './editors'
 const S = strings(
   {
     groups: 'Meaning groups',
-    groupsHint: '1 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group. Tick words as you check them; they fold away.',
+    groupsHint: '1 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group.',
+    tickHint: 'Tick each word as you check it: the card can be accepted once every word in the groups is ticked.',
+    allConfirmed: 'every word confirmed',
     en: 'English label',
     bg: 'Bulgarian',
     note: 'Note',
@@ -68,7 +70,9 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
-    groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група. Отмятайте думите, докато ги проверявате; те се прибират.',
+    groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група.',
+    tickHint: 'Отмятайте всяка дума, щом я проверите: картата може да се приеме, когато всички думи в групите са отметнати.',
+    allConfirmed: 'всички думи са потвърдени',
     en: 'Английски етикет',
     bg: 'Български',
     note: 'Бележка',
@@ -171,6 +175,7 @@ export function MeaningsBoard({
   onSkip,
   followUp = false,
   onWork,
+  onUnconfirmed,
   plain = false,
   only,
 }: {
@@ -190,6 +195,12 @@ export function MeaningsBoard({
   followUp?: boolean
   /** Told whether the board holds work of its own (confirmed words, folded boxes), for the reset button. */
   onWork?: (has: boolean) => void
+  /**
+   * Told how many words in the groups (and the no-meaning box) are not yet
+   * confirmed: the card is accepted only once every one is. Words left for
+   * later and words in no group don't count.
+   */
+  onUnconfirmed?: (n: number) => void
   /** On a page, not in the queue: no ticks to confirm words, nothing to leave for later. */
   plain?: boolean
   /**
@@ -206,9 +217,9 @@ export function MeaningsBoard({
   // Collapsed boxes, by bucket id.
   const [shut, setShut] = useState<Set<string>>(new Set(kept?.shut))
   // Confirmation, a reviewer's checklist while working: the words checked.
-  // Confirmed words fold into a "confirmed" part of their box, shut unless opened.
+  // Confirmed words move into a "confirmed" part of their box, open unless folded.
   const [okWords, setOkWords] = useState<Set<number>>(new Set(kept?.okWords))
-  const [openOk, setOpenOk] = useState<Set<string>>(new Set(kept?.openOk))
+  const [shutOk, setShutOk] = useState<Set<string>>(new Set(kept?.shutOk))
   // The right-click menu: where it opens and which words it moves.
   const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; from: Bucket } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -239,12 +250,12 @@ export function MeaningsBoard({
   }, [menu])
 
   useEffect(() => {
-    const empty = !okWords.size && !openOk.size && !shut.size
+    const empty = !okWords.size && !shutOk.size && !shut.size
     writeDraft(cacheKey, {
-      board: empty ? undefined : { okWords: [...okWords], openOk: [...openOk], shut: [...shut] },
+      board: empty ? undefined : { okWords: [...okWords], shutOk: [...shutOk], shut: [...shut] },
     })
     onWork?.(!empty)
-  }, [cacheKey, okWords, openOk, shut, onWork])
+  }, [cacheKey, okWords, shutOk, shut, onWork])
 
   // Words by bucket, each sorted by newspaper rank, JLPT, then grade.
   const byBucket = useMemo(() => {
@@ -258,6 +269,19 @@ export function MeaningsBoard({
     for (const list of m.values()) list.sort(byNews)
     return m
   }, [words, placements, groups])
+
+  // What still needs a tick before the card can be accepted. Only in the queue, and not for one word.
+  const checks = !plain && only === undefined
+  const unconfirmed = useMemo(() => {
+    if (!checks) return 0
+    let n = 0
+    for (const [key, list] of byBucket) {
+      if (key === null) continue
+      for (const w of list) if (!okWords.has(w.id) && !skipped.has(w.id)) n++
+    }
+    return n
+  }, [checks, byBucket, okWords, skipped])
+  useEffect(() => onUnconfirmed?.(unconfirmed), [unconfirmed, onUnconfirmed])
 
   // A word that moves is no longer confirmed: it was confirmed where it was.
   const unconfirm = (ids: number[]) =>
@@ -435,12 +459,15 @@ export function MeaningsBoard({
     const id = key ?? '∅'
     const done = all.filter((w) => okWords.has(w.id))
     const list = all.filter((w) => !okWords.has(w.id))
+    // A group or the no-meaning box with every word ticked (words left for later aside).
+    const complete = checks && key !== null && all.length > 0 && list.every((w) => skipped.has(w.id))
     return (
       <section
         key={id}
         className="board-group"
         data-kind={key === null ? 'none' : key === CATCH_ALL ? 'catch-all' : 'group'}
         data-over={over === id || undefined}
+        data-complete={complete || undefined}
         onDragOver={(e) => {
           e.preventDefault()
           e.dataTransfer.dropEffect = 'move'
@@ -467,7 +494,7 @@ export function MeaningsBoard({
           {head}
           <span className="hint board-count">
             {t('words', { n: all.length.toLocaleString(lang) })}
-            {done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
+            {complete ? ` · ✓ ${t('allConfirmed')}` : done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
           </span>
         </header>
         {!shut.has(id) && (
@@ -475,10 +502,10 @@ export function MeaningsBoard({
             {all.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
             {done.length > 0 && (
               <div className="board-part board-done">
-                <button className="board-done-toggle" onClick={() => setOpenOk((s) => setIn(s, id, !s.has(id)))} aria-expanded={openOk.has(id)}>
-                  {openOk.has(id) ? '▾' : '▸'} {t('confirmed')} <span className="hint">{done.length}</span>
+                <button className="board-done-toggle" onClick={() => setShutOk((s) => setIn(s, id, !s.has(id)))} aria-expanded={!shutOk.has(id)}>
+                  {shutOk.has(id) ? '▸' : '▾'} {t('confirmed')} <span className="hint">{done.length}</span>
                 </button>
-                {openOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
+                {!shutOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
               </div>
             )}
             {[true, false].map((common) => {
@@ -504,7 +531,10 @@ export function MeaningsBoard({
     <div className="board" ref={boardRef} data-only={only !== undefined || undefined}>
       <div className="board-top">
         <h4>{t('groups')}</h4>
-        <span className="hint">{t('groupsHint')}</span>
+        <span className="hint">
+          {t('groupsHint')}
+          {checks && ` ${t('tickHint')}`}
+        </span>
         {/* Always laid out, only hidden, so picking a word never moves the page. */}
         <span className="board-picked" data-none={picked.size === 0 || undefined} aria-hidden={picked.size === 0 || undefined}>
           {t('picked', { n: Math.max(picked.size, 1) })}{' '}

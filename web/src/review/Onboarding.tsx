@@ -220,7 +220,10 @@ function cards(go: (i: number) => void): Card[] {
             <li>
               Look at <b>red-edged words</b> first: the AI was unsure of them.
             </li>
-            <li>Drag words between groups, or right-click for the menu. Tick each word you have checked.</li>
+            <li>Drag words between groups, or right-click for the menu.</li>
+            <li>
+              <b>Tick every word</b> in the groups as you check it. Accept stays greyed until all of them are ticked.
+            </li>
             <li>
               Unsure of a word? <i>Not sure: leave for later</i>. It comes back at the end of the queue.
             </li>

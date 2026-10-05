@@ -153,12 +153,15 @@ are the ones it was unsure of, so look at those first.
 - **Move words** by dragging them, or right-clicking one to pick its group.
   Click several to select them first and the menu moves them all. (On a
   phone, a long press opens the menu where the browser allows it.)
-- **Confirm words as you go.** Tick each word you have checked (hover a card
-  for its checkbox), or right-click *Confirm* on one word or a selection.
-  Confirmed words fold into a *confirmed* part at the top of their box, shut
-  by default, so what is left in view is what still needs a look. Moving a
-  word clears its tick. Groups need no ticking: fix or remove a wrong one,
-  and what you accept is what you meant.
+- **Confirm every word.** Tick each word you have checked (hover a card for
+  its checkbox), or right-click *Confirm* on one word or a selection.
+  Confirmed words move into a *confirmed* part at the top of their box, open
+  so you can still see them (fold it with its arrow). Moving a word clears
+  its tick. Groups need no ticking: fix or remove a wrong one, and what you
+  accept is what you meant.
+- **Accept waits for the ticks.** Until every word in the groups and in the
+  no-meaning box is confirmed, *accept* is greyed and says how many are left.
+  Words left for later and words not in a group don't count.
 - **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
   submit, the groups and every other word are decided, and the skipped words
   come back together as a follow-up for the same kanji at the very end of the

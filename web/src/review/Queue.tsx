@@ -85,6 +85,7 @@ const S = strings(
     pickHint: 'Pick what {char} contributes to the word, not what the word means overall.',
     left: '{n} waiting',
     confidence: 'model confidence {n}',
+    confirmFirst: 'Confirm every word in the groups first: {n} left',
   },
   {
     all: 'всички',
@@ -143,6 +144,7 @@ const S = strings(
     pickHint: 'Изберете какво внася {char} в думата, а не какво значи думата като цяло.',
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
+    confirmFirst: 'Първо потвърдете всяка дума в групите: остават {n}',
   },
 )
 
@@ -198,6 +200,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [skipped, setSkipped] = useState<Set<number>>(new Set())
   // The board's own work (confirmed words, folded boxes), and a key to start it afresh.
   const [boardWork, setBoardWork] = useState(false)
+  // Words in the groups not yet confirmed: a meanings card is accepted only once there are none.
+  const [unconfirmed, setUnconfirmed] = useState(0)
   const [fresh, setFresh] = useState(0)
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
@@ -345,6 +349,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setBoardWork(false)
     setFresh((n) => n + 1)
   }
+  const blocked = board && unconfirmed > 0
   const edited = item ? moved || relabelled || (open ? !same(draft, item.current) : !same(draft, item.proposed)) : false
   const decideDraft = useCallback(
     (value: TaskValue = draft) => {
@@ -407,7 +412,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const keys = useRef<(e: KeyboardEvent) => void>(() => {})
   keys.current = (e: KeyboardEvent) => {
     if (typing(e) || e.ctrlKey || e.metaKey || e.altKey || !item) return
-    if (e.key === 'a' || e.key === 'Enter') decideDraft()
+    if (e.key === 'a' || e.key === 'Enter') {
+      if (!blocked) decideDraft()
+    }
     else if (e.key === 'r' && canReject(item)) decide('reject')
     else if (e.key === 's') decide('skip')
     else if (e.key === 'j' || e.key === 'ArrowDown') setAt((i) => Math.min(i + 1, (items?.length ?? 1) - 1))
@@ -587,6 +594,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     <MeaningsBoard
                       key={`${item.id}:${fresh}`}
                       onWork={setBoardWork}
+                      onUnconfirmed={setUnconfirmed}
                       cacheKey={item.id}
                       char={item.subject}
                       groups={(draft ?? []) as MeaningGroup[]}
@@ -638,7 +646,12 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
               {problem && <p className="account-problem">{problem}</p>}
               <div className="queue-actions">
-                <button className="account-submit" disabled={busy} onClick={() => decideDraft()}>
+                <button
+                  className="account-submit"
+                  disabled={busy || blocked}
+                  title={blocked ? t('confirmFirst', { n: unconfirmed }) : undefined}
+                  onClick={() => decideDraft()}
+                >
                   {edited ? t('saveEdit') : open ? t('keep') : item.type === 'en_report' ? t('confirmReport') : t('accept')}
                 </button>
                 {canReject(item) && (
@@ -652,6 +665,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
                   {t('reset')}
                 </button>
+                {blocked && <span className="hint queue-blocked">{t('confirmFirst', { n: unconfirmed })}</span>}
                 <span className="hint queue-keys">
                   {t(item.type === 'word_sense' ? 'keysWord' : canReject(item) ? 'keys' : 'keysNoReject')}
                 </span>

@@ -12,7 +12,8 @@ const KEEP_DAYS = 30
 
 export interface BoardDraft {
   okWords: number[]
-  openOk: string[]
+  /** Boxes whose confirmed words are folded away (they show by default). */
+  shutOk?: string[]
   shut: string[]
 }
 
