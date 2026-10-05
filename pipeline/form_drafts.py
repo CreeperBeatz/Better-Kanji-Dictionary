@@ -5,7 +5,9 @@
     python pipeline/form_drafts.py check [--batch F-000]
     python pipeline/form_drafts.py load [--dry-run] [--review-dir DIR]
 
-Two kinds of item, both in the N5-N2 closure:
+Two kinds of item, both in the closure of the kanji in scope (server/scope.py).
+A part or pair already asked about -- in an earlier drafts folder, or with a
+form link item in the queue -- is not asked again:
 
 - **parts**: bound parts with no meaning of their own and no `form_of` yet
   (KANJIDIC gives at most a radical number). The subagent may propose what
@@ -68,8 +70,24 @@ def prepare() -> None:
 
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
     children, nodes = rs.graph(db)
-    targets = [r[0] for r in db.execute("SELECT char FROM kanji WHERE jlpt >= 2")]
+    from server import review, scope as review_scope
+
+    targets = review_scope.kanji(db)
     scope = rs.closure(children, targets)
+    # Asked before: in another drafts folder, or a form link in the queue.
+    asked_parts: set[str] = set()
+    asked_pairs: set[tuple[str, str]] = set()
+    for folder in (ROOT / "data" / "drafts").glob("forms*"):
+        if folder == DRAFTS:
+            continue
+        for f in (folder / "in").glob("F-*.json"):
+            b = json.loads(f.read_text(encoding="utf-8"))
+            asked_parts |= {p["part"] for p in b["parts"]}
+            asked_pairs |= {tuple(p["pair"]) for p in b["pairs"]}
+    for i in review._read()["items"].values():
+        if i["type"] == "form_link":
+            x, _, y = i["subject"].partition("|")
+            asked_pairs |= {(x, y), (y, x)}
     meanings = {c: json.loads(m or "[]") for c, m in db.execute("SELECT char, meanings FROM kanji")}
     linked = {(a, b) for a, b in db.execute("SELECT char, other FROM char_form")}
     form_of = {a for (a,) in db.execute("SELECT char FROM char_form WHERE kind = 'form_of'")}
@@ -83,7 +101,7 @@ def prepare() -> None:
 
     parts = []
     for c in sorted(scope, key=lambda c: -len(containers.get(c, []))):
-        if c not in containers or real_meanings(meanings.get(c, [])) or c in form_of:
+        if c not in containers or real_meanings(meanings.get(c, [])) or c in form_of or c in asked_parts:
             continue
         users = sorted(containers[c], key=lambda k: freq.get(k, 9999))[:10]
         parts.append({
@@ -94,7 +112,7 @@ def prepare() -> None:
     fields = _unihan_fields()
     pairs = []
     for a, b in db.execute("SELECT char, other FROM similar WHERE kind = 'variant'"):
-        if a in scope and (a, b) not in linked and (b, a) not in linked and a < b:
+        if a in scope and (a, b) not in linked and (b, a) not in linked and a < b and (a, b) not in asked_pairs:
             pairs.append({"pair": [a, b], "meanings": [meanings.get(a, []), meanings.get(b, [])], "unihan": fields.get((a, b))})
 
     n = 0
@@ -180,6 +198,7 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--drafts", type=Path, help="keep these drafts in another folder (default data/drafts/forms)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("prepare")
     c = sub.add_parser("check")
@@ -188,6 +207,10 @@ def main() -> int:
     l.add_argument("--dry-run", action="store_true")
     l.add_argument("--review-dir", type=Path)
     args = ap.parse_args()
+    if args.drafts:
+        global DRAFTS, IN, OUT
+        DRAFTS = args.drafts if args.drafts.is_absolute() else ROOT / args.drafts
+        IN, OUT = DRAFTS / "in", DRAFTS / "out"
     if args.cmd == "prepare":
         prepare()
     elif args.cmd == "check":

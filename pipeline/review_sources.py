@@ -7,7 +7,9 @@ Part 6 of TASK-forms-review.md. `count` is what Dani sees first; nothing is
 loaded until `load` is run, and `load` takes the review state to write to
 (the sandbox's, or the server's own data/review when Dani says so).
 
-Sources, for the N5-N2 kanji and everything they contain (the closure):
+Sources, for the kanji in scope (server/scope.py: JLPT, jōyō or a newspaper
+rank) and everything they contain (the closure). A subject that already has an
+item of that kind, decided or not, is not proposed again.
 
 - **ids-diff** -- BabelStone's IDS (free for any use), the Japanese reading
   where it differs, top-level parts only, a nested unencoded piece read as
@@ -252,10 +254,19 @@ def _ours(parts: list[str], nodes: set[str], eq: dict[str, str], prefer: dict[st
 # ---------------------------------------------------------------- what to propose
 
 
-def collect(levels=(5, 4, 3, 2)) -> dict:
+def _known() -> set[tuple[str, str]]:
+    """(type, subject) of every item in the review store, open or decided."""
+    from server import review
+
+    return {(i["type"], i["subject"]) for i in review._read()["items"].values()}
+
+
+def collect() -> dict:
+    from server import scope as review_scope
+
     db = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
-    marks = ",".join("?" * len(levels))
-    targets = [r[0] for r in db.execute(f"SELECT char FROM kanji WHERE jlpt IN ({marks})", levels)]
+    targets = review_scope.kanji(db)
+    known = _known()
     children, nodes = graph(db)
     scope = closure(children, targets)
     eq = equivalence(db)
@@ -271,7 +282,7 @@ def collect(levels=(5, 4, 3, 2)) -> dict:
     decomp, unmappable, agree, strokes = [], Counter(), Counter(), Counter()
     for x in sorted(scope):
         ours = children.get(x, [])
-        if not ours:
+        if not ours or ("decomposition", x) in known:
             continue  # atomic in our graph: a primitive, not a split to argue with
         sources = {}
         for name, raw in (("ids", ids_parts(ids[x], x) if x in ids else None), ("kanjivg", kvg.get(x))):
@@ -324,14 +335,15 @@ def collect(levels=(5, 4, 3, 2)) -> dict:
         for a, b in zip(tm[1:], to[1:]):
             if a != b and a not in IDC and b not in IDC and not b.startswith("{") and a in bound and a not in has_form_of and eq.get(a, a) != eq.get(b, b):
                 support[(a, b)].append(f"{modern}→{old}")
-    olds = [{"part": a, "whole": b, "seen": seen} for (a, b), seen in sorted(support.items(), key=lambda kv: -len(kv[1]))]
+    olds = [{"part": a, "whole": b, "seen": seen} for (a, b), seen in sorted(support.items(), key=lambda kv: -len(kv[1]))
+            if ("form_link", f"{a}|{b}") not in known]
 
     # The existing cost ranking.
     from server.routes.decomp import review_queue
 
     ranked = [r for r in review_queue(limit=300)["items"] if r["char"] in scope]
     proposed_chars = {d["char"] for d in decomp}
-    ranked = [r for r in ranked if r["char"] not in proposed_chars]
+    ranked = [r for r in ranked if r["char"] not in proposed_chars and ("decomposition", r["char"]) not in known]
 
     return {"scope": len(scope), "decomposition": decomp, "agree": agree, "unmappable": unmappable, "strokes": strokes,
             "old": olds, "ranked": ranked}
@@ -340,7 +352,7 @@ def collect(levels=(5, 4, 3, 2)) -> dict:
 def count() -> dict:
     c = collect()
     d = c["decomposition"]
-    print(f"closure of the N5-N2 kanji: {c['scope']} nodes\n")
+    print(f"closure of the kanji in scope: {c['scope']} nodes (only what has no item yet)\n")
     print("decomposition (task A)")
     print(f"  agree with our parts       ids {c['agree']['ids']:>5}   kanjivg {c['agree']['kanjivg']:>5}")
     print(f"  differ, not mappable       ids {c['unmappable']['ids']:>5}   kanjivg {c['unmappable']['kanjivg']:>5}")

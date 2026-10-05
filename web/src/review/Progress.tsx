@@ -1,6 +1,6 @@
 /**
  * How far review has got. A slim bar in the review screen's top bar (desktop
- * only): tasks done of all tasks, and the share of the N5-N2 kanji fully
+ * only): tasks done of all tasks, and the share of the kanji in scope fully
  * verified. It opens the Progress tab, which has the same per stage: parts,
  * forms, meanings, word meanings.
  */
@@ -15,7 +15,7 @@ const S = strings(
     tasksShort: '{done} / {total} tasks',
     verified: '{pct} of the dictionary verified',
     verifiedShort: '{pct} verified',
-    verifiedLong: '{n} of {total} core kanji verified (N5–N2, and frequent ones the JLPT lists miss): nothing open on their parts or forms, meanings accepted, every word placed.',
+    verifiedLong: '{n} of {total} kanji verified (every kanji with a JLPT level, jōyō or a newspaper rank): nothing open on their parts or forms, meanings accepted, every word placed.',
     open: 'Open the progress page',
     stages: 'By stage',
     s_decomposition: 'Parts',
@@ -43,7 +43,7 @@ const S = strings(
     tasksShort: '{done} / {total} задачи',
     verified: '{pct} от речника е проверен',
     verifiedShort: '{pct} проверени',
-    verifiedLong: '{n} от {total} основни кандзи са проверени (N5–N2 и честите, които списъците за JLPT пропускат): нищо отворено за частите или формите им, значенията са приети, всяка дума е разпределена.',
+    verifiedLong: '{n} от {total} кандзи са проверени (всички с ниво от JLPT, джойо или място във вестниците): нищо отворено за частите или формите им, значенията са приети, всяка дума е разпределена.',
     open: 'Отворете страницата с напредъка',
     stages: 'По етапи',
     s_decomposition: 'Части',

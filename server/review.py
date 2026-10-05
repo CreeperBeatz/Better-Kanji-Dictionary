@@ -1471,7 +1471,7 @@ def history(user_id: str | None, limit: int = 100, type_: str | None = None, by:
 
 
 def progress() -> dict:
-    """How far review has got: tasks decided per stage, and how many N5-N2
+    """How far review has got: tasks decided per stage, and how many in-scope
     kanji are fully verified -- nothing open on its parts (to any depth) or
     its forms, its meanings accepted, and none of its words waiting.
 
@@ -1494,7 +1494,7 @@ def progress() -> dict:
         count["total"] += 1
         if i["status"] != "open":
             count["done"] += 1
-    # The kanji in the meanings scope: N5-N2, plus the frequent ones the JLPT lists miss (DATA-ISSUES.md).
+    # The kanji in scope (server/scope.py) that have a meanings task.
     targets = sorted({i["subject"] for i in data["items"].values() if i["type"] == "kanji_senses"})
 
     # Every part below every target, a level at a time, then each closure from that map.
@@ -1649,22 +1649,25 @@ def export() -> dict[str, int]:
 
 
 def load_bg(dry_run: bool = False) -> dict[str, int]:
-    """Queue the machine-translated Bulgarian for checking: one card per word in
-    the labeling scope (common, or a newspaper rank or JLPT level) and one per
-    jōyō or JLPT kanji, most frequent first, kanji before words, all after the
-    other stages in the "all" list. A card already queued is not queued twice."""
+    """Queue the machine-translated Bulgarian for checking: one card per word and
+    per kanji in scope (server/scope.py), most frequent first, kanji before
+    words, all after the other stages in the "all" list. A subject that has a
+    card already, open or decided, is not queued again."""
+    from . import scope
+
+    known = {i["subject"] for i in _read()["items"].values() if i["type"] == "bg"}
     rows = []
-    for r in query("SELECT k.char, k.freq FROM kanji k JOIN kanji_bg b ON b.char = k.char "
-                   "WHERE k.joyo = 1 OR k.jlpt IS NOT NULL"):
+    for r in query(f"SELECT k.char, k.freq FROM kanji k JOIN kanji_bg b ON b.char = k.char WHERE {scope.KANJI}"):
         subject = f"kanji:{r['char']}"
         rows.append({"type": "bg", "subject": subject, "proposed": _bg_built(subject), "source": "mt:claude-sonnet-5",
                      "priority": round(0.99 - min(r["freq"] or 2500, 2500) / 100000, 5)})
     for r in query("SELECT DISTINCT w.id, w.nf, j.level AS jlpt FROM word w JOIN sense_bg b ON b.word_id = w.id "
-                   "LEFT JOIN word_jlpt j ON j.word_id = w.id WHERE w.common = 1 OR w.nf IS NOT NULL OR j.level IS NOT NULL"):
+                   f"LEFT JOIN word_jlpt j ON j.word_id = w.id WHERE {scope.WORDS}"):
         subject = f"word:{r['id']}"
         pri = 0.8 - r["nf"] / 100 if r["nf"] else (0.3 - (6 - r["jlpt"]) / 100 if r["jlpt"] else 0.2)
         rows.append({"type": "bg", "subject": subject, "proposed": _bg_built(subject), "source": "mt:claude-sonnet-5",
                      "priority": round(pri, 5)})
+    rows = [r for r in rows if r["subject"] not in known]
     counts = {"kanji": sum(1 for r in rows if r["subject"].startswith("kanji:")), "words": sum(1 for r in rows if r["subject"].startswith("word:"))}
     if dry_run:
         return counts
