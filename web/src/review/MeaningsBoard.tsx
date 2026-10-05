@@ -468,14 +468,13 @@ export function MeaningsBoard({
       <div className="board-top">
         <h4>{t('groups')}</h4>
         <span className="hint">{t('groupsHint')}</span>
-        {picked.size > 0 && (
-          <span className="board-picked">
-            {t('picked', { n: picked.size })}{' '}
-            <button className="clear" onClick={() => setPicked(new Set())}>
-              {t('clearPick')}
-            </button>
-          </span>
-        )}
+        {/* Always laid out, only hidden, so picking a word never moves the page. */}
+        <span className="board-picked" data-none={picked.size === 0 || undefined} aria-hidden={picked.size === 0 || undefined}>
+          {t('picked', { n: Math.max(picked.size, 1) })}{' '}
+          <button className="clear" onClick={() => setPicked(new Set())} tabIndex={picked.size === 0 ? -1 : undefined}>
+            {t('clearPick')}
+          </button>
+        </span>
       </div>
       {followUp && <p className="board-followup">{t('followUp')}</p>}
       {skipped.size > 0 && <p className="board-skipnote">{t('skippedNote', { n: skipped.size })}</p>}
