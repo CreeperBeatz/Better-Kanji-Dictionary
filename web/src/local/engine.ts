@@ -48,6 +48,8 @@ export interface KanjiPack {
   strokePower: { size: number; values: number[] }
   levels: Record<string, LevelResponse>
   wordsFor: Record<string, number[]>
+  /** Per kanji, the ids of the common words that have it after their first character. Older packs lack it. */
+  inner?: Record<string, number[]>
 }
 
 /** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt, verb pair ids */
@@ -378,6 +380,7 @@ export class Engine {
     let bgStems: string[] | null = null // set when the words were found in Bulgarian
     let bgTiers = new Map<number, number>() // and how well each one matched
     let enTiers: Map<number, number> | null = null // set, the same way, for an English search
+    let jpTiers = new Map<number, number>() // one kanji: common words with it first, then further in, then the rest
 
     const japanese = hasJapanese(q)
     const cyrillic = !japanese && hasCyrillic(q)
@@ -469,6 +472,26 @@ export class Engine {
           .slice(0, limit * 6)
         for (const [w] of extra) wordIdx.push(w)
       }
+
+      // One kanji: after the common words that start with it, the common words
+      // that have it further in (技術, 芸術 for 術), then the rare ones that start with it.
+      if (bgStems === null && [...target].length === 1 && japanese && !isKana(target)) {
+        const present = new Set(wordIdx)
+        const desc = order === 'desc'
+        const inner = [...new Set((this.pack.inner?.[target] ?? []).map((id) => this.indexOfId(id)))]
+          .filter((w) => w >= 0 && !present.has(w))
+          .map((w) => [w, ...this.orderKey(w, sort, desc), this.ids[w]])
+          .sort((a, b) => {
+            for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
+            return 0
+          })
+          .slice(0, limit * 6)
+          .map((r) => r[0])
+        const first = wordIdx.filter((w) => this.common[w])
+        const rest = wordIdx.filter((w) => !this.common[w])
+        wordIdx = [...first, ...inner, ...rest]
+        jpTiers = new Map<number, number>([...first.map((w) => [w, 0] as const), ...inner.map((w) => [w, 1] as const), ...rest.map((w) => [w, 2] as const)])
+      }
     } else if (latinBg) {
       // Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.
       const reading = this.shlyokavitsa(q)
@@ -507,7 +530,7 @@ export class Engine {
     // then sorts by rank, stably -- a Bulgarian search by how well each matched first.
     const pool = [...new Set(wordIdx.slice(0, limit * 4))].sort((a, b) => a - b)
     // An English one likewise; among equal matches, the order asked for.
-    const tiers = enTiers ?? bgTiers
+    const tiers = enTiers ?? (jpTiers.size ? jpTiers : bgTiers)
     const ranked = pool
       .map((i) => [i, tiers.get(i) ?? 0, ...this.orderKey(i, sort, order === 'desc')])
       .sort((a, b) => {

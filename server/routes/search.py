@@ -284,6 +284,7 @@ def search(
     bg_terms: list[str] | None = None  # set when the words were found in Bulgarian
     bg_tiers: dict[int, int] = {}  # and how well each one matched
     en_tiers: dict[int, int] | None = None  # set, the same way, for an English search
+    jp_tiers: dict[int, int] = {}  # one kanji: common words with it first, then further in, then the rest
 
     japanese = has_japanese(q)
     cyrillic = not japanese and bg.has_cyrillic(q)
@@ -360,6 +361,24 @@ def search(
             )
             word_ids += [r["id"] for r in rows if r["id"] not in have][: limit * 6]
 
+        # One kanji: after the common words that start with it, the common words
+        # that have it further in (技術, 芸術 for 術), then the rare ones that start with it.
+        if bg_terms is None and len(target) == 1 and japanese and not is_kana(target):
+            have = set(word_ids)
+            rows = query(
+                "SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
+                "WHERE wc.char = ? AND w.common = 1 AND instr(w.headword, wc.char) > 1 "
+                "ORDER BY " + _ORDER_SQL[(sort, order == "desc")] + ", w.id LIMIT ?",
+                (target, limit * 6 + len(have)),
+            )
+            inner = list(dict.fromkeys(r["id"] for r in rows if r["id"] not in have))[: limit * 6]
+            ph = ",".join("?" * len(word_ids))
+            common_ids = {r["id"] for r in query(f"SELECT id FROM word WHERE common = 1 AND id IN ({ph})", word_ids)} if word_ids else set()
+            first = [w for w in word_ids if w in common_ids]
+            rest = [w for w in word_ids if w not in common_ids]
+            word_ids = first + inner + rest
+            jp_tiers = {**{w: 0 for w in first}, **{w: 1 for w in inner}, **{w: 2 for w in rest}}
+
     elif latin_bg:
         # Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.
         reading = _shlyokavitsa(q)
@@ -401,7 +420,7 @@ def search(
     # A Bulgarian search puts the words that mean exactly the query first: вода
     # finds 水 before 水道, ябълка finds 林檎 before 目玉 (очна ябълка).
     # An English one likewise; among equal matches, the order asked for.
-    tiers = en_tiers if en_tiers is not None else bg_tiers
+    tiers = en_tiers if en_tiers is not None else jp_tiers or bg_tiers
     desc = order == "desc"
     ordered = sorted(words.values(), key=lambda w: (tiers.get(w["id"], 0), *_order(w, sort, desc)))[:limit]
     return {

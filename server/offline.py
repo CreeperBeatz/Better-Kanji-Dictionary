@@ -48,7 +48,8 @@ from .db import DB_PATH
 # 2: Bulgarian glosses, kanji meanings and their indexes.
 # 3: the English index one row per gloss, with n and place; word levels.
 # 4: no radicals (the radical picker is gone).
-FORMAT = 4
+# 5: per kanji, the common words that have it further in (kanji.json `inner`).
+FORMAT = 5
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -479,6 +480,15 @@ def build(force: bool = False) -> dict:
         if len(ids) < WORDS_FOR and word_id not in ids:
             ids.append(word_id)
 
+    # Per kanji, the common words that have it after their first character
+    # (技術 for 術): what a one-kanji search lists after the words starting with it.
+    inner: dict[str, list[int]] = {}
+    for char, word_id in conn.execute(
+        "SELECT DISTINCT wc.char, w.id FROM word_char wc JOIN word w ON w.id = wc.word_id "
+        "WHERE w.common = 1 AND instr(w.headword, wc.char) > 1 ORDER BY wc.char, w.id"
+    ):
+        inner.setdefault(char, []).append(word_id)
+
     files["kanji.json"] = _json(
         {
             # char, strokes, grade, freq, jlpt, joyo, inKanjidic, meanings,
@@ -497,6 +507,7 @@ def build(force: bool = False) -> dict:
             "strokePower": {"size": most, "values": power},
             "levels": {str(n): by_level(n) for n in (1, 2, 3, 4, 5)},
             "wordsFor": words_for,
+            "inner": inner,
         }
     )
     files["strokes.json"] = _json(strokes)
