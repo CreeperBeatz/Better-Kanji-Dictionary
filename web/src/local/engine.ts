@@ -448,27 +448,26 @@ export class Engine {
         interpretation = null
       }
 
-      // Prefix match tops up short result sets, so typing 時 still suggests 時間.
+      // Prefix match tops up short result sets, so typing 時 still suggests 時間:
+      // the first of every word starting with it in the order asked for, not
+      // the first few in character order, which left 日本語 and 日記 out of 日.
       if (bgStems === null && wordIdx.length < limit) {
         const lo = this.forms.lowerBound(target)
         const hi = this.forms.lowerBound(target + '￿')
-        const extra: number[] = []
-        const distinct = new Set<number>()
-        scan: for (let f = lo; f < hi; f++) {
-          for (const w of this.wordsOfForm(f)) {
-            if (distinct.has(w)) continue
-            if (extra.length >= limit * 6) break scan
-            distinct.add(w)
-            extra.push(w)
-          }
-        }
         const present = new Set(wordIdx)
-        for (const w of extra) {
-          if (!present.has(w)) {
-            present.add(w)
-            wordIdx.push(w)
-          }
+        const found = new Set<number>()
+        for (let f = lo; f < hi; f++) {
+          for (const w of this.wordsOfForm(f)) if (!present.has(w) && (!common || this.common[w])) found.add(w)
         }
+        const desc = order === 'desc'
+        const extra = [...found]
+          .map((w) => [w, ...this.orderKey(w, sort, desc), this.ids[w]])
+          .sort((a, b) => {
+            for (let k = 1; k < a.length; k++) if (a[k] !== b[k]) return a[k] - b[k]
+            return 0
+          })
+          .slice(0, limit * 6)
+        for (const [w] of extra) wordIdx.push(w)
       }
     } else if (latinBg) {
       // Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.

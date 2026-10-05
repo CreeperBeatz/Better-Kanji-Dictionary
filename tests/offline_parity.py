@@ -32,6 +32,11 @@ from server import bulgarian, offline, recognize  # noqa: E402
 from server.db import query  # noqa: E402
 from server.japanese import katakana_to_hiragana  # noqa: E402
 from server.routes.search import reading_words, search, words_for_kanji  # noqa: E402
+from server import review  # noqa: E402
+
+# The reviewed Bulgarian, as the app loads it at startup (server/app.py); the
+# device's pack is built with it, so the server side must answer with it too.
+review.load_bg_overlay()
 
 HARD = [
     # English, including prefixes, stop words, punctuation and accents

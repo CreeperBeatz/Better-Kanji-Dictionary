@@ -117,6 +117,17 @@ def _order(w: dict, sort: str, desc: bool) -> tuple:
     return (*first, *level, common, len(w["headword"]))
 
 
+# `_order` in SQL, over word w and its JLPT level j, for ranking many words without fetching them.
+_NEWS = ("w.nf IS NULL", "COALESCE(w.nf, 0)")
+_LEVEL = ("j.level IS NULL", "-COALESCE(j.level, 0)")
+_ORDER_SQL = {
+    ("news", False): ", ".join((_NEWS[0], _NEWS[1], *_LEVEL, "1 - w.common", "length(w.headword)")),
+    ("news", True): ", ".join((_NEWS[0], "-" + _NEWS[1], *_LEVEL, "1 - w.common", "length(w.headword)")),
+    ("jlpt", False): ", ".join((_LEVEL[0], _LEVEL[1], *_NEWS, "1 - w.common", "length(w.headword)")),
+    ("jlpt", True): ", ".join((_LEVEL[0], "COALESCE(j.level, 0)", *_NEWS, "1 - w.common", "length(w.headword)")),
+}
+
+
 def _en_length(text: str) -> int:
     """How many words FTS5 reads in `text`, not counting the "to" of "to
     sleep" -- what the English index's n counts (build_db `_en_length`)."""
@@ -335,16 +346,19 @@ def search(
             kana_guess = ""  # romaji reading found nothing, fall through to English
             interpretation = None
 
-        # Prefix match tops up short result sets, so typing 時 still suggests 時間.
+        # Prefix match tops up short result sets, so typing 時 still suggests 時間:
+        # the first of every word starting with it in the order asked for, not
+        # the first few in character order, which left 日本語 and 日記 out of 日.
         if bg_terms is None and len(word_ids) < limit:
             lo, hi = target, target + "￿"
-            extra = query(
-                "SELECT DISTINCT word_id FROM word_form WHERE text >= ? AND text < ? LIMIT ?",
-                (lo, hi, limit * 6),
+            have = set(word_ids)
+            rows = query(
+                "SELECT w.id FROM word_form f JOIN word w ON w.id = f.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
+                "WHERE f.text >= ? AND f.text < ?" + (" AND w.common = 1" if common else "") + " "
+                "GROUP BY w.id ORDER BY " + _ORDER_SQL[(sort, order == "desc")] + ", w.id LIMIT ?",
+                (lo, hi, limit * 6 + len(have)),
             )
-            for r in extra:
-                if r["word_id"] not in word_ids:
-                    word_ids.append(r["word_id"])
+            word_ids += [r["id"] for r in rows if r["id"] not in have][: limit * 6]
 
     elif latin_bg:
         # Latin that cannot be romaji (4ovek, voda) is Bulgarian before English.
