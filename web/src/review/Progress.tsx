@@ -23,11 +23,13 @@ const S = strings(
     s_kanji_senses: 'Meanings',
     s_word_sense: 'Word meanings',
     s_bg: 'Bulgarian',
+    s_en_report: 'English reports',
     d_decomposition: 'which parts each character visibly contains',
     d_form_link: 'how bound shapes relate to the kanji they come from',
     d_kanji_senses: 'one per kanji: its groups, with its words placed on the board',
     d_word_sense: 'single words: suggestions, and words whose group changed',
     d_bg: 'the machine-translated Bulgarian: one card per word, one per kanji',
+    d_en_report: 'reports that a word’s English (from JMdict) is wrong; real mistakes go to JMdict',
     of: '{done} of {total}',
     left: '{n} left',
     dictionary: 'The dictionary',
@@ -49,11 +51,13 @@ const S = strings(
     s_kanji_senses: 'Значения',
     s_word_sense: 'Значения в думи',
     s_bg: 'Български',
+    s_en_report: 'Доклади за английския',
     d_decomposition: 'кои части съдържа видимо всеки знак',
     d_form_link: 'как свързаните форми се отнасят към кандзито, от което идват',
     d_kanji_senses: 'по една за кандзи: групите му, с думите, разпределени на дъската',
     d_word_sense: 'отделни думи: предложения и думи, чиято група се е променила',
     d_bg: 'машинно преведеният български: по една карта за дума и за кандзи',
+    d_en_report: 'доклади, че английският на дума (от JMdict) е грешен; истинските грешки отиват в JMdict',
     of: '{done} от {total}',
     left: 'остават {n}',
     dictionary: 'Речникът',
@@ -64,7 +68,7 @@ const S = strings(
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const STAGES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg']
+const STAGES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg', 'en_report']
 
 function pct(done: number, total: number): string {
   if (!total) return '0%'

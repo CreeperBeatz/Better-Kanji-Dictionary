@@ -7035,6 +7035,43 @@ button.review-part {
   cursor: pointer;
 }
 
+.page-edit-info {
+  margin-left: 8px;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid var(--rule-bright);
+  border-radius: 50%;
+  background: none;
+  color: var(--paper-dim);
+  font: italic 600 11px/15px Georgia, serif;
+  cursor: pointer;
+  vertical-align: 1px;
+}
+
+.page-edit-info:hover,
+.page-edit-info[aria-expanded='true'] {
+  border-color: var(--ai);
+  color: var(--ai);
+}
+
+.page-edit-why {
+  margin: 2px 0 10px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--ai);
+  background: var(--ai-wash);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.page-edit-why p {
+  margin: 4px 0 0;
+}
+
+.review-report {
+  white-space: pre-wrap;
+}
+
 .page-edit-section[disabled] {
   opacity: 0.7;
 }

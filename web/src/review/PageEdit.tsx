@@ -44,6 +44,12 @@ const S = strings(
     s_form: 'Forms',
     s_bg: 'Bulgarian',
     s_groups: 'Meaning in this word',
+    s_en: 'The English meaning is wrong',
+    enHint: 'The English is JMdict’s. Tick this to report a mistake in it.',
+    enLabel: 'What is wrong, and how you know: another dictionary, a teacher, how the word is used.',
+    whyNot: 'Why can’t I edit the English?',
+    whyNotText:
+      'The English comes from JMdict, a free dictionary that its own editors maintain and check, and this site takes it as the reference. The Bulgarian was translated from it and the English search looks through it, so a quiet change here would make them disagree, with each other and with every other dictionary built on JMdict. So you tell us what is wrong instead. A reviewer checks it, and a real mistake is sent to JMdict to be fixed at the source, for everyone who uses it.',
     sensesHint: 'Drag words between groups, or right-click a word (or a selection of several) to pick its group.',
     noSenses: 'No accepted meaning groups yet.',
     drafted: 'Not reviewed yet: these groups are drafts waiting in the review queue.',
@@ -97,6 +103,12 @@ const S = strings(
     s_form: 'Форми',
     s_bg: 'Български',
     s_groups: 'Значение в тази дума',
+    s_en: 'Английското значение е грешно',
+    enHint: 'Английският е от JMdict. Отметнете това, за да съобщите за грешка в него.',
+    enLabel: 'Какво не е наред и откъде знаете: друг речник, учител, как се използва думата.',
+    whyNot: 'Защо не мога да редактирам английския?',
+    whyNotText:
+      'Английският идва от JMdict, свободен речник, който собствените му редактори поддържат и проверяват, и този сайт го приема за еталон. Българският е преведен от него, а търсенето на английски минава през него, така че тиха промяна тук би ги разминала помежду им и с всеки друг речник, изграден върху JMdict. Затова вместо това ни кажете какво не е наред. Рецензент го проверява, а истинската грешка се изпраща на JMdict, за да се поправи в източника, за всички, които го ползват.',
     sensesHint: 'Плъзгайте думи между групите или щракнете с десния бутон върху дума (или избрани няколко), за да ѝ изберете група.',
     noSenses: 'Още няма приети групи значения.',
     drafted: 'Още не е прегледано: тези групи са чернови, които чакат в опашката за преглед.',
@@ -216,7 +228,10 @@ function EditShell({
   onReset: (section: string) => void
   onClose: () => void
   onSignIn?: () => void
-  children: (s: { on: Set<string>; section: (id: string, label: string, body: ReactNode, editable?: boolean) => ReactNode }) => ReactNode
+  children: (s: {
+    on: Set<string>
+    section: (id: string, label: string, body: ReactNode, editable?: boolean, why?: { title: string; text: string }) => ReactNode
+  }) => ReactNode
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -240,6 +255,10 @@ function EditShell({
 
   const live = changes.filter((c) => on.has(c.section))
   const pending = live.filter((c) => !isDone(outcomes[c.key]))
+  // What is made at once, as against sent: a reviewer's changes, but never a report.
+  const makes = direct && pending.some((c) => c.type !== 'en_report')
+  const needsReason = !direct && pending.some((c) => c.type !== 'en_report')
+  const [info, setInfo] = useState<string | null>(null)
   const allDone = live.length > 0 && pending.length === 0
 
   function toggle(id: string) {
@@ -262,10 +281,12 @@ function EditShell({
     const next = { ...outcomes }
     for (const c of pending) {
       try {
-        const res = direct
-          ? await api.reviewEdit(c.type, c.subject, c.value, reason.trim() || undefined, c.words)
-          : await api.suggest(c.type, c.subject, c.value, reason.trim(), c.words)
-        next[c.key] = 'unchanged' in res && res.unchanged ? 'unchanged' : direct || ('applied' in res && res.applied) ? 'saved' : 'sent'
+        // A report on the English goes to the queue from reviewers too; its text is its reason.
+        const res =
+          direct && c.type !== 'en_report'
+            ? await api.reviewEdit(c.type, c.subject, c.value, reason.trim() || undefined, c.words)
+            : await api.suggest(c.type, c.subject, c.value, reason.trim() || (c.type === 'en_report' ? (c.value as string) : ''), c.words)
+        next[c.key] = 'unchanged' in res && res.unchanged ? 'unchanged' : 'applied' in res && !res.applied ? 'sent' : 'saved'
       } catch (err) {
         next[c.key] = { problem: err instanceof Error ? errorText(err, lang) : t('failed') }
       }
@@ -282,7 +303,8 @@ function EditShell({
     if (problem) return problem
     return mine.length && mine.every(isDone) ? (mine.find((o) => o !== 'unchanged') ?? 'unchanged') : undefined
   }
-  const section = (id: string, label: string, body: ReactNode, editable = true) => {
+  /** `why`: a reason the section is as it is, behind an (i) beside its title. */
+  const section = (id: string, label: string, body: ReactNode, editable = true, why?: { title: string; text: string }) => {
     const o = outcomeOf(id)
     return (
       <fieldset key={id} className="page-edit-section" data-on={on.has(id) || undefined} disabled={isDone(o) || undefined}>
@@ -295,8 +317,26 @@ function EditShell({
           ) : (
             label
           )}
+          {why && (
+            <button
+              type="button"
+              className="page-edit-info"
+              aria-expanded={info === id}
+              aria-label={why.title}
+              title={why.title}
+              onClick={() => setInfo(info === id ? null : id)}
+            >
+              i
+            </button>
+          )}
           {o && <span className={typeof o === 'object' ? 'account-problem' : 'hint'}> — {typeof o === 'object' ? o.problem : t(o)}</span>}
         </legend>
+        {why && info === id && (
+          <div className="page-edit-why">
+            <b>{why.title}</b>
+            <p>{why.text}</p>
+          </div>
+        )}
         {body}
       </fieldset>
     )
@@ -352,16 +392,16 @@ function EditShell({
             <p className="hint">{t('pick')}</p>
             {children({ on, section })}
             <label className="review-field">
-              <span>{direct ? t('reasonOptional') : t('reason')}</span>
+              <span>{needsReason ? t('reason') : t('reasonOptional')}</span>
               <textarea className="assoc-text" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
-              {!direct && <span className="hint">{t('reasonHint')}</span>}
+              {needsReason && <span className="hint">{t('reasonHint')}</span>}
             </label>
             <div className="account-row profile-save">
               <button type="button" className="clear" onClick={onClose}>
                 {t('cancel')}
               </button>
-              <button className="account-submit" disabled={busy || !pending.length || (!direct && !reason.trim())}>
-                {direct ? t('save') : t('send')}
+              <button className="account-submit" disabled={busy || !pending.length || (needsReason && !reason.trim())}>
+                {makes ? t('save') : t('send')}
               </button>
             </div>
           </form>
@@ -682,6 +722,7 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
   const [loadError, setLoadError] = useState<unknown>(null)
   const [picks, setPicks] = useState<Record<string, string | null>>({})
   const [bg, setBg] = useState<string[]>([])
+  const [report, setReport] = useState('')
 
   useEffect(() => {
     if (!user) return
@@ -705,10 +746,12 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
     if (!now) return
     if (section === 'groups') setPicks(Object.fromEntries(now.kanji.map((k) => [k.char, k.group])))
     if (section === 'bg') setBg(now.bg)
+    if (section === 'en') setReport('')
   }
 
   const changes: Change[] = []
   if (now) {
+    if (report.trim()) changes.push({ key: 'en', section: 'en', type: 'en_report', subject: `word:${id}`, value: report.trim() })
     for (const k of now.kanji) {
       const pick = picks[k.char]
       if (k.senses && pick && pick !== k.group)
@@ -750,6 +793,20 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
                 </div>
               ),
               grouped.length > 0,
+            )}
+            {section(
+              'en',
+              t('s_en'),
+              on.has('en') ? (
+                <label className="review-field">
+                  <span>{t('enLabel')}</span>
+                  <textarea className="assoc-text" rows={4} maxLength={1000} value={report} autoFocus onChange={(e) => setReport(e.target.value)} />
+                </label>
+              ) : (
+                <p className="hint">{t('enHint')}</p>
+              ),
+              true,
+              { title: t('whyNot'), text: t('whyNotText') },
             )}
             {section(
               'bg',

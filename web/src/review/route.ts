@@ -22,6 +22,7 @@ const SLUGS: Record<TaskType, string> = {
   kanji_senses: 'meanings',
   word_sense: 'word-meanings',
   bg: 'bulgarian',
+  en_report: 'english',
 }
 
 export interface QueueRoute {

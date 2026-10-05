@@ -62,7 +62,13 @@ EXPORTS = {
     "meaning": ROOT / "data" / "meaning_groups.json",
 }
 
-TYPES = ("decomposition", "form_link", "kanji_senses", "word_sense", "bg")
+TYPES = ("decomposition", "form_link", "kanji_senses", "word_sense", "bg", "en_report")
+
+# A report that a word's English (JMdict's) is wrong, in the reporter's words.
+# It changes nothing on the site: JMdict is the reference, so a reviewer checks
+# the report, and a real mistake is logged in DATA-ISSUES.md and sent to JMdict
+# to be fixed at the source (Dani, 2026-10-05).
+EN_REPORT_MAX = 1000
 ORIGINS = ("proposal", "suggestion")
 # open: waiting. The rest say how it was closed.
 STATUSES = ("open", "auto-accepted", "accepted", "edited", "rejected")
@@ -519,6 +525,17 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             return out
         raise _bad("bad_subject", "that is not a subject of this type")
 
+    if type_ == "en_report":
+        kind, _, key = subject.partition(":")
+        if kind != "word" or not key.isdigit() or not query_one("SELECT 1 AS x FROM word WHERE id = ?", (int(key),)):
+            raise _bad("bad_subject", "no such word")
+        if value is None:
+            return None
+        text = " ".join(str(value).split()) if isinstance(value, str) else ""
+        if len(text) < 3:
+            raise _bad("report_empty", "say what is wrong with the English")
+        return text[:EN_REPORT_MAX]
+
     # word_sense
     char, wid = _split(subject)
     if len(char) != 1 or not wid.isdigit():
@@ -540,6 +557,8 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
 
 def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
     """The overlay's value for the subject, None when nothing overrides the built data."""
+    if type_ == "en_report":
+        return None  # a report is never live
     if type_ == "decomposition":
         ov = store.decomposition_overrides().get(subject)
         return list(ov) if ov is not None else None
@@ -597,6 +616,8 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
     `explicit_words`: the reviewer placed the kanji's words themselves (the
     meanings board), so none are reopened or auto-accepted behind their back.
     """
+    if type_ == "en_report":
+        return  # confirmed or not, the site's English stays JMdict's
     if type_ == "decomposition":
         if value is None:
             store.clear_decomposition(subject)
@@ -984,10 +1005,14 @@ def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | Non
            words: dict | None = None) -> dict:
     """A reviewer's or the admin's own change, from the page: live at once, logged like any other.
 
+    Not a report on the English: that always goes to the queue (`suggest`).
+
     `words`, for a kanji's meanings edited on the page's board: word id -> group
     (None: in no group), as the reviewer left them. As in `decide`, each word
     that moves is a decision under this one, reverted with it.
     """
+    if type_ == "en_report":
+        raise _bad("report_queued", "a report on the English goes to the review queue")
     with _change() as data:
         after = validate(type_, subject, value, data)
         before = live_value(type_, subject, data)
@@ -1077,7 +1102,7 @@ def _names(ids: set[str]) -> dict[str, dict]:
 def _view(item: dict, names: dict, data: dict) -> dict:
     out = {k: v for k, v in item.items() if k != "skipped_by"}
     out["current"] = current(item["type"], item["subject"], data)
-    if item["type"] == "bg" and item["subject"].startswith("word:"):
+    if item["type"] in ("bg", "en_report") and item["subject"].startswith("word:"):
         r = query_one("SELECT headword, reading FROM word WHERE id = ?", (int(item["subject"][5:]),))
         out["label"] = f"{r['headword']}" if r else item["subject"]
     out["createdBy"] = names.get(item["created_by"])
@@ -1205,6 +1230,11 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
     if type_ == "form_link":
         a, b = subject.split("|")
         return {"a": forms.forms_of(a), "b": forms.forms_of(b)}
+    if type_ == "en_report":
+        from .routes.search import _fetch_words
+
+        wid = int(subject.split(":")[1])
+        return {"word": _fetch_words([wid]).get(wid)}
     if type_ == "bg":
         from .routes.search import _fetch_words
 

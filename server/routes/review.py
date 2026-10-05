@@ -67,6 +67,11 @@ def suggest(payload: dict = Body(...), me: dict = Depends(require_user)) -> dict
     type_, subject, value = payload.get("type", ""), payload.get("subject", ""), payload.get("value")
     reason = payload.get("reason")
     words = payload.get("words") if type_ == "kanji_senses" else None
+    if type_ == "en_report":
+        # Reviewers too: the English is JMdict's, so a report is checked, never made live.
+        item = review.add_item(type_, subject, value, f"human:{me['id']}", "suggestion", reason or value,
+                               by=me["id"], priority=1.0)
+        return {"applied": False, "item": {"id": item["id"], "status": item["status"]}}
     if auth.has_role(me, "reviewer"):
         return {"applied": True, "decision": review.direct(type_, subject, value, me["id"], reason, words)}
     if not (reason or "").strip():

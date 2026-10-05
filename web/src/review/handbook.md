@@ -207,6 +207,23 @@ carry; the word's own English is still what you translate.
 - **Not sure?** *Skip* it. Skipped cards wait under *skipped* in the queue
   bar, for when there is nothing else to do.
 
+## English reports (en_report)
+
+Question: is the English JMdict gives this word actually wrong?
+
+The English is JMdict's and is never edited here: the Bulgarian is translated
+from it, English search reads it, and every dictionary built on JMdict shares
+it. A person who thinks it is wrong says so in their own words, and the
+report lands here. Nothing on the site changes, whatever you decide.
+
+- **Confirm only a real mistake**: a wrong meaning, a sense that is missing
+  and common, a gloss that belongs to another word. Check it against another
+  dictionary or the example sentences, not against taste.
+- **Reject** a matter of taste (old-fashioned, British, too literal) or a
+  misreading of the entry. Say why in the reason: the person sees it.
+- **After confirming**, add it to DATA-ISSUES.md and send the correction to
+  JMdict, so it is fixed at the source; the next data build picks it up.
+
 ## Cases
 
 ### 龰: a stroke split against a variant of the same part

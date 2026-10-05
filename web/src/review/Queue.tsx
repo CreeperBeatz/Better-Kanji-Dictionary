@@ -34,6 +34,10 @@ const S = strings(
     t_kanji_senses: 'meanings',
     t_word_sense: 'word meanings',
     t_bg: 'Bulgarian',
+    t_en_report: 'English reports',
+    reported: 'What is wrong, says the report',
+    jmdict: 'The English now (JMdict)',
+    confirmReport: 'confirm: a real mistake',
     skippedTab: 'skipped',
     skippedTitle: 'The items you skipped, to do now',
     showSkipped: '{n} skipped: show them',
@@ -86,6 +90,10 @@ const S = strings(
     t_kanji_senses: 'значения',
     t_word_sense: 'значения в думи',
     t_bg: 'български',
+    t_en_report: 'доклади за английския',
+    reported: 'Какво не е наред според доклада',
+    jmdict: 'Английският сега (JMdict)',
+    confirmReport: 'потвърдете: истинска грешка',
     skippedTab: 'пропуснати',
     skippedTitle: 'Пропуснатите задачи, за да ги свършите сега',
     showSkipped: 'пропуснати: {n}. Покажете ги',
@@ -134,7 +142,7 @@ const S = strings(
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg']
+const TYPES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg', 'en_report']
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
 const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link', 'bg']
 
@@ -395,10 +403,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
   const subjectGlyphs = (i: QueueItem) => {
     const [a] = i.subject.split('|')
-    const b = i.type === 'bg' ? i.subject.split(':')[1] : i.subject.split('|')[1]
+    const b = i.type === 'bg' || i.type === 'en_report' ? i.subject.split(':')[1] : i.subject.split('|')[1]
     if (i.type === 'form_link') return `${a} · ${b}`
     if (i.type === 'word_sense') return a
-    if (i.type === 'bg') return i.label ?? b ?? i.subject.split(':')[1]
+    if (i.type === 'bg' || i.type === 'en_report') return i.label ?? b ?? i.subject.split(':')[1]
     return a
   }
 
@@ -489,7 +497,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               </header>
 
               <div className="queue-judge">
-              {!board && item.type !== 'bg' && (
+              {item.type === 'en_report' ? (
+              <dl className="queue-compare">
+                <dt>{t('reported')}</dt>
+                <dd>
+                  <ValueView type={item.type} value={item.proposed} />
+                </dd>
+              </dl>
+              ) : !board && item.type !== 'bg' && (
               <dl className="queue-compare">
                 <dt>{t('now')}</dt>
                 <dd>
@@ -553,7 +568,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               {problem && <p className="account-problem">{problem}</p>}
               <div className="queue-actions">
                 <button className="account-submit" disabled={busy} onClick={() => decideDraft()}>
-                  {edited ? t('saveEdit') : open ? t('keep') : t('accept')}
+                  {edited ? t('saveEdit') : open ? t('keep') : item.type === 'en_report' ? t('confirmReport') : t('accept')}
                 </button>
                 {canReject(item) && (
                   <button className="clear" disabled={busy} onClick={() => decide('reject')}>
@@ -696,6 +711,25 @@ function Evidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: st
           </>
         )}
       </dl>
+      {detail.type === 'en_report' && c.word && (
+        <div className="queue-word">
+          <h4>{t('jmdict')}</h4>
+          <p>
+            <span className="queue-word-head" lang="ja">
+              {c.word.headword}
+            </span>{' '}
+            <span lang="ja">{c.word.reading}</span>
+          </p>
+          <ol>
+            {c.word.senses.map((s, i) => (
+              <li key={i}>
+                {s.pos.length > 0 && <span className="hint">{s.pos.join(', ')} </span>}
+                {s.gloss}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       {detail.type === 'word_sense' && c.word && (
         <div className="queue-word">
           <p>

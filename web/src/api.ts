@@ -314,7 +314,7 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense' | 'bg'
+export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense' | 'bg' | 'en_report'
 export type Origin = 'proposal' | 'suggestion'
 export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'none'
 

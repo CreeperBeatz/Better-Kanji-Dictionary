@@ -124,6 +124,7 @@ export function ValueView({ type, value, groups }: { type: TaskType; value: Task
       </span>
     )
   }
+  if (type === 'en_report') return <span className="review-report">{value as string}</span>
   if (type === 'bg') {
     return (
       <span lang="bg" className="review-bg">
@@ -164,6 +165,11 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus, wi
   const t = S(lang)
 
   if (type === 'decomposition') return <PartsEditor value={value as string[] | null} onChange={onChange} autoFocus={autoFocus} />
+
+  if (type === 'en_report')
+    return (
+      <textarea className="assoc-text" rows={4} maxLength={1000} value={(value as string | null) ?? ''} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
+    )
 
   if (type === 'form_link') {
     const v = (value as { kind: FormKind; note: string | null } | null) ?? { kind: 'looks_like', note: null }
