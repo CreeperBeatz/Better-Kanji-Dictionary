@@ -451,7 +451,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             setShowSkipped(true)
           }}
         >
-          {t('skippedTab')} {skippedN > 0 && <span className="queue-count">{skippedN}</span>}
+          {t('skippedTab')}
         </button>
         <span className="overlay-tab-rule" />
         {TYPES.map((k) => (
