@@ -21,19 +21,17 @@ const S = strings(
     s_decomposition: 'Parts',
     s_form_link: 'Forms',
     s_kanji_senses: 'Meanings',
-    s_word_sense: 'Word meanings',
-    s_bg: 'Bulgarian',
-    s_en_report: 'English reports',
+    s_bg: 'Bulgarian translations',
+    s_en_report: 'Reports',
     d_decomposition: 'which parts each character visibly contains',
     d_form_link: 'how bound shapes relate to the kanji they come from',
-    d_kanji_senses: 'one per kanji: its groups, with its words placed on the board',
-    d_word_sense: 'single words: suggestions, and words whose group changed',
+    d_kanji_senses: 'one per kanji: its groups, with its words placed on the board; and the odd single word (a suggestion, or one whose group changed)',
     d_bg: 'the machine-translated Bulgarian: one card per word, one per kanji',
     d_en_report: 'reports that a word’s English (from JMdict) is wrong; real mistakes go to JMdict',
     of: '{done} of {total}',
     left: '{n} left',
     dictionary: 'The dictionary',
-    meaningsCover: '{n} of {total} core kanji have accepted meanings',
+    meaningsCover: '{n} of {total} kanji have accepted meanings',
     wordsCover: '{n} of {total} drafted words placed in a group (decided with their kanji’s meanings)',
     loading: 'loading',
   },
@@ -49,26 +47,25 @@ const S = strings(
     s_decomposition: 'Части',
     s_form_link: 'Форми',
     s_kanji_senses: 'Значения',
-    s_word_sense: 'Значения в думи',
-    s_bg: 'Български',
-    s_en_report: 'Доклади за английския',
+    s_bg: 'Преводи на български',
+    s_en_report: 'Доклади',
     d_decomposition: 'кои части съдържа видимо всеки знак',
     d_form_link: 'как свързаните форми се отнасят към канджито, от което идват',
-    d_kanji_senses: 'по една за канджи: групите му, с думите, разпределени на дъската',
-    d_word_sense: 'отделни думи: предложения и думи, чиято група се е променила',
+    d_kanji_senses: 'по една за канджи: групите му, с думите, разпределени на дъската; и по някоя отделна дума (предложение или дума, чиято група се е променила)',
     d_bg: 'машинно преведеният български: по една карта за дума и за канджи',
     d_en_report: 'доклади, че английският на дума (от JMdict) е грешен; истинските грешки отиват в JMdict',
     of: '{done} от {total}',
     left: 'остават {n}',
     dictionary: 'Речникът',
-    meaningsCover: '{n} от {total} основни канджи имат приети значения',
+    meaningsCover: '{n} от {total} канджи имат приети значения',
     wordsCover: '{n} от {total} чернови думи са разпределени в група (решават се със значенията на канджито си)',
     loading: 'зареждане',
   },
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const STAGES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'word_sense', 'bg', 'en_report']
+// As in the queue: a single word's meaning is counted under meanings, with its kanji's card.
+const STAGES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'bg', 'en_report']
 
 function pct(done: number, total: number): string {
   if (!total) return '0%'
@@ -151,7 +148,9 @@ export function ProgressPage({ data }: { data: ReviewProgress | null }) {
         <h3>{t('stages')}</h3>
         <div className="progress-stages">
           {STAGES.map((k) => {
-            const s = data.stages[k]
+            const one = data.stages[k]
+            const words = k === 'kanji_senses' ? data.stages.word_sense : undefined
+            const s = words ? { done: one.done + words.done, total: one.total + words.total } : one
             return (
               <div key={k} className="progress-stage">
                 <div className="progress-stage-name">
