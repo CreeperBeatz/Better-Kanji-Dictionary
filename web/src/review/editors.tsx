@@ -4,7 +4,7 @@
  *
  *   decomposition  the direct parts, as typed characters
  *   form_link      a kind and a note
- *   kanji_senses   2 to 6 meaning groups, each an id and a label in en and bg
+ *   kanji_senses   1 to 6 meaning groups, each an id and a label in en and bg
  *   word_sense     one of the kanji's groups, or the catch-all
  */
 import { lazy, Suspense, useState } from 'react'
@@ -34,7 +34,7 @@ const S = strings(
     note: 'Note',
     noteHint: 'For “a form of”, say where it comes from: the old form, or a reference.',
     groups: 'Meaning groups',
-    groupsHint: '2 to 6, by what the kanji does in words. Words the kanji brings no meaning to have their own box, which always exists.',
+    groupsHint: '1 to 6, by what the kanji does in words. Words the kanji brings no meaning to have their own box, which always exists.',
     id: 'id',
     en: 'English',
     bg: 'Bulgarian',
@@ -62,14 +62,14 @@ const S = strings(
     note: 'Бележка',
     noteHint: 'За „форма на“ кажете откъде идва: старата форма или справочник.',
     groups: 'Групи значения',
-    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Думите, на които кандзито не внася значение, имат своя кутия, която винаги съществува.',
+    groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Думите, на които канджито не внася значение, имат своя кутия, която винаги съществува.',
     id: 'код',
     en: 'английски',
     bg: 'български',
     addGroup: 'добавете група',
     remove: 'махнете',
-    catchAll: 'кандзито не внася значение в думата',
-    noGroups: 'Това кандзи още няма приети групи значения.',
+    catchAll: 'канджито не внася значение в думата',
+    noGroups: 'Това канджи още няма приети групи значения.',
   },
 )
 

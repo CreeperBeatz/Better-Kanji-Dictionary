@@ -157,6 +157,9 @@ Every character in the input must appear once, with 1 to 8 meanings.
 
 ## 3. How to write the Bulgarian
 
+**Japanese kanji are «канджи»** (канджито, канджитата), never «кандзи»,
+which is the Chinese word.
+
 **Sense boundaries are sacred.**
 - One output sense per input sense.
 - Never merge two senses, never split one, and never move a meaning from one

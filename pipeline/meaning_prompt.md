@@ -24,14 +24,17 @@ the checker command you are given, at the end, is fine.)
 
 ## Meaning groups (run A)
 
-The question: *what are the 2 to 6 meanings this kanji carries in modern
+The question: *what are the 1 to 6 meanings this kanji carries in modern
 Japanese words?*
 
 - Groups are defined by **what the kanji contributes inside words**, not by
   English dictionary senses. 青 is blue / green / young-unripe (青二才): the
   English "blue" and "green" are one Japanese colour meaning, "unripe" is
   another.
-- 2 to 6 groups; **most kanji need 2 to 4**. Five or six only for a kanji
+- 1 to 6 groups; **most kanji need 2 to 4**. A kanji with one meaning in
+  modern Japanese (楓 maple) gets **one** group: never add a second group to
+  fill a quota -- a name use, a variant spelling or a near-synonym of the
+  first is not a meaning of its own. Five or six only for a kanji
   with a hundred or more words that really splits that many ways. **Merge**
   any group that would not get at least two of the listed common words, and
   any group that is one word's gloss rather than a meaning of the kanji
@@ -39,7 +42,8 @@ Japanese words?*
   groups beat many thin ones.
 - Each group: `id` (short, lowercase a-z, 0-9 and -, e.g. `life`, `raw`,
   `student`; unique within the kanji), `en` (1 to 4 words, e.g. "life, birth"),
-  `bg` (the same label in Bulgarian, natural and short, e.g. "живот, раждане"),
+  `bg` (the same label in Bulgarian, natural and short, e.g. "живот, раждане";
+  the characters themselves are «канджи», never «кандзи»),
   and optionally `note` (one short sentence, only if the label alone would be
   misread).
 - Order the groups from most to least common in the listed words.

@@ -23,7 +23,7 @@ import { CATCH_ALL } from './editors'
 const S = strings(
   {
     groups: 'Meaning groups',
-    groupsHint: '2 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group. Tick words as you check them; they fold away.',
+    groupsHint: '1 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group. Tick words as you check them; they fold away.',
     en: 'English label',
     bg: 'Bulgarian',
     note: 'Note',
@@ -68,14 +68,14 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
-    groupsHint: 'От 2 до 6, според това какво прави кандзито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група. Отмятайте думите, докато ги проверявате; те се прибират.',
+    groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група. Отмятайте думите, докато ги проверявате; те се прибират.',
     en: 'Английски етикет',
     bg: 'Български',
     note: 'Бележка',
     remove: 'махнете групата',
     addGroup: 'добавете група',
-    catchAll: 'Кандзито не внася значение в думата',
-    catchAllHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните кандзи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
+    catchAll: 'Канджито не внася значение в думата',
+    catchAllHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните канджи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
     none: 'Извън групите',
     noneHint: 'чести или класирани думи, които никоя група не взима; редките думи не се разпределят тук',
     clearPick: 'изчистете избора',

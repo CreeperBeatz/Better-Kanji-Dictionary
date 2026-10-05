@@ -478,8 +478,9 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             raise _bad("bad_subject", "senses are of one kanji")
         if value is None:
             return None
-        if not isinstance(value, list) or not 2 <= len(value) <= 6:
-            raise _bad("senses_count", "a kanji has 2 to 6 meanings here, the catch-all aside")
+        # One is enough for a kanji with one meaning (楓, maple); more than six is a list, not groups.
+        if not isinstance(value, list) or not 1 <= len(value) <= 6:
+            raise _bad("senses_count", "a kanji has 1 to 6 meanings here, the catch-all aside")
         out, ids = [], set()
         for s in value:
             if not isinstance(s, dict):

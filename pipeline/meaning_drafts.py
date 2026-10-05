@@ -13,6 +13,12 @@
     # everything in scope (server/scope.py) that has no meanings task yet:
     python pipeline/meaning_drafts.py --drafts data/drafts/meanings-scope prepare --scope
 
+    # kanji with no word in scope: groups again, from fuller evidence (Wiktionary's
+    # Japanese entry and the kanji's rarer words, which are shown, not placed),
+    # then put in place of the open, untouched drafts
+    python pipeline/meaning_drafts.py --drafts data/drafts/meanings-thin prepare-thin --wiktionary data/drafts/wiktionary-222.json
+    python pipeline/meaning_drafts.py --drafts data/drafts/meanings-thin replace [--dry-run]
+
     # words in scope under kanji that have groups already, but no placement:
     # two placing runs (X, Y) against those groups, like run B twice
     python pipeline/meaning_drafts.py --drafts data/drafts/meanings-extra prepare-extra
@@ -164,7 +170,7 @@ def _load_json(path: Path) -> dict | None:
 
 
 def _valid_senses(senses) -> list[dict] | None:
-    if not isinstance(senses, list) or not 2 <= len(senses) <= 6:
+    if not isinstance(senses, list) or not 1 <= len(senses) <= 6:
         return None
     ids = set()
     out = []
@@ -320,6 +326,74 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     print("loaded:", review.counts()["items"])
 
 
+# ---------------------------------------------------------------- kanji with no word in scope
+
+RARE_SHOWN = 12  # of a kanji's rarer words, shown as evidence
+
+
+def prepare_thin(wiktionary: Path) -> None:
+    """Run-A batches for the in-scope kanji with no word in scope: nothing to
+    place, but evidence to draft from -- Wiktionary's Japanese senses (and
+    whether it calls the kanji a name character), and up to a dozen of its
+    words that are out of scope only for being rare."""
+    wk = json.loads(wiktionary.read_text(encoding="utf-8"))
+    with _db() as db:
+        thin = [k for k in _kanji(db, [], "".join(scope.kanji(db))) if not k["words"]]
+        for k in thin:
+            k.pop("freq", None)
+            rare = db.execute(
+                "SELECT w.id, w.headword, w.reading, "
+                "(SELECT s.gloss FROM sense s WHERE s.word_id = w.id ORDER BY s.ord LIMIT 1) AS gloss "
+                "FROM word_char wc JOIN word w ON w.id = wc.word_id "
+                "WHERE wc.char = ? AND instr(w.headword, wc.char) > 0 "
+                "ORDER BY w.nf IS NULL, w.nf, LENGTH(w.headword), w.id LIMIT ?",
+                (k["char"], RARE_SHOWN),
+            ).fetchall()
+            k["rareWords"] = [[r["headword"], r["reading"], (r["gloss"] or "").split(";")[0][:60]] for r in rare]
+            senses = {}
+            for e in wk.get(k["char"], []):
+                if e["lang"] == "Japanese" and e["glosses"]:
+                    senses.setdefault(e["pos"], [])
+                    senses[e["pos"]] += [g for g in e["glosses"] if g not in senses[e["pos"]]][:8]
+            if senses:
+                k["wiktionary"] = senses
+    batches = [thin[i:i + BATCH_KANJI] for i in range(0, len(thin), BATCH_KANJI)]
+    for i, b in enumerate(batches):
+        _write(IN / f"A-{i:03d}.json", {"batch": f"A-{i:03d}", "run": "A", "kanji": b})
+    print(f"{len(thin)} kanji in {len(batches)} batches -> {IN.relative_to(ROOT)}/A-*.json")
+
+
+def replace(dry_run: bool) -> None:
+    """Put this folder's groups in place of each kanji's open meanings draft,
+    where no one has touched it: still open, drafted by the model, no decision."""
+    from server import review
+
+    a, problems = read_run("A")
+    print(f"run A: {len(a)} kanji valid, {len(problems)} problems")
+    for p in problems[:20]:
+        print("   ", p)
+    with review._change() as data:
+        decided = {d["subject"] for d in data["decisions"] if d["type"] == "kanji_senses"}
+        # Placements name the groups by id: new groups would leave them pointing nowhere.
+        placed = {i["subject"].split("|")[0] for i in data["items"].values() if i["type"] == "word_sense"}
+        done = skipped = 0
+        for item in list(data["items"].values()):
+            c = item["subject"]
+            if item["type"] != "kanji_senses" or c not in a:
+                continue
+            if item["status"] != "open" or item["source"] != SOURCE or c in decided or c in placed or item.get("skipped_by"):
+                skipped += 1
+                continue
+            value = review.validate("kanji_senses", c, a[c]["senses"], data, pending_ok=True, machine=True)
+            if not dry_run:
+                review._update(data, item, proposed=value,
+                               reason="drafted from its meanings, Wiktionary and its rarer words")
+            done += 1
+        if dry_run:
+            raise SystemExit(f"would replace {done}, leave {skipped} (dry run: nothing written)")
+    print(f"replaced {done}, left {skipped} that someone had touched")
+
+
 # ---------------------------------------------------------------- words missing under drafted kanji
 
 
@@ -442,6 +516,10 @@ def main() -> int:
     l = sub.add_parser("load")
     l.add_argument("--dry-run", action="store_true")
     l.add_argument("--review-dir", type=Path)
+    pt = sub.add_parser("prepare-thin")
+    pt.add_argument("--wiktionary", type=Path, required=True, help="the kanji's Wiktionary entries, as gathered from the dump")
+    rp = sub.add_parser("replace")
+    rp.add_argument("--dry-run", action="store_true")
     sub.add_parser("prepare-extra")
     ce = sub.add_parser("check-extra")
     ce.add_argument("--batch", help="just this batch's number, e.g. 007")
@@ -460,6 +538,10 @@ def main() -> int:
         prepare_b(args.batch)
     elif args.cmd == "check":
         check(args.batch)
+    elif args.cmd == "prepare-thin":
+        prepare_thin(args.wiktionary)
+    elif args.cmd == "replace":
+        replace(args.dry_run)
     elif args.cmd == "prepare-extra":
         prepare_extra()
     elif args.cmd == "check-extra":

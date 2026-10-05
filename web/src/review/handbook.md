@@ -95,14 +95,16 @@ A form link never changes parts.
 
 ## Meanings (kanji_senses)
 
-Question: what are the 2–6 things this kanji does in modern words?
+Question: what are the 1–6 things this kanji does in modern words? Most
+kanji have 2–4; a kanji with one meaning (楓, maple) has one group, not a
+second one padded out of a name use or a variant spelling.
 
 - Group by what the kanji does in words, not by English senses (青: blue or
   green, young or unripe).
 - Each group should cover at least two common words; merge the rest.
 - Labels: 1–4 words in English, the same in Bulgarian. Keep the note short.
 - Words the kanji brings no meaning to go in their own box (see below). It
-  always exists and is not one of the 2–6.
+  always exists and is not one of the 1–6.
 - Use the words under each group to test the split: if a group's words don't
   share a meaning, the group is wrong.
 
@@ -142,7 +144,7 @@ words with a red edge are the ones it was unsure of, so look at those first.
 
 The box under the groups is for words where the kanji is *written* but gives
 the word none of its meanings: the word means what it means some other way.
-It is not one of the 2–6 groups and always exists. Three kinds of word go
+It is not one of the 1–6 groups and always exists. Three kinds of word go
 there:
 
 - **Sound-only spellings (ateji).** The kanji were picked for their reading,
