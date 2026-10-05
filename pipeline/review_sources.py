@@ -372,9 +372,15 @@ def count() -> dict:
 
 
 def load(review_dir: Path | None) -> None:
-    from server import review
+    from server import review, store
 
     if review_dir:
+        # An auto-accepted split is written to the associations store, which
+        # use_dir does not move: loading into another review folder against
+        # the real store would change the real graph with no decision behind
+        # it. Point the store elsewhere first (tests/load_sandbox.py does).
+        if store.ASSOC_DIR.resolve() == (ROOT / "data" / "associations").resolve():
+            raise SystemExit("--review-dir with the real associations store: use tests/load_sandbox.py")
         review.use_dir(review_dir)
     c = collect()
     n = Counter()
