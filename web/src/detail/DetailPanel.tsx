@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { api, type GraphResponse, type KanjiNode, type Word, type WordsWithResponse } from '../api'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 import { getLang, strings, useLang, type Lang } from '../i18n'
@@ -97,6 +97,7 @@ interface Props {
 const PAGE_WORDS = 8
 // Once the kanji's meanings are grouped: this many common words under each.
 const GROUP_WORDS = 5
+const REST = 'rest'
 
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
@@ -148,6 +149,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   // Its common words by meaning group, once reviewers have grouped them; null
   // while on the way, and with no groups (or no server) the plain list shows.
   const [grouped, setGrouped] = useState<{ char: string; data: WordsWithResponse | null } | null>(null)
+  // The groups folded away, by id; all open on each new kanji.
+  const [shut, setShut] = useState<{ char: string; ids: Set<string> }>({ char: '', ids: new Set() })
   const [byReading, setByReading] = useState<{ char: string; words: Record<string, Word> } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
@@ -195,6 +198,31 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const vocabReady = grouped?.char === data.focus.char
   const groups = (groupedData?.groups ?? []).filter((g) => g.words.length > 0)
   const rest = groups.length ? (groupedData?.rest.words ?? []) : []
+  const shutHere = shut.char === data.focus.char ? shut.ids : new Set<string>()
+  const fold = (id: string) => {
+    const ids = new Set(shutHere)
+    if (ids.has(id)) ids.delete(id)
+    else ids.add(id)
+    setShut({ char: data.focus.char, ids })
+  }
+  // A group as a box of its own: its title bar folds it, > folded, pointing down open.
+  const vocabGroup = (id: string, label: ReactNode, n: number, ws: Word[]) => {
+    const open = !shutHere.has(id)
+    return (
+      <div key={id} className="vocab-group" data-shut={!open || undefined}>
+        <h4>
+          <button className="meaning-group-toggle vocab-group-toggle" aria-expanded={open} onClick={() => fold(id)}>
+            <svg className="meaning-group-caret" viewBox="0 0 12 12" aria-hidden>
+              <path d="M4 2.5 7.5 6 4 9.5" />
+            </svg>
+            <span className="meaning-group-label">{label}</span>
+            <span className="hint">{n}</span>
+          </button>
+        </h4>
+        {open && <ul>{ws.slice(0, GROUP_WORDS).map(vocabRow)}</ul>}
+      </div>
+    )
+  }
   const vocabRow = (w: Word) => (
     <li key={w.id}>
       <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
@@ -286,18 +314,15 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
           {groups.length > 0 ? (
             <>
-              {groups.map((g) => (
-                <div key={g.id} className="vocab-group">
-                  <h4>{g.id === CATCH_ALL ? t('catchAll') : groupLabel(g.id, groupedData?.senses ?? null, lang)}</h4>
-                  <ul>{g.words.slice(0, GROUP_WORDS).map(vocabRow)}</ul>
-                </div>
-              ))}
-              {rest.length > 0 && (
-                <div className="vocab-group">
-                  <h4>{t('notInGroup')}</h4>
-                  <ul>{rest.slice(0, GROUP_WORDS).map(vocabRow)}</ul>
-                </div>
+              {groups.map((g) =>
+                vocabGroup(
+                  g.id,
+                  g.id === CATCH_ALL ? t('catchAll') : groupLabel(g.id, groupedData?.senses ?? null, lang),
+                  g.words.length,
+                  g.words,
+                ),
               )}
+              {rest.length > 0 && vocabGroup(REST, t('notInGroup'), groupedData?.rest.total ?? rest.length, rest)}
             </>
           ) : (
             <ul>{words.slice(0, PAGE_WORDS).map(vocabRow)}</ul>

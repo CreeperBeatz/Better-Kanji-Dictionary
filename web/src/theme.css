@@ -1308,16 +1308,42 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0;
 }
 
-/* On a kanji's page, a few words under each of its meaning groups. */
+/* On a kanji's page, a few words under each of its meaning groups, each
+   group a box of its own whose title bar folds it. */
+.vocab-group {
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--sumi-sunk);
+}
+
 .vocab-group + .vocab-group {
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .vocab-group h4 {
-  margin: 0 0 3px;
-  font-size: 12px;
-  font-weight: 500;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 400;
   color: var(--paper-dim);
+}
+
+.vocab .vocab-group-toggle {
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 3px;
+}
+
+.vocab-group:not([data-shut]) .vocab-group-toggle {
+  border-bottom: 1px solid var(--rule);
+  border-radius: 3px 3px 0 0;
+}
+
+.vocab-group ul {
+  padding: 4px 10px 6px;
+}
+
+.vocab-group .vocab-row {
+  width: calc(100% + 12px);
 }
 
 .vocab-row {
