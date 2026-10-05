@@ -26,7 +26,6 @@ import type { Level } from '../nav'
 import { Pitch } from './Pitch'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
-import { oneKanji, scopedKanji, setByMeaning, useByMeaning } from './view'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -42,11 +41,6 @@ const S = strings(
     sortNewsTitle: 'Sort by how often newspapers use the word',
     sortJlpt: 'JLPT',
     sortJlptTitle: 'Sort by JLPT level',
-    viewLabel: 'Show the words',
-    viewList: 'List',
-    viewListTitle: 'Every word, the common ones starting with {char} first',
-    viewMeaning: 'By meaning',
-    viewMeaningTitle: 'Every word with {char}, grouped by the meaning {char} has in it',
     newsAsc: 'Most frequent first',
     newsDesc: 'Least frequent first',
     jlptAsc: 'N5 first',
@@ -57,6 +51,7 @@ const S = strings(
     open: 'Open this entry',
     notTranslated: 'not translated into Bulgarian yet',
     inN: 'in {n}',
+    allWithKanji: 'See all words with {char}, by meaning',
     resultsFor: 'Results for {q}',
     readAs: 'read as {r}',
     alternative: 'in Bulgarian: {q}',
@@ -90,11 +85,6 @@ const S = strings(
     sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
     sortJlpt: 'JLPT',
     sortJlptTitle: 'Подреждане по ниво от JLPT',
-    viewLabel: 'Как да се покажат думите',
-    viewList: 'Списък',
-    viewListTitle: 'Всички думи, първо честите, които започват с {char}',
-    viewMeaning: 'По значение',
-    viewMeaningTitle: 'Всички думи с {char}, групирани по значението, което {char} има в тях',
     newsAsc: 'Първо най-честите',
     newsDesc: 'Първо най-редките',
     jlptAsc: 'Първо N5',
@@ -105,6 +95,7 @@ const S = strings(
     open: 'Отворете статията',
     notTranslated: 'още не е преведено на български',
     inN: 'в {n}',
+    allWithKanji: 'Всички думи с {char}, по значение',
     resultsFor: 'Резултати за {q}',
     readAs: 'прочетено като {r}',
     alternative: 'на български: {q}',
@@ -241,6 +232,55 @@ function SortPill({
 // Common words only is the default, so what is stored is the choice to see them all.
 const ALL_WORDS_KEY = 'betterrtk:allWords'
 
+function useCommon(): [boolean, () => void] {
+  const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
+  const toggle = () =>
+    setCommon((on) => {
+      if (on) localStorage.setItem(ALL_WORDS_KEY, '1')
+      else localStorage.removeItem(ALL_WORDS_KEY)
+      return !on
+    })
+  return [common, toggle]
+}
+
+function CommonFilter({ on, onToggle, t }: { on: boolean; onToggle: () => void; t: ReturnType<typeof S> }) {
+  return (
+    <button className="search-filter" aria-pressed={on} data-on={on || undefined} onClick={onToggle} title={t('commonOnlyTitle')}>
+      {t('commonOnly')}
+    </button>
+  )
+}
+
+/** Every word with one kanji, by the meaning it has in each: a page of its own, with the search's rows. */
+export function WordsWithPage({
+  char,
+  onKanji,
+  onWord,
+  open,
+}: {
+  char: string
+  onKanji: (c: string) => void
+  onWord: (w: Word) => void
+  open?: number
+}) {
+  const t = S(useLang())
+  const [common, toggleCommon] = useCommon()
+  return (
+    <WordsWith
+      char={char}
+      common={common}
+      onKanji={onKanji}
+      tools={
+        <div className="search-tools">
+          <span />
+          <CommonFilter on={common} onToggle={toggleCommon} t={t} />
+        </div>
+      }
+      row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open === w.id} extra={extra} />}
+    />
+  )
+}
+
 /** JMdict nf buckets are 500 words wide: nf12 is the top 6,000. */
 export function newsRank(nf: number): string {
   const n = nf * 500
@@ -370,6 +410,8 @@ interface SearchProps {
   open?: { kanji?: string; word?: number }
   /** Shows the map of every character, from the empty search. */
   onMap: () => void
+  /** Opens every word with a kanji, by meaning: offered once a found kanji is open beside the list. */
+  onWordsWith?: (char: string) => void
 }
 
 /** How many words a result shows before the rest are added. */
@@ -378,17 +420,11 @@ const FIRST_ROWS = 10
 const PAGE = 30
 const MOST = 1000
 
-export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, onWordsWith }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
-  // One kanji can be shown by meaning instead: a switch, kept like the sort.
-  // `*生*` is the old way of asking for that, and still works.
-  const byMeaning = useByMeaning()
-  const legacy = scopedKanji(term)
-  const kanjiQ = legacy ?? (oneKanji(term) ? term : null)
-  const scoped = legacy ?? (kanjiQ && byMeaning ? kanjiQ : null)
-  const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
+  const [common, toggleCommon] = useCommon()
   const [[sort, order], setSort] = useState(savedSort)
   // "more" asks again for 30 more, kept per query, so going back keeps what was opened.
   const base = keyOf(lang, common, `${sort}:${order}`, term)
@@ -399,7 +435,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!term || scoped) {
+    if (!term) {
       setResult(null)
       setBusy(false)
       return
@@ -431,7 +467,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key, limit, scoped])
+  }, [term, lang, common, sort, order, key, limit])
 
   // The first screen of words is put up at once; the rest follow in a spare
   // moment, so a result never costs a keystroke more than a screenful.
@@ -451,68 +487,16 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
     setSort([next, nextOrder])
   }
 
-  function toggleCommon() {
-    setCommon((on) => {
-      if (on) localStorage.setItem(ALL_WORDS_KEY, '1')
-      else localStorage.removeItem(ALL_WORDS_KEY)
-      return !on
-    })
-  }
-
   if (!term) return <HomePage onKanji={onKanji} onWord={onWord} onSearch={onSearch} onMap={onMap} open={open?.kanji} />
 
   const tools = (
     <div className="search-tools">
-      <div className="search-tools-start">
-        {kanjiQ && (
-          <div className="view-switch" role="group" aria-label={t('viewLabel')}>
-            <button
-              aria-pressed={!scoped}
-              data-on={!scoped || undefined}
-              title={t('viewListTitle', { char: kanjiQ })}
-              onClick={() => {
-                setByMeaning(false)
-                if (legacy) onSearch(legacy)
-              }}
-            >
-              {t('viewList')}
-            </button>
-            <button
-              aria-pressed={!!scoped}
-              data-on={scoped || undefined}
-              title={t('viewMeaningTitle', { char: kanjiQ })}
-              onClick={() => setByMeaning(true)}
-            >
-              {t('viewMeaning')}
-            </button>
-          </div>
-        )}
-        {/* By meaning, the groups keep their own order. */}
-        {!scoped && <SortPill sort={sort} order={order} onPick={pickSort} t={t} />}
-      </div>
-      <button
-        className="search-filter"
-        aria-pressed={common}
-        data-on={common || undefined}
-        onClick={toggleCommon}
-        title={t('commonOnlyTitle')}
-      >
-        {t('commonOnly')}
-      </button>
+      <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
+      <CommonFilter on={common} onToggle={toggleCommon} t={t} />
     </div>
   )
-
-  // One kanji by meaning: every word written with it, by the meaning it has in each.
-  if (scoped)
-    return (
-      <WordsWith
-        char={scoped}
-        common={common}
-        onKanji={onKanji}
-        tools={tools}
-        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} />}
-      />
-    )
+  // The kanji open beside the list, if it is one this search found.
+  const openKanji = open?.kanji && result?.kanji.some((k) => k.char === open.kanji) ? open.kanji : null
 
   const reading = result?.interpretation?.reading
   const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
@@ -550,6 +534,11 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
             <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open?.kanji === k.char} />
           ))}
         </div>
+      )}
+      {openKanji && onWordsWith && (
+        <button className="clear words-with-open" onClick={() => onWordsWith(openKanji)}>
+          {t('allWithKanji', { char: openKanji })} →
+        </button>
       )}
       {result && result.words.length > 0 && (
         <ol className="words">

@@ -1,5 +1,5 @@
 /**
- * A search for one kanji, by meaning: every word written with it, divided by the
+ * Every word written with one kanji, divided by the
  * meaning the kanji carries in each word -- 生活 and 生まれる under "life",
  * 生野菜 under "raw", 生憎 under "brings no meaning" -- once reviewers have
  * accepted the kanji's meaning groups and placed the word. The kanji page
@@ -59,7 +59,7 @@ export function WordsWith({
   onKanji: (c: string) => void
   /** The search's own row, so the words look as they do in any other search. */
   row: (w: Word, extra?: ReactNode) => ReactNode
-  /** The sort and common-only controls, as on any search. */
+  /** The common-only control, as on a search. */
   tools: ReactNode
 }) {
   const lang = useLang()

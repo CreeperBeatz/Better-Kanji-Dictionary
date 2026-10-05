@@ -11,7 +11,6 @@ import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency, ValencyMark } from '../search/Valency'
-import { setByMeaning } from '../search/view'
 
 const S = strings(
   {
@@ -85,8 +84,8 @@ interface Props {
   onComponents?: () => void
   /** Opens sign-in, for someone signed out who wants to suggest a change. */
   onSignIn?: () => void
-  /** Runs a search, as if typed: "see all words" searches 生, by meaning. */
-  onSearch?: (q: string) => void
+  /** Opens every word with the kanji, by meaning: "see all words". */
+  onWordsWith?: (char: string) => void
 }
 
 // The page shows only the most common few; the rest are a search away, by meaning.
@@ -135,7 +134,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onSearch }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -266,11 +265,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
               </li>
             ))}
           </ul>
-          {onSearch && (
-            <button className="clear vocab-all" onClick={() => {
-                setByMeaning(true)
-                onSearch(data.focus.char)
-              }}>
+          {onWordsWith && (
+            <button className="clear vocab-all" onClick={() => onWordsWith(data.focus.char)}>
               {t('allWords', { char: data.focus.char })}
             </button>
           )}

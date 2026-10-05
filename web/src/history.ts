@@ -8,7 +8,6 @@
 
 import { useSyncExternalStore } from 'react'
 import type { Word } from './api'
-import { scopedKanji } from './search/view'
 
 const KEY = 'betterrtk:history'
 // The Recent tab's list, from before this: characters only, oldest first.
@@ -35,13 +34,7 @@ const same = (a: Visit, b: Visit) =>
 function load(): Visit[] {
   try {
     const got = JSON.parse(localStorage.getItem(KEY) ?? 'null') as { items?: unknown } | null
-    if (got && Array.isArray(got.items)) {
-      // *生*, from before the by-meaning switch, is listed as 生.
-      const seen = new Set<string>()
-      return (got.items as Visit[])
-        .map((v) => (v.kind === 'search' && scopedKanji(v.q) ? { ...v, q: scopedKanji(v.q)! } : v))
-        .filter((v) => v.kind !== 'search' || (!seen.has(v.q) && !!seen.add(v.q)))
-    }
+    if (got && Array.isArray(got.items)) return got.items as Visit[]
     const old = JSON.parse(localStorage.getItem(OLD_KEY) ?? 'null') as { recent?: unknown } | null
     if (old && Array.isArray(old.recent)) {
       localStorage.removeItem(OLD_KEY)

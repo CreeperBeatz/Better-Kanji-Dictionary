@@ -4,8 +4,7 @@ import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } fro
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
-import { LevelPage, SearchPage } from './search/Results'
-import { unscope } from './search/view'
+import { LevelPage, SearchPage, WordsWithPage } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
@@ -47,6 +46,7 @@ const S = strings(
     back: 'Back (Backspace)',
     backTo: 'back to {page}',
     theWord: 'the word',
+    wordsWith: 'words with {char}',
     search: 'search',
     thisWord: 'this word',
     hideLegend: 'Hide the legend',
@@ -70,6 +70,7 @@ const S = strings(
     back: 'Назад (Backspace)',
     backTo: 'назад към {page}',
     theWord: 'думата',
+    wordsWith: 'думи с {char}',
     search: 'търсенето',
     thisWord: 'тази дума',
     hideLegend: 'Скрийте легендата',
@@ -361,6 +362,7 @@ function nameOf(p: Page, t: T) {
   if (p.kind === 'kanji') return <span className="back-glyph">{p.char}</span>
   if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? t('theWord')}</span>
   if (p.kind === 'level') return <>N{p.level}</>
+  if (p.kind === 'words') return <>{t('wordsWith', { char: p.char })}</>
   if (!p.q) return <>{t('search')}</>
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
@@ -381,6 +383,7 @@ function titleOf(p: Page): string {
   if (p.kind === 'kanji') return `${p.char} · ${TITLE}`
   if (p.kind === 'word' && p.word) return `${p.word.headword} · ${TITLE}`
   if (p.kind === 'level') return `N${p.level} · ${TITLE}`
+  if (p.kind === 'words') return `${p.char} · ${TITLE}`
   if (p.kind === 'search' && p.q) return `${p.q} · ${TITLE}`
   return TITLE
 }
@@ -785,6 +788,20 @@ export function App() {
     },
   )
 
+  // Every word with a kanji, by meaning: a page on top, from the kanji's page or
+  // from the search with the kanji open beside it, or marked in it on a phone.
+  const openWords = useStable((char: string) => {
+    setHovered(null)
+    leaveSearchTab()
+    keepSearch()
+    animateNav('forward', () => {
+      setSearchOver(null)
+      leaveStage('replace')
+      toDictionary()
+      push({ kind: 'words', char })
+    })
+  })
+
   // A word, like a character, goes to its graph -- of its kanji -- when it has one.
   const openWord = useStable(
     (w: Word) => {
@@ -887,9 +904,7 @@ export function App() {
 
   // Typing is a search: the first key starts a new stack, the rest change it.
   const type = useCallback(
-    (typed: string) => {
-      // *生*, the old way to see 生 by meaning, becomes 生 with the switch on.
-      const text = unscope(typed)
+    (text: string) => {
       setQ(text)
       toDictionary()
       const page: Page = { kind: 'search', q: text }
@@ -1032,6 +1047,8 @@ export function App() {
         )
       case 'level':
         return <LevelPage level={p.level} onKanji={openKanji} />
+      case 'words':
+        return <WordsWithPage key={p.char} char={p.char} onKanji={openKanji} onWord={openWord} />
       case 'word':
         return (
           <WordPanel
@@ -1054,7 +1071,7 @@ export function App() {
             onKanji={openKanji}
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
             onSignIn={signIn}
-            onSearch={type}
+            onWordsWith={openWords}
           />
         ) : null
       }
@@ -1590,6 +1607,7 @@ export function App() {
                 onAsk={setAsked}
                 onMap={browseMap}
                 open={openIn(picked)}
+                onWordsWith={openWords}
               />
             </div>
           </aside>
@@ -1645,6 +1663,7 @@ export function App() {
                   onAsk={setAsked}
                   onMap={browseMap}
                   open={openIn(top)}
+                  onWordsWith={openWords}
                 />
               )}
               {tab === 'dictionary' &&
