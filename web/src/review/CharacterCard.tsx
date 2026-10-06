@@ -21,7 +21,7 @@ import { DictLinks } from './DictLinks'
 import { KanjiFacts, PartMeaningView, PartTiles, strokesOk, ValueEditor } from './editors'
 import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from './Evidence'
 import { SourceChips, SourceNotes } from '../detail/PartsSource'
-import { useLinkSentence } from './KindsInfo'
+import { KindsInfoButton, KindsTable, useKindsInfo, useLinkSentence } from './KindsInfo'
 import { ReportButton } from './ReportButton'
 import { same } from './board'
 import { clearDraft, readDraft, writeDraft } from './drafts'
@@ -220,6 +220,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const [impact, setImpact] = useState<Impact | null>(null)
   const [busy, setBusy] = useState(false)
   const [notes, setNotes] = useState(false)
+  // The (i) beside the forms and the meaning questions: what each choice means and changes.
+  const [formsInfo, toggleFormsInfo] = useKindsInfo()
+  const [partInfo, togglePartInfo] = useKindsInfo()
   const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
@@ -510,8 +513,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <section className="card-step">
             <h4>
               {num()}
-              {t('q_forms', { char })}
+              {t('q_forms', { char })} <KindsInfoButton open={formsInfo} onToggle={toggleFormsInfo} />
             </h4>
+            {formsInfo && <KindsTable of="form" />}
             <p className="hint">{t('q_forms_hint')}</p>
             {formItems.map((f) => {
               const w = work.forms[f.id]
@@ -557,8 +561,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <section className="card-step">
             <h4>
               {num()}
-              {t('q_meaning', { char })}
+              {t('q_meaning', { char })} <KindsInfoButton open={partInfo} onToggle={togglePartInfo} />
             </h4>
+            {partInfo && <KindsTable of="part" />}
             <p className="hint">{t('q_meaning_hint')}</p>
             <div className="card-options" role="radiogroup">
               <label className="card-option" data-on={work.meaning.pick === 'proposed' || undefined}>
