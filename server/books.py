@@ -11,6 +11,7 @@ server without the folder (the Pi) just has no pictures.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -30,3 +31,30 @@ def page_file(book: str, page: int) -> Path | None:
         return None
     f = books_dir() / book / "pages" / f"p{page:04d}.png"
     return f if f.is_file() else None
+
+
+_entries: tuple[float, dict[int, dict], dict[str, dict]] | None = None
+
+
+def kanji_entry(no: int | None = None, char: str | None = None) -> dict | None:
+    """One entry of the kanji book, as transcribed: a kanji by its number, a
+    grapheme (which has none) by its character. Read again when the file changes,
+    so a corrected transcription shows without a restart."""
+    global _entries
+    f = books_dir() / "kanji" / "kanji.jsonl"
+    if not f.is_file():
+        return None
+    stamp = f.stat().st_mtime
+    if _entries is None or _entries[0] != stamp:
+        by_no, by_char = {}, {}
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            e = json.loads(line)
+            if e.get("type") == "kanji" and isinstance(e.get("no"), int):
+                by_no[e["no"]] = e
+            elif e.get("type") == "grapheme" and e.get("char"):
+                by_char.setdefault(e["char"], e)
+        _entries = (stamp, by_no, by_char)
+    _, by_no, by_char = _entries
+    return by_no.get(no) if no is not None else by_char.get(char or "")

@@ -7654,11 +7654,10 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin: 6px 0;
 }
 
-/* What Dani's print dictionaries say on a card (review/BookEvidence.tsx), the page's scan under it. */
+/* What Dani's print dictionaries say on a card (review/BookEvidence.tsx): a kanji
+   book entry drawn as the typeset book draws it, on paper; the scan in a popup. */
 .book-src {
-  margin: 6px 0;
-  padding: 6px 10px;
-  border-left: 2px solid var(--rule);
+  margin: 8px 0;
 }
 
 .book-src p {
@@ -7670,30 +7669,30 @@ html[data-nav]::view-transition-old(tabs):only-child {
   color: var(--muted);
 }
 
+.book-from {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+}
+
 .book-name {
   font-style: italic;
 }
 
 .book-page {
-  margin-left: 6px;
+  margin-left: 8px;
   font-size: 12px;
 }
 
-.book-page[data-on] {
-  color: var(--paper);
-  text-decoration: underline;
+.book-ja,
+.book-term .book-ja {
+  font-family: var(--mincho);
+  font-size: 17px;
 }
 
-.book-part,
 .book-term {
   display: inline-block;
   margin-right: 12px;
-}
-
-.book-part-char,
-.book-ja {
-  font-family: var(--mincho);
-  font-size: 18px;
 }
 
 .book-has {
@@ -7710,24 +7709,162 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 12px;
 }
 
-/* The page fits the column; a click shows it at full size, to scroll around in. */
+/* The entry: the book's frame, black on paper. */
+.book-entry {
+  max-width: 640px;
+  margin: 4px 0 6px;
+  padding: 0 8px 4px;
+  border: 1px solid #111;
+  background: #f7f4ec;
+  color: #111;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.be-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid #111;
+}
+
+.book-entry[data-grapheme] .be-kw::before {
+  content: '★ ';
+}
+
+.be-kw {
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+.be-alt {
+  font-style: italic;
+  font-size: 12px;
+}
+
+.be-parts {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.be-pc {
+  font-family: 'Klee One', 'UD Digi Kyokasho N-R', var(--mincho);
+  font-size: 15px;
+}
+
+.be-lvl {
+  font-size: 14px;
+}
+
+.be-cols {
+  display: flex;
+  gap: 10px;
+}
+
+.be-glyph {
+  flex: 0 0 64px;
+  padding-top: 4px;
+  font-family: 'Klee One', 'UD Digi Kyokasho N-R', var(--mincho);
+  font-size: 56px;
+  line-height: 1;
+  text-align: center;
+}
+
+.be-desc {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.be-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.be-info {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+  border-bottom: 1px dotted #555;
+}
+
+.be-meta {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.be-words {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  padding-top: 3px;
+}
+
+.be-words[data-one] {
+  grid-template-columns: 1fr;
+}
+
+.be-w {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.be-ja {
+  font-family: var(--mincho);
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.be-jl {
+  font-size: 10px;
+}
+
+.be-note {
+  margin-top: 4px;
+  font-size: 12px;
+  text-align: justify;
+}
+
+@media (max-width: 640px) {
+  .be-words {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The printed page, over everything: fits the screen; a click shows it at full size to scroll. */
+.book-popup-panel {
+  width: min(96vw, 900px);
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.book-popup-title {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .book-scan {
-  margin-top: 6px;
-  max-height: 70vh;
   overflow: auto;
-  border: 1px solid var(--rule);
   background: #fff;
+  border: 1px solid var(--rule);
 }
 
 .book-scan img {
   display: block;
-  width: 100%;
+  max-width: 100%;
+  max-height: 84vh;
+  margin: 0 auto;
   cursor: zoom-in;
 }
 
 .book-scan[data-zoom] img {
-  width: auto;
   max-width: none;
+  max-height: none;
   cursor: zoom-out;
 }
 

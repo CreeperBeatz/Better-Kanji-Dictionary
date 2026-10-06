@@ -79,6 +79,15 @@ def _queued(me: dict, type_: str, subject: str, value, reason, evidence: dict | 
     return {"applied": False, "item": {"id": item["id"], "status": item["status"]}}
 
 
+@router.get("/book-entry")
+def book_entry(no: int | None = Query(None), char: str | None = Query(None, max_length=2), _: dict = Depends(reviewer)) -> dict:
+    """An entry of the kanji book as transcribed (server/books.py), for drawing it on a card: reviewers and the admin only."""
+    e = books.kanji_entry(no, char)
+    if e is None:
+        raise AppError(404, "book_entry_missing", "that entry of the kanji book is not on this server")
+    return e
+
+
 @router.get("/book/{book}/{page}")
 def book_page(book: str, page: int, _: dict = Depends(reviewer)) -> FileResponse:
     """A scanned page of one of the print dictionaries a card cites (server/books.py): reviewers and the admin only."""

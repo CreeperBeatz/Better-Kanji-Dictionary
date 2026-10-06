@@ -1,33 +1,45 @@
 /**
- * What Dani's two print dictionaries say about a card (pipeline/book_sources.py),
- * with the printed page a click away. The books were transcribed by an AI, so
- * anything taken from them is checked against the page's scan, which only
- * reviewers and the admin can open (server/books.py).
+ * What Dani's two print dictionaries say about a card (pipeline/book_sources.py).
+ * A kanji book entry is drawn the way the typeset books draw it (the PDFs in
+ * Documents/JapaneseDictionaries/out), from the transcription the server
+ * keeps (server/books.py). The printed page's scan is the last resort, for
+ * when the drawn entry looks wrong: a button opens it in a popup, and only
+ * reviewers and the admin can fetch it.
  */
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, type BookGloss, type BookKeyword, type BookOld, type BookPartView, type BookRef, type BookSplit } from '../api'
+import {
+  api,
+  type BookGloss,
+  type BookKeyword,
+  type BookOld,
+  type BookPartView,
+  type BookRef,
+  type BookSplit,
+  type KanjiBookEntry,
+} from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
+import { useKey } from '../keys'
+import { Overlay } from '../Overlay'
 
 const S = strings(
   {
     kanji: 'Цалта’s kanji book',
     'bg-ja': 'Иванов’s Bulgarian–Japanese dictionary',
-    page: 'p. {n}',
-    pageHint: 'The printed page: check what was read from it',
-    loading: 'loading the page…',
+    fromBook: 'From the book',
+    page: 'printed page {n}',
+    pageHint: 'The scan of the printed page: for when what is drawn here looks wrong',
+    pageTitle: '{book}, page {n}',
+    loading: 'loading…',
     zoom: 'Click to zoom in or out',
     unsure: 'The transcription may be wrong here',
     shared: 'This spelling fits more than one word: the book may mean another of them.',
-    splits: 'Splits it as',
+    ourParts: 'In our parts',
     sameNow: 'the same as now',
     sameProposed: 'the same as the proposal',
     use: 'use this split',
-    noChar: 'no character for this part',
     oldForm: 'Gives {old} as its old form',
-    names: 'Bulgarian names',
-    itsEntry: 'Its own entry',
-    namedIn: 'Named in',
+    names: 'Its Bulgarian names in the book',
     keyword: 'keyword',
     alt: 'second meaning',
     inList: 'already in the list',
@@ -38,21 +50,20 @@ const S = strings(
   {
     kanji: 'Канджи речникът на Цалта',
     'bg-ja': 'Българско-японският речник на Иванов',
-    page: 'с. {n}',
-    pageHint: 'Отпечатаната страница: сверете прочетеното от нея',
-    loading: 'страницата се зарежда…',
+    fromBook: 'От книгата',
+    page: 'отпечатана с. {n}',
+    pageHint: 'Сканираната страница: за когато нарисуваното тук изглежда грешно',
+    pageTitle: '{book}, страница {n}',
+    loading: 'зарежда се…',
     zoom: 'Щракнете, за да увеличите или намалите',
     unsure: 'Преписът тук може да е грешен',
     shared: 'Този запис пасва на повече от една дума: книгата може да има предвид друга от тях.',
-    splits: 'Разделя го на',
+    ourParts: 'В нашите части',
     sameNow: 'същото като сега',
     sameProposed: 'същото като предложението',
     use: 'вземете това разделяне',
-    noChar: 'няма знак за тази част',
     oldForm: 'Дава {old} като старата му форма',
-    names: 'Български имена',
-    itsEntry: 'Собствената ѝ статия',
-    namedIn: 'Наречена така в',
+    names: 'Българските ѝ имена в книгата',
     keyword: 'ключова дума',
     alt: 'второ значение',
     inList: 'вече е в списъка',
@@ -62,84 +73,190 @@ const S = strings(
   },
 )
 
-// A page's scan, fetched once a session: flipping between cards of one page reuses it.
-const scans = new Map<string, Promise<string>>()
-
-function scan(book: BookRef['book'], page: number): Promise<string> {
-  const key = `${book}/${page}`
-  let p = scans.get(key)
+/** Fetched once a session: cards of one page or entry reuse it. */
+function once<T>(cache: Map<string, Promise<T>>, key: string, get: () => Promise<T>): Promise<T> {
+  let p = cache.get(key)
   if (!p) {
-    p = api.reviewBookPage(book, page).then((blob) => URL.createObjectURL(blob))
-    p.catch(() => scans.delete(key)) // a failure is asked again next time
-    scans.set(key, p)
+    p = get()
+    p.catch(() => cache.delete(key)) // a failure is asked again next time
+    cache.set(key, p)
   }
   return p
 }
 
-function PageScan({ book, page }: { book: BookRef['book']; page: number }) {
+const scans = new Map<string, Promise<string>>()
+const entries = new Map<string, Promise<KanjiBookEntry>>()
+
+/** A promise's value once it is in, or the error's text. */
+function useFetched<T>(key: string, get: () => Promise<T>, cache: Map<string, Promise<T>>): { value: T | null; problem: string | null } {
   const lang = useLang()
-  const t = S(lang)
-  const [url, setUrl] = useState<string | null>(null)
-  const [problem, setProblem] = useState<string | null>(null)
-  const [zoom, setZoom] = useState(false)
+  const [state, setState] = useState<{ key: string; value: T | null; problem: string | null }>({ key, value: null, problem: null })
   useEffect(() => {
     let live = true
-    scan(book, page).then(
-      (u) => live && setUrl(u),
-      (e) => live && setProblem(errorText(e, lang)),
+    once(cache, key, get).then(
+      (value) => live && setState({ key, value, problem: null }),
+      (e) => live && setState({ key, value: null, problem: errorText(e, lang) }),
     )
     return () => {
       live = false
     }
-  }, [book, page, lang])
-  if (problem) return <p className="hint">{problem}</p>
-  if (!url) return <p className="hint">{t('loading')}</p>
+    // `get` is the same request for the same key
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, lang])
+  return state.key === key ? state : { value: null, problem: null }
+}
+
+/** The printed page in a popup over the review screen; it has the keyboard while it is open. */
+function PagePopup({ book, page, onClose }: { book: BookRef['book']; page: number; onClose: () => void }) {
+  const t = S(useLang())
+  const [zoom, setZoom] = useState(false)
+  const { value: url, problem } = useFetched(`${book}/${page}`, () => api.reviewBookPage(book, page).then((b) => URL.createObjectURL(b)), scans)
+  // Heard before the review screen's own keys: Escape closes the page, not review mode, and
+  // a card's shortcuts (a accepts) do nothing behind it.
+  useKey(
+    (e) => {
+      e.stopPropagation()
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    },
+    { capture: true },
+  )
+  const title = t('pageTitle', { book: t(book), n: page })
   return (
-    <div className="book-scan" data-zoom={zoom || undefined}>
-      <img src={url} alt={t('page', { n: page })} title={t('zoom')} onClick={() => setZoom((z) => !z)} />
+    <Overlay className="book-popup" panel="book-popup-panel" label={title} onClose={onClose} escape={false} closeTitle="Esc">
+      <p className="book-popup-title">{title}</p>
+      {problem ? (
+        <p className="hint">{problem}</p>
+      ) : !url ? (
+        <p className="hint">{t('loading')}</p>
+      ) : (
+        <div className="book-scan" data-zoom={zoom || undefined}>
+          <img src={url} alt={title} title={t('zoom')} onClick={() => setZoom((z) => !z)} />
+        </div>
+      )}
+    </Overlay>
+  )
+}
+
+/** *x* in the book's notes is its italics. */
+function noteText(note: string): ReactNode[] {
+  return note.split(/\*(.+?)\*/g).map((s, i) => (i % 2 ? <i key={i}>{s}</i> : s))
+}
+
+/**
+ * A kanji book entry as the book draws it: number, keyword, parts, level; the
+ * kanji, its readings, old form, frequency, strokes and radical; its words;
+ * its note. `words`: all of them with the note, none (the head only), or the
+ * one a word card is about.
+ */
+function KanjiEntry({ src, words }: { src: BookRef; words: 'all' | 'none' | string }) {
+  const key = src.no != null ? `no:${src.no}` : `char:${src.char ?? ''}`
+  const { value: e, problem } = useFetched(key, () => api.reviewBookEntry(src.no ?? null, src.char ?? null), entries)
+  const t = S(useLang())
+  if (problem) return <p className="hint">{problem}</p>
+  if (!e) return <p className="hint">{t('loading')}</p>
+  const glyph = e.kanji ?? e.char
+  const meta = [
+    e.old_form && `舊${e.old_form}`,
+    e.freq && `F${e.freq}`,
+    e.strokes && `画${e.strokes}`,
+    (e.radical?.char || e.radical?.no) && `${e.radical?.char ?? ''}${e.radical?.no ?? ''}`,
+  ].filter(Boolean)
+  const shown = words === 'all' ? (e.words ?? []) : words === 'none' ? [] : (e.words ?? []).filter((w) => w.ja === words)
+  return (
+    <div className="book-entry" lang="bg" data-grapheme={e.type === 'grapheme' || undefined}>
+      <div className="be-head">
+        {e.no != null && <span className="be-no">{e.no}.</span>}
+        <span className="be-kw">{e.keyword ?? e.name}</span>
+        {e.alt_meaning && <span className="be-alt">{e.alt_meaning}</span>}
+        <span className="be-parts">
+          {e.parts.map((p, i) => (
+            <span key={i}>
+              {i > 0 && ' + '}
+              {p.char ? (
+                <span className="be-pc" lang="ja">
+                  {p.char}
+                </span>
+              ) : (
+                <i>[{p.glyph_desc ?? '?'}]</i>
+              )}{' '}
+              {p.name}
+            </span>
+          ))}
+        </span>
+        {e.level && <span className="be-lvl">[{e.level}]</span>}
+      </div>
+      {words !== 'none' && (
+        <div className="be-cols">
+          <div className="be-glyph" lang="ja">
+            {glyph ?? <i className="be-desc">{e.glyph_desc}</i>}
+          </div>
+          <div className="be-main">
+            {e.type === 'kanji' && (
+              <div className="be-info">
+                <span>{[...(e.kun ?? []), ...(e.on ?? [])].join('  ')}</span>
+                <span className="be-meta" lang="ja">
+                  {meta.join(' ')}
+                </span>
+              </div>
+            )}
+            {shown.length > 0 && (
+              <div className="be-words" data-one={words !== 'all' || undefined}>
+                {shown.map((w, i) => (
+                  <div key={i} className="be-w">
+                    <span className="be-ja" lang="ja">
+                      {w.ja}
+                    </span>
+                    <span>
+                      <b>
+                        {w.romaji}
+                        {w.star && '★'}
+                      </b>{' '}
+                      {w.bg}
+                      {w.jlpt && <span className="be-jl"> {w.jlpt}</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {words === 'all' && e.type === 'grapheme' && e.note && <div className="be-note">{noteText(e.note)}</div>}
+          </div>
+        </div>
+      )}
+      {words === 'all' && e.type === 'kanji' && e.note && <div className="be-note">{noteText(e.note)}</div>}
     </div>
   )
 }
 
 /**
- * Which book and entry, its pages (each opens its scan), what the agent was
- * unsure of, and the book's view. `open`: its first page is shown from the
- * start -- the scan is what the transcription is checked against.
+ * Which book and entry, the entry itself (the kanji book's, drawn), the card's
+ * use of it, what the agent was unsure of, and the printed page in a popup.
+ * `entry`: how much of a kanji book entry to draw (KanjiEntry's `words`).
  */
-export function BookSource(props: { src: BookRef; open?: boolean; children?: ReactNode }) {
-  // A new entry starts afresh: the page open on the last card is not this one's.
-  const { book, no, pages } = props.src
-  return <Source key={`${book}/${no ?? ''}/${pages.join(',')}`} {...props} />
-}
-
-function Source({ src, open: first = false, children }: { src: BookRef; open?: boolean; children?: ReactNode }) {
+export function BookSource({ src, entry = 'all', children }: { src: BookRef; entry?: 'all' | 'none' | string; children?: ReactNode }) {
   const t = S(useLang())
-  const [open, setOpen] = useState<number | null>(first ? (src.pages[0] ?? null) : null)
+  const [page, setPage] = useState<number | null>(null)
   return (
     <div className="book-src">
       <p className="book-head">
-        <span className="book-name">{t(src.book)}</span>
+        <span className="book-from">{t('fromBook')}:</span> <span className="book-name">{t(src.book)}</span>
         {src.no != null && <> · №{src.no}</>}
         {src.pages.map((p) => (
-          <button
-            key={p}
-            type="button"
-            className="clear book-page"
-            data-on={open === p || undefined}
-            title={t('pageHint')}
-            onClick={() => setOpen((o) => (o === p ? null : p))}
-          >
-            {t('page', { n: p })}
+          <button key={p} type="button" className="clear book-page" title={t('pageHint')} onClick={() => setPage(p)}>
+            {t('page', { n: p })} ↗
           </button>
         ))}
       </p>
+      {src.book === 'kanji' && (src.no != null || src.char) && <KanjiEntry src={src} words={entry} />}
       {children}
       {src.unsure && src.unsure.length > 0 && (
         <p className="queue-warn book-unsure">
           {t('unsure')}: {src.unsure.join('; ')}
         </p>
       )}
-      {open !== null && <PageScan key={open} book={src.book} page={open} />}
+      {page !== null && <PagePopup book={src.book} page={page} onClose={() => setPage(null)} />}
     </div>
   )
 }
@@ -147,7 +264,7 @@ function Source({ src, open: first = false, children }: { src: BookRef; open?: b
 const sameSet = (a: string[] | null | undefined, b: string[] | null | undefined) =>
   !!a && !!b && a.length === b.length && a.every((c) => b.includes(c))
 
-/** A decomposition card: how the kanji book splits the kanji, and a way to take it as the answer. */
+/** A decomposition card: the kanji book's entry, its split in our parts, and a way to take it as the answer. */
 export function BookSplitView({
   view,
   current,
@@ -162,46 +279,43 @@ export function BookSplitView({
   const t = S(useLang())
   const split = view.split
   return (
-    <BookSource src={view} open>
-      <p className="book-parts">
-        <span className="hint">{t('splits')} </span>
-        {view.parts.map((p, i) => (
-          <span key={i} className="book-part">
-            <span lang="ja" className="book-part-char">
-              {p.char ?? '?'}
-            </span>{' '}
-            <span lang="bg">{p.name}</span>
-            {!p.char && <span className="hint"> ({p.glyph_desc || t('noChar')})</span>}
+    <BookSource src={view}>
+      {split && (
+        <p className="book-use">
+          <span className="hint">{t('ourParts')}: </span>
+          <span lang="ja" className="book-ja">
+            {split.join(' ')}
           </span>
-        ))}
-        {sameSet(split, current) ? (
-          <span className="hint"> · {t('sameNow')}</span>
-        ) : sameSet(split, proposed) ? (
-          <span className="hint"> · {t('sameProposed')}</span>
-        ) : (
-          split &&
-          onUse && (
-            <button type="button" className="clear" onClick={() => onUse(split)}>
-              {t('use')}
-            </button>
-          )
-        )}
+          {sameSet(split, current) ? (
+            <span className="hint"> · {t('sameNow')}</span>
+          ) : sameSet(split, proposed) ? (
+            <span className="hint"> · {t('sameProposed')}</span>
+          ) : (
+            onUse && (
+              <button type="button" className="clear" onClick={() => onUse(split)}>
+                {t('use')}
+              </button>
+            )
+          )}
+        </p>
+      )}
+    </BookSource>
+  )
+}
+
+/** A form link card: the kanji book's entry, with the old form it gives. */
+export function BookOldView({ view }: { view: BookOld }) {
+  const t = S(useLang())
+  return (
+    <BookSource src={view}>
+      <p className="book-use" lang="ja">
+        {t('oldForm', { old: view.old })}
       </p>
     </BookSource>
   )
 }
 
-/** A form link card: the old form the kanji book gives. */
-export function BookOldView({ view }: { view: BookOld }) {
-  const t = S(useLang())
-  return (
-    <BookSource src={view} open>
-      <p lang="ja">{t('oldForm', { old: view.old })}</p>
-    </BookSource>
-  )
-}
-
-/** A part meaning card: what the kanji book calls the part, in its own entry and in the kanji it names it in. */
+/** A part meaning card: the part's own entry in the kanji book, and the kanji the book names it in. */
 export function BookPartPanel({ view }: { view: BookPartView }) {
   const t = S(useLang())
   return (
@@ -212,22 +326,9 @@ export function BookPartPanel({ view }: { view: BookPartView }) {
           <span lang="bg">{view.names.map(([n, k]) => (k > 1 ? `${n} ×${k}` : n)).join(', ')}</span>
         </p>
       )}
-      {view.entry && (
-        <BookSource src={view.entry} open>
-          <p>
-            <span className="hint">{t('itsEntry')}: </span>
-            {view.entry.name && <b lang="bg">{view.entry.name}</b>}
-            {view.entry.note && <span lang="bg"> — {view.entry.note}</span>}
-          </p>
-        </BookSource>
-      )}
+      {view.entry && <BookSource src={view.entry} />}
       {view.seen.map((s) => (
-        <BookSource key={`${s.no}`} src={s} open={!view.entry && s === view.seen[0]}>
-          <p>
-            <span className="hint">{t('namedIn')} </span>
-            <span lang="ja">{s.char}</span>: <span lang="bg">{s.name}</span>
-          </p>
-        </BookSource>
+        <BookSource key={`${s.no}`} src={s} entry="none" />
       ))}
     </div>
   )
@@ -274,14 +375,14 @@ function Term({ term, has, targets }: { term: string; has: boolean; targets: { l
   )
 }
 
-/** A kanji's Bulgarian card: the book's keyword and second meaning, each added to the meanings with a click. */
+/** A kanji's Bulgarian card: the entry, then its keyword and second meaning to add with a click. */
 export function BookKeywordPanel({ view, value, onChange }: { view: BookKeyword; value: string[]; onChange: (v: string[]) => void }) {
   const t = S(useLang())
   const have = new Set(value.map(norm))
   const room = value.length < 12
   const add = (m: string) => onChange([...value.filter((v) => v.trim()), m])
   const row = (label: string, text: string) => (
-    <p>
+    <p className="book-use">
       <span className="hint">{label}: </span>
       {terms(text).map((m) => (
         <Term key={m} term={m} has={have.has(norm(m))} targets={room ? [{ label: t('add'), add: () => add(m) }] : []} />
@@ -289,14 +390,18 @@ export function BookKeywordPanel({ view, value, onChange }: { view: BookKeyword;
     </p>
   )
   return (
-    <BookSource src={view} open>
+    <BookSource src={view}>
       {row(t('keyword'), view.keyword)}
       {view.alt && row(t('alt'), view.alt)}
     </BookSource>
   )
 }
 
-/** A word's Bulgarian card: every gloss either book gives the word, each term added to a sense with a click. */
+/**
+ * A word's Bulgarian card: each book's gloss of it -- the kanji book's as the
+ * word's line in its kanji's entry, the dictionary's as its printed line -- and
+ * each term to add to a sense with a click.
+ */
 export function BookGlossPanel({ views, value, onChange }: { views: BookGloss[]; value: string[]; onChange: (v: string[]) => void }) {
   const t = S(useLang())
   const has = (term: string) => value.some((g) => g.split(';').some((x) => norm(x) === norm(term)))
@@ -305,12 +410,17 @@ export function BookGlossPanel({ views, value, onChange }: { views: BookGloss[];
   return (
     <div className="book-glosses">
       {views.map((v, k) => (
-        <BookSource key={k} src={v} open={k === 0}>
-          <p>
-            <span lang="ja" className="book-ja">
-              {v.ja}
-            </span>{' '}
-            {v.romaji && <span className="hint">{v.romaji} </span>}
+        <BookSource key={k} src={v} entry={v.ja}>
+          {v.book === 'bg-ja' && (
+            <p className="book-line">
+              <span lang="bg">{v.bg}</span> <i>{v.romaji}</i>{' '}
+              <span lang="ja" className="book-ja">
+                {v.ja}
+              </span>
+              {v.notes && v.notes.length > 0 && <span lang="bg"> ({v.notes.join('; ')})</span>}
+            </p>
+          )}
+          <p className="book-use">
             {terms(v.bg).map((term) => (
               <Term
                 key={term}
@@ -323,7 +433,6 @@ export function BookGlossPanel({ views, value, onChange }: { views: BookGloss[];
                 }
               />
             ))}
-            {v.notes && v.notes.length > 0 && <span className="hint" lang="bg"> ({v.notes.join('; ')})</span>}
           </p>
           {v.shared && <p className="hint">{t('shared')}</p>}
         </BookSource>

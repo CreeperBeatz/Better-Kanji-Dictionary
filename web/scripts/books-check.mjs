@@ -1,7 +1,7 @@
 // Usage: SANDBOX=<sandbox dir> node scripts/books-check.mjs [base]  (against tests/sandbox.py --dir <sandbox dir>)
 // After tests/load_sandbox.py with the print dictionaries beside the repo
 // (pipeline/book_sources.py): each kind of card shows what the books say, a
-// card opens its page's scan by itself, "use this split" fills the answer, and a book's
+// kanji book entry is drawn and its page opens in a popup, "use this split" fills the answer, and a book's
 // term goes into a Bulgarian card with a click.
 import { DatabaseSync } from 'node:sqlite'
 import { chromium } from 'playwright'
@@ -26,20 +26,28 @@ async function open(slug, item) {
   await wait(1200)
 }
 
-/** The card opens its entry's first page by itself. */
+/** The kanji book entry is drawn; its page opens in a popup, and Escape closes only the popup. */
 async function pageOpens(shot) {
-  await admin.waitForSelector('.book-scan img', { timeout: 10000 })
-  await wait(300)
-  const w = await admin.locator('.book-scan img').first().evaluate((img) => img.naturalWidth)
-  console.log('  scan loaded, natural width:', w)
+  await admin.waitForSelector('.book-entry, .book-line', { timeout: 10000 })
+  console.log('  drawn entry:', (await admin.locator('.book-entry').first().textContent().catch(() => '(none)')).slice(0, 90))
   await admin.screenshot({ path: `${SHOTS}/${shot}.png`, fullPage: true })
+  await admin.locator('.book-page').first().click()
+  await admin.waitForSelector('.book-popup .book-scan img', { timeout: 10000 })
+  await wait(300)
+  const w = await admin.locator('.book-popup .book-scan img').evaluate((img) => img.naturalWidth)
+  await admin.screenshot({ path: `${SHOTS}/${shot}-page.png` })
+  await admin.keyboard.press('a') // the card's accept key: the popup has the keyboard
+  await admin.keyboard.press('Escape')
+  await wait(300)
+  console.log('  page popup: scan width', w, '| closed by Escape:', (await admin.locator('.book-popup').count()) === 0,
+    '| review screen still open:', (await admin.locator('.workbench').count()) === 1)
 }
 
 console.log('a decomposition the book proposes')
 const fresh = await find('decomposition', (i) => i.source === 'tsalta-diff')
 await open('parts', fresh)
-console.log('  book panel:', (await admin.locator('.book-src').first().textContent()).slice(0, 120))
 await pageOpens('books-1-decomp-new')
+console.log('  still open after a and Escape:', (await call(admin, `/api/review/items/${fresh.id}`)).status)
 
 console.log('an existing decomposition item with the book beside it')
 const beside = await find('decomposition', (i) => i.source !== 'tsalta-diff' && i.evidence?.book?.split && i.proposed &&

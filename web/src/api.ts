@@ -514,6 +514,30 @@ export interface BookRef {
   unsure?: string[]
 }
 
+/** An entry of the kanji book as transcribed (server/books.py): a numbered kanji, or a grapheme (a part with a name). */
+export interface KanjiBookEntry {
+  type: 'kanji' | 'grapheme'
+  no?: number
+  kanji?: string
+  char?: string | null
+  /** A grapheme's name; a kanji has a keyword. */
+  name?: string | null
+  glyph_desc?: string | null
+  keyword?: string
+  alt_meaning?: string | null
+  parts: BookPart[]
+  /** The book's Kanken level mark: 1-10, ★, ★★. */
+  level?: string | null
+  kun?: string[]
+  on?: string[]
+  old_form?: string | null
+  freq?: number | null
+  strokes?: number | null
+  radical?: { char: string | null; no: number | null } | null
+  words?: { ja: string; romaji: string | null; star: boolean; bg: string; jlpt: string | null }[]
+  note?: string | null
+}
+
 /** A part as the kanji book draws it: a character, or a shape described in words when it has none. */
 export interface BookPart {
   char: string | null
@@ -938,6 +962,10 @@ export const api = {
     ]),
 
   reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
+
+  /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
+  reviewBookEntry: (no: number | null, char: string | null) =>
+    get<KanjiBookEntry>('/api/review/book-entry', no != null ? [['no', String(no)]] : [['char', char ?? '']]),
 
   /** A scanned page a card cites (server/books.py): reviewers and the admin only. */
   reviewBookPage: async (book: BookRef['book'], page: number) => {
