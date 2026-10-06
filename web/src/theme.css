@@ -7828,6 +7828,30 @@ html[data-nav]::view-transition-old(tabs):only-child {
   text-align: justify;
 }
 
+/* Иванов's line, on the same paper as the kanji book's entry: what the book says,
+   apart from the card's own data. Romaji and Japanese in its typeface (typeset.py). */
+.book-src .book-line {
+  max-width: 640px;
+  margin: 4px 0 6px;
+  padding: 3px 8px 3px 20px;
+  text-indent: -12px;
+  border: 1px solid #111;
+  background: #f7f4ec;
+  color: #111;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.bl-rm {
+  font-family: Arial, sans-serif;
+}
+
+.bl-ja {
+  font-family: 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  font-size: 15px;
+}
+
 @media (max-width: 640px) {
   .be-words {
     grid-template-columns: 1fr;

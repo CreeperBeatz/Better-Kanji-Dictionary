@@ -412,12 +412,12 @@ export function BookGlossPanel({ views, value, onChange }: { views: BookGloss[];
       {views.map((v, k) => (
         <BookSource key={k} src={v} entry={v.ja}>
           {v.book === 'bg-ja' && (
-            <p className="book-line">
-              <span lang="bg">{v.bg}</span> <i>{v.romaji}</i>{' '}
-              <span lang="ja" className="book-ja">
+            <p className="book-line" lang="bg">
+              {v.bg} <i className="bl-rm">{v.romaji}</i>{' '}
+              <span lang="ja" className="bl-ja">
                 {v.ja}
               </span>
-              {v.notes && v.notes.length > 0 && <span lang="bg"> ({v.notes.join('; ')})</span>}
+              {v.notes && v.notes.length > 0 && <> ({v.notes.join('; ')})</>}
             </p>
           )}
           <p className="book-use">
