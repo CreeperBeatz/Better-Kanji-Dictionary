@@ -95,6 +95,22 @@ confidence; loading drops any word whose headword lacks the kanji (787 of
 Source: JMdict alternative spellings in word_char.
 **Status: handled at load.** Nothing dropped reaches the queue.
 
+### D-015 · Parts in common kanji with no recorded meaning
+*Found 2026-10-06.* 187 parts inside in-scope kanji have no KANJIDIC meaning
+(after the radical-number filter), no Kanji Alive line and no form link to
+borrow one from, so their page says "no recorded meaning". The most used are
+丷 (in 243 in-scope kanji: 前 業 米 首), 卄 (230), 𠂇 (100: 左 右 友 有),
+⺁ ⺈ 𠂉 (62–75), 丆 龴 龰 龷 𠮛 ⺍ ⺺ 覀. They are of three kinds:
+- forms of a real kanji with the link missing: 𠂇 = 又, ⺺ = 聿, 㔾 = 卩,
+  覀 = 襾, 兑 = 兌, 夹 = 夾, 录 = 彔 (and 龰 = 止, D-005);
+- rare real characters KANJIDIC leaves out: 夋 堇 劦 豖 冎 壴 桼 罙 仌;
+- shapes that several unrelated old parts merged into, with no one meaning:
+  丷 is 八 in 半, grains in 米, hair in 首, the top of 止 in 前.
+Also 卌's KANJIDIC meaning is "40", which `real_meanings` drops as filler.
+Source: KANJIDIC has no entry for most bound parts; the form links are
+incomplete.
+**Status: open.**
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
