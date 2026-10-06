@@ -34,12 +34,12 @@ const S = strings(
     k_looks_like: 'looks like (a mnemonic only)',
     k_kin: 'a separate character for the same thing',
     k_none: 'no relation',
-    m_positional: 'X and Y are one character: one is how the other is written in a certain position, often with fewer or different strokes (水 → 氵 on the left, 心 → 忄, 糸 → 糹). Position decides which one you see.',
+    m_positional: 'Only on links that already are one; for a new bound form choose “is a form of”, which also does this. X and Y are one character: one is how the other is written in a certain position, often with fewer or different strokes (水 → 氵 on the left, 心 → 忄, 糸 → 糹). Position decides which one you see.',
     c_positional: 'Both pages list the other under “In other positions”. In the graph, focusing either one also shows the kanji built from the other (糸 shows 細) — unless the link has a note, which keeps them apart (月 and 肉). Describing a kanji by its parts finds either form by the other’s name.',
     m_old: 'Y is X’s pre-1946 shape: 会 → 會, 青 → 靑.',
     c_old: 'X’s page shows Y as its “Old form”; Y’s page shows X as “Today’s form”. Nothing else: the old shape is evidence for the story, not a part.',
     m_form_of: 'X is Y, written differently for the place it sits (龰 is 止 at the bottom), with history behind it (the note must say what). One per part; accepting one replaces any other.',
-    c_form_of: 'X’s page lists Y under “A form of”, and when X has no meaning of its own, its heading says “a form of Y” with Y’s meanings, everywhere X appears. Y’s page lists X under “Its forms as a part”. Describing a kanji by Y’s name finds X.',
+    c_form_of: 'X’s page lists Y under “A form of”, and when X has no meaning of its own, its heading says “a form of Y” with Y’s meanings, everywhere X appears. Y’s page lists X under “Its forms as a part”. In the graph, focusing Y also shows the kanji built from X (止 shows 足 走). Describing a kanji by Y’s name finds X.',
     m_looks_like: 'X looks like Y and learners read it so, but Y is not where it comes from: 龶 looks like 王.',
     c_looks_like: 'X’s page shows Y under “Looks like”, marked as a mnemonic, not its origin; Y’s page lists X under “Mistaken for it”. Describing a kanji by Y’s name finds X. No meaning is lent.',
     m_kin: 'X and Y are two characters in their own right, each with its own reading, that mean the same thing. Either can sit in the same place in a kanji: 隹 in 雅, 鳥 in 鳴 (both birds).',
@@ -75,12 +75,12 @@ const S = strings(
     k_looks_like: 'прилича на (само мнемоника)',
     k_kin: 'отделен знак за същото нещо',
     k_none: 'няма връзка',
-    m_positional: 'X и Y са един знак: единият е начинът, по който другият се пише на определено място, често с по-малко или различни черти (水 → 氵 отляво, 心 → 忄, 糸 → 糹). Мястото решава кой от двата виждате.',
+    m_positional: 'Само при връзки, които вече са такива; за нова свързана форма изберете „е форма на“, което прави и това. X и Y са един знак: единият е начинът, по който другият се пише на определено място, често с по-малко или различни черти (水 → 氵 отляво, 心 → 忄, 糸 → 糹). Мястото решава кой от двата виждате.',
     c_positional: 'Двете страници показват другата под „В други позиции“. В графа фокусът върху едната показва и канджитата, построени от другата (糸 показва 細) — освен ако връзката има бележка; тогава остават отделно (月 и 肉). Описание на канджи по частите му намира всяка от двете форми по името на другата.',
     m_old: 'Y е формата на X отпреди 1946 г.: 会 → 會, 青 → 靑.',
     c_old: 'Страницата на X показва Y като „Стара форма“, а страницата на Y показва X като „Днешна форма“. Нищо друго: старата форма е довод за историята, не част.',
     m_form_of: 'X е Y, написан различно за мястото, на което стои (龰 е 止 отдолу), с история зад това (бележката трябва да каже каква). По една на част; приемането на нова заменя предишната.',
-    c_form_of: 'Страницата на X показва Y под „Форма на“, а когато X няма свое значение, заглавието ѝ казва „форма на Y“ със значенията на Y, навсякъде, където се появи X. Страницата на Y показва X под „Формите му като част“. Описание на канджи с името на Y намира X.',
+    c_form_of: 'Страницата на X показва Y под „Форма на“, а когато X няма свое значение, заглавието ѝ казва „форма на Y“ със значенията на Y, навсякъде, където се появи X. Страницата на Y показва X под „Формите му като част“. В графа фокусът върху Y показва и канджитата, построени от X (止 показва 足 走). Описание на канджи с името на Y намира X.',
     m_looks_like: 'X прилича на Y и учащите го четат така, но не идва от Y: 龶 прилича на 王.',
     c_looks_like: 'Страницата на X показва Y под „Прилича на“, отбелязано като мнемоника, а не произход; страницата на Y показва X под „Бъркат го с него“. Описание на канджи с името на Y намира X. Значение не се заема.',
     m_kin: 'X и Y са два самостоятелни знака, всеки със свое четене, които значат едно и също. Всеки от тях може да стои на същото място в канджи: 隹 в 雅, 鳥 в 鳴 (и двата са птици).',
@@ -97,7 +97,7 @@ const S = strings(
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-export const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'kin', 'none']
+export const FORM_KINDS: FormKind[] = ['form_of', 'old', 'looks_like', 'kin', 'none', 'positional']
 /** The kinds that read one way, and so can be turned round (server/review.py ONE_WAY). */
 export const ONE_WAY: FormKind[] = ['old', 'form_of', 'looks_like']
 export const PART_KINDS: PartKind[] = ['meaning', 'shape']

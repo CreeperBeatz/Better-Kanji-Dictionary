@@ -40,13 +40,20 @@ word written in jōyō kanji has one.)
 | **save my answer** | Replaces *accept* once you changed something, and saves your version. | every card |
 | **skip** | Leaves it for now. Skipped cards wait under *skipped* in the queue bar. | every card |
 | **reset card** | Throws away what you changed and starts again from the proposal (greyed when there is nothing to throw away). | every card |
-| **reject** | The proposal is wrong as a whole. | parts, forms, part meanings, people's suggestions |
+| **reject** | The proposal is wrong as a whole. | reports, people's suggestions |
+| **save** | Saves every answer on a character's card at once. | characters |
 
-Meanings and Bulgarian have no *reject*: they are shaped until they are
-right, then accepted, or skipped.
+A character's card has no *reject*: each of its answers says what it does
+(*keep it as it is*, *no parts* …). Meanings and Bulgarian are shaped until
+they are right, then accepted, or skipped.
 
 **Keys:** `a` or `Enter` accepts (or saves), `r` rejects, `s` skips, `j` / `k`
-move to the next or previous card. On a single word, `1`–`9` pick a group
+move to the next or previous card.
+
+**Something else is wrong?** Every card has it under its title. A mistake
+the card can't fix (a word's English, a kanji's readings or levels, its
+similar kanji, a part on another card) goes to *reports* for a reviewer to
+check. The pages' *Edit* has the same at the bottom. On a single word, `1`–`9` pick a group
 and decide in one press.
 
 ### The print dictionaries
@@ -65,25 +72,49 @@ dictionary.
   Esc closes it). When the box says *the transcription may be wrong here*,
   look at the page before you use anything from it.
 - **Where it shows:**
-  - on **parts**, the book's split, with *use this split* to make it your
-    answer;
-  - on **forms**, the old form the book gives;
-  - on **part meanings**, the Bulgarian names the book uses for the part;
+  - on a **character's** parts, the book's split, with *use this split* to
+    make it your answer; on its forms, the old form the book gives; on a
+    part with no meaning, the Bulgarian names the book uses for it;
   - on **Bulgarian** cards, the book's terms. A term that is already in the
     list has a ✓; *+ add* (or *+1*, *+2* for a word's senses) puts it in.
-- **The kanji book's own cards.** Some *parts* and *forms* cards come from
+- **The kanji book's own cards.** Some character cards come from
   the book itself (`tsalta-diff`, `tsalta`); judge them like any proposal. It
   calls some name variants old forms (埜 for 野): those are not old forms.
 
-## Parts
+## Characters
+
+> **One card per character.** Up to three questions, in this order: what
+> is it built from, how is it related to other characters, and, for a part
+> with no meaning in the dictionary, what is it? Only the questions that
+> have something waiting are asked.
+
+### How the card works
+
+- **Every answer says what it does.** *Use the proposal* (where it came
+  from is beside it), *use the AI draft*, *keep it as it is*, *no parts*,
+  *something else*. There is no bare *reject*: say what should be true
+  instead. (A check's *reject* used to mean "keep it", and 五 段 為 were
+  closed that way with their wrong parts still live.)
+- **The AI draft comes with its proof**: what each part does in the
+  character, and what the old form shows, with a confidence. It starts
+  selected when it gave an answer; it is a suggestion, so read the proof.
+  A low confidence is marked red. *Why this card* says what a rule found
+  (one part only, strokes in no part, a bare stroke, a data issue).
+- **What this changes** shows, for the parts you picked, what every kanji
+  containing the character gains or loses. Above *save*, the summary says
+  in sentences everything saving will do.
+- **Something else is wrong?** under the character files a report for
+  what the card can't fix (its readings, its English, its levels).
+
+### Built from
 
 > **Question:** which parts is this character built from, as written today?
 
-### What counts as a part
+#### What counts as a part
 
 - **Each part should mean something in this character.** A data source that
   splits a shape into stroke groups (IDS often does) is describing the
-  drawing, not the character. Reject it.
+  drawing, not the character. Don't use it.
 - **Start from the simplest part, not a stroke.** A learner begins with the
   smallest piece that is a kanji or a real part. If a character can't be
   split into such pieces, it has no parts (it is atomic), and that is fine:
@@ -101,7 +132,7 @@ dictionary.
   lampstand (王) with its flame (丶). If the stroke is only there because the
   drawing has it, leave it out.
 
-### Today's shape, and when the old form decides
+#### Today's shape, and when the old form decides
 
 - **Judge by today's shape.** 青 contains 月, even though the old form 靑 had
   丹 there. The 丹 belongs in a form note, not in the parts.
@@ -111,7 +142,7 @@ dictionary.
   does. The old form only chooses between splits that are visible today. It
   never adds a part that is no longer visible.
 
-### Kanji written differently as a part
+#### Kanji written differently as a part
 
 A bound form is handled by how much it still looks like its source:
 
@@ -124,21 +155,19 @@ Either way the form link is what carries the meaning across. If it is
 missing, add it with *Edit* at the bottom of the character's page, in its
 Forms section.
 
-### Read the impact
+#### Read the impact
 
 "This adds a containment edge" means the study order moves. "157 kanji
 contain it" means every one of them gains or loses a prerequisite. A change
 that makes many kanji depend on a part that means nothing in them is a bad
 change, even if it is technically accurate.
 
-### Checks and drawing
+#### Drawing a part
 
-- **Checks** (nothing proposed) ask you to look at the current parts. If they
-  are right, press *looks right, keep it*. If not, type the right parts.
-- **Can't type a part?** Press *Draw* next to the parts field and draw it;
-  picking a candidate adds it to the parts.
+- **Can't type a part?** Under *Something else*, press *Draw* next to the
+  parts field and draw it; picking a candidate adds it to the parts.
 
-## Forms
+### Related characters
 
 > **Question:** how does X relate to Y?
 
@@ -154,7 +183,10 @@ change, even if it is technically accurate.
 - **Read the sentence.** On a card each choice reads with its two
   characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
   a form of and a looks like go one way; if a proposal has them the wrong
-  way round, press **⇄ swap** and accept your answer. No need to reject it.
+  way round, pick *Something else*, press **⇄ swap**, and save.
+- **One choice for a bound form.** *Is a form of* covers both "it is that
+  kanji written for its place" and "it lends that kanji's meaning". *How it
+  is written in another position* is only offered where a link already is one.
 - **Position, or two characters?** Looks do not decide it: 氵 has three
   strokes and 水 four, yet 氵 is only ever 水 written on the left, and it
   never stands alone. 隹 and 鳥 are both characters with their own readings
@@ -165,14 +197,14 @@ change, even if it is technically accurate.
   of another (林 is two 木, 炎 two 火, 𢆶 two 幺) contains it, and that is
   its parts: 林's parts are 木. It is a character with a meaning of its own
   (林 is a grove, not a tree), so it lends nothing and borrows nothing.
-  Choose *no relation*, or reject a card that proposes a form of. If the
+  Choose *no relation*, or *leave it as it is* when nothing links them yet. If the
   doubled character has no meaning in the dictionary (𢆶), it gets one
   under *Part meanings*.
-- Reject a *looks like* that points at a kanji with the wrong meaning that
-  the learner will also meet.
+- Don't take a *looks like* that points at a kanji with the wrong meaning
+  that the learner will also meet.
 - A form link never changes parts.
 
-### Judge it by the kanji
+#### Judge it by the kanji
 
 Each card shows both characters in every font we have (the old 1978/1983
 shapes too, where a font draws them differently), and under each one every
@@ -182,17 +214,17 @@ first. Read the two lists side by side:
 - **An *is a form of* must hold in nearly all of X's kanji.** Its meaning
   is lent to every one of them. If X is Y in 来 but something else in 前,
   米 and 首, it is not a form of Y: it is a shape (see *Part meanings*),
-  and the link is rejected.
+  and the link is left as it is.
 - **A *how it is written in another position* should fill the same role** in both
   lists: 氵 in 海 does what 水 does in 泉.
 
-### What each link changes on the site
+#### What each link changes on the site
 
 The same table is behind the (i) next to *Relation* on every forms card.
 
 <!-- kinds:form -->
 
-## Part meanings
+### A part with no meaning
 
 > **Question:** this part has no meaning in the dictionary. What is it?
 
@@ -208,7 +240,7 @@ A part is one of three things, and only two of them are decided here:
 
 <!-- kinds:part -->
 
-### Writing one
+#### Writing one
 
 - **A shape's name is a name, not a meaning.** Say what it looks like:
   "two drops", "slanted cap". The page shows it as "a shape: “two drops”",
@@ -223,12 +255,12 @@ A part is one of three things, and only two of them are decided here:
 - **A meaning is the one it has in Japanese kanji.** Unihan's line is
   written for Chinese; it often gives a surname or a river. When a part
   mostly gives the sound, keep its meaning short and say so in the note.
-- **A shape and a form of cannot both be right.** The card lists the form
-  links for the part still waiting, with what the draft thinks of each.
-  When you accept a shape, go to those and reject the form of; a shape on
-  the page wins over a form of in any case.
-- **If it really is a form of a kanji**, reject the card and accept (or
-  add, on the part's page) the form link instead.
+- **A shape and a form of cannot both be right.** The form links waiting
+  for the part are on the same card, each with what the part's draft thinks
+  of it. The card won't save a shape together with a form of: leave the
+  link as it is, or answer *it is a form of a kanji*.
+- **If it really is a form of a kanji**, pick *it is a form of a kanji* and
+  use (or write) the form link above it.
 
 ## Meanings
 
@@ -265,6 +297,10 @@ are the ones it was unsure of, so look at those first.
 - **Accept waits for the ticks.** Until every word in the groups and in the
   no-meaning box is confirmed, *accept* is greyed and says how many are left.
   Words left for later and words not in a group don't count.
+- **Some words start ticked.** Two drafting runs placed every word
+  independently; where both put it in the same group, both sure, it starts
+  confirmed (about 7 words in 10). Glance over them, and untick one that is
+  wrong: it is your decision, not theirs. The rest are yours to tick.
 - **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
   submit, the groups and every other word are decided, and the skipped words
   come back together as a follow-up for the same kanji at the very end of the
@@ -358,20 +394,23 @@ English is still what you translate.
 
 ## Reports
 
-> **Question:** is the English JMdict gives this word actually wrong?
+> **Question:** is what the report says actually wrong?
 
-The English is JMdict's and is never edited here: the Bulgarian is translated
-from it, English search reads it, and every dictionary built on JMdict shares
-it. A person who thinks it is wrong says so in their own words, and the
-report lands here. Nothing on the site changes, whatever you decide.
+Some data comes from reference dictionaries and is never edited here:
+words' English (JMdict), kanji's English meanings, readings and levels
+(KANJIDIC), similar kanji (computed). A person who spots a mistake there,
+or anything a card can't fix, says so in their own words with *Something
+else is wrong?*, and the report lands here with what it is about. Nothing
+on the site changes, whatever you decide.
 
-- **Confirm only a real mistake**: a wrong meaning, a sense that is missing
-  and common, a gloss that belongs to another word. Check it against another
+- **Confirm only a real mistake**: a wrong meaning or reading, a sense
+  that is missing and common, a wrong level. Check it against another
   dictionary or the example sentences, not against taste.
 - **Reject** a matter of taste (old-fashioned, British, too literal) or a
   misreading of the entry. Say why in the reason: the person sees it.
-- A confirmed report is logged as a data issue and sent to JMdict, so it is
-  fixed at the source; the next data build picks it up.
+- A confirmed report is logged as a data issue (DATA-ISSUES.md) and sent
+  to the source, so it is fixed there; the next data build picks it up. A
+  report about parts or forms becomes a character card instead.
 
 ## Cases
 
@@ -389,9 +428,9 @@ reason field and tell the admin, so it can be added here.
 - **So it is a shape.** Several unrelated old parts became the same two
   strokes. No meaning is true across them.
 
-> **Decision:** reject both form links. Accept 丷 as *a shape with no
-> meaning*, named for what it looks like, with a note saying what it is in
-> which kanji.
+> **Decision:** *leave it as it is* for both form links. Answer 丷 as *a
+> shape with no meaning*, named for what it looks like, with a note saying
+> what it is in which kanji.
 
 > **Lesson:** before accepting a form of for a bound part, read the list of
 > its kanji on the card. If Y is only right in a few, it is a shape.
@@ -410,12 +449,12 @@ reason field and tell the admin, so it can be added here.
 - **What was actually missing** was the form link: 龰 had none, so its page
   could not borrow 止's meaning.
 
-> **Decision:** reject, with a reason ("IDS splits strokes; 龰 is 止 at the
-> bottom"). Then on 龰's page add 止 as *is a form of* (and *same part in
-> another position* if you like, as 亻 has for 人).
+> **Decision:** *keep it as it is* (止), with a reason ("IDS splits
+> strokes; 龰 is 止 at the bottom"). Then on 龰's page add 止 as *is a form
+> of*.
 
 > **Lesson:** when a proposal replaces a recognisable part with stroke
-> fragments, reject it. When the current part is a real kanji written
+> fragments, don't use it. When the current part is a real kanji written
 > differently for its position, keep it if it still looks like it, and make
 > sure the form link exists.
 
@@ -431,7 +470,7 @@ KanjiVG and KRADFILE split it as 丿 + 干.
   66 kanji built on 午 (許 缶 陶 謡 遥 御 …) would depend on "shield".
 - **Nothing smaller does a job in 午**, so it is atomic.
 
-> **Decision:** clear the parts field (no parts, atomic) and save. The
+> **Decision:** *no parts*, and save. The
 > likeness to 干 千 牛 belongs in *Similar → looks*.
 
 > **Lesson:** a character can visibly contain a kanji without being built
@@ -455,8 +494,8 @@ strokes: 䒑 + 龰 (the dots and the line on top, a foot below) or 八 + 𤴓
   story (䒑 is what is left of the two people) goes in 従's notes and
   meanings, not in its parts.
 
-> **Decision:** 彳 + 䒑 + 龰, which is what the data already has. Reject a
-> proposal of 𤴓 or 八 for 従.
+> **Decision:** *keep it as it is*: 彳 + 䒑 + 龰, which is what the data
+> already has, not a proposal of 𤴓 or 八.
 
 > **Lesson:** when two splits use the same strokes, follow the old form's
 > grouping. The old form chooses between splits that are visible today and

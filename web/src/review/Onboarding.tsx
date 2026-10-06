@@ -60,13 +60,12 @@ function List({ label, tone, children }: { label: string; tone?: 'watch'; childr
 
 const J = ({ children }: { children: ReactNode }) => <span lang="ja">{children}</span>
 
-/** The five stages, on the overview card: each opens its own card. */
+/** The four stages, on the overview card: each opens its own card. */
 const STAGES: { name: string; q: string; card: number }[] = [
-  { name: 'Parts', q: 'Which parts is this character built from, as written today?', card: 3 },
-  { name: 'Forms', q: 'How does this shape relate to that one?', card: 4 },
-  { name: 'Meanings', q: 'What are the 1–6 things this kanji does in words?', card: 5 },
-  { name: 'Bulgarian', q: 'Is the machine translation right?', card: 6 },
-  { name: 'Reports', q: 'Is the dictionary’s English really wrong?', card: 7 },
+  { name: 'Characters', q: 'What is it built from, how is it related, and what is a part with no meaning?', card: 3 },
+  { name: 'Meanings', q: 'What are the 1–6 things this kanji does in words?', card: 4 },
+  { name: 'Bulgarian', q: 'Is the machine translation right?', card: 5 },
+  { name: 'Reports', q: 'Is what someone reported really wrong?', card: 6 },
 ]
 
 function cards(go: (i: number) => void): Card[] {
@@ -105,7 +104,7 @@ function cards(go: (i: number) => void): Card[] {
       body: (
         <List label="Getting around">
           <li>
-            Pick a <b>stage</b> at the top (parts, forms, part meanings, meanings, Bulgarian, reports) or <b>all</b>. A greyed stage has
+            Pick a <b>stage</b> at the top (characters, meanings, Bulgarian, reports) or <b>all</b>. A greyed stage has
             nothing waiting yet.
           </li>
           <li>Cards come most important first, which mostly means the most frequent kanji and words first.</li>
@@ -124,8 +123,8 @@ function cards(go: (i: number) => void): Card[] {
     },
     {
       kicker: 'The tasks',
-      title: 'Five kinds of card',
-      lead: <>Each stage asks one question. The next five cards take them one by one.</>,
+      title: 'Four kinds of card',
+      lead: <>Each stage asks its questions in plain words. The next four cards take them one by one.</>,
       body: (
         <div className="onb-stages">
           {STAGES.map((s) => (
@@ -138,83 +137,51 @@ function cards(go: (i: number) => void): Card[] {
       ),
     },
     {
-      kicker: 'Task 1 of 5',
-      title: 'Parts',
+      kicker: 'Task 1 of 4',
+      title: 'Characters',
       glyph: '午',
-      lead: <>Which parts is this character built from, as it is written today? Each part must do a job in it.</>,
-      more: 'Parts',
+      lead: (
+        <>
+          One card per character, up to three questions: what is it built from today, how is it related to other
+          characters, and, for a part with no meaning in the dictionary, what is it? Every answer says what it does.
+        </>
+      ),
+      more: 'Characters',
       body: (
         <>
           <List label="Do">
-            <li>Name the smallest pieces that are kanji or real parts, and that mean something here.</li>
             <li>
-              No such pieces? It has no parts (it is <b>atomic</b>). That is fine: <J>午</J> is learned as one piece.
+              Read the <b>AI draft</b> and its reason first. It is a suggestion with its proof, not a fact.
             </li>
             <li>
-              Nothing proposed? It is a <b>check</b>: <i>looks right, keep it</i>, or type the right parts.
+              Pick an answer: <i>use the proposal</i>, <i>keep it as it is</i>, <i>no parts</i>, or <i>something else</i>.
+              Each part must do a job in the character: meaning, sound, or a kanji written for its position.
+            </li>
+            <li>
+              No such pieces? It has <b>no parts</b>. That is fine: <J>日</J> and <J>午</J> are learned as one piece.
+            </li>
+            <li>
+              Read <b>what this changes</b> and the summary above <i>save</i> before saving.
             </li>
           </List>
           <List label="Look out" tone="watch">
             <li>
-              <b>Stroke splits.</b> Sources chop real parts into strokes (<J>口 → 丨一</J>). Reject them.
-            </li>
-            <li>
-              <b>Lookalikes.</b> <J>午</J> contains <J>干</J>, but a pestle has nothing to do with a shield. Leave it
-              out of the parts.
+              <b>Lookalikes and stroke splits.</b> <J>日</J> is not <J>口</J>, <J>木</J> is not <J>八 十</J>.
             </li>
             <li>
               <b>The old form</b> only breaks a tie between two groupings visible today (<J>従</J>). It never adds a part.
             </li>
             <li>
-              <b>The impact line.</b> “157 kanji contain it” means 157 kanji change. A big number deserves a second look.
+              <b>A form of</b> lends its meaning to every kanji with the part: check the list of kanji under it. A part
+              that is several things in different kanji is a <b>shape</b> with a name (<J>丷</J>), and the card won’t let
+              you save both.
             </li>
           </List>
         </>
       ),
     },
     {
-      kicker: 'Task 2 of 5',
-      title: 'Forms',
-      glyph: '亻',
-      lead: <>How does one shape relate to another? A form link carries meaning across; it never changes parts.</>,
-      more: 'Forms',
-      body: (
-        <>
-          <List label="The main links">
-            <li>
-              <b>how it is written in another position</b>: <J>人·亻</J>, <J>水·氵</J>
-            </li>
-            <li>
-              <b>its old form</b>: the pre-reform shape, <J>青·靑</J>
-            </li>
-            <li>
-              <b>is a form of</b>: written differently for its place, lending its meaning, <J>龰·止</J>
-            </li>
-            <li>
-              <b>looks like</b>: a mnemonic only, <J>龶</J> looks like <J>王</J>
-            </li>
-          </List>
-          <List label="Look out" tone="watch">
-            <li>
-              <i>is a form of</i> needs history behind it: the old form, or a reference. And it must hold in nearly
-              all the kanji listed under the part: its meaning is lent to every one.
-            </li>
-            <li>
-              The <b>(i)</b> beside <i>Relation</i> says what each link changes on the site.
-            </li>
-            <li>
-              A part with no meaning at all has its own stage, <b>part meanings</b>: a meaning of its own, or a shape
-              with only a name (<J>丷</J> is <J>八</J> in <J>半</J>, grains in <J>米</J>).
-            </li>
-            <li>
-              Reject a <i>looks like</i> that points at a kanji the learner will meet with a different meaning.
-            </li>
-          </List>
-        </>
-      ),
-    },
-    {
-      kicker: 'Task 3 of 5',
+      kicker: 'Task 2 of 4',
       title: 'Meanings',
       glyph: '合',
       lead: (
@@ -232,7 +199,8 @@ function cards(go: (i: number) => void): Card[] {
             </li>
             <li>Drag words between groups, or right-click for the menu.</li>
             <li>
-              <b>Tick every word</b> in the groups as you check it. Accept stays greyed until all of them are ticked.
+              <b>Tick every word</b> in the groups as you check it. Words two AI runs agreed on start ticked: glance over
+              them and untick a wrong one. Accept stays greyed until every word is ticked.
             </li>
             <li>
               Unsure of a word? <i>Not sure: leave for later</i>. It comes back at the end of the queue.
@@ -257,7 +225,7 @@ function cards(go: (i: number) => void): Card[] {
       ),
     },
     {
-      kicker: 'Task 4 of 5',
+      kicker: 'Task 3 of 4',
       title: 'Bulgarian',
       glyph: '訳',
       lead: (
@@ -287,13 +255,13 @@ function cards(go: (i: number) => void): Card[] {
       ),
     },
     {
-      kicker: 'Task 5 of 5',
+      kicker: 'Task 4 of 4',
       title: 'Reports',
       glyph: '誤',
       lead: (
         <>
-          Someone says the dictionary’s English for a word is wrong. The English comes from JMdict and is never edited
-          here: nothing on the site changes, whatever you decide.
+          Someone found a mistake no card can fix: a word’s English (JMdict’s), a kanji’s readings or levels, its similar
+          kanji. Those come from reference dictionaries: nothing on the site changes, whatever you decide.
         </>
       ),
       more: 'Reports',
@@ -301,8 +269,8 @@ function cards(go: (i: number) => void): Card[] {
         <>
           <List label="Do">
             <li>
-              <b>Confirm</b> a real mistake: a wrong meaning, a common sense that is missing, a gloss from another word.
-              It goes on to JMdict.
+              <b>Confirm</b> a real mistake: a wrong meaning or reading, a common sense that is missing, a wrong level. It
+              goes into the data issues list and on to the source.
             </li>
             <li>
               <b>Reject</b> a matter of taste, and say why: the person who reported it sees your reason.
@@ -326,7 +294,8 @@ function cards(go: (i: number) => void): Card[] {
               <kbd>a</kbd> accept
             </dt>
             <dd>
-              Take the card as shown. Once you change something it becomes <i>save my answer</i>.
+              Take the card as shown. Once you change something it becomes <i>save my answer</i>. On a character’s card,{' '}
+              <kbd>a</kbd> saves the answers picked.
             </dd>
             <dt>
               <kbd>s</kbd> skip
@@ -337,7 +306,7 @@ function cards(go: (i: number) => void): Card[] {
             <dt>
               <kbd>r</kbd> reject
             </dt>
-            <dd>Only on parts, forms, part meanings and people’s suggestions: things that can be wrong as a whole.</dd>
+            <dd>Only on reports and people’s suggestions. A character’s card has answers that say what they do instead.</dd>
             <dt>reset card</dt>
             <dd>Throw away your changes and start again from the proposal.</dd>
             <dt>
@@ -351,7 +320,8 @@ function cards(go: (i: number) => void): Card[] {
               decision.
             </li>
             <li>
-              Spot wrong English there? <i>The English meaning is wrong</i> files a report. Even yours goes to the queue.
+              Spot something wrong that no card fixes? <i>Something else is wrong?</i> on every card, and at the bottom of
+              the page’s Edit, files a report. Even yours goes to the queue.
             </li>
           </List>
         </>
