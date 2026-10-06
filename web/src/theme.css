@@ -8395,3 +8395,139 @@ button.review-part {
 .dict-open [aria-hidden] {
   font-family: system-ui, sans-serif;
 }
+
+/* A character's card (review/CharacterCard.tsx): parts, forms and what a part
+   is, one step each, every answer a sentence saying what it does. */
+.card-step {
+  border-top: 1px solid var(--rule);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.card-step h4 {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--paper);
+}
+
+.card-step > .hint {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+}
+
+.card-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.card-option {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi);
+  cursor: pointer;
+}
+
+.card-option[data-on] {
+  background: var(--ai-wash);
+  border-color: var(--ai);
+}
+
+.card-option input {
+  flex: none;
+  margin: 0;
+}
+
+.card-option-label .review-parts {
+  vertical-align: middle;
+}
+
+.card-option-why {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.card-draft {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--ai);
+  background: var(--sumi);
+  font-size: 13px;
+}
+
+.card-draft[data-unsure] {
+  border-left-color: var(--shu);
+}
+
+.card-draft p {
+  margin: 2px 0;
+}
+
+.card-draft-why {
+  color: var(--paper-dim);
+}
+
+.card-link + .card-link {
+  border-top: 1px dashed var(--rule);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.card-changes h5,
+.card-summary h5 {
+  margin: 8px 0 2px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.card-summary {
+  border-top: 1px solid var(--rule);
+  margin-top: 12px;
+}
+
+.card-summary ul {
+  margin: 2px 0 8px;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+/* "Something else is wrong?" on every card (review/ReportButton.tsx). */
+.report-open {
+  font-size: 12.5px;
+  padding: 0;
+}
+
+.report-form {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi);
+}
+
+.report-actions {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 0;
+}
+
+.report-sent {
+  margin: 4px 0;
+}
+
+/* The meanings board: words two drafting runs agreed on start ticked. */
+.board-surenote {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--ai);
+  background: var(--sumi);
+  font-size: 12.5px;
+}

@@ -322,7 +322,14 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType = 'decomposition' | 'form_link' | 'part_meaning' | 'kanji_senses' | 'word_sense' | 'bg' | 'en_report'
+export type TaskType = 'decomposition' | 'form_link' | 'part_meaning' | 'kanji_senses' | 'word_sense' | 'bg' | 'report' | 'character'
+/** What a report is about: a word's or a kanji's (server/review.py REPORT_ABOUT). */
+export type ReportAbout = 'english' | 'reading' | 'meanings' | 'readings' | 'levels' | 'parts' | 'forms' | 'similar' | 'strokes' | 'other'
+/** Something wrong that no card or edit can fix, in the reporter's words; never live. */
+export interface Report {
+  about: ReportAbout
+  text: string
+}
 export type Origin = 'proposal' | 'suggestion'
 export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'kin' | 'none'
 export type PartKind = 'meaning' | 'shape'
@@ -367,7 +374,7 @@ export interface MeaningGroup {
  * What each type's value is: parts, a link, meaning groups, one group's id, or
  * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings.
  */
-export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | string | null
+export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | string | null
 
 /** A change waiting in the labeling queue (server/review.py). */
 export interface QueueItem {
@@ -384,13 +391,16 @@ export interface QueueItem {
   evidence: Record<string, unknown> | null
   priority: number
   /** `withdrawn`: its source no longer proposes it (a misread corrected); never a decision. */
-  status: 'open' | 'auto-accepted' | 'accepted' | 'edited' | 'rejected' | 'withdrawn'
+  status: 'open' | 'auto-accepted' | 'accepted' | 'edited' | 'kept' | 'rejected' | 'withdrawn'
   created: string
   createdBy: Author | null
   decidedBy: Author | null
   confidence?: number
   /** Bulgarian word cards: the word's headword, for the list. */
   label?: string
+  /** A character's card (type `character`): the items on it, and their types. */
+  items?: string[]
+  kinds?: TaskType[]
 }
 
 export interface Impact {
@@ -412,7 +422,7 @@ export interface Impact {
 
 export interface Decision {
   id: string
-  action: 'accept' | 'edit' | 'reject' | 'direct' | 'auto' | 'revert' | 'reopen'
+  action: 'accept' | 'edit' | 'keep' | 'reject' | 'direct' | 'auto' | 'revert' | 'reopen'
   type: TaskType
   subject: string
   before: TaskValue
@@ -447,6 +457,8 @@ export interface BoardWord {
   confidence?: number | null
   /** Whether the two drafting runs agreed. */
   agree?: boolean | null
+  /** Both runs agree, both sure: the board starts it ticked. */
+  sure?: boolean
 }
 
 export interface ReviewProgress {
@@ -464,6 +476,20 @@ export interface HistoryFilter {
   by?: string
   from?: string
   to?: string
+}
+
+/** One item's answer on a character's card. */
+export interface CardDecision {
+  item: string
+  action: 'accept' | 'edit' | 'keep' | 'reject' | 'skip'
+  value?: TaskValue
+}
+
+/** A character's card: every item waiting about it, and what it is now. */
+export interface CharacterCard {
+  char: string
+  items: ItemDetail[]
+  context: ItemDetail['context'] & { parts: string[] }
 }
 
 export interface ItemDetail extends QueueItem {
@@ -963,6 +989,13 @@ export const api = {
 
   reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
 
+  /** A character's card: its parts, forms and part-meaning items, and the character's own facts. */
+  reviewCharacter: (char: string) => get<CharacterCard>(`/api/review/characters/${encodeURIComponent(char)}`),
+
+  /** Every item on a character's card decided at once; all "skip" leaves the card for later. */
+  decideCharacter: (char: string, decisions: CardDecision[], reason?: string) =>
+    send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', { decisions, reason }),
+
   /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
   reviewBookEntry: (no: number | null, char: string | null) =>
     get<KanjiBookEntry>('/api/review/book-entry', no != null ? [['no', String(no)]] : [['char', char ?? '']]),
@@ -981,7 +1014,7 @@ export const api = {
    */
   decide: (
     id: string,
-    action: 'accept' | 'edit' | 'reject' | 'skip',
+    action: 'accept' | 'edit' | 'keep' | 'reject' | 'skip',
     value?: TaskValue,
     reason?: string,
     words?: Record<number, string | null>,
@@ -994,13 +1027,16 @@ export const api = {
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
 
+  /** What giving `char` these parts would change upstream, before anyone decides. */
+  reviewImpact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),
+
   /** A reviewer's own change, live at once. `words`, for a kanji's meanings edited on the page's board: word id -> group. */
   reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string, words?: Record<number, string | null>) =>
     send<Decision | { unchanged: true }>('/api/review/edit', 'POST', { type, subject, value, reason, words }),
 
   /** From a user, queued for a reviewer; from a reviewer, made. */
-  suggest: (type: TaskType, subject: string, value: TaskValue, reason: string, words?: Record<number, string | null>) =>
-    send<{ applied: boolean; item?: { id: string; status: string } }>('/api/review/suggest', 'POST', { type, subject, value, reason, words }),
+  suggest: (type: TaskType, subject: string, value: TaskValue, reason: string, words?: Record<number, string | null>, from?: string) =>
+    send<{ applied: boolean; item?: { id: string; status: string } }>('/api/review/suggest', 'POST', { type, subject, value, reason, words, from }),
 
   /** For a kanji page's Edit / Suggest changes: its groups (or the open draft) and the board's words. */
   pageKanji: (char: string) =>

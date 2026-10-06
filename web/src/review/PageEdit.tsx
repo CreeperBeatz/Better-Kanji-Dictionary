@@ -24,6 +24,7 @@ import {
   type TaskType,
   type TaskValue,
   type Word,
+  type Report,
 } from '../api'
 import { useAuth } from '../account/auth'
 import { FormsSummary, useForms } from '../detail/Forms'
@@ -34,7 +35,7 @@ import { Overlay } from '../Overlay'
 import { toggled } from '../sets'
 import { BgLabels, BgMeanings, BgSenses } from './BgCard'
 import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
-import { CATCH_ALL, groupLabel, strokesOk, ValueEditor, ValueView } from './editors'
+import { CATCH_ALL, groupLabel, ReportEditor, strokesOk, ValueEditor, ValueView } from './editors'
 import { MeaningsBoard } from './MeaningsBoard'
 
 const S = strings(
@@ -52,11 +53,10 @@ const S = strings(
     partNone: 'Nothing recorded yet.',
     s_bg: 'Bulgarian',
     s_groups: 'Meaning in this word',
-    s_en: 'The English meaning is wrong',
-    enHint: 'The English is JMdict’s. Tick this to report a mistake in it.',
-    enLabel: 'What is wrong?',
-    whyNot: 'Why can’t I edit the English?',
-    whyNotText: 'We use JMdict as the reference for English. A mistake in it has to be sent to JMdict and fixed there, not here. Once we verify your claim, we will contact JMdict to fix the mistake.',
+    s_report: 'Something else is wrong',
+    reportHint: 'Its English, a reading, a level, its similar kanji: anything you can’t change above. Tick this to report it.',
+    whyNot: 'Why can’t I change it myself?',
+    whyNotText: 'These come from reference dictionaries (JMdict for words’ English, KANJIDIC for kanji). A mistake has to be fixed at the source, not just here. A reviewer checks your report; a real mistake goes into our list of data issues and is sent to the source.',
     sensesHint: 'Drag words between groups, or right-click a word (or a selection of several) to pick its group.',
     noSenses: 'No accepted meaning groups yet.',
     drafted: 'Not reviewed yet: these groups are drafts waiting in the review queue.',
@@ -102,11 +102,10 @@ const S = strings(
     partNone: 'Още нищо не е записано.',
     s_bg: 'Български',
     s_groups: 'Значение в тази дума',
-    s_en: 'Английското значение е грешно',
-    enHint: 'Английският е от JMdict. Отметнете това, за да съобщите за грешка в него.',
-    enLabel: 'Какво не е наред?',
-    whyNot: 'Защо не мога да редактирам английския?',
-    whyNotText: 'Ползваме JMdict като еталон за английския. Грешка в него трябва да се изпрати на JMdict и да се поправи там, а не тук. След като проверим твърдението ви, ще се свържем с JMdict, за да поправят грешката.',
+    s_report: 'Нещо друго не е наред',
+    reportHint: 'Английският, четене, ниво, сходните канджи: всичко, което не можете да промените по-горе. Отметнете това, за да съобщите.',
+    whyNot: 'Защо не мога да го променя сам?',
+    whyNotText: 'Това идва от справочни речници (JMdict за английския на думите, KANJIDIC за канджи). Грешката трябва да се поправи при източника, не само тук. Рецензент проверява доклада ви; истинската грешка влиза в списъка ни с проблеми в данните и се изпраща на източника.',
     sensesHint: 'Плъзгайте думи между групите или щракнете с десния бутон върху дума (или избрани няколко), за да ѝ изберете група.',
     noSenses: 'Още няма приети групи значения.',
     drafted: 'Още не е прегледано: тези групи са чернови, които чакат в опашката за преглед.',
@@ -155,6 +154,19 @@ interface Change {
 }
 
 const isDone = (o: Outcome | undefined) => o === 'sent' || o === 'saved' || o === 'unchanged'
+
+type Section = (id: string, label: string, body: ReactNode, editable?: boolean, why?: { title: string; text: string }) => ReactNode
+
+/** "Something else is wrong", the last section of both dialogs: a report for a reviewer, never a change. */
+function reportSection(section: Section, on: Set<string>, subject: string, report: Report | null, setReport: (r: Report) => void, t: T) {
+  return section(
+    'report',
+    t('s_report'),
+    on.has('report') ? <ReportEditor value={report} onChange={setReport} subject={subject} autoFocus /> : <p className="hint">{t('reportHint')}</p>,
+    true,
+    { title: t('whyNot'), text: t('whyNotText') },
+  )
+}
 
 /** The button at the bottom of a page: Edit for reviewers, Suggest changes for everyone else. */
 function EditButton({ children }: { children: (close: () => void) => ReactNode }) {
@@ -230,8 +242,8 @@ function EditShell({
   const live = changes.filter((c) => on.has(c.section))
   const pending = live.filter((c) => !isDone(outcomes[c.key]))
   // What is made at once, as against sent: a reviewer's changes, but never a report.
-  const makes = direct && pending.some((c) => c.type !== 'en_report')
-  const needsReason = !direct && pending.some((c) => c.type !== 'en_report')
+  const makes = direct && pending.some((c) => c.type !== 'report')
+  const needsReason = !direct && pending.some((c) => c.type !== 'report')
   const [info, setInfo] = useState<string | null>(null)
   const allDone = live.length > 0 && pending.length === 0
 
@@ -249,11 +261,11 @@ function EditShell({
     const next = { ...outcomes }
     for (const c of pending) {
       try {
-        // A report on the English goes to the queue from reviewers too; its text is its reason.
+        // A report goes to the queue from reviewers too; its text is its reason.
         const res =
-          direct && c.type !== 'en_report'
+          direct && c.type !== 'report'
             ? await api.reviewEdit(c.type, c.subject, c.value, reason.trim() || undefined, c.words)
-            : await api.suggest(c.type, c.subject, c.value, reason.trim() || (c.type === 'en_report' ? (c.value as string) : ''), c.words)
+            : await api.suggest(c.type, c.subject, c.value, reason.trim() || (c.type === 'report' ? (c.value as Report).text : ''), c.words)
         next[c.key] = 'unchanged' in res && res.unchanged ? 'unchanged' : 'applied' in res && !res.applied ? 'sent' : 'saved'
       } catch (err) {
         next[c.key] = { problem: err instanceof Error ? errorText(err, lang) : t('failed') }
@@ -401,6 +413,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   // What the part is, once edited; until then the dialog shows what the page has.
   const [part, setPart] = useState<PartMeaning | null>(null)
   const [bg, setBg] = useState<string[]>([])
+  const [report, setReport] = useState<Report | null>(null)
   const [fresh, setFresh] = useState(0)
 
   useEffect(() => {
@@ -443,6 +456,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
       setFresh((n) => n + 1)
     }
     if (section === 'parts') setParts(now.parts)
+    if (section === 'report') setReport(null)
     if (section === 'form') setForm(NO_FORM)
     if (section === 'part') setPart(null)
     if (section === 'bg') {
@@ -496,6 +510,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     if (part && !same(part, forms?.part ?? null)) changes.push({ key: 'part', section: 'part', type: 'part_meaning', subject: char, value: part })
     const cleanBg = bg.map((m) => m.trim()).filter(Boolean)
     if (!same(cleanBg, now.bg)) changes.push({ key: 'bg', section: 'bg', type: 'bg', subject: `kanji:${char}`, value: cleanBg })
+    if (report?.text.trim()) changes.push({ key: 'report', section: 'report', type: 'report', subject: `kanji:${char}`, value: { ...report, text: report.text.trim() } })
   }
 
   return (
@@ -607,6 +622,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                 )}
               </>,
             )}
+            {reportSection(section, on, `kanji:${char}`, report, setReport, t)}
           </>
         )
       }
@@ -653,7 +669,7 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
   const [loadError, setLoadError] = useState<unknown>(null)
   const [picks, setPicks] = useState<Record<string, string | null>>({})
   const [bg, setBg] = useState<string[]>([])
-  const [report, setReport] = useState('')
+  const [report, setReport] = useState<Report | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -677,12 +693,12 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
     if (!now) return
     if (section === 'groups') setPicks(Object.fromEntries(now.kanji.map((k) => [k.char, k.group])))
     if (section === 'bg') setBg(now.bg)
-    if (section === 'en') setReport('')
+    if (section === 'report') setReport(null)
   }
 
   const changes: Change[] = []
   if (now) {
-    if (report.trim()) changes.push({ key: 'en', section: 'en', type: 'en_report', subject: `word:${id}`, value: report.trim() })
+    if (report?.text.trim()) changes.push({ key: 'report', section: 'report', type: 'report', subject: `word:${id}`, value: { ...report, text: report.text.trim() } })
     for (const k of now.kanji) {
       const pick = picks[k.char]
       if (k.senses && pick && pick !== k.group)
@@ -725,20 +741,7 @@ function WordEditDialog({ id, headword, onClose, onSignIn }: { id: number; headw
               ),
               grouped.length > 0,
             )}
-            {section(
-              'en',
-              t('s_en'),
-              on.has('en') ? (
-                <label className="review-field">
-                  <span>{t('enLabel')}</span>
-                  <textarea className="assoc-text" rows={4} maxLength={1000} value={report} autoFocus onChange={(e) => setReport(e.target.value)} />
-                </label>
-              ) : (
-                <p className="hint">{t('enHint')}</p>
-              ),
-              true,
-              { title: t('whyNot'), text: t('whyNotText') },
-            )}
+            {reportSection(section, on, `word:${id}`, report, setReport, t)}
             {section(
               'bg',
               t('s_bg'),

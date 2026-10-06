@@ -6,14 +6,11 @@
  * Keyboard: a or Enter accepts (or saves the edit), r rejects, s skips,
  * j / k move, and for a word's meaning 1-9 picks a group and decides at once.
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { DictLinks } from './DictLinks'
 import {
   api,
   dataChanged,
-  type BookOld,
-  type BookPartView,
-  type BookSplit,
   type ItemDetail,
   type MeaningGroup,
   type Origin,
@@ -25,30 +22,30 @@ import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { typing, useKey } from '../keys'
 import { withIds } from '../sets'
-import { FontStrip } from '../detail/FontStrip'
-import { CATCH_ALL, KanjiFacts, PartTiles, strokesOk, ValueEditor, ValueView } from './editors'
-import { useKindLabel, useLinkSentence } from './KindsInfo'
+import { CATCH_ALL, strokesOk, ValueEditor, ValueView } from './editors'
 import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
 import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard } from './BgCard'
-import { BookOldView, BookPartPanel, BookSplitView } from './BookEvidence'
+import { CharacterCard } from './CharacterCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
-import { queuePath, queueRouteInUrl, replaceQueueRoute } from './route'
+import { Evidence } from './Evidence'
+import { ReportButton } from './ReportButton'
+import { queueRouteInUrl, replaceQueueRoute } from './route'
 
 const S = strings(
   {
     all: 'all',
     any: 'any',
     originLabel: 'Where the items came from',
+    t_character: 'characters',
     t_decomposition: 'parts',
     t_form_link: 'forms',
     t_part_meaning: 'part meanings',
     t_kanji_senses: 'meanings',
     t_word_sense: 'one word',
     t_bg: 'Bulgarian translations',
-    t_en_report: 'reports',
+    t_report: 'reports',
     reported: 'What is wrong, says the report',
-    jmdict: 'The English now (JMdict)',
     confirmReport: 'confirm: a real mistake',
     skippedTab: 'skipped',
     skippedTitle: 'The items you skipped, to do now',
@@ -78,50 +75,23 @@ const S = strings(
     keys: 'a accept · r reject · s skip · j/k next/previous',
     keysNoReject: 'a accept · s skip · j/k next/previous',
     keysWord: '1–9 pick and decide · r reject · s skip · j/k next/previous',
-    removed: 'Loses as a part',
-    added: 'Gains as a part',
-    lost: 'No longer a prerequisite',
-    gained: 'New prerequisites',
-    newEdge: 'This adds a containment edge: the order moves.',
-    containers: '{n} kanji contain it ({joyo} jōyō), all affected:',
-    notes: '{n} public notes mention a part it would lose:',
-    oldForm: 'Old form',
-    oldHint: 'Evidence for the story, not for the parts: judge the parts by the shape written today.',
-    pickHint: 'Pick what {char} contributes to the word, not what the word means overall.',
     left: '{n} waiting',
     confidence: 'model confidence {n}',
     confirmFirst: 'Confirm every word in the groups first: {n} left',
-    usedIn: 'In {n} kanji with a rating',
-    usedInNone: 'In no kanji with a rating',
-    usedInHint: 'Every kanji that is common, jōyō or JLPT-rated and contains it, at any depth; most frequent first.',
-    inBoth: '{n} in both',
-    showAll: 'show all {n}',
-    showFewer: 'show fewer',
-    noMeaning: 'no meaning of its own',
-    unihan: 'Unihan',
-    unihanHint: 'Chinese-centred; often a surname or a place, not what the part does in Japanese kanji.',
-    formLinks: 'Form links about it, still waiting',
-    formLinksHint: 'A “form of” lends one meaning to every kanji with the part. If it is a shape, reject the form of in the forms queue.',
-    draftSays: 'the draft says: {verdict}',
-    v_keep: 'keep',
-    v_reject: 'reject',
-    openItem: 'open in the queue',
-    formNow: 'Its forms now',
-    oldForms: 'old forms are shown under each kanji that has one',
   },
   {
     all: 'всички',
     any: 'всякакви',
     originLabel: 'Откъде са дошли',
+    t_character: 'знаци',
     t_decomposition: 'части',
     t_form_link: 'форми',
     t_part_meaning: 'значения на части',
     t_kanji_senses: 'значения',
     t_word_sense: 'една дума',
     t_bg: 'преводи на български',
-    t_en_report: 'доклади',
+    t_report: 'доклади',
     reported: 'Какво не е наред според доклада',
-    jmdict: 'Английският сега (JMdict)',
     confirmReport: 'потвърдете: истинска грешка',
     skippedTab: 'пропуснати',
     skippedTitle: 'Пропуснатите задачи, за да ги свършите сега',
@@ -151,57 +121,37 @@ const S = strings(
     keys: 'a приемане · r отхвърляне · s пропускане · j/k следващо/предишно',
     keysNoReject: 'a приемане · s пропускане · j/k следващо/предишно',
     keysWord: '1–9 избор и решение · r отхвърляне · s пропускане · j/k следващо/предишно',
-    removed: 'Губи като част',
-    added: 'Получава като част',
-    lost: 'Вече не е предпоставка',
-    gained: 'Нови предпоставки',
-    newEdge: 'Това добавя ребро на съдържане: редът се мести.',
-    containers: '{n} канджи го съдържат ({joyo} джойо), всички засегнати:',
-    notes: '{n} публични бележки споменават част, която би изчезнала:',
-    oldForm: 'Стара форма',
-    oldHint: 'Доказателство за историята, не за частите: частите се съдят по днешната форма.',
-    pickHint: 'Изберете какво внася {char} в думата, а не какво значи думата като цяло.',
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
     confirmFirst: 'Първо потвърдете всяка дума в групите: остават {n}',
-    usedIn: 'В {n} канджи с оценка',
-    usedInNone: 'В нито едно канджи с оценка',
-    usedInHint: 'Всяко канджи, което е често срещано, джойо или с ниво от JLPT и го съдържа на каквато и да е дълбочина; най-честите първи.',
-    inBoth: '{n} в двете',
-    showAll: 'покажете всички {n}',
-    showFewer: 'покажете по-малко',
-    noMeaning: 'няма свое значение',
-    unihan: 'Unihan',
-    unihanHint: 'Насочен към китайския; често фамилия или място, а не това, което частта прави в японските канджи.',
-    formLinks: 'Връзки между форми за нея, които още чакат',
-    formLinksHint: '„Форма на“ заема едно значение на всяко канджи с частта. Ако тя е форма без значение, отхвърлете „форма на“ в опашката с форми.',
-    draftSays: 'черновата казва: {verdict}',
-    v_keep: 'запазете',
-    v_reject: 'отхвърлете',
-    openItem: 'отворете в опашката',
-    formNow: 'Формите ѝ сега',
-    oldForms: 'старите форми са показани под всяко канджи, което има такава',
   },
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const TYPES: TaskType[] = ['decomposition', 'form_link', 'part_meaning', 'kanji_senses', 'word_sense', 'bg', 'en_report']
-// The stages to pick from: a single word's meaning is under meanings, with its kanji's card.
+// A character's parts, forms and part meaning are one card (CharacterCard.tsx); a single
+// word's meaning is under meanings, with its kanji's card.
+const TYPES: TaskType[] = ['character', 'kanji_senses', 'word_sense', 'bg', 'report']
 const STAGES = TYPES.filter((k) => k !== 'word_sense')
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
-const LIVE_ON_PAGE: TaskType[] = ['decomposition', 'form_link', 'part_meaning', 'bg']
+const LIVE_ON_PAGE: TaskType[] = ['bg']
+
+/** What a card is about, for "Something else is wrong?": its word, or its kanji. */
+function reportSubject(i: QueueItem): string | null {
+  if (i.type === 'report') return null
+  if (i.type === 'bg') return i.subject
+  if (i.type === 'word_sense') return `word:${i.subject.split('|')[1]}`
+  return `kanji:${i.subject.split('|')[0]}`
+}
 
 /** A single word's item: the word's id, from its subject 生|1234567. */
 const wordOf = (i: QueueItem) => Number(i.subject.split('|')[1])
 
 /**
- * Reject is for proposals that can be wrong as a whole: a decomposition, a
- * form link, a part's meaning (it may be a form of a kanji after all), or
- * anything a person suggested. Meanings and Bulgarian are shaped until
- * right, then accepted, or skipped.
+ * Reject is for what can be wrong as a whole: a report, or anything a person
+ * suggested. Meanings and Bulgarian are shaped until right, then accepted, or
+ * skipped; a character's card says in words what each answer does.
  */
-const canReject = (i: QueueItem) =>
-  i.type === 'decomposition' || i.type === 'form_link' || i.type === 'part_meaning' || i.origin === 'suggestion'
+const canReject = (i: QueueItem) => i.type === 'report' || i.origin === 'suggestion'
 
 /** `onDecided` is told after each decision, so the progress can count again. */
 export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void; onDecided?: () => void }) {
@@ -250,7 +200,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         let list = d.items
         let n = id ? list.findIndex((i) => i.id === id) : -1
         if (id && n < 0) {
-          const one = await api.reviewItem(id).catch(() => null)
+          // A character's card has no item of its own: its address names the character.
+          const one: QueueItem | null = id.startsWith('char:')
+            ? { id, type: 'character', subject: id.slice(5), status: 'open', origin: 'proposal', source: '' } as QueueItem
+            : await api.reviewItem(id).catch(() => null)
           if (one && one.status === 'open' && (!type || one.type === type) && (!origin || one.origin === origin)) {
             list = [one, ...list]
             n = 0
@@ -293,7 +246,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setNotes({})
     setNotesFrom({})
     setBoardWork(false)
-    if (!item) return
+    // A character's card loads its own (CharacterCard.tsx).
+    if (!item || item.type === 'character') return
     let stale = false
     api.reviewItem(item.id).then(
       (d) => {
@@ -325,6 +279,21 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     }
   }, [item?.id])
 
+  /** The open item was decided or skipped: off the list, counts follow, on to the next. */
+  const advance = useCallback(
+    (skipped: boolean) => {
+      if (!item) return
+      if (!skipped) onDecided?.()
+      setItems((list) => list && list.filter((i) => i.id !== item.id))
+      setTotal((n) => n - 1)
+      if (!showSkipped) setTypes((c) => ({ ...c, [item.type]: Math.max(0, (c[item.type] ?? 1) - 1) }))
+      if (skipped && !showSkipped) setSkippedN((n) => n + 1)
+      if (!skipped && showSkipped) setSkippedN((n) => Math.max(0, n - 1))
+      setAt((i) => Math.max(0, Math.min(i, (items?.length ?? 1) - 2)))
+    },
+    [item, items, onDecided, showSkipped],
+  )
+
   const decide = useCallback(
     async (action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, words?: Placements, skip?: Placements) => {
       if (!item || busy) return
@@ -336,20 +305,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withNotes)
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
-        if (action !== 'skip') onDecided?.()
-        setItems((list) => list && list.filter((i) => i.id !== item.id))
-        setTotal((n) => n - 1)
-        if (!showSkipped) setTypes((c) => ({ ...c, [item.type]: Math.max(0, (c[item.type] ?? 1) - 1) }))
-        if (action === 'skip' && !showSkipped) setSkippedN((n) => n + 1)
-        if (action !== 'skip' && showSkipped) setSkippedN((n) => Math.max(0, n - 1))
-        setAt((i) => Math.max(0, Math.min(i, (items?.length ?? 1) - 2)))
+        advance(action === 'skip')
       } catch (e) {
         setProblem(errorText(e, lang))
       } finally {
         setBusy(false)
       }
     },
-    [item, busy, reason, items, lang, onDecided, showSkipped, labels, notes],
+    [item, busy, reason, lang, labels, notes, advance],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
@@ -416,6 +379,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
   useKey((e) => {
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey || !item) return
+    // A character's card takes a, Enter and s itself; j and k still move.
+    if (item.type === 'character' && !['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
     if (e.key === 'a' || e.key === 'Enter') {
       if (!blocked) decideDraft()
     }
@@ -435,10 +400,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
   const subjectGlyphs = (i: QueueItem) => {
     const [a] = i.subject.split('|')
-    const b = i.type === 'bg' || i.type === 'en_report' ? i.subject.split(':')[1] : i.subject.split('|')[1]
+    const b = i.type === 'bg' || i.type === 'report' ? i.subject.split(':')[1] : i.subject.split('|')[1]
     if (i.type === 'form_link') return `${a} · ${b}`
     if (i.type === 'word_sense') return i.label ? `${a} · ${i.label}` : a
-    if (i.type === 'bg' || i.type === 'en_report') return i.label ?? b ?? i.subject.split(':')[1]
+    if (i.type === 'bg' || i.type === 'report') return i.label ?? b ?? i.subject.split(':')[1]
     return a
   }
 
@@ -529,7 +494,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             ))}
           </ol>
 
-          {item && (
+          {item?.type === 'character' && (
+            <CharacterCard key={item.id} id={item.id} char={item.subject} onDone={advance} onKanji={onKanji} />
+          )}
+          {item && item.type !== 'character' && (
             <article className="queue-item">
               <header className="queue-head">
                 <span className="queue-big" lang="ja">
@@ -546,6 +514,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     )}
                   </p>
                   {item.reason && <p className="queue-reason">{item.reason}</p>}
+                  {reportSubject(item) && <ReportButton key={item.id} subject={reportSubject(item)!} from={item.id} />}
                 </div>
                 <div className="queue-dict">
                   <DictLinks
@@ -557,7 +526,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               </header>
 
               <div className="queue-judge">
-              {item.type === 'en_report' ? (
+              {item.type === 'report' ? (
               <dl className="queue-compare">
                 <dt>{t('reported')}</dt>
                 <dd>
@@ -652,7 +621,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   title={blocked ? t('confirmFirst', { n: unconfirmed }) : undefined}
                   onClick={() => decideDraft()}
                 >
-                  {edited ? t('saveEdit') : open ? t('keep') : item.type === 'en_report' ? t('confirmReport') : t('accept')}
+                  {edited ? t('saveEdit') : open ? t('keep') : item.type === 'report' ? t('confirmReport') : t('accept')}
                 </button>
                 {canReject(item) && (
                   <button className="clear" disabled={busy} onClick={() => decide('reject')}>
@@ -674,261 +643,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             </article>
           )}
         </div>
-      )}
-    </div>
-  )
-}
-
-/** What the item is judged by, per type. `onUse` takes a value the evidence offers (the book's split) as the answer. */
-function Evidence({ detail, onKanji, onUse }: { detail: ItemDetail; onKanji?: (char: string) => void; onUse?: (v: TaskValue) => void }) {
-  const lang = useLang()
-  const t = S(lang)
-  const glyphs = (chars: string[]) => <PartTiles chars={chars} onKanji={onKanji} />
-  // What Dani's print dictionaries say (pipeline/book_sources.py), when they say anything.
-  const book = detail.evidence?.book
-
-  if (detail.type === 'decomposition') {
-    const imp = detail.impact
-    const old = detail.context.forms?.old ?? []
-    return (
-      <div className="queue-evidence">
-        {book != null && (
-          <BookSplitView
-            view={book as BookSplit}
-            current={detail.current as string[] | null}
-            proposed={detail.proposed as string[] | null}
-            onUse={onUse}
-          />
-        )}
-        {old.length > 0 && (
-          <p title={t('oldHint')}>
-            <span className="hint">{t('oldForm')}: </span>
-            {glyphs(old.map((o) => o.char))} {old[0].note && <span className="hint">{old[0].note}</span>}
-          </p>
-        )}
-        {imp && (
-          <>
-            {imp.newEdge && <p className="queue-warn">{t('newEdge')}</p>}
-            <dl className="queue-compare">
-              {imp.removed.length > 0 && (
-                <>
-                  <dt>{t('removed')}</dt>
-                  <dd>{glyphs(imp.removed)}</dd>
-                </>
-              )}
-              {imp.added.length > 0 && (
-                <>
-                  <dt>{t('added')}</dt>
-                  <dd>{glyphs(imp.added)}</dd>
-                </>
-              )}
-              {imp.lost.length > 0 && (
-                <>
-                  <dt>{t('lost')}</dt>
-                  <dd>{glyphs(imp.lost)}</dd>
-                </>
-              )}
-              {imp.gained.length > 0 && (
-                <>
-                  <dt>{t('gained')}</dt>
-                  <dd>{glyphs(imp.gained)}</dd>
-                </>
-              )}
-            </dl>
-            {imp.containers > 0 && (
-              <p>
-                <span className="hint">{t('containers', { n: imp.containers, joyo: imp.containersJoyo })} </span>
-                {glyphs(imp.topContainers)}
-              </p>
-            )}
-            {imp.notesTotal > 0 && (
-              <div>
-                <p className="queue-warn">{t('notes', { n: imp.notesTotal })}</p>
-                <ul className="queue-notes">
-                  {imp.notes.map((n) => (
-                    <li key={n.id}>
-                      <span lang="ja">{n.char}</span> <span className="hint">{n.text}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    )
-  }
-
-  if (detail.type === 'form_link') {
-    const [a, b] = detail.subject.split('|')
-    const users = detail.context.users as { a: string[]; b: string[] } | undefined
-    const meanings = detail.context.meanings
-    const both = users ? users.a.filter((c) => users.b.includes(c)).length : 0
-    return (
-      <div className="queue-evidence">
-        <div className="queue-sides">
-          {(['a', 'b'] as const).map((k) => (
-            <section key={k} className="queue-side">
-              <FontStrip char={k === 'a' ? a : b} />
-              <p className="queue-side-meaning">{meanings?.[k]?.slice(0, 3).join(', ') || <span className="hint">{t('noMeaning')}</span>}</p>
-              {users && <UsedIn chars={users[k]} onKanji={onKanji} />}
-            </section>
-          ))}
-        </div>
-        {both > 0 && <p className="hint">{t('inBoth', { n: both })}</p>}
-        {book != null && <BookOldView view={book as BookOld} />}
-      </div>
-    )
-  }
-
-  if (detail.type === 'part_meaning') return <PartEvidence detail={detail} onKanji={onKanji} />
-
-  const c = detail.context
-  return (
-    <div className="queue-evidence">
-      <dl className="queue-compare">
-        <KanjiFacts context={c} />
-      </dl>
-      {detail.type === 'en_report' && c.word && (
-        <div className="queue-word">
-          <h4>{t('jmdict')}</h4>
-          <p>
-            <span className="queue-word-head" lang="ja">
-              {c.word.headword}
-            </span>{' '}
-            <span lang="ja">{c.word.reading}</span>
-          </p>
-          <ol>
-            {c.word.senses.map((s, i) => (
-              <li key={i}>
-                {s.pos.length > 0 && <span className="hint">{s.pos.join(', ')} </span>}
-                {s.gloss}
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-      {detail.type === 'word_sense' && c.word && (
-        <div className="queue-word">
-          <p>
-            <span className="queue-word-head" lang="ja">
-              {c.word.headword}
-            </span>{' '}
-            <span lang="ja">{c.word.reading}</span>
-          </p>
-          <ol>
-            {c.word.senses.slice(0, 4).map((s, i) => (
-              <li key={i}>{lang === 'bg' && s.glossBg ? s.glossBg : s.gloss}</li>
-            ))}
-          </ol>
-          <p className="hint">{t('pickHint', { char: c.char ?? '' })}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** The kanji in scope a character is in, most frequent first: the first few, then all on request. */
-function UsedIn({ chars, onKanji, old }: { chars: string[]; onKanji?: (char: string) => void; old?: Record<string, string> }) {
-  const t = S(useLang())
-  const [all, setAll] = useState(false)
-  const FEW = 48
-  const shown = all ? chars : chars.slice(0, FEW)
-  return (
-    <div className="queue-used">
-      <p className="hint" title={t('usedInHint')}>
-        {chars.length ? t('usedIn', { n: chars.length }) : t('usedInNone')}
-      </p>
-      {old ? (
-        <span className="review-parts queue-used-old" lang="ja">
-          {shown.map((c) => (
-            <span key={c} className="queue-used-one">
-              <button className="review-part" onClick={() => onKanji?.(c)}>
-                {c}
-              </button>
-              {old[c] && <span className="queue-used-was">{old[c]}</span>}
-            </span>
-          ))}
-        </span>
-      ) : (
-        <PartTiles chars={shown} onKanji={onKanji} />
-      )}
-      {chars.length > FEW && (
-        <button className="clear" onClick={() => setAll((a) => !a)}>
-          {all ? t('showFewer') : t('showAll', { n: chars.length })}
-        </button>
-      )}
-    </div>
-  )
-}
-
-/** A part's meaning is judged by the kanji it is in and what it was in their old forms. */
-function PartEvidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: string) => void }) {
-  const t = S(useLang())
-  const kindLabel = useKindLabel()
-  const sentence = useLinkSentence()
-  const c = detail.context
-  const unihan = typeof detail.evidence?.unihan === 'string' ? detail.evidence.unihan : null
-  const verdicts = (detail.evidence?.formLinks ?? {}) as Record<string, 'keep' | 'reject'>
-  const forms = c.forms
-  const row = (label: string, items: { char: string; note: string | null }[] | undefined): ReactNode =>
-    items && items.length > 0 ? (
-      <>
-        <dt>{label}</dt>
-        <dd>
-          {items.map((i) => (
-            <span key={i.char}>
-              <span lang="ja">{i.char}</span>
-              {i.note && <span className="hint"> {i.note}</span>}{' '}
-            </span>
-          ))}
-        </dd>
-      </>
-    ) : null
-  return (
-    <div className="queue-evidence">
-      <FontStrip char={detail.subject} />
-      <dl className="queue-compare">
-        <KanjiFacts context={c} />
-        {unihan && (
-          <>
-            <dt title={t('unihanHint')}>{t('unihan')}</dt>
-            <dd>{unihan}</dd>
-          </>
-        )}
-        {row(kindLabel('form_of'), forms?.formOf)}
-        {row(kindLabel('looks_like'), forms?.looksLike)}
-        {row(kindLabel('positional'), forms?.positional)}
-      </dl>
-      {c.formItems && c.formItems.length > 0 && (
-        <div className="queue-form-items">
-          <h4 title={t('formLinksHint')}>{t('formLinks')}</h4>
-          <ul>
-            {c.formItems.map((f) => (
-              <li key={f.id}>
-                <span lang="ja">{f.proposed ? sentence(f.proposed.kind, f.subject, f.proposed.reverse) : f.subject.replace('|', ' · ')}</span>
-                {f.proposed?.note && <span className="hint"> — {f.proposed.note}</span>}
-                {verdicts[f.subject] && (
-                  <span className="queue-verdict" data-verdict={verdicts[f.subject]}>
-                    {' '}
-                    {t('draftSays', { verdict: t(`v_${verdicts[f.subject]}` as Key) })}
-                  </span>
-                )}{' '}
-                <a className="dict-open" href={queuePath({ type: 'form_link', item: f.id })} target="_blank" rel="noopener">
-                  {t('openItem')} <span aria-hidden>↗</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-          <p className="hint">{t('formLinksHint')}</p>
-        </div>
-      )}
-      {detail.evidence?.book != null && <BookPartPanel view={detail.evidence.book as BookPartView} />}
-      {Array.isArray(c.users) && (
-        <>
-          <UsedIn chars={c.users} onKanji={onKanji} old={c.old ?? {}} />
-          {c.old && Object.keys(c.old).length > 0 && <p className="hint">{t('oldForms')}</p>}
-        </>
       )}
     </div>
   )

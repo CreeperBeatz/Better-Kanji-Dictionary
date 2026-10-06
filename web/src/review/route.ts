@@ -14,17 +14,20 @@ import type { Origin, TaskType } from '../api'
 
 const TABS: WorkbenchTab[] = ['queue', 'history', 'progress', 'people', 'handbook']
 const PATH = /^\/review(?:\/([a-z-]+))?(?:\/[^/]*)*\/?$/
-const QUEUE_PATH = /^\/review\/queue(?:\/([a-z-]+))?(?:\/([A-Za-z0-9-]+))?\/?$/
+const QUEUE_PATH = /^\/review\/queue(?:\/([a-z-]+))?(?:\/([^/?]+))?\/?$/
 
 const SLUGS: Record<TaskType, string> = {
+  character: 'characters',
   decomposition: 'parts',
   form_link: 'forms',
   part_meaning: 'part-meanings',
   kanji_senses: 'meanings',
   word_sense: 'word-meanings',
   bg: 'bulgarian',
-  en_report: 'english',
+  report: 'reports',
 }
+// Parts, forms and part meanings are one stage now, a card per character: an old address lands there.
+const MERGED: TaskType[] = ['decomposition', 'form_link', 'part_meaning']
 
 export interface QueueRoute {
   type?: TaskType
@@ -39,7 +42,7 @@ export interface QueueRoute {
 let lastQueue: QueueRoute = {}
 
 export function queuePath(r: QueueRoute): string {
-  const path = `/review/queue/${r.type ? SLUGS[r.type] : 'all'}${r.item ? `/${r.item}` : ''}`
+  const path = `/review/queue/${r.type ? SLUGS[r.type] : 'all'}${r.item ? `/${encodeURIComponent(r.item)}` : ''}`
   const q = new URLSearchParams()
   if (r.origin) q.set('origin', r.origin)
   if (r.skipped) q.set('skipped', '1')
@@ -51,12 +54,12 @@ export function queueRouteInUrl(): QueueRoute {
   if (!m) return lastQueue
   const found = (Object.keys(SLUGS) as TaskType[]).find((k) => SLUGS[k] === m[1])
   // Single words are reviewed under meanings now; an old address still lands there.
-  const type = found === 'word_sense' ? 'kanji_senses' : found
+  const type = found === 'word_sense' ? 'kanji_senses' : found && MERGED.includes(found) ? 'character' : found
   const params = new URLSearchParams(window.location.search)
   const origin = params.get('origin')
   return {
     type,
-    item: m[2],
+    item: m[2] ? decodeURIComponent(m[2]) : undefined,
     origin: origin === 'proposal' || origin === 'suggestion' ? origin : undefined,
     skipped: params.get('skipped') === '1' || undefined,
   }

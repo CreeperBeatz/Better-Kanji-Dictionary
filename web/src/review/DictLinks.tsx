@@ -31,7 +31,7 @@ const word = (id: string, headword?: string): Target => ({ href: `/word/${id}`, 
 
 /** The dictionary pages an item is about, the main one first. */
 function dictTargets(type: TaskType, subject: string, label?: string): Target[] {
-  if (type === 'bg' || type === 'en_report') {
+  if (type === 'bg' || type === 'report') {
     const [kind, rest] = subject.split(':')
     if (!rest) return []
     return kind === 'word' ? [word(rest, label)] : [kanji(rest)]

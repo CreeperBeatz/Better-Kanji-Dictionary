@@ -60,6 +60,8 @@ const S = strings(
     followUp: 'Left for later: only the words skipped last time. The groups are already decided.',
     oneWord: 'One word to place: move {word} to the group it belongs in. The groups are decided; the other words show what each holds.',
     unsure: 'the drafting model was unsure here',
+    sure: 'ticked from the start: two drafting runs put it here, both sure. Untick it if it is wrong.',
+    nSure: '{n} words start ticked: two drafting runs agreed on them, both sure. Glance over them; untick any that is wrong.',
     words: '{n} words',
     common: 'common',
     uncommon: 'uncommon',
@@ -106,6 +108,8 @@ const S = strings(
     followUp: 'Оставени за по-късно: само пропуснатите миналия път думи. Групите вече са решени.',
     oneWord: 'Една дума за подреждане: преместете {word} в групата, към която принадлежи. Групите са решени; другите думи показват какво съдържа всяка.',
     unsure: 'моделът не беше сигурен тук',
+    sure: 'отметната от начало: две чернови я сложиха тук, и двете сигурни. Махнете отметката, ако е грешно.',
+    nSure: '{n} думи започват отметнати: две чернови са съгласни за тях, и двете сигурни. Прегледайте ги; махнете отметката на грешните.',
     words: '{n} думи',
     common: 'чести',
     uncommon: 'редки',
@@ -195,7 +199,17 @@ export function MeaningsBoard({
   const [shut, setShut] = useState<Set<string>>(new Set(kept?.shut))
   // Confirmation, a reviewer's checklist while working: the words checked.
   // Confirmed words move into a "confirmed" part of their box, open unless folded.
-  const [okWords, setOkWords] = useState<Set<number>>(new Set(kept?.okWords))
+  // A word both drafting runs put where it is, both sure, starts ticked: the
+  // reviewer looks at the rest, and unticks a ticked one that is wrong.
+  const [preTicked] = useState(
+    () =>
+      new Set(
+        !plain && only === undefined
+          ? words.filter((w) => w.sure && w.group !== null && (w.id in placements ? placements[w.id] : w.group) === w.group).map((w) => w.id)
+          : [],
+      ),
+  )
+  const [okWords, setOkWords] = useState<Set<number>>(() => (kept ? new Set(kept.okWords) : new Set(preTicked)))
   const [shutOk, setShutOk] = useState<Set<string>>(new Set(kept?.shutOk))
   // The right-click menu: where it opens and which words it moves.
   const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; from: Bucket } | null>(null)
@@ -228,12 +242,13 @@ export function MeaningsBoard({
   )
 
   useEffect(() => {
-    const empty = !okWords.size && !shutOk.size && !shut.size
+    const asStarted = okWords.size === preTicked.size && [...okWords].every((id) => preTicked.has(id))
+    const empty = asStarted && !shutOk.size && !shut.size
     writeDraft(cacheKey, {
       board: empty ? undefined : { okWords: [...okWords], shutOk: [...shutOk], shut: [...shut] },
     })
     onWork?.(!empty)
-  }, [cacheKey, okWords, shutOk, shut, onWork])
+  }, [cacheKey, okWords, shutOk, shut, onWork, preTicked])
 
   // Words by bucket, each sorted by newspaper rank, JLPT, then grade.
   const byBucket = useMemo(() => {
@@ -317,7 +332,8 @@ export function MeaningsBoard({
           const ids = picked.has(w.id) ? [...picked] : [w.id]
           setMenu({ x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 280), ids, from })
         }}
-        title={unsure ? t('unsure') : undefined}
+        data-sure={(ok && preTicked.has(w.id)) || undefined}
+        title={unsure ? t('unsure') : ok && preTicked.has(w.id) ? t('sure') : undefined}
       >
         <span className="board-head" lang="ja">
           {!plain && (
@@ -516,6 +532,7 @@ export function MeaningsBoard({
       {followUp && <p className="board-followup">{t('followUp')}</p>}
       {onlyWord && <p className="board-followup">{t('oneWord', { word: onlyWord.headword })}</p>}
       {skipped.size > 0 && <p className="board-skipnote">{t('skippedNote', { n: skipped.size })}</p>}
+      {preTicked.size > 0 && <p className="hint board-surenote">{t('nSure', { n: preTicked.size })}</p>}
       {groups.map((g, i) =>
         bucket(
           g.id,

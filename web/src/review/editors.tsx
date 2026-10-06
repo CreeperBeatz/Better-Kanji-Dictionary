@@ -7,9 +7,10 @@
  *   part_meaning   a meaning, or a shape's name, in en and bg, and a note
  *   kanji_senses   1 to 6 meaning groups, each an id and a label in en and bg
  *   word_sense     one of the kanji's groups, or the catch-all
+ *   report         what it is about, and what is wrong, in the reporter's words
  */
 import { lazy, Suspense, useState } from 'react'
-import { type FormKind, type FormLink, type ItemDetail, type MeaningGroup, type PartMeaning, type TaskType, type TaskValue } from '../api'
+import { type FormKind, type FormLink, type ItemDetail, type MeaningGroup, type PartMeaning, type Report, type ReportAbout, type TaskType, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
 import { FORM_KINDS, KindsInfoButton, KindsTable, ONE_WAY, PART_KINDS, useKindLabel, useKindsInfo, useLinkSentence } from './KindsInfo'
 
@@ -53,6 +54,18 @@ const S = strings(
     kanjidic: 'KANJIDIC',
     curated: 'Kanji Alive',
     readings: 'Readings',
+    about: 'What is wrong',
+    whatWrong: 'Say what is wrong, and what it should be if you know',
+    r_english: 'its English meaning (from JMdict)',
+    r_reading: 'its reading',
+    r_meanings: 'its English meanings (from KANJIDIC)',
+    r_readings: 'its readings',
+    r_levels: 'its JLPT level, school grade or frequency',
+    r_parts: 'its parts',
+    r_forms: 'its forms or old form',
+    r_similar: 'its similar kanji',
+    r_strokes: 'its stroke order or count',
+    r_other: 'something else',
   },
   {
     atomic: 'без части (неделим)',
@@ -90,6 +103,18 @@ const S = strings(
     kanjidic: 'KANJIDIC',
     curated: 'Kanji Alive',
     readings: 'Четения',
+    about: 'Какво не е наред',
+    whatWrong: 'Кажете какво не е наред и какво би трябвало да е, ако знаете',
+    r_english: 'английското значение (от JMdict)',
+    r_reading: 'четенето',
+    r_meanings: 'английските значения (от KANJIDIC)',
+    r_readings: 'четенията',
+    r_levels: 'нивото по JLPT, класа в училище или честотата',
+    r_parts: 'частите',
+    r_forms: 'формите или старата форма',
+    r_similar: 'сходните канджи',
+    r_strokes: 'реда или броя на чертите',
+    r_other: 'нещо друго',
   },
 )
 
@@ -98,6 +123,39 @@ const S = strings(
  * only from data sources; a person may use one, after saying yes to this.
  */
 const STROKES = new Set([...'一丨丶丿乙亅乚㇒㇏'])
+
+type Key = Parameters<ReturnType<typeof S>>[0]
+
+/** What a report may be about, by its subject (server/review.py REPORT_ABOUT). */
+export const REPORT_ABOUT: Record<'word' | 'kanji', ReportAbout[]> = {
+  word: ['english', 'reading', 'other'],
+  kanji: ['meanings', 'readings', 'levels', 'parts', 'forms', 'similar', 'strokes', 'other'],
+}
+
+/** A report: what it is about (by `subject`, word:123 or kanji:生) and what is wrong. */
+export function ReportEditor({ value, onChange, subject, autoFocus }: { value: Report | null; onChange: (v: Report) => void; subject: string; autoFocus?: boolean }) {
+  const t = S(useLang())
+  const choices = REPORT_ABOUT[subject.startsWith('word:') ? 'word' : 'kanji']
+  const v = value ?? { about: choices[0], text: '' }
+  return (
+    <>
+      <label className="review-field">
+        <span>{t('about')}</span>
+        <select className="assoc-text" value={v.about} onChange={(e) => onChange({ ...v, about: e.target.value as ReportAbout })}>
+          {choices.map((k) => (
+            <option key={k} value={k}>
+              {t(`r_${k}` as Key)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="review-field">
+        <span>{t('whatWrong')}</span>
+        <textarea className="assoc-text" rows={4} maxLength={1000} value={v.text} autoFocus={autoFocus} onChange={(e) => onChange({ ...v, text: e.target.value })} />
+      </label>
+    </>
+  )
+}
 
 /** True when the parts hold no stroke, or the person confirms they mean it. */
 export function strokesOk(parts: TaskValue, lang: 'en' | 'bg'): boolean {
@@ -180,7 +238,14 @@ export function ValueView({ type, value, groups, subject }: { type: TaskType; va
     )
   }
   if (type === 'part_meaning') return <PartMeaningView value={value as PartMeaning} />
-  if (type === 'en_report') return <span className="review-report">{value as string}</span>
+  if (type === 'report') {
+    const r = value as Report
+    return (
+      <span className="review-report">
+        <b>{t(`r_${r.about}` as Key)}</b> — {r.text}
+      </span>
+    )
+  }
   if (type === 'bg') {
     return (
       <span lang="bg" className="review-bg">
@@ -224,10 +289,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus, wi
 
   if (type === 'decomposition') return <PartsEditor value={value as string[] | null} onChange={onChange} autoFocus={autoFocus} />
 
-  if (type === 'en_report')
-    return (
-      <textarea className="assoc-text" rows={4} maxLength={1000} value={(value as string | null) ?? ''} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
-    )
+  if (type === 'report') return <ReportEditor value={value as Report | null} onChange={onChange} subject={subject ?? ''} autoFocus={autoFocus} />
 
   if (type === 'form_link') return <FormLinkEditor value={value} onChange={onChange} autoFocus={autoFocus} subject={subject} />
   if (type === 'part_meaning') return <PartMeaningEditor value={value} onChange={onChange} autoFocus={autoFocus} />
@@ -370,7 +432,7 @@ function FormLinkEditor({ value, onChange, autoFocus, subject }: { value: TaskVa
             autoFocus={autoFocus}
             onChange={(e) => onChange(turned({ ...v, kind: e.target.value as FormKind }, reverse))}
           >
-            {FORM_KINDS.map((k) => (
+            {FORM_KINDS.filter((k) => k !== 'positional' || v.kind === 'positional').map((k) => (
               <option key={k} value={k}>
                 {label(k)}
               </option>

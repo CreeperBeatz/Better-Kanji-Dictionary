@@ -29,6 +29,8 @@ export interface ItemDraft {
   /** And their Bulgarian notes. */
   notes?: Record<string, string>
   board?: BoardDraft
+  /** A character's card: each step's answer (CharacterCard.tsx). */
+  card?: unknown
 }
 
 export function readDraft(id: string): ItemDraft | null {
