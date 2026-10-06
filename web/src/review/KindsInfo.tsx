@@ -19,6 +19,7 @@ const S = strings(
     means: 'Means',
     changes: 'What it changes on the site',
     test: 'Position, or two characters? If one of them is only ever the other, written for a certain position (氵 is never seen alone), it is “how it is written in another position”. If both are characters in their own right that mean the same thing, it is “a separate character for the same thing”.',
+    built: 'Built from it is not a form of it. A character made of two or more of another (林 木, 炎 火, 𢆶 幺) contains it: that is its parts, not a form link. Choose “no relation”; if it has no meaning of its own, it gets one under part meanings.',
     formNever: 'No form link ever changes a kanji’s parts, the graph’s lines or the study order. On a card each choice reads as a sentence with its two characters; ⇄ turns an old form, a form of or a looks like round.',
     x_positional: '{x} and {y} are one character, written for different positions',
     x_old: '{y} is the old form of {x}',
@@ -43,7 +44,7 @@ const S = strings(
     c_looks_like: 'X’s page shows Y under “Looks like”, marked as a mnemonic, not its origin; Y’s page lists X under “Mistaken for it”. Describing a kanji by Y’s name finds X. No meaning is lent.',
     m_kin: 'X and Y are two characters in their own right, each with its own reading, that mean the same thing. Either can sit in the same place in a kanji: 隹 in 雅, 鳥 in 鳴 (both birds).',
     c_kin: 'Both pages show the other under “Related”. Nothing else: the graph never merges them (鳴 does not show under 隹).',
-    m_none: 'Nothing worth showing a learner: a Chinese simplified form, a rare variant.',
+    m_none: 'Nothing worth showing a learner: a Chinese simplified form, a rare variant — or a character built from the other (林 is two 木).',
     c_none: 'Removes every link between X and Y, built or reviewed, both ways. If Unihan pairs them, they still show under “Other variants”.',
     p_meaning: 'its own meaning',
     p_shape: 'a shape with no meaning',
@@ -59,6 +60,7 @@ const S = strings(
     means: 'Значи',
     changes: 'Какво променя в сайта',
     test: 'Позиция или два знака? Ако единият винаги е просто другият, написан за определено място (氵 никога не стои сам), това е „как се пише в друга позиция“. Ако и двата са самостоятелни знаци с едно и също значение, това е „отделен знак за същото нещо“.',
+    built: 'Построен от него не значи форма на него. Знак от два или повече еднакви знака (林 木, 炎 火, 𢆶 幺) го съдържа: това са частите му, не връзка между форми. Изберете „няма връзка“; ако няма свое значение, получава такова в значенията на части.',
     formNever: 'Връзка между форми никога не променя частите на канджи, линиите в графа или реда на учене. На картата всеки избор се чете като изречение с двата си знака; ⇄ обръща стара форма, „форма на“ или „прилича на“.',
     x_positional: '{x} и {y} са един знак, написан за различни позиции',
     x_old: '{y} е старата форма на {x}',
@@ -83,7 +85,7 @@ const S = strings(
     c_looks_like: 'Страницата на X показва Y под „Прилича на“, отбелязано като мнемоника, а не произход; страницата на Y показва X под „Бъркат го с него“. Описание на канджи с името на Y намира X. Значение не се заема.',
     m_kin: 'X и Y са два самостоятелни знака, всеки със свое четене, които значат едно и също. Всеки от тях може да стои на същото място в канджи: 隹 в 雅, 鳥 в 鳴 (и двата са птици).',
     c_kin: 'Двете страници показват другата под „Сродни“. Нищо друго: графът никога не ги слива (鳴 не се показва под 隹).',
-    m_none: 'Нищо, което си струва да се покаже на учащия: китайска опростена форма, рядък вариант.',
+    m_none: 'Нищо, което си струва да се покаже на учащия: китайска опростена форма, рядък вариант — или знак, построен от другия (林 е два 木).',
     c_none: 'Премахва всяка връзка между X и Y, вградена или прегледана, в двете посоки. Ако Unihan ги свързва, те пак се показват под „Други варианти“.',
     p_meaning: 'свое значение',
     p_shape: 'форма без значение',
@@ -147,7 +149,12 @@ export function KindsTable({ of }: { of: 'form' | 'part' }) {
           ))}
         </tbody>
       </table>
-      {of === 'form' && <p>{t('test')}</p>}
+      {of === 'form' && (
+        <>
+          <p>{t('test')}</p>
+          <p>{t('built')}</p>
+        </>
+      )}
       <p className="hint">{t(of === 'form' ? 'formNever' : 'partNever')}</p>
     </div>
   )

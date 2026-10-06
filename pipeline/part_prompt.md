@@ -37,6 +37,10 @@ Pick exactly one per part.
   as a meaning. Also use `shape` for a fragment that is just strokes cut
   from a bigger part and means nothing alone.
 
+A part made of two or more of one kanji (𢆶 is two 幺) is built from it,
+not a form of it: never `form_of`. It is a `meaning` if the doubling means
+something (𢆶, tiny), otherwise a `shape`.
+
 When a part is a form of Y in most kanji but something else in a few,
 prefer `form_of` and name the exceptions in the evidence. When it is two or
 more things about equally often, it is a `shape`.

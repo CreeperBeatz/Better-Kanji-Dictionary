@@ -17,7 +17,8 @@ explains a part.
   **Needs evidence** in `note`: an old form where Y appears in X's place
   (cite it: "靑, the old form of 青"), or a standard reference (Kangxi
   radical, Shuowen). At most one `form_of` per part. If you cannot point to
-  evidence, do not propose `form_of`.
+  evidence, do not propose `form_of`. A part made of two or more of Y (𢆶 is
+  two 幺, 林 two 木) is built from Y, not a form of it: no `form_of`.
 - `looks_like` — a popular **mnemonic** lookalike: 龶 looks like 王. Not
   etymology, and always shown as a mnemonic. Propose one only if learners
   really do read it that way and it helps; do not propose lookalikes that

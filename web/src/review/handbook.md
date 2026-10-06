@@ -123,7 +123,7 @@ change, even if it is technically accurate.
 | *is a form of* | X is Y, written differently for the place it sits, and lends Y's meaning. Needs history behind it (the old form, a reference). One per bound form. | 龰·止 |
 | *looks like* | a mnemonic lookalike only, always shown as such | 龶 looks like 王 |
 | *a separate character for the same thing* | X and Y are characters in their own right, with their own readings, that mean the same thing; either can sit in the same place (雅 has 隹 where 鳴 has 鳥) | 隹·鳥 |
-| *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant | 业·業 |
+| *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant, or a character built from the other | 业·業, 林·木 |
 
 - **Read the sentence.** On a card each choice reads with its two
   characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
@@ -135,6 +135,13 @@ change, even if it is technically accurate.
   (スイ, チョウ), and either can sit in the same place. The first is *how it
   is written in another position*; the second, *a separate character for
   the same thing*.
+- **Built from it is not a form of it.** A character made of two or more
+  of another (林 is two 木, 炎 two 火, 𢆶 two 幺) contains it, and that is
+  its parts: 林's parts are 木. It is a character with a meaning of its own
+  (林 is a grove, not a tree), so it lends nothing and borrows nothing.
+  Choose *no relation*, or reject a card that proposes a form of. If the
+  doubled character has no meaning in the dictionary (𢆶), it gets one
+  under *Part meanings*.
 - Reject a *looks like* that points at a kanji with the wrong meaning that
   the learner will also meet.
 - A form link never changes parts.
