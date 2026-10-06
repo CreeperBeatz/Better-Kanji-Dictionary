@@ -18,6 +18,12 @@ const Onboarding = lazy(() => import('./Onboarding'))
 const S = strings(
   {
     people: 'People',
+    gateTitle: 'The review screen',
+    gateSignedOut: 'It is for reviewers. Sign in to open it.',
+    gateUser: 'Your account is not a reviewer yet. You can ask to become one in your account.',
+    signIn: 'Sign in',
+    myAccount: 'Open my account',
+    back: 'Back to the dictionary',
     requests: 'Asking to review',
     noRequests: 'No one is waiting.',
     approve: 'approve',
@@ -63,6 +69,12 @@ const S = strings(
   },
   {
     people: 'Хора',
+    gateTitle: 'Екранът за преглед',
+    gateSignedOut: 'Той е за рецензенти. Влезте, за да го отворите.',
+    gateUser: 'Профилът ви още не е рецензент. Можете да поискате да станете такъв от профила си.',
+    signIn: 'Вход',
+    myAccount: 'Отворете профила си',
+    back: 'Обратно към речника',
     requests: 'Искат да рецензират',
     noRequests: 'Никой не чака.',
     approve: 'одобрете',
@@ -119,14 +131,17 @@ export function Workbench({
   onTab,
   onClose,
   onKanji,
+  onSignIn,
 }: {
   tab: WorkbenchTab
   onTab: (t: WorkbenchTab) => void
   onClose: () => void
   onKanji?: (char: string) => void
+  /** Opens the account dialog: to sign in, or to ask to review. */
+  onSignIn?: () => void
 }) {
   const t = S(useLang())
-  const { user } = useAuth()
+  const { user, ready } = useAuth()
   const [version, setVersion] = useState(0)
   const decided = useCallback(() => setVersion((v) => v + 1), [])
   const progress = useProgress(version)
@@ -151,7 +166,33 @@ export function Workbench({
     else onClose()
   })
 
-  if (!user || user.role === 'user') return null
+  // Opened from its address: while the account loads, the screen says so, rather than
+  // leaving the map in view; signed out or not a reviewer, it says why and offers a way in.
+  if (!ready || !user || user.role === 'user')
+    return (
+      <div className="overlay workbench-screen">
+        <div className="overlay-panel workbench workbench-gate" role="dialog" aria-modal="true" aria-label={t('gateTitle')}>
+          {!ready ? (
+            <p className="hint">{t('loading')}</p>
+          ) : (
+            <>
+              <h2>{t('gateTitle')}</h2>
+              <p>{t(user ? 'gateUser' : 'gateSignedOut')}</p>
+              <p className="workbench-gate-actions">
+                {onSignIn && (
+                  <button className="account-submit" onClick={onSignIn}>
+                    {t(user ? 'myAccount' : 'signIn')}
+                  </button>
+                )}
+                <button className="clear" onClick={onClose}>
+                  {t('back')}
+                </button>
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    )
   const tabs: WorkbenchTab[] = ['queue', 'history', 'progress', ...(user.role === 'admin' ? (['people'] as const) : []), 'handbook']
 
   // The whole screen: the queue needs the room, and its list and item scroll on their own.

@@ -1819,12 +1819,12 @@ export function App() {
         </main>
       </div>
 
-      {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
       {workbench && (
         <Workbench
           tab={workbench}
           onTab={workbenchTab}
           onClose={closeWorkbench}
+          onSignIn={signIn}
           onKanji={(c) => {
             // Over the review entry, so back comes back to the review screen.
             setWorkbench(null)
@@ -1832,6 +1832,8 @@ export function App() {
           }}
         />
       )}
+      {/* After the review screen, so signing in from its gate opens above it. */}
+      {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
     </div>
   )
 }
