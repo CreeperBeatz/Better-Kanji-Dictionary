@@ -77,6 +77,20 @@ TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sen
 # The three types a character's card decides together; the queue lists them as one stage.
 CHARACTER_TYPES = ("decomposition", "form_link", "part_meaning")
 CHARACTER = "character"
+# The old forms (Unihan kJapaneseOldVariant) are checked on one list, a page at a time, not a card each:
+# their form links carry this source and the virtual type below (pipeline/form_checks.py).
+OLD_FORMS = "old_forms"
+OLD_CHECK = "old-forms-check"
+OLD_PAGE = 60
+
+
+def _on_card(i: dict) -> bool:
+    """On a character's card: its parts, form links and part meaning -- an old form waits on the list instead."""
+    return i["type"] in CHARACTER_TYPES and i["source"] != OLD_CHECK
+
+
+def _old_check(i: dict) -> bool:
+    return i["type"] == "form_link" and i["source"] == OLD_CHECK
 
 # A report that something is wrong that no card or edit can fix: a word's
 # English (JMdict's), a kanji's dictionary meanings or readings, its levels,
@@ -434,7 +448,7 @@ def _bad_words() -> AppError:
 
 
 def _known_type(type_: str, character: bool = False) -> None:
-    if type_ not in TYPES and not (character and type_ == CHARACTER):
+    if type_ not in TYPES and not (character and type_ in (CHARACTER, OLD_FORMS)):
         raise _bad("bad_type", "unknown task type")
 
 
@@ -1333,23 +1347,26 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
     anchor = _anchors(data)
     types = {t: 0 for t in TYPES if t not in CHARACTER_TYPES}
-    types[CHARACTER] = len({anchor(i) for i in mine if i["type"] in CHARACTER_TYPES})
+    types[CHARACTER] = len({anchor(i) for i in mine if _on_card(i)})
+    types[OLD_FORMS] = sum(1 for i in mine if _old_check(i))
     for i in mine:
         if i["type"] not in CHARACTER_TYPES:
             types[i["type"]] += 1
     # The meanings stage holds a kanji's groups and its single words both;
     # the character stage, a character's parts, forms and part meaning.
     def wanted(i: dict) -> bool:
+        if _old_check(i):
+            return type_ in (None, OLD_FORMS)
         return (type_ is None or i["type"] == type_ or (type_ == "kanji_senses" and i["type"] == "word_sense")
                 or (type_ == CHARACTER and i["type"] in CHARACTER_TYPES))
 
     rows = [i for i in mine if wanted(i)]
     rows.sort(key=lambda i: (-(i.get("priority") or 0), i["created"]))
     rows = _by_character(_by_kanji(rows), anchor)
-    names = _names({i["created_by"] for i in rows[:limit] if i["type"] != CHARACTER})
+    names = _names({i["created_by"] for i in rows[:limit] if i["type"] not in (CHARACTER, OLD_FORMS)})
     return {
         "total": len(rows),
-        "items": [i if i["type"] == CHARACTER else _view(i, names, data) for i in rows[:limit]],
+        "items": [i if i["type"] in (CHARACTER, OLD_FORMS) else _view(i, names, data) for i in rows[:limit]],
         "types": types,
         "skipped": len(_by_character([i for i in waiting if user_id in i["skipped_by"] and wanted(i)], anchor)),
     }
@@ -1374,7 +1391,17 @@ def _by_character(rows: list[dict], anchor) -> list[dict]:
     """A character's parts, forms and part-meaning items as one card, at the
     place its first item had: the queue lists the card, the card holds the items."""
     out, cards = [], {}
+    old = None
     for i in rows:
+        if _old_check(i):
+            # Every old form waiting is one entry: the list, at the place of its first.
+            if old is None:
+                old = {"id": OLD_FORMS, "type": OLD_FORMS, "subject": "", "origin": "proposal", "source": OLD_CHECK,
+                       "items": [], "proposed": None, "current": None, "evidence": None, "reason": None,
+                       "status": "open", "priority": i.get("priority") or 0, "createdBy": None}
+                out.append(old)
+            old["items"].append(i["id"])
+            continue
         if i["type"] not in CHARACTER_TYPES:
             out.append(i)
             continue
@@ -1404,7 +1431,7 @@ def character_card(char: str) -> dict:
     data = _read()
     anchor = _anchors(data)
     ids = [i["id"] for i in sorted(data["items"].values(), key=lambda i: (-(i.get("priority") or 0), i["created"]))
-           if i["status"] == "open" and i["type"] in CHARACTER_TYPES and anchor(i) == char]
+           if i["status"] == "open" and _on_card(i) and anchor(i) == char]
     if not ids:
         raise AppError(404, "card_empty", "nothing waits about this character")
     users = users_of(char)
@@ -1432,7 +1459,7 @@ def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | No
     with _change() as data:
         anchor = _anchors(data)
         open_ids = {i["id"] for i in data["items"].values()
-                    if i["status"] == "open" and i["type"] in CHARACTER_TYPES and anchor(i) == char}
+                    if i["status"] == "open" and _on_card(i) and anchor(i) == char}
         asked = [d.get("item") for d in decisions if isinstance(d, dict)]
         if len(asked) != len(decisions) or set(asked) != open_ids or len(set(asked)) != len(asked):
             raise AppError(409, "card_changed", "this card changed since it was opened; open it again")
@@ -1452,6 +1479,37 @@ def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | No
                 if x == char:
                     raise _bad("shape_and_form_of", "a shape and a form of can't both be right: pick one")
         return [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason) for d in decisions]
+
+
+def old_forms(limit: int = OLD_PAGE) -> dict:
+    """The old forms waiting, most used first, a page at a time: each with both
+    characters, the link as it is now, and a few kanji in scope it is in."""
+    data = _read()
+    waiting = [i for i in data["items"].values() if i["status"] == "open" and _old_check(i)]
+    waiting.sort(key=lambda i: (-(i.get("priority") or 0), i["subject"]))
+    out = []
+    for i in waiting[:limit]:
+        a, b = i["subject"].split("|")
+        users = users_of(a)
+        out.append({"id": i["id"], "subject": i["subject"], "current": current("form_link", i["subject"], data),
+                    "users": users[:6], "inScope": len(users),
+                    # A compatibility ideograph (U+F900-FAFF, U+2F800-2FA1F): most fonts draw it like today's form (D-017).
+                    "compat": any(0xF900 <= ord(c) <= 0xFAFF or 0x2F800 <= ord(c) <= 0x2FA1F for c in (a, b))})
+    return {"total": len(waiting), "items": out}
+
+
+def decide_old_forms(decisions: list[dict], user_id: str) -> list[dict]:
+    """A page of the old-forms list in one change: each "keep" (right as it is) or "edit" (what it is instead)."""
+    if not isinstance(decisions, list) or not decisions or len(decisions) > 200:
+        raise _bad("card_decisions", "decide every item on the page")
+    with _change() as data:
+        for d in decisions:
+            it = data["items"].get(d.get("item")) if isinstance(d, dict) else None
+            if not it or it["status"] != "open" or not _old_check(it):
+                raise AppError(409, "card_changed", "this list changed since it was opened; open it again")
+            if d.get("action") not in ("keep", "edit"):
+                raise _bad("bad_action", "keep or edit")
+        return [_decide(data, d["item"], d["action"], user_id, d.get("value")) for d in decisions]
 
 
 def _by_kanji(rows: list[dict]) -> list[dict]:
@@ -1839,13 +1897,22 @@ def progress() -> dict:
     # Parts, forms and part meanings are decided a character at a time: one task per card.
     anchor = _anchors(data)
     cards: dict[str, bool] = {}
+    old = {"done": 0, "total": 0}
     for i in data["items"].values():
-        if i["type"] in CHARACTER_TYPES and i["status"] != "withdrawn":
+        if i["status"] == "withdrawn":
+            continue
+        if _old_check(i):
+            old["total"] += 1
+            old["done"] += i["status"] != "open"
+        elif i["type"] in CHARACTER_TYPES:
             c = anchor(i)
             cards[c] = cards.get(c, True) and i["status"] != "open"
     for t in CHARACTER_TYPES:
         del stages[t]
     stages[CHARACTER] = {"done": sum(cards.values()), "total": len(cards)}
+    # An old form is one row of a list, but still a thing decided: a task each.
+    if old["total"]:
+        stages[OLD_FORMS] = old
     # The kanji in scope (server/scope.py) that have a meanings task.
     targets = sorted(subjects("kanji_senses", data))
 

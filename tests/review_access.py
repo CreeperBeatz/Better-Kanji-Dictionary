@@ -123,6 +123,27 @@ def main() -> int:
         check("keep changes nothing", "牛" not in store.decomposition_overrides())
         check("kept is logged as kept", review._read()["decisions"][-2]["action"] == "keep")
 
+        print("the old forms: one list, off the cards")
+        added, _ = review.add_items([
+            {"type": "form_link", "subject": s, "proposed": None, "source": review.OLD_CHECK, "reason": "check"}
+            for s in ("会|會", "国|國")])
+        check("two old forms are queued", added == 2)
+        _, q = call("GET", "/api/review/queue?type=old_forms", "reviewer")
+        check("the queue lists them as one entry", [i["type"] for i in q["items"]] == ["old_forms"] and q["types"]["old_forms"] == 2, q)
+        check("no character card holds them", call("GET", "/api/review/characters/%E4%BC%9A", "reviewer")[0] == 404)
+        _, page = call("GET", "/api/review/old-forms", "reviewer")
+        check("the list has both, as they are now", len(page["items"]) == 2 and page["items"][0]["current"]["kind"] == "old", page)
+        ids = {r["subject"]: r["id"] for r in page["items"]}
+        check("a user may not see it", call("GET", "/api/review/old-forms", "user")[0] == 403)
+        status, res = call("POST", "/api/review/old-forms/decide", "reviewer", {"decisions": [
+            {"item": ids["会|會"], "action": "keep"},
+            {"item": ids["国|國"], "action": "edit", "value": {"kind": "none", "note": "test"}}]})
+        check("a page is decided at once", status == 200 and [i["status"] for i in res["items"]] == ["kept", "edited"], (status, res))
+        check("an edited row is live", review.current("form_link", "国|國")["kind"] == "none")
+        check("deciding it again is 409", call("POST", "/api/review/old-forms/decide", "reviewer", {"decisions": [
+            {"item": ids["会|會"], "action": "keep"}]})[0] == 409)
+        check("progress counts them apart", review.progress()["stages"]["old_forms"] == {"done": 2, "total": 2})
+
         print("reports: on a word or a kanji, never live")
         status, res = call("POST", "/api/review/suggest", "reviewer", {"type": "report", "subject": "kanji:合", "value": {"about": "meanings", "text": "0.1 is a bare unit"}})
         check("a reviewer's report is queued too", status == 200 and res["applied"] is False, (status, res))

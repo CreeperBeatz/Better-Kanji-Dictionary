@@ -76,6 +76,7 @@ const S = strings(
     s_meaning_form: 'let {char} borrow the meaning of what it is a form of',
     reason: 'Reason (optional)',
     save: 'save',
+    pickFirst: 'Pick an answer for each question first. Nothing is picked where the draft was unsure or nothing is proposed.',
     skip: 'skip',
     reset: 'reset card',
     resetTitle: 'Throw away what you chose on this card and start again',
@@ -129,6 +130,7 @@ const S = strings(
     s_meaning_form: 'остави {char} да заема значението на това, чиято форма е',
     reason: 'Причина (по желание)',
     save: 'запишете',
+    pickFirst: 'Първо изберете отговор на всеки въпрос. Нищо не е избрано, където черновата не е сигурна или няма предложение.',
     skip: 'пропуснете',
     reset: 'нулирайте картата',
     resetTitle: 'Изхвърлете избраното на тази карта и започнете отначало',
@@ -141,12 +143,20 @@ type Key = Parameters<ReturnType<typeof S>>[0]
 
 interface Work {
   parts?: { pick: string; custom: string[] }
-  forms: Record<string, { pick: 'proposed' | 'now' | 'other'; value: FormLink }>
+  /** '' = nothing picked yet: an unsure draft, or a link check with nothing proposed. */
+  forms: Record<string, { pick: '' | 'proposed' | 'now' | 'other'; value: FormLink }>
   meaning?: { pick: 'proposed' | 'other' | 'form' | 'none'; value: PartMeaning }
   reason: string
 }
 
-/** Where the card starts: the draft when there is one, else the first proposal, else as it is. */
+/** Below this the draft is a guess: the card starts with nothing picked, so the reviewer reads before saving. */
+const UNSURE = 0.6
+
+/**
+ * Where the card starts: the draft when there is one, else the first proposal,
+ * else as it is. An unsure draft, or a link check with nothing proposed, starts
+ * with nothing picked, so a tired reviewer cannot save it unread.
+ */
 function startWork(card: Card): Work {
   const parts = card.items.filter((i) => i.type === 'decomposition')
   const forms = card.items.filter((i) => i.type === 'form_link')
@@ -154,8 +164,10 @@ function startWork(card: Card): Work {
   const draft = draftOf(parts)
   const options = partsOptions(parts, card.context.parts, draft)
   const work: Work = { forms: {}, reason: '' }
-  if (parts.length) work.parts = { pick: draft ? 'draft' : options[0].key, custom: draft?.parts ?? card.context.parts }
-  for (const f of forms) work.forms[f.id] = { pick: 'proposed', value: (f.proposed as FormLink) ?? { kind: 'none', note: null } }
+  if (parts.length)
+    work.parts = { pick: draft ? (draft.confidence < UNSURE ? '' : 'draft') : options[0].key, custom: draft?.parts ?? card.context.parts }
+  for (const f of forms)
+    work.forms[f.id] = { pick: f.proposed ? 'proposed' : '', value: (f.proposed as FormLink) ?? (f.current as FormLink | null) ?? { kind: 'none', note: null } }
   if (meaning) work.meaning = { pick: 'proposed', value: meaning.proposed as PartMeaning }
   return work
 }
@@ -191,7 +203,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         setStart(s)
         // Work kept from an older card layout whose answer is gone starts afresh.
         const kept = readDraft(id)?.card as Work | undefined
-        const keys = new Set(['other', ...partsOptions(c.items.filter((i) => i.type === 'decomposition'), c.context.parts, draftOf(c.items)).map((o) => o.key)])
+        const keys = new Set(['', 'other', ...partsOptions(c.items.filter((i) => i.type === 'decomposition'), c.context.parts, draftOf(c.items)).map((o) => o.key)])
         setWork(kept && (!kept.parts || keys.has(kept.parts.pick)) ? kept : s)
       },
       (e) => !stale && setProblem(errorText(e, lang)),
@@ -214,11 +226,13 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const options = useMemo(() => (card ? partsOptions(partsItems, card.context.parts, draft) : []), [card, partsItems, draft])
 
   // The parts the chosen answer gives.
-  const chosen: string[] | null = !work?.parts
+  const chosen: string[] | null = !work?.parts || work.parts.pick === ''
     ? null
     : work.parts.pick === 'other'
       ? work.parts.custom
       : (options.find((o) => o.key === work.parts!.pick)?.parts ?? now)
+  // A question with nothing picked yet: saving waits for it.
+  const unpicked = !!work && (work.parts?.pick === '' || Object.values(work.forms).some((f) => f.pick === ''))
   const partsChange = chosen !== null && !same(chosen, now)
 
   // What the chosen parts would change upstream.
@@ -239,7 +253,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   // Each form link and the part's meaning, resolved to what they would be.
   const formValue = (f: ItemDetail): FormLink | null => {
     const w = work?.forms[f.id]
-    if (!w || w.pick === 'now') return null
+    if (!w || w.pick === 'now' || w.pick === '') return null
     return w.pick === 'proposed' ? (f.proposed as FormLink) : w.value
   }
   const meaningValue: PartMeaning | null =
@@ -292,6 +306,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
     if (!card || !work || busy) return
     const list = skip ? card.items.map((i) => ({ item: i.id, action: 'skip' as const })) : decisions()
     if (!list) return
+    if (!skip && unpicked) return
     if (!skip && partsChange && !strokesOk(chosen, lang)) return
     setBusy(true)
     setProblem(null)
@@ -319,7 +334,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   useKey((e) => {
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey) return
     if (e.key === 'a' || e.key === 'Enter') {
-      if (!conflict) send(false)
+      if (!conflict && !unpicked) send(false)
     } else if (e.key === 's') send(true)
     else return
     e.preventDefault()
@@ -563,8 +578,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <input className="assoc-text" value={work.reason} maxLength={500} onChange={(e) => setWork({ ...work, reason: e.target.value })} />
         </label>
         {problem && <p className="account-problem">{problem}</p>}
+        {unpicked && <p className="hint card-pick-first">{t('pickFirst')}</p>}
         <div className="queue-actions">
-          <button className="account-submit" disabled={busy || conflict} onClick={() => send(false)}>
+          <button className="account-submit" disabled={busy || conflict || unpicked} title={unpicked ? t('pickFirst') : undefined} onClick={() => send(false)}>
             {t('save')}
           </button>
           <button className="clear" disabled={busy} onClick={() => send(true)}>

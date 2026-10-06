@@ -103,7 +103,12 @@ dictionary.
   source, as today's or as no parts, it takes that answer's place and its
   labels. It shows its confidence and its reason, and starts selected; a
   red edge means it was unsure. *Why this card* under the answers says
-  what a rule found (one part only …).
+  what a rule found (one part only, a source keeps it whole, only one
+  source splits it like this …).
+- **Nothing picked?** Where the draft was unsure (below 0.6), or a link is
+  only a check with nothing proposed, the card starts with no answer
+  picked, and *save* waits until you pick one for each question. Read
+  those slowly: they are the ones most likely to be wrong.
 - **Edit**, on the draft, opens the parts field with what the draft says:
   change it and save. That is also how you give an answer of your own.
 - **What this changes** shows, for the parts you picked, what every kanji
@@ -196,6 +201,14 @@ change, even if it is technically accurate.
 | *a separate character for the same thing* | X and Y are characters in their own right, with their own readings, that mean the same thing; either can sit in the same place (雅 has 隹 where 鳴 has 鳥) | 隹·鳥 |
 | *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant, or a character built from the other | 业·業, 林·木 |
 
+- **A check with nothing proposed** is a link the dictionary was built
+  with that no person has looked at. Leave it as it is when it is right;
+  otherwise say what it is instead.
+- **The old forms are one list** (the *old forms* stage), not a card each:
+  "舊 is the old form of 旧". Every row starts ticked. Untick a wrong one
+  and pick what the two are instead; *save* checks the whole page. A row
+  marked *a font difference only* is a compatibility code point (D-017):
+  the link is usually right, but most fonts draw both the same.
 - **Read the sentence.** On a card each choice reads with its two
   characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
   a form of and a looks like go one way; if a proposal has them the wrong

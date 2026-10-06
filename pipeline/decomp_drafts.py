@@ -2,6 +2,7 @@
 
     python pipeline/decomp_drafts.py flags                 # what the rules find, nothing written
     python pipeline/decomp_drafts.py prepare               # batches for the subagents
+    python pipeline/decomp_drafts.py prepare --new         # a later pass: only what has no draft yet (E-*)
     # one Sonnet subagent per data/drafts/decomp/in/*.json, following pipeline/decomp_prompt.md
     python pipeline/decomp_drafts.py check [--batch D-000]
     python pipeline/decomp_drafts.py load [--dry-run] [--review-dir DIR]
@@ -22,6 +23,13 @@ in scope (the closure):
 - **bare stroke**: a part that is a single stroke (以 = 丨丶人).
 - **no source splits it**: neither IDS nor KanjiVG gives it parts, and we do.
 - **data issue**: named in DATA-ISSUES.md (五 段 為 並 牛 …).
+- **a source keeps it whole** (D-018, Dani's rule: a base kanji stays
+  whole): KanjiVG, IDS or Цалта give it no parts, and we split it
+  (止 = 丄 卜, 糸 = 小 幺).
+- **weak backing**: fewer than two of KanjiVG, IDS and Цалта split it as we
+  do -- only one source does, they all split it otherwise, or none can be
+  read (具, 合, 直). Two sources agreeing is the bar for a split no person
+  has checked.
 
 Every parts card -- these and the ones already queued -- then gets a draft:
 the parts it should have (or none), whether that keeps or changes today's,
@@ -51,6 +59,8 @@ from server import scope as review_scope  # noqa: E402
 DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "decomp")
 PER_BATCH = 30
 FLAG_SOURCE = "parts-check"
+# The sources a split is checked against (decomp_source), in the order a reviewer trusts them.
+BACKERS = (("kanjivg", "KanjiVG"), ("ids", "IDS"), ("tsalta", "Цалта"))
 
 # DATA-ISSUES.md D-004: found by people, whether or not a rule sees them.
 DATA_ISSUES = {
@@ -84,6 +94,9 @@ def flags() -> tuple[dict[str, list[str]], dict]:
     scope = rs.closure(children, review_scope.kanji(db))
     st = strokes(db)
     ids, kvg = rs.babelstone(), rs.kanjivg()
+    splits = source_splits(db)
+    eq = rs.equivalence(db)
+    key = lambda p: frozenset(eq.get(c, c) for c in p)  # noqa: E731 -- order and position (糹 for 糸) don't count
     out: dict[str, list[str]] = defaultdict(list)
     for x in sorted(scope):
         parts = children.get(x, [])
@@ -100,9 +113,33 @@ def flags() -> tuple[dict[str, list[str]], dict]:
         bare = [p for p in parts if p in BARE_STROKES]
         if bare:
             out[x].append(f"bare stroke as a part: {''.join(bare)}")
-        if (x not in ids or rs.ids_parts(ids[x], x) is None) and x not in kvg:
+        unread = (x not in ids or rs.ids_parts(ids[x], x) is None) and x not in kvg
+        if unread:
             out[x].append("neither IDS nor KanjiVG splits it")
+        got = splits.get(x, {})
+        whole = [name for s, name in BACKERS if got.get(s) == []]
+        if whole:
+            out[x].append(f"{' and '.join(whole)} keep{'s' if len(whole) == 1 else ''} it whole: a base kanji stays whole (D-018)")
+        agree = [name for s, name in BACKERS if got.get(s) and key(got[s]) == key(parts)]
+        other = [f"{name} {''.join(got[s])}" for s, name in BACKERS if got.get(s) and key(got[s]) != key(parts)]
+        if len(agree) < 2:
+            if agree and other:
+                out[x].append(f"only {agree[0]} splits it like this ({'; '.join(other)})")
+            elif agree:
+                out[x].append(f"only {agree[0]} splits it like this")
+            elif other:
+                out[x].append(f"every source splits it otherwise: {'; '.join(other)}")
+            elif not whole and not unread:
+                out[x].append("no source we can read splits it")
     return dict(out), {"db": db, "children": children, "nodes": nodes, "scope": scope, "strokes": st, "ids": ids, "kvg": kvg}
+
+
+def source_splits(db) -> dict[str, dict[str, list[str]]]:
+    """char -> source -> parts, from the build's decomp_source (pipeline/decomp_sources.py); [] = one piece."""
+    out: dict[str, dict[str, list[str]]] = defaultdict(dict)
+    for c, src, parts in db.execute("SELECT char, source, parts FROM decomp_source WHERE source != 'built'"):
+        out[c][src] = json.loads(parts)
+    return out
 
 
 def _write(path: Path, data: dict) -> None:
@@ -120,14 +157,28 @@ def subjects() -> tuple[dict[str, list[dict]], dict[str, list[str]], dict]:
     return dict(cards), found, ctx
 
 
-def prepare() -> None:
+def _decided(data: dict | None = None) -> set[str]:
+    """Characters whose parts a person decided in this queue: no draft or check is put back on them."""
+    data = data or review._read()
+    return {i["subject"] for i in data["items"].values()
+            if i["type"] == "decomposition" and i["status"] not in ("open", "withdrawn")}
+
+
+def prepare(new: bool = False) -> None:
+    """Batches for the subagents. `new`: a later pass -- only the flagged characters with no
+    card and no decision yet, as E-* batches beside the first pass's D-*, which stay."""
     cards, found, ctx = subjects()
+    splits = source_splits(ctx["db"])
     db, children, st, ids, kvg = ctx["db"], ctx["children"], ctx["strokes"], ctx["ids"], ctx["kvg"]
     krad = rs.kradfile()
     meanings = {c: json.loads(m or "[]")[:4] for c, m in db.execute("SELECT char, meanings FROM kanji")}
     curated = dict(db.execute("SELECT char, meaning FROM kanji_curated"))
     old = {a: b for a, b in db.execute("SELECT char, other FROM char_form WHERE kind = 'old'")}
-    chars = sorted(set(cards) | set(found), key=lambda c: (-len(review.users_of(c)), c))
+    if new:
+        decided = _decided()
+        chars = sorted((c for c in found if c not in cards and c not in decided), key=lambda c: (-len(review.users_of(c)), c))
+    else:
+        chars = sorted(set(cards) | set(found), key=lambda c: (-len(review.users_of(c)), c))
     rows = []
     for c in chars:
         users = review.users_of(c)
@@ -143,15 +194,17 @@ def prepare() -> None:
             "flags": found.get(c, []),
             "ids": ids.get(c),
             "kanjivg": kvg.get(c),
+            "tsalta": splits.get(c, {}).get("tsalta"),
             "kradfile": krad.get(c),
             "old": old.get(c),
             "oldIds": ids.get(old[c]) if c in old else None,
         })
-    for f in IN.glob("D-*.json"):
+    prefix = "E" if new else "D"
+    for f in IN.glob(f"{prefix}-*.json"):
         f.unlink()
     for i in range(0, len(rows), PER_BATCH):
         n = i // PER_BATCH
-        _write(IN / f"D-{n:03d}.json", {"batch": f"D-{n:03d}", "chars": rows[i:i + PER_BATCH]})
+        _write(IN / f"{prefix}-{n:03d}.json", {"batch": f"{prefix}-{n:03d}", "chars": rows[i:i + PER_BATCH]})
     print(f"{len(rows)} characters ({len(cards)} with a card, {len(set(found) - set(cards))} flagged with none)"
           f" in {-(-len(rows) // PER_BATCH)} batches -> {IN.relative_to(ROOT)}")
 
@@ -161,7 +214,7 @@ VERDICTS = ("keep", "change")
 
 def read(only: str | None = None) -> tuple[list[dict], list[str]]:
     good, problems = [], []
-    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or 'D-*'}.json", problems):
+    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or '[DE]-*'}.json", problems):
         asked = {r["char"]: r for r in batch["chars"]}
         seen = set()
         for d in out.get("chars", []):
@@ -184,6 +237,8 @@ def read(only: str | None = None) -> tuple[list[dict], list[str]]:
                 problems.append(f"{where}: {e}")
                 continue
             current = [p["part"] for p in asked[c]["current"]]
+            if d["verdict"] == "keep" and sorted(parts) == sorted(current):
+                parts = current  # the same parts, another order: a keep
             if (d["verdict"] == "keep") != (parts == current):
                 problems.append(f"{where}: verdict {d['verdict']} but parts {''.join(parts)} vs now {''.join(current)}")
                 continue
@@ -216,6 +271,9 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
             cards[i["subject"]].append(i)
     evidence, rows = {}, []
     n = Counter()
+    decided = _decided(data)
+    # The rules as they are now (a later pass adds some): what the card says under "why this card".
+    found, _ = flags()
     eq = rs.equivalence(proposals.connect())
 
     def norm(parts: list[str]) -> frozenset[str]:
@@ -224,6 +282,9 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
 
     for g in good:
         c = g["char"]
+        if c in decided:
+            continue
+        g = {**g, "flags": found.get(c, g["flags"])}
         # A learner sees no difference: a keep.
         if norm(g["parts"]) == norm(g["current"]):
             g = {**g, "verdict": "keep", "parts": g["current"]}
@@ -259,7 +320,7 @@ def main() -> int:
     proposals.drafts_arg(ap, "data/drafts/decomp")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("flags")
-    sub.add_parser("prepare")
+    sub.add_parser("prepare").add_argument("--new", action="store_true")
     c = sub.add_parser("check")
     c.add_argument("--batch")
     proposals.load_parser(sub, "load")
@@ -272,7 +333,7 @@ def main() -> int:
         print(f"{len(found)} characters flagged:", dict(kinds))
         print(" ".join(f"{c}" for c in found))
     elif args.cmd == "prepare":
-        prepare()
+        prepare(args.new)
     elif args.cmd == "check":
         check(args.batch)
     else:

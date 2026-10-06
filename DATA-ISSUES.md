@@ -154,9 +154,9 @@ normalisation (NFC), which copy-paste and many tools apply, turns the old
 code point into the modern one.
 Source: Unihan kJapaneseOldVariant, through
 pipeline/forms.py.
-**Status: open.** These could show the font_old glyphs (jp78/jp83) instead
-of the text character, or be marked "a font difference, not a different
-character".
+**Status: in review** (2026-10-06). All 366 old forms are on the old-forms
+list (pipeline/form_checks.py), these 62 marked "a font difference only".
+Showing the font_old glyphs (jp78/jp83) on the page is still open.
 
 ### D-018 · The basic pictographs are split into lookalikes
 *Found 2026-10-06,* by the parts drafts (D-004). The graph gives the most
@@ -168,11 +168,24 @@ them is atomic, and the drafts say so, mostly at confidence 0.85–0.95.
 Through them, 1,611 of the 2,679 in-scope kanji contain a character whose
 parts a confident draft would change.
 Source: cjk-decomp / KRADFILE-style visual splits, through pipeline/decomp.py.
-**Status: in review, with a question first.** The study order was first
-built on *visual* containment (FINDINGS.md: 時 contains 寺 because it shows
-it). The handbook's rule since 2026-10-05 is containment by *parts*. The two
-disagree exactly here: under the first, 白 waits for 日; under the second, it
-doesn't. Decide the rule before accepting these cards in bulk.
+**Status: in review; the rule is decided** (Dani, 2026-10-06): a base kanji
+stays whole; otherwise the split the sources give (KanjiVG, IDS, Цалта),
+then the old form; a memorable split goes in the notes. A second pass
+(pipeline/decomp_drafts.py, `prepare --new`) checks every character in scope
+against it: 155 that a source keeps whole but the graph splits (止 = 丄 卜,
+用 = 二 冂, 糸 = 小 幺, 示 = 二 小, 西 = 兀 囗), and every split fewer than two
+sources give. 324 characters had no card; each now has one, with a draft
+under the new rule (91 proposals, 233 checks; 离 without a draft).
+
+### D-019 · Built form links nobody reviewed
+*Found 2026-10-06.* The 471 links pipeline/forms.py builds (char_form) went
+live unreviewed; the queue held only new proposals. A wrong "form of" lends
+its meaning to every kanji with the part.
+Source: Unihan kJapaneseOldVariant (366 old forms) and pipeline/forms.py's
+own lists (positional forms, form of, looks like, same thing).
+**Status: in review** (2026-10-06, pipeline/form_checks.py): the 366 old
+forms on one list, a page at a time; the 41 other pairs (the two directions
+of a link counted once) as checks on their characters' cards.
 
 ## Fixed
 

@@ -27,6 +27,7 @@ import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements
 import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard } from './BgCard'
 import { CharacterCard } from './CharacterCard'
+import { OldFormsList } from './OldFormsList'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { Evidence } from './Evidence'
 import { ReportButton } from './ReportButton'
@@ -38,6 +39,7 @@ const S = strings(
     any: 'any',
     originLabel: 'Where the items came from',
     t_character: 'characters',
+    t_old_forms: 'old forms',
     t_decomposition: 'parts',
     t_form_link: 'forms',
     t_part_meaning: 'part meanings',
@@ -84,6 +86,7 @@ const S = strings(
     any: 'всякакви',
     originLabel: 'Откъде са дошли',
     t_character: 'знаци',
+    t_old_forms: 'стари форми',
     t_decomposition: 'части',
     t_form_link: 'форми',
     t_part_meaning: 'значения на части',
@@ -130,14 +133,14 @@ const S = strings(
 type Key = Parameters<ReturnType<typeof S>>[0]
 // A character's parts, forms and part meaning are one card (CharacterCard.tsx); a single
 // word's meaning is under meanings, with its kanji's card.
-const TYPES: TaskType[] = ['character', 'kanji_senses', 'word_sense', 'bg', 'report']
+const TYPES: TaskType[] = ['character', 'old_forms', 'kanji_senses', 'word_sense', 'bg', 'report']
 const STAGES = TYPES.filter((k) => k !== 'word_sense')
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
 const LIVE_ON_PAGE: TaskType[] = ['bg']
 
 /** What a card is about, for "Something else is wrong?": its word, or its kanji. */
 function reportSubject(i: QueueItem): string | null {
-  if (i.type === 'report') return null
+  if (i.type === 'report' || i.type === 'old_forms') return null
   if (i.type === 'bg') return i.subject
   if (i.type === 'word_sense') return `word:${i.subject.split('|')[1]}`
   return `kanji:${i.subject.split('|')[0]}`
@@ -246,8 +249,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setNotes({})
     setNotesFrom({})
     setBoardWork(false)
-    // A character's card loads its own (CharacterCard.tsx).
-    if (!item || item.type === 'character') return
+    // A character's card loads its own (CharacterCard.tsx), and so does the old-forms list.
+    if (!item || item.type === 'character' || item.type === 'old_forms') return
     let stale = false
     api.reviewItem(item.id).then(
       (d) => {
@@ -380,7 +383,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   useKey((e) => {
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey || !item) return
     // A character's card takes a, Enter and s itself; j and k still move.
-    if (item.type === 'character' && !['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+    if ((item.type === 'character' || item.type === 'old_forms') && !['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
     if (e.key === 'a' || e.key === 'Enter') {
       if (!blocked) decideDraft()
     }
@@ -402,6 +405,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     const [a] = i.subject.split('|')
     const b = i.type === 'bg' || i.type === 'report' ? i.subject.split(':')[1] : i.subject.split('|')[1]
     if (i.type === 'form_link') return `${a} · ${b}`
+    if (i.type === 'old_forms') return '旧 ← 舊'
     if (i.type === 'word_sense') return i.label ? `${a} · ${i.label}` : a
     if (i.type === 'bg' || i.type === 'report') return i.label ?? b ?? i.subject.split(':')[1]
     return a
@@ -497,7 +501,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
           {item?.type === 'character' && (
             <CharacterCard key={item.id} id={item.id} char={item.subject} onDone={advance} onKanji={onKanji} />
           )}
-          {item && item.type !== 'character' && (
+          {item?.type === 'old_forms' && (
+            <OldFormsList key={item.id} onSaved={() => onDecided?.()} onDone={() => advance(false)} onKanji={onKanji} />
+          )}
+          {item && item.type !== 'character' && item.type !== 'old_forms' && (
             <article className="queue-item">
               <header className="queue-head">
                 <span className="queue-big" lang="ja">

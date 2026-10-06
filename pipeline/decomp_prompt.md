@@ -16,16 +16,24 @@ parts. So a wrong part costs the learner: if 日 had 口 as a part, all 382
 common kanji with 日 would wait for 口 and tell the learner the sun is a
 mouth.
 
-The rules (the reviewers' handbook):
+The rules (the reviewers' handbook; the dictionary owner's rule, D-018):
 
-- **Each part must do a job in this character**: give meaning, give the
-  sound, or be a kanji written in its form for that position (氵 is 水,
-  亻 is 人). A data source that cuts the drawing into stroke groups is
-  describing the drawing, not the character.
+- **A base kanji stays whole.** A pictograph a learner meets as one piece
+  (日 木 土 田 大 王 白 止 糸 用 西 示) has no parts, even when its drawing
+  contains smaller shapes: 日 is not 口, 木 is not 八 + 十. Splitting it
+  helps nobody and is not what the sources say.
+- **The standard split first.** There is no official Japanese standard, so
+  the open sources stand in for one: KanjiVG, then IDS, then Цалта's kanji
+  book (`kanjivg`, `ids`, `tsalta` in the input; `[]` = it keeps the
+  character whole). Where they agree on today's shape, take that split
+  (春 = 𡗗 + 日, not 三 + 人 + 日). Use the old form or the history only
+  where they disagree or give nothing.
+- **An easy-to-remember split is not a part.** A memorable but unofficial
+  split (春 as 三 人 日) belongs in a learner's note, not in the parts.
 - **A lookalike is not a part.** 午 visibly contains 干, but 午 is a pestle
-  and 干 a shield: 干 does nothing in 午. If no smaller piece does a job,
-  the character is **atomic** (no parts) — that is fine and common for
-  pictographs: 日 (a picture of the sun), 午, 牛, 車, 斤 are atomic.
+  and 干 a shield, and no source splits 午 that way: 午 is whole. Do not
+  make a mid-level kanji whole only because you cannot say what a piece
+  does in it: if the sources split it, keep their split.
 - **Nothing may be lost.** A split must account for the whole shape: 皮 is
   not just 又, and 段 is not just 殳. If the rest is not a real part, either
   name the part it is (when one exists in the graph) or make the character
@@ -53,14 +61,16 @@ JLPT-rated kanji contain it (the cost of a mistake); `examples`; `current`,
 today's parts with their meanings and strokes; `proposals`, other sources'
 splits waiting for review; `flags`, what a rule found suspicious (one part
 only, strokes unaccounted for, a bare stroke, no source splits it, a known
-data issue); `ids` (BabelStone IDS: ⿰ left-right, ⿱ top-bottom, …),
-`kanjivg` (its component groups), `kradfile` (radicals it contains, a lookup
+data issue, a source keeping it whole, fewer than two sources splitting
+it as we do); `ids` (BabelStone IDS: ⿰ left-right, ⿱ top-bottom, …),
+`kanjivg` (its component groups), `tsalta` (Цалта's split; `[]` = whole), `kradfile` (radicals it contains, a lookup
 aid that lists every shape, not a decomposition), `old` and `oldIds`.
 
 A flag is a reason to look, not a verdict. 林 = 木 is flagged "one part
 only" and is fine (a repeat); 三 = 二 is flagged the same way and is wrong
-(three strokes, atomic). Most characters have no flag at all: they are on a
-card because a source split them differently. Decide each one.
+(three strokes, atomic). In this pass every character is flagged: most because only one
+source (or none) splits it as we do. Often the split is still right; say
+which sources give it. Decide each one.
 
 ## Output
 
@@ -69,13 +79,13 @@ card because a source split them differently. Decide each one.
   "batch": "<the input's batch>",
   "chars": [
     {"char": "日", "verdict": "change", "parts": [],
-     "why": "A picture of the sun (oracle bone: a circle with a dot); 口 is a lookalike and gives 日 no meaning or sound. Atomic.",
+     "why": "A base kanji: a picture of the sun (oracle bone: a circle with a dot). KanjiVG and Цалта keep it whole; 口 is a lookalike.",
      "lookalikes": ["口"], "confidence": 0.95},
     {"char": "海", "verdict": "keep", "parts": ["氵", "毎"],
-     "why": "氵 (water) gives the meaning, 毎 (old form 每) gives the sound カイ←マイ.",
+     "why": "KanjiVG and IDS both give 氵 + 毎 (old form 每).",
      "confidence": 0.9},
     {"char": "上", "verdict": "change", "parts": [],
-     "why": "A mark above a line (指事); 卜 (divination) is a lookalike that does nothing in it. Atomic.",
+     "why": "A base kanji: a mark above a line (指事). KanjiVG keeps it whole; 卜 is a lookalike.",
      "lookalikes": ["卜"], "confidence": 0.85}
   ]
 }
@@ -84,10 +94,9 @@ card because a source split them differently. Decide each one.
 - `verdict`: `keep` when `parts` equals `current` exactly (same characters,
   same order), else `change`.
 - `parts`: your answer in writing order; `[]` for atomic.
-- `why`: the proof, 1–2 sentences, at most 400 characters. Say what each
-  part does in the character (meaning, sound, or which kanji it is written
-  for), and cite the old form or the character's origin when it decides the
-  matter. For a change, say what is wrong with today's parts. Plain English;
+- `why`: the proof, 1–2 sentences, at most 400 characters. Say which
+  sources give your split (or that it is a base kanji), and cite the old
+  form or the character's origin when it decides the matter. For a change, say what is wrong with today's parts. Plain English;
   a reviewer reads it in a few seconds.
 - `lookalikes`: parts of today's split (or a proposal's) that only look like
   a piece of the character, if any. The reviewer can file them under

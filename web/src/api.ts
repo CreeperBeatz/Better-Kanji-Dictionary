@@ -339,7 +339,7 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType = 'decomposition' | 'form_link' | 'part_meaning' | 'kanji_senses' | 'word_sense' | 'bg' | 'report' | 'character'
+export type TaskType = 'decomposition' | 'form_link' | 'part_meaning' | 'kanji_senses' | 'word_sense' | 'bg' | 'report' | 'character' | 'old_forms'
 /** What a report is about: a word's or a kanji's (server/review.py REPORT_ABOUT). */
 export type ReportAbout = 'english' | 'reading' | 'meanings' | 'readings' | 'levels' | 'parts' | 'forms' | 'similar' | 'strokes' | 'other'
 /** Something wrong that no card or edit can fix, in the reporter's words; never live. */
@@ -500,6 +500,19 @@ export interface CardDecision {
   item: string
   action: 'accept' | 'edit' | 'keep' | 'reject' | 'skip'
   value?: TaskValue
+}
+
+/** One old form on the old-forms list (server/review.py old_forms). */
+export interface OldFormRow {
+  id: string
+  /** X|Y: Y is the old form of X, unless `current.reverse`. */
+  subject: string
+  current: FormLink
+  /** The first kanji in scope with X, and how many there are. */
+  users: string[]
+  inScope: number
+  /** A compatibility code point: most fonts draw it like today's form (D-017). */
+  compat: boolean
 }
 
 /** A character's card: every item waiting about it, and what it is now. */
@@ -1012,6 +1025,12 @@ export const api = {
   /** Every item on a character's card decided at once; all "skip" leaves the card for later. */
   decideCharacter: (char: string, decisions: CardDecision[], reason?: string) =>
     send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', { decisions, reason }),
+
+  /** The old forms waiting, a page at a time. */
+  reviewOldForms: () => get<{ total: number; items: OldFormRow[] }>('/api/review/old-forms'),
+
+  /** A page of the old-forms list decided: each row kept, or what it is instead. */
+  decideOldForms: (decisions: CardDecision[]) => send<{ items: QueueItem[] }>('/api/review/old-forms/decide', 'POST', { decisions }),
 
   /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
   reviewBookEntry: (no: number | null, char: string | null) =>
