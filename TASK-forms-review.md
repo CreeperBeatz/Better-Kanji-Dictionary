@@ -610,3 +610,31 @@ and appear in an admin "auto-accepted" list for spot checks.
   `server/semantic.py`
 - Offline: `server/offline.py`, `web/src/local/`, `tests/offline_parity.py`
 - Pipeline stages: `pipeline/build_db.py` (`@stage(...)`)
+
+---
+
+## 9. Production deploy of the review — checklist (Dani, 2026-10-06)
+
+Not started: wait for Dani's go-ahead, and do it from the Pi's network.
+
+- **Production starts with a blank queue.** Every card open, nothing
+  decided: local decisions (Dani's tries on 8799 — 木 五 段 里 幵 …) do not
+  go to production; Dani makes them again there. Before copying the review
+  store, run `python pipeline/fresh_queue.py` on a copy (server stopped; it
+  backs both stores up), then check `progress()`: 0 done apart from the rule
+  auto-accepts. Withdrawn items (the 366 old-form checks) stay withdrawn.
+- **The store's reviewed decompositions:** production's `store.json` keeps no
+  decomposition overrides except the rule auto-accepts (fresh_queue drops
+  them locally; do the same to the Pi's copy, after backing it up).
+- **The database:** ship the local `data/betterrtk.sqlite`, built with the
+  `fonts`, `forms` and `sources` stages (decomp_source with the Цалта
+  shapes, D-020). Copy it with the sqlite backup API, check sha256.
+- **The Pi's `.env`:** `BETTERRTK_OWNER_EMAIL=dani.matev123@gmail.com`
+  (still empty there; admin comes only from this setting).
+- **The books** (Цалта's scans and transcription) are not on the Pi: cards
+  there show no book entry or page. Decide with Dani whether to copy the
+  transcription (kanji.jsonl) without the scans.
+- **Then:** merge `feat/forms-review` into main (ask first), build `web/dist`
+  (check the exit code), headless-Chromium check, send dist + models,
+  `deploy/update.sh`, and the usual backups of `data/auth` and
+  `data/associations`.
