@@ -173,6 +173,20 @@ def main() -> int:
         decided = call("POST", f"/api/review/items/{it['id']}/decide", "reviewer", {"action": "reject"})
         check("the reviewer decides it", decided[0] == 200, decided)
         check("a decided item is left alone", review.attach_evidence("book", {it["id"]: {**view, "no": 1}}) == 0)
+        check("evidence comes off an open item", review.drop_evidence("book", [it["id"]]) == 0)  # decided: left as it is
+
+        print("a source re-read: its open proposals restated or withdrawn")
+        src = review.add_item("decomposition", "話", ["言", "千", "口"], "tsalta-diff", reason="the book splits it so")
+        changed, refused = review.restate({src["id"]: {"proposed": ["言", "舌"], "reason": "corrected", "evidence": None}})
+        got = review._read()["items"][src["id"]]
+        check("restated in place", (changed, refused) == (1, 0) and got["proposed"] == ["言", "舌"] and got["status"] == "open", got)
+        check("a restatement that fails validation leaves it", review.restate({src["id"]: {"proposed": ["話"]}}) == (0, 1))
+        before = review.progress()["stages"]["decomposition"]
+        check("withdrawn", review.withdraw([src["id"]], "the book no longer gives it") == 1)
+        check("out of the queue", all(i["id"] != src["id"] for i in call("GET", "/api/review/queue?type=decomposition", "reviewer")[1]["items"]))
+        after = review.progress()["stages"]["decomposition"]
+        check("not counted as a task done", after["done"] == before["done"] and after["total"] == before["total"] - 1, (before, after))
+        check("free to be asked again by another source", "話" not in review.subjects("decomposition"))
 
         print("admin-only lists")
         for who, want in (("reviewer", 403), ("admin", 200)):

@@ -26,7 +26,9 @@ books passes a person, who has the page's scan on the card to catch a misread.
   meaning; for a word, every gloss either book gives it.
 
 Fields the transcribing agent marked unsure travel with the evidence, so the
-card can say so.
+card can say so. Loading again after the books were corrected restates this
+loader's open items, withdraws the ones the books no longer support, and
+takes the books' view off cards it no longer fits; decided items stay as they are.
 """
 
 from __future__ import annotations
@@ -51,6 +53,7 @@ from server.japanese import deinflect, katakana_to_hiragana, romaji_to_kana  # n
 
 SOURCE_DECOMP = "tsalta-diff"
 SOURCE_FORM = "tsalta"
+OWN = (SOURCE_DECOMP, SOURCE_FORM)  # this loader's own items: re-reading the books restates them
 KEY = "book"  # where the books' view goes in an item's evidence
 
 
@@ -190,11 +193,18 @@ class Words:
 
 
 def _open_items(type_: str) -> dict[str, list[dict]]:
+    """Open items of a type, by subject; this loader's own are not "another item" to stand beside."""
     out: dict[str, list[dict]] = defaultdict(list)
     for i in review._read()["items"].values():
-        if i["type"] == type_ and i["status"] == "open":
+        if i["type"] == type_ and i["status"] == "open" and i["source"] not in OWN:
             out[i["subject"]].append(i)
     return out
+
+
+def _own() -> dict[tuple[str, str], str]:
+    """(type, subject) -> id of this loader's open items, which a reload restates or withdraws."""
+    return {(i["type"], i["subject"]): i["id"] for i in review._read()["items"].values()
+            if i["status"] == "open" and i["source"] in OWN}
 
 
 def collect() -> dict:
@@ -209,7 +219,7 @@ def collect() -> dict:
         entries = [e for e in entries if e["kanji"] not in twice]
     graphemes = [e for e in kanji_book if e["type"] == "grapheme"]
     data = review._read()
-    decided = {i["subject"] for i in data["items"].values() if i["type"] == "decomposition" and i["status"] != "open"}
+    decided = {i["subject"] for i in data["items"].values() if i["type"] == "decomposition" and i["status"] not in ("open", "withdrawn")}
 
     # -- decomposition
     targets = review_scope.kanji(db)
@@ -267,7 +277,8 @@ def collect() -> dict:
         n["decomp new items"] += 1
 
     # -- form links: old forms
-    known_links = {i["subject"] for i in data["items"].values() if i["type"] == "form_link"}
+    known_links = {i["subject"] for i in data["items"].values() if i["type"] == "form_link" and i["status"] != "withdrawn"
+                   and not (i["status"] == "open" and i["source"] in OWN)}
     open_links = _open_items("form_link")
     new_links, attach_links = [], {}
     for e in entries:
@@ -307,7 +318,7 @@ def collect() -> dict:
         if subject not in names and not g:
             continue
         view = {
-            "names": names[subject].most_common(),
+            "names": [[name, k] for name, k in names[subject].most_common()],  # lists, as the store gives them back
             "entry": {**ref(g), "name": (g.get("name") or g.get("keyword") or "").lower() or None, "note": g.get("note"),
                       "unsure": unsure(g, "char", "name", "note")} if g else None,
             "seen": seen_in[subject],
@@ -351,8 +362,23 @@ def collect() -> dict:
     n["word cards with a book gloss"] = sum(1 for k, v in attach_bg.items() if isinstance(v, list))
     n["words with a book gloss, no open card"] = sum(1 for wid in glosses if f"word:{wid}" not in open_bg)
 
-    return {"counts": n, "new": new_decomp + new_links,
+    return {"counts": n, "new": new_decomp + new_links, "own": _own(),
             "attach": {"decomposition": attach_decomp, "form_link": attach_links, "part_meaning": attach_parts, "bg": attach_bg}}
+
+
+def plan(c: dict) -> dict:
+    """What loading does to the queue: new items, this loader's open items to restate
+    or withdraw (the books were corrected since), and evidence that no longer applies."""
+    own, new = c["own"], {(r["type"], r["subject"]): r for r in c["new"]}
+    attached = {i for by_item in c["attach"].values() for i in by_item}
+    return {
+        "add": [r for k, r in new.items() if k not in own],
+        "restate": {own[k]: r for k, r in new.items() if k in own},
+        "withdraw": [i for k, i in own.items() if k not in new],
+        "drop": [i["id"] for i in review._read()["items"].values()
+                 if i["status"] == "open" and i["source"] not in OWN and isinstance(i["evidence"], dict)
+                 and KEY in i["evidence"] and i["id"] not in attached],
+    }
 
 
 def count() -> dict:
@@ -361,6 +387,9 @@ def count() -> dict:
         print(f"  {k:42} {v:>6}")
     for k, v in c["attach"].items():
         print(f"  evidence for open {k} items{'':16} {len(v):>6}")
+    p = c["plan"] = plan(c)
+    print(f"  queue: {len(p['add'])} new, {len(p['restate'])} of ours restated, {len(p['withdraw'])} of ours withdrawn, "
+          f"evidence off {len(p['drop'])} items")
     return c
 
 
@@ -370,10 +399,15 @@ def load(review_dir: Path | None) -> None:
         raise SystemExit("--review-dir with the real associations store: use tests/load_sandbox.py")
     proposals.use_review_dir(review_dir)
     c = count()
-    added, refused = review.add_items(c["new"])
+    p = c["plan"]
+    added, refused = review.add_items(p["add"])
     print(f"new items: {added} added, {refused} refused")
+    changed, refused = review.restate(p["restate"])
+    print(f"our open items: {changed} changed, {len(p['restate']) - changed - refused} as they were, {refused} refused")
+    print(f"withdrawn, the books no longer give them: {review.withdraw(p['withdraw'], 'the corrected book no longer gives this')}")
     for type_, by_item in c["attach"].items():
         print(f"evidence on open {type_} items: {review.attach_evidence(KEY, by_item)}")
+    print(f"evidence that no longer applies, taken off: {review.drop_evidence(KEY, p['drop'])}")
 
 
 def main() -> int:

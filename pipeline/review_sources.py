@@ -255,8 +255,8 @@ def _ours(parts: list[str], nodes: set[str], eq: dict[str, str], prefer: dict[st
 
 
 def _known() -> set[tuple[str, str]]:
-    """(type, subject) of every item in the review store, open or decided."""
-    return {(i["type"], i["subject"]) for i in review._read()["items"].values()}
+    """(type, subject) of every item in the review store, open or decided (a withdrawn one was never asked)."""
+    return {(i["type"], i["subject"]) for i in review._read()["items"].values() if i["status"] != "withdrawn"}
 
 
 def collect() -> dict:

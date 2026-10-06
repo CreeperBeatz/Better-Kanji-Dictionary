@@ -960,6 +960,55 @@ def attach_evidence(key: str, by_item: dict[str, Any]) -> int:
         return n
 
 
+def drop_evidence(key: str, item_ids: list[str]) -> int:
+    """Take a second source's view off open items it no longer applies to."""
+    with _change() as data:
+        n = 0
+        for item_id in item_ids:
+            i = data["items"].get(item_id)
+            if i and i["status"] == "open" and isinstance(i["evidence"], dict) and key in i["evidence"]:
+                _update(data, i, evidence={k: v for k, v in i["evidence"].items() if k != key})
+                n += 1
+        return n
+
+
+def restate(rows: dict[str, dict]) -> tuple[int, int]:
+    """A source re-read: its open, undecided proposals take the new proposal,
+    reason, evidence and priority (item id -> add_items row). Returns
+    (changed, refused); a row that no longer validates leaves its item as it was."""
+    with _change() as data:
+        changed = refused = 0
+        for item_id, r in rows.items():
+            i = data["items"].get(item_id)
+            if not i or i["status"] != "open" or i["origin"] != "proposal":
+                continue
+            try:
+                proposed = validate(i["type"], i["subject"], r.get("proposed"), data, pending_ok=True, machine=True)
+            except AppError:
+                refused += 1
+                continue
+            new = {"proposed": proposed, "reason": _text(r.get("reason")), "evidence": r.get("evidence"),
+                   "priority": r.get("priority", 0.0)}
+            if any(i.get(k) != v for k, v in new.items()):
+                _update(data, i, **new)
+                changed += 1
+        return changed, refused
+
+
+def withdraw(item_ids: list[str], why: str) -> int:
+    """Open proposals their source no longer makes (a misread corrected): out
+    of the queue as `withdrawn`. Nothing was decided, so nothing is undone,
+    and the item stays on record."""
+    with _change() as data:
+        n = 0
+        for item_id in item_ids:
+            i = data["items"].get(item_id)
+            if i and i["status"] == "open" and i["origin"] == "proposal":
+                _update(data, i, status="withdrawn", withdrawn_at=_now(), withdrawn_why=_text(why))
+                n += 1
+        return n
+
+
 FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 
@@ -1323,8 +1372,8 @@ def _bg_waits(subject: str, pending: set[str]) -> bool:
 
 
 def subjects(type_: str, data: dict | None = None) -> set[str]:
-    """Every subject with an item of this type, open or decided."""
-    return {i["subject"] for i in (data or _read())["items"].values() if i["type"] == type_}
+    """Every subject with an item of this type, open or decided (not withdrawn)."""
+    return {i["subject"] for i in (data or _read())["items"].values() if i["type"] == type_ and i["status"] != "withdrawn"}
 
 
 def counts() -> dict:
@@ -1638,6 +1687,8 @@ def progress() -> dict:
     words = {"done": 0, "total": 0}
     open_by: dict[str, set[str]] = {t: set() for t in TYPES}
     for i in data["items"].values():
+        if i["status"] == "withdrawn":
+            continue  # its source took it back: not a task
         if i["status"] == "open":
             open_by[i["type"]].add(i["subject"])
         drafted = i["type"] == "word_sense" and i["source"].startswith("ai:")

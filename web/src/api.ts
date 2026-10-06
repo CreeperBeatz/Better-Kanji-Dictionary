@@ -383,7 +383,8 @@ export interface QueueItem {
   reason: string | null
   evidence: Record<string, unknown> | null
   priority: number
-  status: 'open' | 'auto-accepted' | 'accepted' | 'edited' | 'rejected'
+  /** `withdrawn`: its source no longer proposes it (a misread corrected); never a decision. */
+  status: 'open' | 'auto-accepted' | 'accepted' | 'edited' | 'rejected' | 'withdrawn'
   created: string
   createdBy: Author | null
   decidedBy: Author | null
