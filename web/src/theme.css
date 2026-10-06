@@ -2086,6 +2086,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-size: 11.5px;
 }
 
+.bg-latin {
+  grid-column: 2;
+  margin: 0;
+  font-size: 11.5px;
+}
+
 .bg-meaning-tools {
   display: flex;
   flex-wrap: wrap;
@@ -2115,7 +2121,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     grid-template-columns: 1fr;
   }
 
-  .bg-was {
+  .bg-was,
+  .bg-latin {
     grid-column: 1;
   }
 }

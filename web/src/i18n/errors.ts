@@ -109,7 +109,6 @@ const ERRORS: Record<string, [string, string]> = {
   sense_unknown: ["not one of this kanji's meanings", 'не е от значенията на това канджи'],
   word_not_with: ['that word is not written with this kanji', 'тази дума не се пише с това канджи'],
   words_invalid: ['the words could not be read', 'думите не можаха да бъдат прочетени'],
-  bg_latin: ['a Latin letter inside a Bulgarian word: {words}', 'латинска буква в българска дума: {words}'],
   needs_edit: ['this item has no proposal to accept; pick a value', 'няма предложение за приемане; изберете стойност'],
   needs_value: ['pick a value', 'изберете стойност'],
   item_not_found: ['no such item', 'няма такава задача'],

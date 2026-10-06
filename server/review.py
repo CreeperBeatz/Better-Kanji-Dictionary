@@ -429,20 +429,6 @@ def _bad(code: str, detail: str, **params) -> AppError:
     return AppError(400, code, detail, **params)
 
 
-WORD = re.compile(r"[^\W\d_]+")
-LATIN = re.compile(r"[A-Za-zÀ-ɏ]")
-CYRILLIC = re.compile(r"[Ѐ-ӿ]")
-
-
-def _check_bg(*texts: str | None) -> None:
-    """Refuse Bulgarian with a word that mixes Latin and Cyrillic letters: a Latin a
-    in граничa looks right and is never found by search. Latin words alone
-    (NHK, COVID-19, Pieris japonica) are kept."""
-    mixed = [w for t in texts if t for w in WORD.findall(t) if LATIN.search(w) and CYRILLIC.search(w)]
-    if mixed:
-        raise _bad("bg_latin", "a Latin letter inside a Bulgarian word", words=", ".join(dict.fromkeys(mixed)))
-
-
 def _bad_words() -> AppError:
     return _bad("words_invalid", "words are a map of word id to group")
 
@@ -575,10 +561,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         def text(k: str, n: int) -> str | None:
             return " ".join(str(value.get(k) or "").split())[:n] or None
 
-        out = {"kind": value["kind"], "en": en, "bg": text("bg", 40), "note": text("note", 400), "noteBg": text("noteBg", 400)}
-        if not machine:
-            _check_bg(out["bg"], out["noteBg"])
-        return out
+        return {"kind": value["kind"], "en": en, "bg": text("bg", 40), "note": text("note", 400), "noteBg": text("noteBg", 400)}
 
     if type_ == "kanji_senses":
         if len(subject) != 1:
@@ -606,8 +589,6 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
                 "note": (s.get("note") or "").strip()[:200] or None,
                 "noteBg": (s.get("noteBg") or "").strip()[:200] or None,
             })
-        # The Bulgarian labels are not checked here: the meanings board accepts the
-        # draft's without showing them. The Bulgarian card and page edits check them.
         return out
 
     if type_ == "bg":
@@ -623,8 +604,6 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             out = [" ".join(g.split())[:400] for g in value]
             if not any(out):
                 raise _bad("bg_invalid", "one Bulgarian gloss per sense")
-            if not machine:
-                _check_bg(*out)
             return out
         if kind == "kanji" and len(key) == 1:
             if value is None:
@@ -635,8 +614,6 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             out = [m for m in out if m]
             if not 1 <= len(out) <= 12:
                 raise _bad("bg_meanings", "a kanji has 1 to 12 Bulgarian meanings")
-            if not machine:
-                _check_bg(*out)
             return out
         raise _bad("bad_subject", "that is not a subject of this type")
 
@@ -921,9 +898,7 @@ def add_item(type_: str, subject: str, proposed: Any, source: str, origin: str =
     _known_origin(origin)
     with _change() as data:
         proposed = validate(type_, subject, proposed, data, pending_ok=origin == "proposal", machine=origin == "proposal")
-        if type_ == "kanji_senses" and origin == "suggestion" and proposed:
-            _check_bg(*(t for g in proposed for t in (g["bg"], g["noteBg"])))
-        moves =evidence.get("moves") if isinstance(evidence, dict) else None
+        moves = evidence.get("moves") if isinstance(evidence, dict) else None
         if moves is not None:
             moves = _moves(subject, proposed, moves)
             evidence = {**evidence, "moves": moves}
@@ -1132,7 +1107,6 @@ def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str,
         {**g, "bg": clean(labels.get(g["id"], g.get("bg") or ""), 40), "noteBg": clean(notes.get(g["id"], g.get("noteBg") or ""), 200)}
         for g in before
     ], data)
-    _check_bg(*(t for g in after for t in (g["bg"], g["noteBg"])))
     if after == before:
         return
     c = _decision("direct", "kanji_senses", char, before, after, user_id, None, "Bulgarian labels")
@@ -1228,8 +1202,6 @@ def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | Non
         raise _bad("report_queued", "a report goes to the review queue")
     with _change() as data:
         after = validate(type_, subject, value, data)
-        if type_ == "kanji_senses" and after:
-            _check_bg(*(t for g in after for t in (g["bg"], g["noteBg"])))
         before = live_value(type_, subject, data)
         explicit = _on_the_board(type_, words)
         if before == after and not explicit:

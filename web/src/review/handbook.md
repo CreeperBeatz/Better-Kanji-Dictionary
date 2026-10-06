@@ -417,9 +417,9 @@ English is still what you translate.
 - **Kanji.** One short meaning per field, saying what the English says.
   Add or remove fields as needed (1 to 12).
 - **Japanese kanji are канджи**, never кандзи (that is Chinese).
-- **Type Bulgarian in Cyrillic.** A Latin letter in a Bulgarian word (граничa)
-  looks right, but search can't find the word. Such a save is refused. Latin
-  words on their own are correct: NHK, COVID-19.
+- **Latin letters get a warning.** A Latin letter in a Bulgarian word (граничa)
+  looks right, but search can't find the word. A name or an abbreviation in
+  Latin is correct (NHK, COVID-19): then ignore the warning.
 - **Accept** confirms the card as it is; *save my answer* keeps your fixes.
   Either way it shows on the site at once. Search by Bulgarian text still
   uses the old wording until the data is rebuilt.

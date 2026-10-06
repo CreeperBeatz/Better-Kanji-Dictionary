@@ -27,6 +27,7 @@ const S = strings(
     inGroups: 'What its kanji bring here',
     noMeaning: 'brings no meaning to this word',
     notPlaced: 'not placed in a group',
+    latin: 'Has Latin letters. Correct for a name or an abbreviation (NHK). In a Bulgarian word (граничa), search does not find it.',
   },
   {
     bulgarian: 'Български',
@@ -44,6 +45,7 @@ const S = strings(
     inGroups: 'Какво внасят канджитата му тук',
     noMeaning: 'не внася значение в тази дума',
     notPlaced: 'не е разпределена в група',
+    latin: 'Има латински букви. Вярно е за име или съкращение (NHK). В българска дума (граничa) търсенето не я намира.',
   },
 )
 
@@ -155,6 +157,12 @@ export function BgCard({
 
 // The card's editors, which a page's Edit dialog (PageEdit.tsx) uses too.
 
+/** A warning under Bulgarian with a Latin letter in it: only a warning, as NHK is right. */
+function LatinWarn({ text }: { text: string }) {
+  const t = S(useLang())
+  return /[A-Za-z]/.test(text) ? <span className="queue-warn bg-latin">{t('latin')}</span> : null
+}
+
 /** A word's glosses, one per sense beside its English; with `built`, one that differs from the machine translation says what it was. */
 export function BgSenses({
   senses,
@@ -185,6 +193,7 @@ export function BgSenses({
               aria-label={`${t('bulgarian')} ${i + 1}`}
               onChange={(e) => onChange(value.map((x, j) => (j === i ? e.target.value : x)))}
             />
+            <LatinWarn text={value[i] ?? ''} />
             {changed && (
               <span className="bg-was hint">
                 {t('machine')}: {built[i]}
@@ -238,6 +247,7 @@ export function BgMeanings({
           </span>
         ))}
       </div>
+      <LatinWarn text={value.join(' ')} />
       {(room || tools !== undefined) && (
         <span className="bg-meaning-tools">
           {room && (
@@ -302,6 +312,7 @@ export function BgLabels({
               data-changed={(marks && (notes[g.id] ?? '') !== (g.noteBg ?? '')) || undefined}
               onChange={(e) => onNotes({ ...notes, [g.id]: e.target.value })}
             />
+            <LatinWarn text={`${labels[g.id] ?? ''} ${notes[g.id] ?? ''}`} />
           </li>
         ))}
       </ul>
