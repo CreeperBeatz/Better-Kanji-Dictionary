@@ -180,6 +180,12 @@ Audit of what no rule flags (`prepare --audit 60`, data/drafts/decomp-audit):
 a random 60 of the 1,687 characters two sources back and nothing flags,
 judged by Sonnet under the same rule: 0 wrong (only order, or 竹 written
 ⺮). With 0 in 60, the error rate there is below 5% at 95% confidence.
+A second sample of 300 more (`--audit 300 --seed 300 --exclude …`,
+data/drafts/decomp-audit-300): one disagreement, 貝 = 八 目 (the draft
+would keep it whole as a base pictograph, at 0.55, against every source).
+Over all 360: at most 1 wrong, so below about 1.3% at 95% confidence. It
+points at the one kind the rules can't see: a base pictograph that every
+source splits (貝 見 音 穴 玄 辛 舛 元 舌 支 高 among the in-scope radicals).
 
 ### D-019 · Built form links nobody reviewed
 *Found 2026-10-06.* The 471 links pipeline/forms.py builds (char_form) went

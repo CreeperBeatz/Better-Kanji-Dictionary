@@ -166,7 +166,7 @@ def _decided(data: dict | None = None) -> set[str]:
             if i["type"] == "decomposition" and i["status"] not in ("open", "withdrawn")}
 
 
-def prepare(new: bool = False, audit: int = 0, seed: int = 20261006) -> None:
+def prepare(new: bool = False, audit: int = 0, seed: int = 20261006, exclude: str | None = None) -> None:
     """Batches for the subagents. `new`: a later pass -- only the flagged characters with no
     card and no decision yet, as E-* batches beside the first pass's D-*, which stay."""
     cards, found, ctx = subjects()
@@ -180,7 +180,10 @@ def prepare(new: bool = False, audit: int = 0, seed: int = 20261006) -> None:
         # What passes every rule (two sources agree, nothing flagged) and has no card: how often is it still wrong?
         import random
 
-        passed = sorted(c for c in ctx["scope"] if children.get(c) and c not in found and c not in cards and c not in _decided())
+        # An earlier sample's characters (--exclude 'data/drafts/decomp-audit/in/A-*.json') are not drawn again.
+        before = {r["char"] for f in ROOT.glob(exclude) for r in json.loads(f.read_text(encoding="utf-8"))["chars"]} if exclude else set()
+        passed = sorted(c for c in ctx["scope"]
+                        if children.get(c) and c not in found and c not in cards and c not in _decided() and c not in before)
         chars = sorted(random.Random(seed).sample(passed, min(audit, len(passed))), key=lambda c: (-len(review.users_of(c)), c))
         print(f"sampled {len(chars)} of the {len(passed)} that pass every rule")
     elif new:
@@ -332,6 +335,8 @@ def main() -> int:
     pp = sub.add_parser("prepare")
     pp.add_argument("--new", action="store_true")
     pp.add_argument("--audit", type=int, default=0, help="a random sample of this many that pass every rule")
+    pp.add_argument("--seed", type=int, default=20261006)
+    pp.add_argument("--exclude", help="a glob of earlier audit batches whose characters are not drawn again")
     c = sub.add_parser("check")
     c.add_argument("--batch")
     proposals.load_parser(sub, "load")
@@ -344,7 +349,7 @@ def main() -> int:
         print(f"{len(found)} characters flagged:", dict(kinds))
         print(" ".join(f"{c}" for c in found))
     elif args.cmd == "prepare":
-        prepare(args.new, args.audit)
+        prepare(args.new, args.audit, args.seed, args.exclude)
     elif args.cmd == "check":
         check(args.batch)
     else:
