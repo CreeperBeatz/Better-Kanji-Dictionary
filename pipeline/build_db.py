@@ -567,6 +567,7 @@ def build_examples(db: sqlite3.Connection) -> None:
 
 
 BG_OUT = ROOT / "pipeline" / "translate" / "out"
+BG_REVIEWED = ROOT / "data" / "bg_reviewed.json"  # server/review.py export
 
 
 _BRACKETED = re.compile(r"\([^)]*\)?")
@@ -616,7 +617,7 @@ def _bg_items(glosses: list[str], terms, spelling) -> list[tuple[str, int, int, 
     return out
 
 
-@stage("bg", "translate/out/*.json -> Bulgarian glosses, kanji meanings and their search indexes")
+@stage("bg", "translate/out/*.json -> Bulgarian glosses, kanji meanings; + data/bg_reviewed.json -> their search indexes")
 def build_bulgarian(db: sqlite3.Connection) -> None:
     """Load whatever the translating agents have handed back (see translate/TASK.md).
 
@@ -693,6 +694,18 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
                 continue
             kanji[char] = (g, source)
 
+    # What reviewers checked or fixed (`python -m server.review export`). The tables
+    # keep the machine translation: pages lay the review store over it at run time
+    # (server/bg_overlay.py), and a card compares with it and reverts to it. The
+    # search indexes take the reviewed wording, so search finds what pages show.
+    reviewed = json.loads(BG_REVIEWED.read_text(encoding="utf-8")) if BG_REVIEWED.exists() else {}
+    found_senses: dict[tuple[int, int], list[str]] = {}
+    for wid, per_sense in (reviewed.get("words") or {}).items():
+        for i, g in enumerate(per_sense):
+            if (int(wid), i) in known_senses and (g := glosses(g.split(";"))):
+                found_senses[(int(wid), i)] = g
+    found_kanji = {c: g for c, m in (reviewed.get("kanji") or {}).items() if c in known_kanji and (g := glosses(m))}
+
     rows = sorted(senses.items())
     db.executemany(
         "INSERT INTO sense_bg VALUES (?,?,?,?)", [(w, o, "; ".join(g), src) for (w, o), (g, src) in rows]
@@ -702,7 +715,7 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
         [
             (t, w, n, place + (4 if o else 0), spelled)
             for (w, o), (g, _) in rows
-            for t, n, place, spelled in _bg_items(g, terms, spelling)
+            for t, n, place, spelled in _bg_items(found_senses.get((w, o), g), terms, spelling)
         ],
     )
     krows = sorted(kanji.items())
@@ -712,13 +725,14 @@ def build_bulgarian(db: sqlite3.Connection) -> None:
     )
     db.executemany(
         "INSERT INTO bg_kanji_fts (terms, char) VALUES (?, ?)",
-        [(" ".join(terms(", ".join(m))), c) for c, (m, _) in krows],
+        [(" ".join(terms(", ".join(found_kanji.get(c, m)))), c) for c, (m, _) in krows],
     )
 
     words = len({w for w, _ in senses})
     print(f"  files         {len(files):>7,} in {BG_OUT}")
     print(f"  senses        {len(rows):>7,} Bulgarian senses over {words:,} words")
     print(f"  kanji         {len(krows):>7,} characters with Bulgarian meanings")
+    print(f"  reviewed      {len(found_senses):>7,} senses and {len(found_kanji):,} kanji searched by the reviewed wording ({BG_REVIEWED.name})")
     if skipped:
         print(f"  skipped       {skipped:>7,} senses or kanji that match nothing in the dictionary")
 

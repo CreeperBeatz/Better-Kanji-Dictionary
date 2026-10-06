@@ -36,8 +36,11 @@ sense: 生 is "Life, Genuine, Birth" in English but "живот, раждам с
 Source: jmdict-kanjidic-bg (`mt:claude-sonnet-5`).
 **Status: in review.** The Bulgarian stage has one card per in-scope word and
 per jōyō/JLPT kanji (32,545). Each card opens once its kanji's meaning groups
-are accepted. Corrections show on the site at once. They are not copied back
-into jmdict-kanjidic-bg automatically; that is done by hand.
+are accepted. Corrections show on the site at once. This database is the
+source of truth: `python -m server.review export` writes them to
+data/bg_reviewed.json, the next data build searches by them, and
+jmdict-kanjidic-bg takes them when its `scripts/build.py` is run. Both are
+done by hand, when the admin decides.
 
 ### D-003 · KANJIDIC English meanings with noise
 *Found 2026-10-02.* 合 is listed as "Fit, Suit, Join, 0.1". The "0.1" is the
@@ -262,5 +265,5 @@ IDS and KanjiVG sometimes write 厂 for ⺁, which we treat as a different shape
 ## Known limits (not mistakes, but worth knowing)
 
 - A corrected Bulgarian gloss shows everywhere at once, but searching by
-  Bulgarian text still finds the word by its old wording until the data is
-  rebuilt with the correction.
+  Bulgarian text still finds the word by its old wording until it is
+  exported (`python -m server.review export`) and the data is rebuilt.

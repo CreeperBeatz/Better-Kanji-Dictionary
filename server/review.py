@@ -71,6 +71,8 @@ EXPORTS = {
     "form_link": ROOT / "data" / "form_overrides.json",
     "meaning": ROOT / "data" / "meaning_groups.json",
     "part_meaning": ROOT / "data" / "part_meanings.json",
+    # Read by pipeline/build_db.py (stage bg) and by jmdict-kanjidic-bg's scripts/build.py.
+    "bg": ROOT / "data" / "bg_reviewed.json",
 }
 
 TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "bg", "report")
@@ -2012,8 +2014,18 @@ def export() -> dict[str, int]:
     EXPORTS["meaning"].write_text(json.dumps(meaning, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     parts = dict(sorted(data["live"]["part_meaning"].items()))
     EXPORTS["part_meaning"].write_text(json.dumps(parts, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+
+    # The reviewed Bulgarian: a word's glosses, one "; "-joined string per sense
+    # ("" keeps the machine translation), and a kanji's meanings.
+    bg: dict[str, dict] = {"words": {}, "kanji": {}}
+    for subject, v in data["live"]["bg"].items():
+        kind, key = _target(subject)
+        bg["words" if kind == "word" else "kanji"][key] = v["value"]
+    bg = {"words": dict(sorted(bg["words"].items(), key=lambda kv: int(kv[0]))), "kanji": dict(sorted(bg["kanji"].items()))}
+    EXPORTS["bg"].write_text(json.dumps(bg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return {"decomposition": len(ov), "form_link": len(data["live"]["form_link"]), "part_meaning": len(parts),
-            "kanji_senses": len(meaning["senses"]), "word_sense": len(meaning["words"])}
+            "kanji_senses": len(meaning["senses"]), "word_sense": len(meaning["words"]),
+            "bg words": len(bg["words"]), "bg kanji": len(bg["kanji"])}
 
 
 def load_bg(dry_run: bool = False) -> dict[str, int]:
