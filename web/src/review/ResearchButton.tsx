@@ -15,14 +15,14 @@ import { useLinkSentence } from './KindsInfo'
 
 const S = strings(
   {
-    open: 'Research in Claude ↗',
+    open: 'Research in Claude',
     title: 'Open a new conversation on claude.ai with a research prompt about this card (the prompt is also copied)',
-    copied: 'Prompt copied. If Claude opens without it, paste it. Turn on Research in Claude for a deep search.',
+    copied: 'Prompt copied: paste it if Claude opens empty. Turn on Research there.',
   },
   {
-    open: 'Проучване в Claude ↗',
+    open: 'Проучване в Claude',
     title: 'Отваря нов разговор в claude.ai със заявка за проучване по тази карта (заявката се копира и в клипборда)',
-    copied: 'Заявката е копирана. Ако Claude се отвори без нея, поставете я. Включете Research в Claude за задълбочено търсене.',
+    copied: 'Заявката е копирана: поставете я, ако Claude се отвори празен. Включете Research там.',
   },
 )
 
@@ -116,10 +116,16 @@ export function ResearchButton({ card }: { card: CharacterCard }) {
   }
   return (
     <>
-      <button type="button" className="clear research-open" title={t('title')} onClick={open}>
+      <button type="button" className="dict-open research-open" title={t('title')} onClick={open}>
+        {/* A magnifier over a page: research, not a link out. */}
+        <svg className="research-icon" viewBox="0 0 16 16" aria-hidden>
+          <path d="M3 1.5h6.5L12.5 4.5V7M3 1.5v12h4M3 1.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+          <circle cx="10.5" cy="10.5" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M12.4 12.4L14.6 14.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
         {t('open')}
       </button>
-      {copied && <p className="hint research-copied">{t('copied')}</p>}
+      {copied && <span className="hint research-copied">{t('copied')}</span>}
     </>
   )
 }

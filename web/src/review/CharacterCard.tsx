@@ -364,12 +364,10 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <p className="queue-meta">
             {t('kind')} · {t('from', { source: sources })}
           </p>
-          <p className="card-head-actions">
-            <ResearchButton card={card} />
-          </p>
           <ReportButton subject={`kanji:${char}`} from={id} />
         </div>
-        <div className="queue-dict">
+        <div className="queue-dict card-head-pills">
+          <ResearchButton card={card} />
           <DictLinks type="decomposition" subject={char} />
         </div>
       </header>
