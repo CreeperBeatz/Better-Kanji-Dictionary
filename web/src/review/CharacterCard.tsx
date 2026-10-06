@@ -39,9 +39,8 @@ const S = strings(
     q_meaning_hint: 'A real character with its own meaning, a shape several old parts merged into (a name, not a meaning), or a form of a kanji (step above).',
     useProposal: 'Use the proposal',
     useDraft: 'Use the draft',
-    draftAgrees: 'the draft agrees',
     edit: 'Edit',
-    editTitle: 'Start your own answer from this one',
+    editTitle: 'Change the draft: the parts field opens with what it says',
     keepNow: 'Keep it as it is',
     atomic: 'No parts: it is learned as one piece',
     other: 'Something else:',
@@ -92,9 +91,8 @@ const S = strings(
     q_meaning_hint: 'Истински знак със свое значение, форма, в която са се слели няколко стари части (име, не значение), или форма на канджи (стъпката по-горе).',
     useProposal: 'Използвайте предложението',
     useDraft: 'Използвайте черновата',
-    draftAgrees: 'черновата е съгласна',
     edit: 'Промяна',
-    editTitle: 'Започнете свой отговор от този',
+    editTitle: 'Променете черновата: полето за части се отваря с нейния отговор',
     keepNow: 'Оставете го както е',
     atomic: 'Без части: учи се като едно цяло',
     other: 'Нещо друго:',
@@ -155,8 +153,7 @@ interface PartsOption {
 }
 
 interface Work {
-  /** `from`: the answer whose Edit opened the field, when one did. */
-  parts?: { pick: string; custom: string[]; from?: string }
+  parts?: { pick: string; custom: string[] }
   forms: Record<string, { pick: 'proposed' | 'now' | 'other'; value: FormLink }>
   meaning?: { pick: 'proposed' | 'other' | 'form' | 'none'; value: PartMeaning }
   reason: string
@@ -164,35 +161,35 @@ interface Work {
 
 const setOf = (a: string[]) => [...a].sort().join('')
 
-/** The parts answers on offer: each distinct proposal, the AI draft if it says something new, today's, none. */
+/**
+ * The parts answers on offer: each source's distinct proposal, today's, no
+ * parts, and last, always, the draft (this dictionary's own: BKD), which is
+ * the one to edit. The draft's own items (an `ai:` source) are the draft.
+ */
 function partsOptions(items: ItemDetail[], now: string[], draft: Draft | null): PartsOption[] {
   const out: PartsOption[] = []
   const seen = new Set<string>([setOf(now)])
   for (const i of items) {
     const p = i.proposed as string[] | null
-    if (!p || seen.has(setOf(p))) continue
+    if (!p || i.source.startsWith('ai:') || seen.has(setOf(p))) continue
     seen.add(setOf(p))
     out.push({ key: `p:${i.id}`, parts: p, item: i })
   }
-  if (draft && !seen.has(setOf(draft.parts))) {
-    seen.add(setOf(draft.parts))
-    out.push({ key: 'draft', parts: draft.parts })
-  }
   out.push({ key: 'now', parts: now })
-  if (!seen.has('')) out.push({ key: 'atomic', parts: [] })
+  if (!seen.has('') && !(draft && !draft.parts.length)) out.push({ key: 'atomic', parts: [] })
+  if (draft) out.push({ key: 'draft', parts: draft.parts })
   return out
 }
 
-/** Where the card starts: the AI draft's answer when it gave one, else the first proposal, else as it is. */
+/** Where the card starts: the draft when there is one, else the first proposal, else as it is. */
 function startWork(card: Card): Work {
   const parts = card.items.filter((i) => i.type === 'decomposition')
   const forms = card.items.filter((i) => i.type === 'form_link')
   const meaning = card.items.find((i) => i.type === 'part_meaning')
   const draft = draftOf(parts)
   const options = partsOptions(parts, card.context.parts, draft)
-  const byDraft = draft && options.find((o) => setOf(o.parts) === setOf(draft.parts))
   const work: Work = { forms: {}, reason: '' }
-  if (parts.length) work.parts = { pick: (byDraft ?? options[0]).key, custom: card.context.parts }
+  if (parts.length) work.parts = { pick: draft ? 'draft' : options[0].key, custom: draft?.parts ?? card.context.parts }
   for (const f of forms) work.forms[f.id] = { pick: 'proposed', value: (f.proposed as FormLink) ?? { kind: 'none', note: null } }
   if (meaning) work.meaning = { pick: 'proposed', value: meaning.proposed as PartMeaning }
   return work
@@ -232,7 +229,10 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         const s = startWork(c)
         setCard(c)
         setStart(s)
-        setWork((readDraft(id)?.card as Work | undefined) ?? s)
+        // Work kept from an older card layout whose answer is gone starts afresh.
+        const kept = readDraft(id)?.card as Work | undefined
+        const keys = new Set(['other', ...partsOptions(c.items.filter((i) => i.type === 'decomposition'), c.context.parts, draftOf(c.items)).map((o) => o.key)])
+        setWork(kept && (!kept.parts || keys.has(kept.parts.pick)) ? kept : s)
       },
       (e) => !stale && setProblem(errorText(e, lang)),
     )
@@ -303,7 +303,8 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
       if (!partsChange) partsItems.forEach((i) => out.push({ item: i.id, action: 'keep' }))
       else {
         // One item carries the answer: the proposal picked, else the first; the rest were not chosen.
-        const carrier = pick.startsWith('p:') ? pick.slice(2) : partsItems[0].id
+        // The item whose proposal it is carries the answer (an accept); else the first, as an edit.
+        const carrier = pick.startsWith('p:') ? pick.slice(2) : (partsItems.find((i) => i.proposed && setOf(i.proposed as string[]) === setOf(chosen))?.id ?? partsItems[0].id)
         for (const i of partsItems) {
           if (i.id !== carrier) out.push({ item: i.id, action: 'reject' })
           else if (same(i.proposed, chosen)) out.push({ item: i.id, action: 'accept' })
@@ -431,41 +432,35 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
             <p className="hint">{t('q_parts_hint')}</p>
             <div className="card-options" role="radiogroup">
               {options.map((o) => {
-                // The draft's reasoning sits on the answer it agrees with, whichever that is.
-                const isDraft = !!draft && setOf(o.parts) === setOf(draft.parts)
-                const ownDraft = o.key === 'draft' || !!o.item?.source.startsWith('ai:')
+                const isDraft = o.key === 'draft'
                 const by = givenBy(o.parts)
-                const chips = by.length ? by : ownDraft ? (['bkd'] as PartsSource[]) : []
-                const editing = work.parts!.pick === 'other' && work.parts!.from === o.key
+                const chips = isDraft ? (['bkd', ...by] as PartsSource[]) : by
+                const editing = isDraft && work.parts!.pick === 'other'
                 return (
                   <div key={o.key} className="card-option-wrap">
                     <label className="card-option" data-on={work.parts!.pick === o.key || editing || undefined} data-unsure={(isDraft && draft!.confidence < 0.6) || undefined}>
-                      {o.parts.length > 0 && (
+                      {isDraft && !editing && (
                         <button
                           type="button"
                           className="clear card-edit"
                           title={t('editTitle')}
                           onClick={(e) => {
                             e.preventDefault()
-                            setParts({ pick: 'other', custom: o.parts, from: o.key })
+                            setParts({ pick: 'other', custom: draft!.parts })
                           }}
                         >
                           {t('edit')}
                         </button>
                       )}
-                      <input type="radio" name={`parts-${id}`} checked={work.parts!.pick === o.key} onChange={() => setParts({ pick: o.key, from: undefined })} />
+                      <input type="radio" name={`parts-${id}`} checked={work.parts!.pick === o.key || editing} onChange={() => setParts({ pick: o.key })} />
                       <span className="card-option-label">
-                        {o.key === 'now' ? t('keepNow') : o.key === 'atomic' ? t('atomic') : ownDraft ? t('useDraft') : t('useProposal')}
+                        {o.key === 'now' ? t('keepNow') : o.key === 'atomic' ? t('atomic') : isDraft ? t('useDraft') : t('useProposal')}
                         {o.key !== 'atomic' && <>: {tiles(o.parts)}</>}
                         {chips.length > 0 && <SourceChips by={chips} onOpen={() => setNotes((n) => !n)} />}
-                        {o.item?.reason && !ownDraft && <span className="hint card-option-why">{o.item.reason}</span>}
+                        {o.item?.reason && <span className="hint card-option-why">{o.item.reason}</span>}
                         {isDraft && (
                           <span className="card-draft">
-                            <span className="hint">
-                              {!ownDraft && `${t('draftAgrees')} · `}
-                              {t('confidence', { n: draft!.confidence })}
-                            </span>{' '}
-                            {draft!.why}
+                            <span className="hint">{t('confidence', { n: draft!.confidence })}</span> {draft!.why}
                             {!!draft!.lookalikes?.length && (
                               <span className="hint">
                                 {' '}
@@ -480,12 +475,16 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                   </div>
                 )
               })}
-              <label className="card-option" data-on={(work.parts.pick === 'other' && !work.parts.from) || undefined}>
-                <input type="radio" name={`parts-${id}`} checked={work.parts.pick === 'other' && !work.parts.from} onChange={() => setParts({ pick: 'other', from: undefined })} />
-                <span className="card-option-label">{t('other')}</span>
-              </label>
-              {work.parts.pick === 'other' && !work.parts.from && (
-                <ValueEditor type="decomposition" value={work.parts.custom} onChange={(v) => setParts({ custom: v as string[] })} />
+              {!draft && (
+                <>
+                  <label className="card-option" data-on={work.parts.pick === 'other' || undefined}>
+                    <input type="radio" name={`parts-${id}`} checked={work.parts.pick === 'other'} onChange={() => setParts({ pick: 'other' })} />
+                    <span className="card-option-label">{t('other')}</span>
+                  </label>
+                  {work.parts.pick === 'other' && (
+                    <ValueEditor type="decomposition" value={work.parts.custom} onChange={(v) => setParts({ custom: v as string[] })} />
+                  )}
+                </>
               )}
             </div>
             {!!draft?.flags?.length && (

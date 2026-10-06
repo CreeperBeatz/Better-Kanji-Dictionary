@@ -90,20 +90,19 @@ dictionary.
 
 ### How the card works
 
-- **Every answer says what it does.** *Use the proposal*, *use the draft*,
-  *keep it as it is*, *no parts*, *something else*. There is no bare
-  *reject*: say what should be true instead. (A check's *reject* used to
-  mean "keep it", and 五 段 為 were closed that way with their wrong parts
-  still live.)
-- **Labels say who gives an answer**: KanjiVG, IDS, Цалта, cjk-decomp, or
-  *BKD* (Better Kanji Dictionary's own) when no source does. Press one for
-  what each source is and how each splits the character.
-- **The draft** sits inside the answer it gives, or the one it agrees with
-  ("the draft agrees"), with its confidence and its reason. It starts
-  selected; a red edge means it was unsure. *Why this card* under the
-  answers says what a rule found (one part only, strokes in no part …).
-- **Edit**, at the left of an answer, starts your own answer from it: the
-  field opens under it with those parts, to change and save.
+- **Every answer says what it does.** *Use the proposal*, *keep it as it
+  is*, *no parts*, and last, *use the draft*. There is no bare *reject*:
+  say what should be true instead. (A check's *reject* used to mean "keep
+  it", and 五 段 為 were closed that way with their wrong parts still live.)
+- **Labels say who gives an answer**: KanjiVG, IDS, Цалта, cjk-decomp. The
+  draft is *BKD*, Better Kanji Dictionary's own, plus any source that
+  splits it the same way. Press a label for what each source is and how
+  each splits the character.
+- **The draft** is always the last answer, with its confidence and its
+  reason, and starts selected; a red edge means it was unsure. *Why this
+  card* under the answers says what a rule found (one part only …).
+- **Edit**, on the draft, opens the parts field with what the draft says:
+  change it and save. That is also how you give an answer of your own.
 - **What this changes** shows, for the parts you picked, what every kanji
   containing the character gains or loses. Above *save*, the summary says
   in sentences everything saving will do.
