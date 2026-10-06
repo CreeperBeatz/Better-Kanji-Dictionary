@@ -499,6 +499,60 @@ export interface ItemDetail extends QueueItem {
   }
 }
 
+/**
+ * What one of Dani's print dictionaries says, put on a review card as evidence
+ * (pipeline/book_sources.py): Цалта's kanji book (`kanji`, numbered entries)
+ * or Иванов's Bulgarian-Japanese dictionary (`bg-ja`). `unsure`: what the
+ * transcribing agent was not sure it read right -- the page's scan settles it.
+ */
+export interface BookRef {
+  book: 'kanji' | 'bg-ja'
+  pages: number[]
+  no?: number
+  char?: string
+  unsure?: string[]
+}
+
+/** A part as the kanji book draws it: a character, or a shape described in words when it has none. */
+export interface BookPart {
+  char: string | null
+  name: string | null
+  glyph_desc?: string | null
+}
+
+/** The kanji book on a decomposition: its parts, and the same split in our graph's nodes when it maps. */
+export interface BookSplit extends BookRef {
+  parts: BookPart[]
+  split: string[] | null
+}
+
+/** The kanji book's old form of a kanji. */
+export interface BookOld extends BookRef {
+  old: string
+}
+
+/** The kanji book on a part: its Bulgarian names (with how often), its own entry, where it is named. */
+export interface BookPartView {
+  names: [string, number][]
+  entry: (BookRef & { name: string | null; note: string | null }) | null
+  seen: (BookRef & { name: string })[]
+}
+
+/** The kanji book's Bulgarian keyword for a kanji, and its second meaning. */
+export interface BookKeyword extends BookRef {
+  keyword: string
+  alt: string | null
+}
+
+/** A word's gloss in either book. `shared`: the book's spelling fits other words too (イースト: yeast, east). */
+export interface BookGloss extends BookRef {
+  bg: string
+  ja: string
+  romaji: string | null
+  notes?: string[]
+  shared?: boolean
+}
+
 /** Every word with a kanji: by accepted meaning group, then the ones not placed yet, a page at a time. */
 export interface WordsWithResponse {
   char: string
@@ -883,6 +937,13 @@ export const api = {
     ]),
 
   reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
+
+  /** A scanned page a card cites (server/books.py): reviewers and the admin only. */
+  reviewBookPage: async (book: BookRef['book'], page: number) => {
+    const res = await fetch(`${BASE}/api/review/book/${book}/${page}`, { headers: authHeaders() })
+    if (!res.ok) throw await refusal(res, { message: 'that page could not be fetched', code: 'book_page_missing' })
+    return res.blob()
+  },
 
   /**
    * `words`, for a kanji's meanings: word id -> group id or null, as left on the

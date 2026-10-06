@@ -6,8 +6,9 @@ everyone's decisions, the auto-accepted ones, and can revert.
 """
 
 from fastapi import APIRouter, Body, Depends, Query
+from fastapi.responses import FileResponse
 
-from .. import auth, review
+from .. import auth, books, review
 from ..errors import AppError
 from .auth import check_role, require_role, require_user
 
@@ -76,6 +77,15 @@ def _queued(me: dict, type_: str, subject: str, value, reason, evidence: dict | 
     item = review.add_item(type_, subject, value, f"human:{me['id']}", "suggestion", reason,
                            evidence=evidence, by=me["id"], priority=1.0)
     return {"applied": False, "item": {"id": item["id"], "status": item["status"]}}
+
+
+@router.get("/book/{book}/{page}")
+def book_page(book: str, page: int, _: dict = Depends(reviewer)) -> FileResponse:
+    """A scanned page of one of the print dictionaries a card cites (server/books.py): reviewers and the admin only."""
+    f = books.page_file(book, page)
+    if f is None:
+        raise AppError(404, "book_page_missing", "that page's scan is not on this server")
+    return FileResponse(f, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/page/kanji/{char}")

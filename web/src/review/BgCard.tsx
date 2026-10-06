@@ -5,7 +5,8 @@
  * edit, and what is saved shows on the site at once (server/bg_overlay.py).
  */
 import type { ReactNode } from 'react'
-import type { ItemDetail, MeaningGroup, Sense } from '../api'
+import type { BookGloss, BookKeyword, ItemDetail, MeaningGroup, Sense } from '../api'
+import { BookGlossPanel, BookKeywordPanel } from './BookEvidence'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, KanjiFacts } from './editors'
 
@@ -69,6 +70,8 @@ export function BgCard({
   const t = S(lang)
   const c = detail.context
   const built = c.built ?? []
+  // What Dani's print dictionaries give (pipeline/book_sources.py): a kanji's keyword, a word's glosses.
+  const book = detail.evidence?.book
 
   if (detail.subject.startsWith('word:') && c.word) {
     const w = c.word
@@ -102,6 +105,7 @@ export function BgCard({
         )}
         <p className="hint">{t('hint')}</p>
         <BgSenses senses={w.senses} value={value} onChange={onChange} built={built} />
+        {Array.isArray(book) && book.length > 0 && <BookGlossPanel views={book as BookGloss[]} value={value} onChange={onChange} />}
       </div>
     )
   }
@@ -132,6 +136,7 @@ export function BgCard({
           )
         }
       />
+      {book != null && <BookKeywordPanel view={book as BookKeyword} value={value} onChange={onChange} />}
       {c.senses && c.senses.length > 0 && (
         <BgLabels
           groups={c.senses}

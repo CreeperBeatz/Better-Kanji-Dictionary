@@ -36,6 +36,7 @@ const ERRORS: Record<string, [string, string]> = {
   images_unavailable: ['picture search is not available right now', 'търсенето на картини не е достъпно в момента'],
   images_busy: ['picture search is busy; try again in a minute', 'търсенето на картини е претоварено; опитайте след минута'],
   picture_unfetched: ['that picture could not be fetched', 'картината не можа да бъде изтеглена'],
+  book_page_missing: ['that page’s scan is not on this server', 'сканираната страница не е на този сървър'],
   bad_email: ['that does not look like an email address', 'това не прилича на имейл адрес'],
   too_soon: ['a link was just sent; give it a moment', 'току-що изпратихме връзка; изчакайте малко'],
   link_expired: ['this link has expired or was already used', 'връзката е изтекла или вече е използвана'],

@@ -11,6 +11,9 @@ import { DictLinks } from './DictLinks'
 import {
   api,
   dataChanged,
+  type BookOld,
+  type BookPartView,
+  type BookSplit,
   type ItemDetail,
   type MeaningGroup,
   type Origin,
@@ -28,6 +31,7 @@ import { useKindLabel, useLinkSentence } from './KindsInfo'
 import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
 import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard } from './BgCard'
+import { BookOldView, BookPartPanel, BookSplitView } from './BookEvidence'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { queuePath, queueRouteInUrl, replaceQueueRoute } from './route'
 
@@ -573,7 +577,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               </dl>
               )}
 
-              {detail && item.type !== 'bg' && <Evidence detail={detail} onKanji={onKanji} />}
+              {detail && item.type !== 'bg' && <Evidence detail={detail} onKanji={onKanji} onUse={setDraft} />}
               </div>
 
               <div className="queue-decide">
@@ -675,17 +679,27 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   )
 }
 
-/** What the item is judged by, per type. */
-function Evidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: string) => void }) {
+/** What the item is judged by, per type. `onUse` takes a value the evidence offers (the book's split) as the answer. */
+function Evidence({ detail, onKanji, onUse }: { detail: ItemDetail; onKanji?: (char: string) => void; onUse?: (v: TaskValue) => void }) {
   const lang = useLang()
   const t = S(lang)
   const glyphs = (chars: string[]) => <PartTiles chars={chars} onKanji={onKanji} />
+  // What Dani's print dictionaries say (pipeline/book_sources.py), when they say anything.
+  const book = detail.evidence?.book
 
   if (detail.type === 'decomposition') {
     const imp = detail.impact
     const old = detail.context.forms?.old ?? []
     return (
       <div className="queue-evidence">
+        {book != null && (
+          <BookSplitView
+            view={book as BookSplit}
+            current={detail.current as string[] | null}
+            proposed={detail.proposed as string[] | null}
+            onUse={onUse}
+          />
+        )}
         {old.length > 0 && (
           <p title={t('oldHint')}>
             <span className="hint">{t('oldForm')}: </span>
@@ -762,6 +776,7 @@ function Evidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: st
           ))}
         </div>
         {both > 0 && <p className="hint">{t('inBoth', { n: both })}</p>}
+        {book != null && <BookOldView view={book as BookOld} />}
       </div>
     )
   }
@@ -908,6 +923,7 @@ function PartEvidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char
           <p className="hint">{t('formLinksHint')}</p>
         </div>
       )}
+      {detail.evidence?.book != null && <BookPartPanel view={detail.evidence.book as BookPartView} />}
       {Array.isArray(c.users) && (
         <>
           <UsedIn chars={c.users} onKanji={onKanji} old={c.old ?? {}} />

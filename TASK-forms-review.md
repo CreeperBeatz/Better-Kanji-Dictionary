@@ -370,6 +370,14 @@ The framework every task type in §5 runs on.
 - `pipeline/form_drafts.py` + `form_prompt.md`: subagents propose `form_of`
   (with evidence) / `looks_like` for bound parts with no meaning, and
   classify the Unihan variant pairs nothing classifies (`none` is dropped).
+- `pipeline/book_sources.py count|load` (2026-10-06): Dani's two print
+  dictionaries (server/books.py; transcribed in Documents/JapaneseDictionaries).
+  The kanji book's split where it differs from ours (`tsalta-diff`), its old
+  forms we lack (`tsalta`), and its view as `evidence.book` on open parts,
+  forms, part-meaning and Bulgarian cards (a kanji's keyword, a word's glosses
+  from either book). Cards show it with the page's scan, served to reviewers
+  and the admin only and never copied into the repo or the pack. Browser
+  check: `web/scripts/books-check.mjs`.
 - Counts (2026-10-02), none loaded: decomposition 224 proposals over 213
   characters (IDS only 75, KanjiVG only 115, both 34; 3 would auto-accept;
   182 add a containment edge), 99 cost-ranked checks, 16 old-form links,

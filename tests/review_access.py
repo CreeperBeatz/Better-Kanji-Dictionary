@@ -10,7 +10,10 @@ Uses 青 (parts 龶 月) and 生, which every build has.
 
 from __future__ import annotations
 
+import os
 import sys
+import urllib.error
+import urllib.request
 
 from harness import Checks, Server, use_sandbox
 
@@ -150,6 +153,27 @@ def main() -> int:
         call("POST", "/api/review/edit", "reviewer", none)
         check("a link can be taken away", call("GET", "/api/kanji/%E9%BE%B6/forms")[1]["looksLike"] == [])
 
+        print("the print dictionaries: a page's scan is for reviewers and the admin")
+        pages = srv.tmp / "books" / "kanji" / "pages"
+        pages.mkdir(parents=True)
+        (pages / "p0061.png").write_bytes(b"PNG")  # a stand-in: only who may fetch it is checked
+        os.environ["BETTERRTK_BOOKS_DIR"] = str(srv.tmp / "books")
+        for who, want in ((None, 401), ("user", 403), ("reviewer", 200), ("admin", 200)):
+            check(f"{who or 'anonymous'} GET a page is {want}", page_status(srv, "/api/review/book/kanji/61", who) == want)
+        check("a page that is not here is 404", page_status(srv, "/api/review/book/kanji/62", "reviewer") == 404)
+        check("an unknown book is 404", page_status(srv, "/api/review/book/scans/61", "reviewer") == 404)
+
+        print("a second source goes beside an item, not into it")
+        it = review.add_item("decomposition", "語", None, "cost-ranking", reason="check: many parts")
+        view = {"book": "kanji", "split": ["言", "吾"]}
+        check("attached to an open item", review.attach_evidence("book", {it["id"]: view}) == 1)
+        got = review._read()["items"][it["id"]]
+        check("the proposal is untouched", got["proposed"] is None and got["evidence"]["book"] == view, got)
+        check("the same view again changes nothing", review.attach_evidence("book", {it["id"]: view}) == 0)
+        decided = call("POST", f"/api/review/items/{it['id']}/decide", "reviewer", {"action": "reject"})
+        check("the reviewer decides it", decided[0] == 200, decided)
+        check("a decided item is left alone", review.attach_evidence("book", {it["id"]: {**view, "no": 1}}) == 0)
+
         print("admin-only lists")
         for who, want in (("reviewer", 403), ("admin", 200)):
             check(f"{who} GET auto is {want}", call("GET", "/api/review/auto", who)[0] == want)
@@ -160,6 +184,18 @@ def main() -> int:
     finally:
         srv.stop()
     return check.done()
+
+
+def page_status(srv: Server, path: str, who: str | None) -> int:
+    """A response's status only: a page's scan is not JSON."""
+    req = urllib.request.Request(f"http://127.0.0.1:{srv.port}{path}")
+    if who:
+        req.add_header("Authorization", f"Bearer {srv.sessions[who]}")
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
 
 
 if __name__ == "__main__":

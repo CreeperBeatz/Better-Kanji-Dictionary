@@ -49,6 +49,29 @@ right, then accepted, or skipped.
 move to the next or previous card. On a single word, `1`–`9` pick a group
 and decide in one press.
 
+### The print dictionaries
+
+Many cards show what two printed dictionaries say, in a box with the book's
+name: Цалта's kanji book (by entry number) and Иванов's Bulgarian–Japanese
+dictionary.
+
+- **A second opinion, not the answer.** The books were made by people, but
+  they were transcribed by an AI. The kanji book also splits kanji the way a
+  mnemonic course would, not always by today's shape.
+- **Check it against the page.** The page button (*p. 163*) opens the scan
+  under the box; click it to zoom. When the box says *the transcription may
+  be wrong here*, look at the page before you use anything from it.
+- **Where it shows:**
+  - on **parts**, the book's split, with *use this split* to make it your
+    answer;
+  - on **forms**, the old form the book gives;
+  - on **part meanings**, the Bulgarian names the book uses for the part;
+  - on **Bulgarian** cards, the book's terms. A term that is already in the
+    list has a ✓; *+ add* (or *+1*, *+2* for a word's senses) puts it in.
+- **The kanji book's own cards.** Some *parts* and *forms* cards come from
+  the book itself (`tsalta-diff`, `tsalta`); judge them like any proposal. It
+  calls some name variants old forms (埜 for 野): those are not old forms.
+
 ## Parts
 
 > **Question:** which parts is this character built from, as written today?

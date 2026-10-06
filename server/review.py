@@ -942,6 +942,24 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
         return added, refused
 
 
+def attach_evidence(key: str, by_item: dict[str, Any]) -> int:
+    """Put a second source's view beside open items' own evidence, under `key`;
+    the proposal itself is not touched. Returns how many items changed (one
+    already carrying the same value, or decided meanwhile, is left alone)."""
+    with _change() as data:
+        n = 0
+        for item_id, value in by_item.items():
+            i = data["items"].get(item_id)
+            if not i or i["status"] != "open":
+                continue
+            ev = i["evidence"] if isinstance(i["evidence"], dict) else {}
+            if ev.get(key) == value:
+                continue
+            _update(data, i, evidence={**ev, key: value})
+            n += 1
+        return n
+
+
 FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 
