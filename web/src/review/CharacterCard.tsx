@@ -39,6 +39,7 @@ const S = strings(
     q_meaning_hint: 'A real character with its own meaning, a shape several old parts merged into (a name, not a meaning), or a form of a kanji (step above).',
     useProposal: 'Use the proposal',
     useDraft: 'Use the draft',
+    sameAsNow: 'as it is now',
     edit: 'Edit',
     editTitle: 'Change the draft: the parts field opens with what it says',
     keepNow: 'Keep it as it is',
@@ -91,6 +92,7 @@ const S = strings(
     q_meaning_hint: 'Истински знак със свое значение, форма, в която са се слели няколко стари части (име, не значение), или форма на канджи (стъпката по-горе).',
     useProposal: 'Използвайте предложението',
     useDraft: 'Използвайте черновата',
+    sameAsNow: 'както е сега',
     edit: 'Промяна',
     editTitle: 'Променете черновата: полето за части се отваря с нейния отговор',
     keepNow: 'Оставете го както е',
@@ -162,22 +164,24 @@ interface Work {
 const setOf = (a: string[]) => [...a].sort().join('')
 
 /**
- * The parts answers on offer: each source's distinct proposal, today's, no
- * parts, and last, always, the draft (this dictionary's own: BKD), which is
- * the one to edit. The draft's own items (an `ai:` source) are the draft.
+ * The parts answers on offer, in a fixed order: each source's distinct
+ * proposal, today's, the draft, and no parts last. The draft takes the place
+ * of any answer with the same parts (it carries that answer's labels), so
+ * nothing is offered twice; its own items (an `ai:` source) are the draft.
  */
 function partsOptions(items: ItemDetail[], now: string[], draft: Draft | null): PartsOption[] {
   const out: PartsOption[] = []
+  const drafted = draft ? setOf(draft.parts) : null
   const seen = new Set<string>([setOf(now)])
   for (const i of items) {
     const p = i.proposed as string[] | null
-    if (!p || i.source.startsWith('ai:') || seen.has(setOf(p))) continue
+    if (!p || i.source.startsWith('ai:') || seen.has(setOf(p)) || setOf(p) === drafted) continue
     seen.add(setOf(p))
     out.push({ key: `p:${i.id}`, parts: p, item: i })
   }
-  out.push({ key: 'now', parts: now })
-  if (!seen.has('') && !(draft && !draft.parts.length)) out.push({ key: 'atomic', parts: [] })
+  if (setOf(now) !== drafted) out.push({ key: 'now', parts: now })
   if (draft) out.push({ key: 'draft', parts: draft.parts })
+  if (!seen.has('') && drafted !== '') out.push({ key: 'atomic', parts: [] })
   return out
 }
 
@@ -434,7 +438,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               {options.map((o) => {
                 const isDraft = o.key === 'draft'
                 const by = givenBy(o.parts)
-                const chips = isDraft ? (['bkd', ...by] as PartsSource[]) : by
+                const chips = isDraft ? (['sonnet', ...by] as PartsSource[]) : by
                 const editing = isDraft && work.parts!.pick === 'other'
                 return (
                   <div key={o.key} className="card-option-wrap">
@@ -455,6 +459,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                       <input type="radio" name={`parts-${id}`} checked={work.parts!.pick === o.key || editing} onChange={() => setParts({ pick: o.key })} />
                       <span className="card-option-label">
                         {o.key === 'now' ? t('keepNow') : o.key === 'atomic' ? t('atomic') : isDraft ? t('useDraft') : t('useProposal')}
+                        {isDraft && setOf(o.parts) === setOf(now) && <span className="hint"> ({t('sameAsNow')})</span>}
                         {o.key !== 'atomic' && <>: {tiles(o.parts)}</>}
                         {chips.length > 0 && <SourceChips by={chips} onOpen={() => setNotes((n) => !n)} />}
                         {o.item?.reason && <span className="hint card-option-why">{o.item.reason}</span>}

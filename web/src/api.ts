@@ -36,7 +36,7 @@ export interface KanjiNode {
 }
 
 /** Where a decomposition comes from (server/decomp_sources.py); `bkd` is this dictionary's own. */
-export type PartsSource = 'kanjivg' | 'ids' | 'tsalta' | 'cjk-decomp' | 'topokanji' | 'bkd'
+export type PartsSource = 'kanjivg' | 'ids' | 'tsalta' | 'cjk-decomp' | 'topokanji' | 'bkd' | 'sonnet'
 
 /** One source's split of a character, in the graph's own characters; [] = one piece. */
 export interface SourceSplit {

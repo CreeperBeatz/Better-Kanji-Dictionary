@@ -8559,7 +8559,8 @@ button.review-part {
   cursor: pointer;
 }
 
-.source-chip[data-source='bkd'] {
+.source-chip[data-source='bkd'],
+.source-chip[data-source='sonnet'] {
   border-color: var(--ai);
   color: var(--paper);
 }
