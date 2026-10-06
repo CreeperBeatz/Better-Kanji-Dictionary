@@ -11,8 +11,8 @@ line, nothing borrowed through an accepted form_of, no reviewed part meaning
 -- and that has no part_meaning item yet. The subagent sorts each into one
 of three, and the loader queues it where it is decided:
 
-- **form_of**: the part is one kanji, squashed or moved, in nearly all its
-  kanji (𠂇 is 又). A `form_link` proposal; it lends that kanji's meaning.
+- **form_of**: the part is one kanji, written differently for its place, in
+  nearly all its kanji (𠂇 is 又). A `form_link` proposal; it lends that kanji's meaning.
 - **meaning**: a real character with a meaning of its own where it is used
   (夋, 劦). A `part_meaning` proposal of kind meaning.
 - **shape**: several unrelated old parts merged into it (丷 is 八 in 半,

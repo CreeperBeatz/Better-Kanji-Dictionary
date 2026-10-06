@@ -182,13 +182,13 @@ function cards(go: (i: number) => void): Card[] {
         <>
           <List label="The main links">
             <li>
-              <b>same part in another position</b>: <J>人·亻</J>, <J>水·氵</J>
+              <b>how it is written in another position</b>: <J>人·亻</J>, <J>水·氵</J>
             </li>
             <li>
               <b>its old form</b>: the pre-reform shape, <J>青·靑</J>
             </li>
             <li>
-              <b>is a form of</b>: squashed or moved, lending its meaning, <J>龰·止</J>
+              <b>is a form of</b>: written differently for its place, lending its meaning, <J>龰·止</J>
             </li>
             <li>
               <b>looks like</b>: a mnemonic only, <J>龶</J> looks like <J>王</J>

@@ -12,7 +12,7 @@ explains a part.
 
 ## The kinds
 
-- `form_of` — the part X **is** the kanji Y, squashed or moved into a
+- `form_of` — the part X **is** the kanji Y, written differently for its
   position: 亻 is 人, 氵 is 水, 龶 is 生 (plain in the old form 靑 of 青).
   **Needs evidence** in `note`: an old form where Y appears in X's place
   (cite it: "靑, the old form of 青"), or a standard reference (Kangxi

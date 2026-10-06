@@ -106,7 +106,7 @@ export interface FormsResponse {
   forms: FormItem[]
   looksLike: FormItem[]
   lookalikeOf: FormItem[]
-  /** The same thing drawn differently: 隹 for 鳥. */
+  /** A separate character for the same thing: 隹 for 鳥. */
   kin: FormItem[]
   variants: FormItem[]
 }

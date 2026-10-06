@@ -15,11 +15,11 @@ contains 月 because that is what is on the page, and its old form 靑 (生 over
                 水 氵 氺. Stored both ways round, within each group.
     old         `other` is the pre-1946 form of `char`: 青 → 靑, 売 → 賣.
                 Unihan kJapaneseOldVariant, plus the gaps curated below.
-    form_of     the bound part `char` *is* `other`, squashed or moved: 龶 → 生,
+    form_of     the bound part `char` *is* `other`, written for its place: 龶 → 生,
                 亻 → 人. One per bound part; it lends the part its meaning.
     looks_like  a popular lookalike, `char` → `other`: 龶 → 王. A mnemonic,
                 always labelled as one, never as where the part comes from.
-    kin         two characters for the same thing, drawn differently: 隹 鳥.
+    kin         two separate characters for the same thing: 隹 鳥.
                 Neither is a form of the other. Stored once, read both ways.
 
 `source` is `unihan`, `curated` or `review:<decision id>`. Accepted review
@@ -72,18 +72,18 @@ POSITIONAL: list[tuple[str, str | None]] = [
     ("肉月", "月 at the left or bottom of 腕 胃 肩 is 肉, flesh (にくづき), not the moon"),
 ]
 
-# A bound part that is a kanji squashed or moved, where it is not already the
-# second member of a positional group above (those are derived).
+# A bound part that is a kanji written differently for its place, where it is
+# not already the second member of a positional group above (those are derived).
 FORM_OF: dict[str, tuple[str, str | None]] = {
     "龶": ("生", "the top of 青 is 生, plain in the old form 靑; 生 lends 青 and 清 晴 精 請 静 情 the reading セイ"),
 }
 
 LOOKS_LIKE: list[tuple[str, str, str | None]] = [
-    ("龶", "王", "often called “king”, but it is a squashed 生"),
+    ("龶", "王", "often called “king”, but it is 生 written as a part"),
     ("䒑", "艹", None),
 ]
 
-# Kin: the same thing, drawn two ways. Shown on the Forms block, never merged
+# Kin: two separate characters for the same thing. Shown on the Forms block, never merged
 # on the graph -- 鳴 does not look like it contains 隹.
 KIN: list[tuple[str, str, str | None]] = [
     ("鳥", "隹", "both began as drawings of a bird; 鶏's old form 鷄 is also written 雞"),

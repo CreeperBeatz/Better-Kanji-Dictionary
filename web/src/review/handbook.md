@@ -64,8 +64,8 @@ and decide in one press.
   a small picture like 午 is learned as one piece.
 - **A lookalike is not a part.** 午 visibly contains 干, but 干 (a shield)
   does nothing in 午 (a pestle). Ask what the piece does in this character:
-  meaning, sound, or a squashed form of its source kanji. If it does none of
-  these, it only looks alike. Lookalikes go in *Similar → looks*, where a
+  meaning, sound, or its source kanji written for that position. If it
+  does none of these, it only looks alike. Lookalikes go in *Similar → looks*, where a
   learner sees them side by side. Your own way of seeing a shape (決 as
   person + ユ) goes in your associations, not in the parts.
 - **Bare strokes are parts only when they mean something.** Data sources love
@@ -85,7 +85,7 @@ and decide in one press.
   does. The old form only chooses between splits that are visible today. It
   never adds a part that is no longer visible.
 
-### Squashed or moved kanji
+### Kanji written differently as a part
 
 A bound form is handled by how much it still looks like its source:
 
@@ -118,13 +118,19 @@ change, even if it is technically accurate.
 
 | Link | Use it when | Example |
 |---|---|---|
-| *same part in another position* | the same part, written where another position needs it | 人·亻, 水·氵, 衣·衤 |
+| *how it is written in another position* | one is only ever the other, written for a certain position, often with fewer or different strokes; position decides which you see | 人·亻, 水·氵, 衣·衤 |
 | *its old form* | Y is the pre-reform shape of X | 青·靑, 会·會 |
-| *is a form of* | X is Y squashed or moved, and lends Y's meaning. Needs history behind it (the old form, a reference). One per bound form. | 龰·止 |
+| *is a form of* | X is Y, written differently for the place it sits, and lends Y's meaning. Needs history behind it (the old form, a reference). One per bound form. | 龰·止 |
 | *looks like* | a mnemonic lookalike only, always shown as such | 龶 looks like 王 |
-| *the same thing, drawn differently* | X and Y are one thing, but neither is inside the other's kanji | 隹·鳥 |
+| *a separate character for the same thing* | X and Y are characters in their own right, with their own readings, that mean the same thing; either can sit in the same place (雅 has 隹 where 鳴 has 鳥) | 隹·鳥 |
 | *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant | 业·業 |
 
+- **Position, or two characters?** Looks do not decide it: 氵 has three
+  strokes and 水 four, yet 氵 is only ever 水 written on the left, and it
+  never stands alone. 隹 and 鳥 are both characters with their own readings
+  (スイ, チョウ), and either can sit in the same place. The first is *how it
+  is written in another position*; the second, *a separate character for
+  the same thing*.
 - Reject a *looks like* that points at a kanji with the wrong meaning that
   the learner will also meet.
 - A form link never changes parts.
@@ -140,7 +146,7 @@ first. Read the two lists side by side:
   is lent to every one of them. If X is Y in 来 but something else in 前,
   米 and 首, it is not a form of Y: it is a shape (see *Part meanings*),
   and the link is rejected.
-- **A *same part in another position* should fill the same role** in both
+- **A *how it is written in another position* should fill the same role** in both
   lists: 氵 in 海 does what 水 does in 泉.
 
 ### What each link changes on the site
@@ -159,7 +165,7 @@ A part is one of three things, and only two of them are decided here:
 
 | It is | Decided as | Example |
 |---|---|---|
-| one kanji, squashed or moved, in nearly all its kanji | a form link: *is a form of*, in the forms queue | 𠂇 is 又, the hand in 左 右 友 |
+| one kanji, written differently for its place, in nearly all its kanji | a form link: *is a form of*, in the forms queue | 𠂇 is 又, the hand in 左 右 友 |
 | a real character that brings its own meaning | *its own meaning* | 劦, joint effort, in 協 脅 |
 | a shape that several unrelated old parts merged into | *a shape with no meaning*, with a name | 丷: 八 in 半, grains in 米, hair in 首 |
 
@@ -372,9 +378,9 @@ reason field and tell the admin, so it can be added here.
 > another position* if you like, as 亻 has for 人).
 
 > **Lesson:** when a proposal replaces a recognisable part with stroke
-> fragments, reject it. When the current part is a bent or squashed version
-> of a real kanji, keep it if it still looks like it, and make sure the form
-> link exists.
+> fragments, reject it. When the current part is a real kanji written
+> differently for its position, keep it if it still looks like it, and make
+> sure the form link exists.
 
 ### 午: a lookalike inside an atom
 

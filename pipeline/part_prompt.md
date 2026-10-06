@@ -17,8 +17,8 @@ shape tells the story.** Nothing you write changes what contains what.
 
 Pick exactly one per part.
 
-- `form_of` — the part **is** one kanji Y, squashed or moved, in nearly all
-  the kanji it appears in: 𠂇 is 又 (the hand in 左 右 友 有), 龰 is 止 (the
+- `form_of` — the part **is** one kanji Y, written differently for its
+  place, in nearly all the kanji it appears in: 𠂇 is 又 (the hand in 左 右 友 有), 龰 is 止 (the
   foot in 足 走), ⺺ is 聿. The page will then lend it Y's meaning
   everywhere, so it must be true in most of the examples. **Needs evidence**
   in `evidence`: an old form where Y stands in the part's place ("又 stands

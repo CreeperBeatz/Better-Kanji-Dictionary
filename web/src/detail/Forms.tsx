@@ -1,6 +1,6 @@
 /**
  * The forms of a character: its old form (靑 for 青), its forms in other
- * positions (人 亻), what a bound part is a form of (龶 is a squashed 生), and
+ * positions (人 亻), what a bound part is a form of (龶 is 生 written as a part), and
  * the lookalikes learners use as mnemonics (龶 looks like 王), labelled as
  * such -- a mnemonic is never presented as where a part comes from.
  *
@@ -19,12 +19,12 @@ const S = strings(
     new: 'Today’s form',
     positional: 'In other positions',
     formOf: 'A form of',
-    forms: 'Its squashed or moved forms',
+    forms: 'Its forms as a part',
     looksLike: 'Looks like',
     looksLikeHint: 'a mnemonic, not its origin',
     lookalikeOf: 'Mistaken for it',
     kin: 'Related',
-    kinHint: 'the same thing, drawn differently',
+    kinHint: 'a separate character for the same thing',
     variants: 'Other variants',
     notAPage: '{char} has no page of its own',
     noForms: 'No forms recorded yet.',
@@ -35,12 +35,12 @@ const S = strings(
     new: 'Днешна форма',
     positional: 'В други позиции',
     formOf: 'Форма на',
-    forms: 'Сбитите или преместени форми',
+    forms: 'Формите му като част',
     looksLike: 'Прилича на',
     looksLikeHint: 'мнемоника, а не произход',
     lookalikeOf: 'Бъркат го с него',
     kin: 'Сродни',
-    kinHint: 'същото нещо, нарисувано различно',
+    kinHint: 'отделен знак за същото нещо',
     variants: 'Други варианти',
     notAPage: '{char} няма собствена страница',
     noForms: 'Още няма записани форми.',
