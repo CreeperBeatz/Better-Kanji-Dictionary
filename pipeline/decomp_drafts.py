@@ -3,6 +3,8 @@
     python pipeline/decomp_drafts.py flags                 # what the rules find, nothing written
     python pipeline/decomp_drafts.py prepare               # batches for the subagents
     python pipeline/decomp_drafts.py prepare --new         # a later pass: only what has no draft yet (E-*)
+    python pipeline/decomp_drafts.py --drafts data/drafts/decomp-audit prepare --audit 60
+                                                           # a random sample of what no rule flags (A-*), to measure
     # one Sonnet subagent per data/drafts/decomp/in/*.json, following pipeline/decomp_prompt.md
     python pipeline/decomp_drafts.py check [--batch D-000]
     python pipeline/decomp_drafts.py load [--dry-run] [--review-dir DIR]
@@ -164,7 +166,7 @@ def _decided(data: dict | None = None) -> set[str]:
             if i["type"] == "decomposition" and i["status"] not in ("open", "withdrawn")}
 
 
-def prepare(new: bool = False) -> None:
+def prepare(new: bool = False, audit: int = 0, seed: int = 20261006) -> None:
     """Batches for the subagents. `new`: a later pass -- only the flagged characters with no
     card and no decision yet, as E-* batches beside the first pass's D-*, which stay."""
     cards, found, ctx = subjects()
@@ -174,7 +176,14 @@ def prepare(new: bool = False) -> None:
     meanings = {c: json.loads(m or "[]")[:4] for c, m in db.execute("SELECT char, meanings FROM kanji")}
     curated = dict(db.execute("SELECT char, meaning FROM kanji_curated"))
     old = {a: b for a, b in db.execute("SELECT char, other FROM char_form WHERE kind = 'old'")}
-    if new:
+    if audit:
+        # What passes every rule (two sources agree, nothing flagged) and has no card: how often is it still wrong?
+        import random
+
+        passed = sorted(c for c in ctx["scope"] if children.get(c) and c not in found and c not in cards and c not in _decided())
+        chars = sorted(random.Random(seed).sample(passed, min(audit, len(passed))), key=lambda c: (-len(review.users_of(c)), c))
+        print(f"sampled {len(chars)} of the {len(passed)} that pass every rule")
+    elif new:
         decided = _decided()
         chars = sorted((c for c in found if c not in cards and c not in decided), key=lambda c: (-len(review.users_of(c)), c))
     else:
@@ -199,7 +208,7 @@ def prepare(new: bool = False) -> None:
             "old": old.get(c),
             "oldIds": ids.get(old[c]) if c in old else None,
         })
-    prefix = "E" if new else "D"
+    prefix = "A" if audit else "E" if new else "D"
     for f in IN.glob(f"{prefix}-*.json"):
         f.unlink()
     for i in range(0, len(rows), PER_BATCH):
@@ -320,7 +329,9 @@ def main() -> int:
     proposals.drafts_arg(ap, "data/drafts/decomp")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("flags")
-    sub.add_parser("prepare").add_argument("--new", action="store_true")
+    pp = sub.add_parser("prepare")
+    pp.add_argument("--new", action="store_true")
+    pp.add_argument("--audit", type=int, default=0, help="a random sample of this many that pass every rule")
     c = sub.add_parser("check")
     c.add_argument("--batch")
     proposals.load_parser(sub, "load")
@@ -333,7 +344,7 @@ def main() -> int:
         print(f"{len(found)} characters flagged:", dict(kinds))
         print(" ".join(f"{c}" for c in found))
     elif args.cmd == "prepare":
-        prepare(args.new)
+        prepare(args.new, args.audit)
     elif args.cmd == "check":
         check(args.batch)
     else:

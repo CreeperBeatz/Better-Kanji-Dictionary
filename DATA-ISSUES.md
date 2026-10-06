@@ -176,6 +176,10 @@ against it: 155 that a source keeps whole but the graph splits (止 = 丄 卜,
 用 = 二 冂, 糸 = 小 幺, 示 = 二 小, 西 = 兀 囗), and every split fewer than two
 sources give. 324 characters had no card; each now has one, with a draft
 under the new rule (91 proposals, 233 checks; 离 without a draft).
+Audit of what no rule flags (`prepare --audit 60`, data/drafts/decomp-audit):
+a random 60 of the 1,687 characters two sources back and nothing flags,
+judged by Sonnet under the same rule: 0 wrong (only order, or 竹 written
+⺮). With 0 in 60, the error rate there is below 5% at 95% confidence.
 
 ### D-019 · Built form links nobody reviewed
 *Found 2026-10-06.* The 471 links pipeline/forms.py builds (char_form) went
@@ -189,6 +193,20 @@ their characters' cards. The 366 old forms are not reviewed (Dani,
 2026-10-06): they come from an official list (Unihan kJapaneseOldVariant,
 which matches the Jōyō Kanji Table; 青 靑 and 清 淸 added by hand, both the
 standard old forms). Card and page show their source; a doubt is a report.
+
+### D-020 · Цалта's split lost where the book writes a part as a shape
+*Found 2026-10-06* (Dani, on 区). The kanji book writes some parts with
+katakana or rare code points: 区 = 匚 + メ, 勾 = 勹 + ム, 現 = 𤣩 + 見. None
+of them is in the graph, so the whole split was left out of the sources
+(decomp_source) and the card and page named no Цалта where he agrees.
+68 splits were lost this way; another 46 entries draw a part with no
+character at all (the top of 京), and are partial.
+Source: the transcription (Documents/JapaneseDictionaries), through
+pipeline/decomp_sources.py.
+**Status: partly fixed** (2026-10-06): plain identities are mapped
+(メ 㐅 → 乂, ム → 厶, 𤣩 → 王, ⺗ → 㣺, 𭕄 → ⺍, 黾 → 黽; BOOK_SHAPES), which
+recovers 34. The other 34 use a shape the graph has no part for (施's 𭤨,
+賞's 𫩠, 歓's 𮥶): still left out, rather than read as something else.
 
 ## Fixed
 

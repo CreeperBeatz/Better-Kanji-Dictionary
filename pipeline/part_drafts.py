@@ -1,6 +1,7 @@
 """Draft what each part with no meaning is, with Claude Code subagents, then queue it (D-015).
 
     python pipeline/part_drafts.py prepare
+    python pipeline/part_drafts.py prepare --new   # a later pass: what has no item yet, as Q-* beside P-*
     # one Sonnet subagent per data/drafts/parts/in/*.json, following pipeline/part_prompt.md
     python pipeline/part_drafts.py check [--batch P-000]
     python pipeline/part_drafts.py load [--dry-run] [--review-dir DIR]
@@ -100,7 +101,7 @@ def unexplained() -> list[str]:
     return sorted(out, key=lambda c: (-len(users[c]), c))
 
 
-def prepare() -> None:
+def prepare(new: bool = False) -> None:
     db = proposals.connect()
     children, _ = rs.graph(db)
     parents: dict[str, set[str]] = defaultdict(set)
@@ -117,7 +118,9 @@ def prepare() -> None:
     for i in data["items"].values():
         if i["type"] == "form_link" and i["status"] == "open":
             for c in set(i["subject"].split("|")):
-                open_forms[c].append({"subject": i["subject"], **i["proposed"]})
+                # A check proposes nothing: the link as it is, waiting for a person.
+                value = i["proposed"] or {**review.current("form_link", i["subject"], data), "built": True}
+                open_forms[c].append({"subject": i["subject"], **value})
 
     parts = []
     for c in unexplained():
@@ -138,9 +141,12 @@ def prepare() -> None:
             ],
             "openFormLinks": open_forms.get(c, []),
         })
+    prefix = "Q" if new else "P"
+    for f in IN.glob(f"{prefix}-*.json"):
+        f.unlink()
     for i in range(0, len(parts), PER_BATCH):
         n = i // PER_BATCH
-        _write(IN / f"P-{n:03d}.json", {"batch": f"P-{n:03d}", "parts": parts[i:i + PER_BATCH]})
+        _write(IN / f"{prefix}-{n:03d}.json", {"batch": f"{prefix}-{n:03d}", "parts": parts[i:i + PER_BATCH]})
     print(f"{len(parts)} parts in {-(-len(parts) // PER_BATCH)} batches -> {IN.relative_to(ROOT)}")
 
 
@@ -149,7 +155,7 @@ KINDS = ("form_of", "meaning", "shape")
 
 def read(only: str | None = None) -> tuple[list[dict], list[str]]:
     good, problems = [], []
-    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or 'P-*'}.json", problems):
+    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or '[PQ]-*'}.json", problems):
         asked = {p["part"]: p for p in batch["parts"]}
         seen = set()
         for d in out.get("parts", []):
@@ -209,8 +215,12 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     data = review._read()
     form_of_open = {i["subject"] for i in data["items"].values()
                     if i["type"] == "form_link" and i["status"] == "open" and (i["proposed"] or {}).get("kind") == "form_of"}
+    # A part a person has decided, or that waits already, gets nothing new from an older batch.
+    asked = {i["subject"] for i in data["items"].values() if i["type"] == "part_meaning" and i["status"] != "withdrawn"}
     rows = []
     for g in good:
+        if g["part"] in asked:
+            continue
         # Most used first, within the stage: 丷 (in 243 kanji) before 㒸 (3).
         priority = round(min(g["inScope"], 300) / 100, 2)
         evidence = {"confidence": g["confidence"], "batch": g["batch"], "inScope": g["inScope"]}
@@ -240,14 +250,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     proposals.drafts_arg(ap, "data/drafts/parts")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("prepare")
+    sub.add_parser("prepare").add_argument("--new", action="store_true")
     c = sub.add_parser("check")
     c.add_argument("--batch")
     proposals.load_parser(sub, "load")
     args = ap.parse_args()
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
-        prepare()
+        prepare(args.new)
     elif args.cmd == "check":
         check(args.batch)
     else:

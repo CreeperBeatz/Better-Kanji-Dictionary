@@ -41,6 +41,16 @@ def _prefer(children: dict[str, list[str]], nodes: set[str], eq: dict[str, str])
     return prefer
 
 
+# Shapes the kanji book writes with a character the graph doesn't have, for the part the graph
+# has: katakana used as shapes (区 = 匚 メ), and the positional or rare code points of a part
+# (現 = 𤣩 見, 慕 = 莫 ⺗). Only plain identities -- a book shape with no graph part (施's 𭤨,
+# 賞's 𫩠) still leaves its split out, rather than read as something it is not.
+BOOK_SHAPES = {
+    "メ": "乂", "㐅": "乂", "ム": "厶",
+    "𤣩": "王", "⺗": "㣺", "𭕄": "⺍", "黾": "黽",
+}
+
+
 def _tsalta() -> dict[str, list[str]]:
     """The kanji book's split of each kanji, as the characters it names; none without the books."""
     try:
@@ -60,7 +70,7 @@ def _tsalta() -> dict[str, list[str]]:
         if e.get("type") != "kanji":
             continue
         seen[e["kanji"]] += 1
-        raw = [p.get("char") for p in e.get("parts") or []]
+        raw = [BOOK_SHAPES.get(p.get("char"), p.get("char")) for p in e.get("parts") or []]
         if all(raw):  # a part with no character (the top of 京) leaves the split partial: not used
             out[e["kanji"]] = raw
     # A kanji the book has twice is a misread headword (book_sources.py): neither is trusted.
