@@ -204,11 +204,10 @@ change, even if it is technically accurate.
 - **A check with nothing proposed** is a link the dictionary was built
   with that no person has looked at. Leave it as it is when it is right;
   otherwise say what it is instead.
-- **The old forms are one list** (the *old forms* stage), not a card each:
-  "舊 is the old form of 旧". Every row starts ticked. Untick a wrong one
-  and pick what the two are instead; *save* checks the whole page. A row
-  marked *a font difference only* is a compatibility code point (D-017):
-  the link is usually right, but most fonts draw both the same.
+- **Old forms are not a question.** "會 is the old form of 会" comes from an
+  official list (Unihan, which follows the Jōyō Kanji Table), so the card
+  shows it as information, with its source. If you think one is wrong,
+  use *Something else is wrong?*.
 - **Read the sentence.** On a card each choice reads with its two
   characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
   a form of and a looks like go one way; if a proposal has them the wrong

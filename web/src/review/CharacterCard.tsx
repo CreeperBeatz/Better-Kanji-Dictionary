@@ -23,6 +23,7 @@ import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from '.
 import { SourceChips, SourceNotes } from '../detail/PartsSource'
 import { KindsInfoButton, KindsTable, useKindsInfo, useLinkSentence } from './KindsInfo'
 import { ReportButton } from './ReportButton'
+import { FormSource } from '../detail/Forms'
 import { ResearchButton } from './ResearchButton'
 import { same } from './board'
 import { draftOf, partsOptions, setOf } from './cardOptions'
@@ -76,6 +77,8 @@ const S = strings(
     s_meaning_form: 'let {char} borrow the meaning of what it is a form of',
     reason: 'Reason (optional)',
     save: 'save',
+    oldForm: 'Old form',
+    newForm: 'Today’s form',
     pickFirst: 'Pick an answer for each question first. Nothing is picked where the draft was unsure or nothing is proposed.',
     skip: 'skip',
     reset: 'reset card',
@@ -130,6 +133,8 @@ const S = strings(
     s_meaning_form: 'остави {char} да заема значението на това, чиято форма е',
     reason: 'Причина (по желание)',
     save: 'запишете',
+    oldForm: 'Стара форма',
+    newForm: 'Днешна форма',
     pickFirst: 'Първо изберете отговор на всеки въпрос. Нищо не е избрано, където черновата не е сигурна или няма предложение.',
     skip: 'пропуснете',
     reset: 'нулирайте картата',
@@ -379,6 +384,12 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <p className="queue-meta">
             {t('kind')} · {t('from', { source: sources })}
           </p>
+          {/* Old forms come from an official list: shown, not asked. A doubt is a report. */}
+          {[...(card.context.forms?.old ?? []).map((f) => ['old', f] as const), ...(card.context.forms?.new ?? []).map((f) => ['new', f] as const)].map(([k, f]) => (
+            <p key={k + f.char} className="hint card-old-form">
+              {t(k === 'old' ? 'oldForm' : 'newForm')}: <span lang="ja">{f.char}</span> <FormSource source={f.source} />
+            </p>
+          ))}
           <ReportButton subject={`kanji:${char}`} from={id} />
         </div>
         <div className="queue-dict card-head-pills">

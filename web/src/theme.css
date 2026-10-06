@@ -8657,52 +8657,16 @@ button.review-part {
   font-size: 11.5px;
 }
 
-/* The old-forms list: one row per old form, ticked when right. */
-.old-forms-rows {
-  list-style: none;
-  margin: 12px 0;
-  padding: 0;
+/* An old form's source, beside the glyph (Unihan, or BKD's own). */
+.forms-source {
+  margin-left: 4px;
+  cursor: help;
 }
 
-.old-forms-row {
-  display: grid;
-  grid-template-columns: auto 6.5em 1fr;
-  gap: 10px;
-  align-items: baseline;
-  padding: 6px 4px;
-  border-bottom: 1px solid var(--rule);
+.card-old-form {
+  margin: 2px 0;
 }
 
-.old-forms-row[data-changed] {
-  background: var(--ai-wash);
-}
-
-.old-forms-pair {
-  font-family: var(--mincho);
-  font-size: 26px;
-  white-space: nowrap;
-}
-
-.old-forms-pair .clear {
-  font-size: inherit;
-  padding: 0 2px;
-}
-
-.old-forms-arrow {
-  font-size: 15px;
-  color: var(--muted);
-  margin: 0 4px;
-}
-
-.old-forms-instead {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-top: 6px;
-}
-
-.old-forms-note {
-  flex: 1;
-  min-width: 12em;
+.card-old-form span[lang] {
+  font-size: 18px;
 }

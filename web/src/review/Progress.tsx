@@ -21,8 +21,6 @@ const S = strings(
     s_kanji_senses: 'Meanings',
     s_bg: 'Bulgarian translations',
     s_report: 'Reports',
-    s_old_forms: 'Old forms',
-    d_old_forms: 'one list: is the second character the old form of the first? Checked a page at a time',
     d_character: 'one card per character: what it is built from, which kanji it is a form of, and what a part with no meaning is',
     d_kanji_senses: 'one per kanji: its groups, with its words placed on the board; and the odd single word (a suggestion, or one whose group changed)',
     d_bg: 'the machine-translated Bulgarian: one card per word, one per kanji',
@@ -42,8 +40,6 @@ const S = strings(
     verifiedLong: '{n} от {total} канджи са проверени (всички с ниво от JLPT, джойо или място във вестниците): нищо отворено за частите, формите или значенията на частите им, значенията са приети, всяка дума е разпределена.',
     open: 'Отворете страницата с напредъка',
     stages: 'По етапи',
-    s_old_forms: 'Стари форми',
-    d_old_forms: 'един списък: вторият знак старата форма на първия ли е? Проверява се по страница',
     s_character: 'Знаци',
     s_kanji_senses: 'Значения',
     s_bg: 'Преводи на български',
@@ -63,7 +59,7 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 // As in the queue: a single word's meaning is counted under meanings, with its kanji's card.
-const STAGES: TaskType[] = ['character', 'old_forms', 'kanji_senses', 'bg', 'report']
+const STAGES: TaskType[] = ['character', 'kanji_senses', 'bg', 'report']
 
 function pct(done: number, total: number): string {
   if (!total) return '0%'
@@ -145,7 +141,7 @@ export function ProgressPage({ data }: { data: ReviewProgress | null }) {
       <section className="progress-card">
         <h3>{t('stages')}</h3>
         <div className="progress-stages">
-          {STAGES.filter((k) => data.stages[k]).map((k) => {
+          {STAGES.map((k) => {
             const one = data.stages[k]
             const words = k === 'kanji_senses' ? data.stages.word_sense : undefined
             const s = words ? { done: one.done + words.done, total: one.total + words.total } : one

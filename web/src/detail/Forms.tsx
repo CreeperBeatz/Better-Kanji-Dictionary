@@ -28,6 +28,10 @@ const S = strings(
     variants: 'Other variants',
     notAPage: '{char} has no page of its own',
     noForms: 'No forms recorded yet.',
+    src_unihan: 'Unihan',
+    src_unihan_d: 'From Unicode’s list of Japanese old forms (Unihan, kJapaneseOldVariant). It matches the old forms the Jōyō Kanji Table (2010) prints in brackets.',
+    src_bkd: 'BKD',
+    src_bkd_d: 'Added by Better Kanji Dictionary: the standard old form, missing from Unicode’s list.',
   },
   {
     title: 'Форми',
@@ -44,6 +48,10 @@ const S = strings(
     variants: 'Други варианти',
     notAPage: '{char} няма собствена страница',
     noForms: 'Още няма записани форми.',
+    src_unihan: 'Unihan',
+    src_unihan_d: 'От списъка на Unicode със старите японски форми (Unihan, kJapaneseOldVariant). Съвпада със старите форми, които Таблицата на джоё канджи (2010) дава в скоби.',
+    src_bkd: 'BKD',
+    src_bkd_d: 'Добавена от Better Kanji Dictionary: стандартната стара форма, която липсва в списъка на Unicode.',
   },
 )
 
@@ -59,6 +67,18 @@ const ROWS: [keyof Omit<FormsResponse, 'char' | 'meaning' | 'part'>, Key][] = [
   ['kin', 'kin'],
   ['variants', 'variants'],
 ]
+
+/** Where an old-form link comes from: Unicode's list, or this dictionary's own addition. */
+export function FormSource({ source }: { source: string }) {
+  const t = S(useLang())
+  const own = source === 'curated'
+  if (!own && source !== 'unihan') return null
+  return (
+    <span className="source-chip forms-source" data-source={own ? 'bkd' : 'unihan'} title={t(own ? 'src_bkd_d' : 'src_unihan_d')}>
+      {t(own ? 'src_bkd' : 'src_unihan')}
+    </span>
+  )
+}
 
 /** The forms of `char`, or null until they arrive (offline they never do; the page goes without). */
 export function useForms(char: string, wanted = true): FormsResponse | null {
@@ -117,6 +137,7 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
               {data[k].map((i) => (
                 <span key={i.char} className="forms-item">
                   {glyph(i)}
+                  {(k === 'old' || k === 'new') && <FormSource source={i.source} />}
                   {(k === 'formOf' || k === 'looksLike' || k === 'kin') && meaningsOf(i, lang).value[0] && (
                     <span className="forms-meaning">{meaningsOf(i, lang).value[0]}</span>
                   )}

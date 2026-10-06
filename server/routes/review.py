@@ -56,17 +56,6 @@ def decide_character(char: str, payload: dict = Body(...), me: dict = Depends(re
     return {"items": review.decide_card(char, payload.get("decisions"), me["id"], payload.get("reason"))}
 
 
-@router.get("/old-forms")
-def old_forms(limit: int = Query(review.OLD_PAGE, ge=1, le=200), _: dict = Depends(reviewer)) -> dict:
-    """The old forms waiting, a page at a time: checked as one list."""
-    return review.old_forms(limit)
-
-
-@router.post("/old-forms/decide")
-def decide_old_forms(payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
-    return {"items": review.decide_old_forms(payload.get("decisions"), me["id"])}
-
-
 @router.get("/progress")
 def progress(_: dict = Depends(reviewer)) -> dict:
     return review.progress()

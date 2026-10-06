@@ -154,9 +154,9 @@ normalisation (NFC), which copy-paste and many tools apply, turns the old
 code point into the modern one.
 Source: Unihan kJapaneseOldVariant, through
 pipeline/forms.py.
-**Status: in review** (2026-10-06). All 366 old forms are on the old-forms
-list (pipeline/form_checks.py), these 62 marked "a font difference only".
-Showing the font_old glyphs (jp78/jp83) on the page is still open.
+**Status: open.** A display problem, not a wrong link: the old forms come
+from an official list and are not reviewed (D-019). These could show the
+font_old glyphs (jp78/jp83) instead of the text character.
 
 ### D-018 · The basic pictographs are split into lookalikes
 *Found 2026-10-06,* by the parts drafts (D-004). The graph gives the most
@@ -183,9 +183,12 @@ live unreviewed; the queue held only new proposals. A wrong "form of" lends
 its meaning to every kanji with the part.
 Source: Unihan kJapaneseOldVariant (366 old forms) and pipeline/forms.py's
 own lists (positional forms, form of, looks like, same thing).
-**Status: in review** (2026-10-06, pipeline/form_checks.py): the 366 old
-forms on one list, a page at a time; the 41 other pairs (the two directions
-of a link counted once) as checks on their characters' cards.
+**Status: in review** (2026-10-06, pipeline/form_checks.py): the 41 pairs
+written by hand (the two directions of a link counted once) are checks on
+their characters' cards. The 366 old forms are not reviewed (Dani,
+2026-10-06): they come from an official list (Unihan kJapaneseOldVariant,
+which matches the Jōyō Kanji Table; 青 靑 and 清 淸 added by hand, both the
+standard old forms). Card and page show their source; a doubt is a report.
 
 ## Fixed
 

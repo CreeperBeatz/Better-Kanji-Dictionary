@@ -7,13 +7,14 @@ went live without a person looking at them; the queue only held new
 proposals. A "form of" lends its meaning to every kanji with the part, so a
 wrong one misleads on many pages.
 
-- The **old forms** (Unihan kJapaneseOldVariant, 366) are checked on one list,
-  a page at a time (server/review.py OLD_FORMS): most are right, and a person
-  only needs to catch the odd one -- a compatibility code point drawn like
-  today's form (D-017), a Chinese variant.
+- The **old forms** are not checked: they come from an official list (Unihan
+  kJapaneseOldVariant, which matches the old forms the Jōyō Kanji Table
+  prints in brackets), so there is nothing for a person to verify (Dani,
+  2026-10-06). The card shows them as information; a reviewer who doubts one
+  files a report.
 - **Every other link** (a form for a position, "form of", "looks like", "the
-  same thing") is a check on its character's card, with nothing proposed:
-  the reviewer says whether it stays.
+  same thing") was written by hand in pipeline/forms.py: a check on its
+  character's card, with nothing proposed; the reviewer says whether it stays.
 
 A pair with a link already waiting is left alone; running it again adds nothing.
 """
@@ -40,18 +41,17 @@ def rows() -> list[dict]:
     decided = {frozenset(i["subject"].split("|")) for i in data["items"].values()
                if i["type"] == "form_link" and i["status"] not in ("open", "withdrawn")}
     out, seen = [], set()
-    for char, other, kind, source in db.execute("SELECT char, other, kind, source FROM char_form ORDER BY char, other"):
+    for char, other, kind, source in db.execute(
+            "SELECT char, other, kind, source FROM char_form WHERE kind != 'old' ORDER BY char, other"):
         pair = frozenset((char, other))
         if pair in seen or pair in waiting or pair in decided:
             continue
         seen.add(pair)
         users = len(review.users_of(char))
-        old = kind == "old"
         out.append({
-            "type": "form_link", "subject": f"{char}|{other}", "proposed": None,
-            "source": review.OLD_CHECK if old else CHECK,
+            "type": "form_link", "subject": f"{char}|{other}", "proposed": None, "source": CHECK,
             "reason": f"check: a built link nobody has reviewed ({source or 'pipeline/forms.py'})",
-            "priority": round(min(users, 300) / 30, 2) - (2 if old else 0),
+            "priority": round(min(users, 300) / 30, 2),
         })
     return out
 
@@ -63,8 +63,7 @@ def main() -> int:
     args = ap.parse_args()
     proposals.use_review_dir(args.review_dir)
     rs = rows()
-    old = sum(1 for r in rs if r["source"] == review.OLD_CHECK)
-    print(f"{len(rs)} links to check: {old} old forms on the list, {len(rs) - old} on character cards")
+    print(f"{len(rs)} links to check, on character cards")
     if not args.dry_run:
         print("added %d, refused %d" % review.add_items(rs))
     return 0

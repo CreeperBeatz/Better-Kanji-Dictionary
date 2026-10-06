@@ -25,7 +25,6 @@ const SLUGS: Record<TaskType, string> = {
   word_sense: 'word-meanings',
   bg: 'bulgarian',
   report: 'reports',
-  old_forms: 'old-forms',
 }
 // Parts, forms and part meanings are one stage now, a card per character: an old address lands there.
 const MERGED: TaskType[] = ['decomposition', 'form_link', 'part_meaning']
