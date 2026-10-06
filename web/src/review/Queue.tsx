@@ -24,7 +24,7 @@ import { typing, useKey } from '../keys'
 import { withIds } from '../sets'
 import { FontStrip } from '../detail/FontStrip'
 import { CATCH_ALL, KanjiFacts, PartTiles, strokesOk, ValueEditor, ValueView } from './editors'
-import { useKindLabel } from './KindsInfo'
+import { useKindLabel, useLinkSentence } from './KindsInfo'
 import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
 import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard } from './BgCard'
@@ -564,11 +564,11 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               <dl className="queue-compare">
                 <dt>{t('now')}</dt>
                 <dd>
-                  <ValueView type={item.type} value={item.current} groups={groups} />
+                  <ValueView type={item.type} value={item.current} groups={groups} subject={item.subject} />
                 </dd>
                 <dt>{t('proposed')}</dt>
                 <dd>
-                  {open ? <span className="hint">{t('noProposal')}</span> : <ValueView type={item.type} value={item.proposed} groups={groups} />}
+                  {open ? <span className="hint">{t('noProposal')}</span> : <ValueView type={item.type} value={item.proposed} groups={groups} subject={item.subject} />}
                 </dd>
               </dl>
               )}
@@ -630,6 +630,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       onChange={setDraft}
                       groups={groups}
                       char={item.subject.split('|')[0]}
+                      subject={item.subject}
                     />
                   </>
                 )}
@@ -850,6 +851,7 @@ function UsedIn({ chars, onKanji, old }: { chars: string[]; onKanji?: (char: str
 function PartEvidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char: string) => void }) {
   const t = S(useLang())
   const kindLabel = useKindLabel()
+  const sentence = useLinkSentence()
   const c = detail.context
   const unihan = typeof detail.evidence?.unihan === 'string' ? detail.evidence.unihan : null
   const verdicts = (detail.evidence?.formLinks ?? {}) as Record<string, 'keep' | 'reject'>
@@ -889,7 +891,7 @@ function PartEvidence({ detail, onKanji }: { detail: ItemDetail; onKanji?: (char
           <ul>
             {c.formItems.map((f) => (
               <li key={f.id}>
-                <span lang="ja">{f.subject.replace('|', ' · ')}</span> {f.proposed && kindLabel(f.proposed.kind)}
+                <span lang="ja">{f.proposed ? sentence(f.proposed.kind, f.subject, f.proposed.reverse) : f.subject.replace('|', ' · ')}</span>
                 {f.proposed?.note && <span className="hint"> — {f.proposed.note}</span>}
                 {verdicts[f.subject] && (
                   <span className="queue-verdict" data-verdict={verdicts[f.subject]}>

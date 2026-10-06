@@ -18,6 +18,7 @@ import {
   dataChanged,
   type BoardWord,
   type FormKind,
+  type FormLink,
   type MeaningGroup,
   type PartMeaning,
   type TaskType,
@@ -370,7 +371,7 @@ function EditShell({
 // A kanji's groups' Bulgarian labels and notes as stored, by group id.
 const labelsOf = (gs: MeaningGroup[] | null) => Object.fromEntries((gs ?? []).map((s) => [s.id, s.bg ?? '']))
 const notesOf = (gs: MeaningGroup[] | null) => Object.fromEntries((gs ?? []).map((s) => [s.id, s.noteBg ?? '']))
-const NO_FORM = { other: '', kind: 'looks_like' as FormKind, note: null as string | null }
+const NO_FORM = { other: '', kind: 'looks_like' as FormKind, note: null as string | null, reverse: false }
 
 interface KanjiNow {
   senses: MeaningGroup[] | null
@@ -484,7 +485,14 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     }
     if (!same(parts, now.parts)) changes.push({ key: 'parts', section: 'parts', type: 'decomposition', subject: char, value: parts })
     const other = [...form.other.trim()][0]
-    if (other) changes.push({ key: 'form', section: 'form', type: 'form_link', subject: `${char}|${other}`, value: { kind: form.kind, note: form.note } })
+    if (other)
+      changes.push({
+        key: 'form',
+        section: 'form',
+        type: 'form_link',
+        subject: `${char}|${other}`,
+        value: { kind: form.kind, note: form.note, ...(form.reverse ? { reverse: true } : {}) },
+      })
     if (part && !same(part, forms?.part ?? null)) changes.push({ key: 'part', section: 'part', type: 'part_meaning', subject: char, value: part })
     const cleanBg = bg.map((m) => m.trim()).filter(Boolean)
     if (!same(cleanBg, now.bg)) changes.push({ key: 'bg', section: 'bg', type: 'bg', subject: `kanji:${char}`, value: cleanBg })
@@ -542,8 +550,12 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                     </label>
                     <ValueEditor
                       type="form_link"
-                      value={{ kind: form.kind, note: form.note }}
-                      onChange={(v) => setForm({ ...form, ...(v as { kind: FormKind; note: string | null }) })}
+                      subject={`${char}|${[...form.other.trim()][0] ?? ''}`}
+                      value={{ kind: form.kind, note: form.note, ...(form.reverse ? { reverse: true } : {}) }}
+                      onChange={(v) => {
+                        const link = v as FormLink
+                        setForm({ ...form, kind: link.kind, note: link.note, reverse: !!link.reverse })
+                      }}
                     />
                   </>
                 )}

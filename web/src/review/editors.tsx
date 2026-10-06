@@ -3,15 +3,15 @@
  * by the review queue and the "suggest a change" dialog.
  *
  *   decomposition  the direct parts, as typed characters
- *   form_link      a kind and a note
+ *   form_link      a kind and a note, and which way a one-way kind reads
  *   part_meaning   a meaning, or a shape's name, in en and bg, and a note
  *   kanji_senses   1 to 6 meaning groups, each an id and a label in en and bg
  *   word_sense     one of the kanji's groups, or the catch-all
  */
 import { lazy, Suspense, useState } from 'react'
-import { type FormKind, type ItemDetail, type MeaningGroup, type PartMeaning, type TaskType, type TaskValue } from '../api'
+import { type FormKind, type FormLink, type ItemDetail, type MeaningGroup, type PartMeaning, type TaskType, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
-import { FORM_KINDS, KindsInfoButton, KindsTable, PART_KINDS, useKindLabel, useKindsInfo } from './KindsInfo'
+import { FORM_KINDS, KindsInfoButton, KindsTable, ONE_WAY, PART_KINDS, useKindLabel, useKindsInfo, useLinkSentence } from './KindsInfo'
 
 // Not needed until its button is pressed.
 const DrawPad = lazy(() => import('../draw/DrawPad').then((m) => ({ default: m.DrawPad })))
@@ -30,6 +30,8 @@ const S = strings(
     kind: 'Relation',
     note: 'Note',
     noteHint: 'For “a form of”, say where it comes from: the old form, or a reference.',
+    swap: '⇄ swap',
+    swapTitle: 'Read it the other way round',
     partKind: 'This part is',
     partEn: 'English: the meaning, or the shape’s name',
     partEnHint: '1 to 5 words. A shape’s name says what it looks like (“two drops”), never what it means.',
@@ -65,6 +67,8 @@ const S = strings(
     kind: 'Връзка',
     note: 'Бележка',
     noteHint: 'За „форма на“ кажете откъде идва: старата форма или справочник.',
+    swap: '⇄ обърнете',
+    swapTitle: 'Прочетете го в обратната посока',
     partKind: 'Тази част е',
     partEn: 'Английски: значението или името на формата',
     partEnHint: 'От 1 до 5 думи. Името на форма казва как изглежда („две капки“), никога какво значи.',
@@ -154,11 +158,12 @@ export function PartTiles({ chars, onKanji }: { chars: string[]; onKanji?: (char
   )
 }
 
-/** A value, read-only. */
-export function ValueView({ type, value, groups }: { type: TaskType; value: TaskValue; groups?: MeaningGroup[] | null }) {
+/** A value, read-only. `subject`, for a form link: its two characters, so it reads as a sentence. */
+export function ValueView({ type, value, groups, subject }: { type: TaskType; value: TaskValue; groups?: MeaningGroup[] | null; subject?: string }) {
   const lang = useLang()
   const t = S(lang)
   const kindLabel = useKindLabel()
+  const sentence = useLinkSentence()
   if (value === null || value === undefined)
     return <span className="hint">{t(type === 'decomposition' || type === 'form_link' ? 'sourceData' : 'noneYet')}</span>
   if (type === 'decomposition') {
@@ -166,10 +171,10 @@ export function ValueView({ type, value, groups }: { type: TaskType; value: Task
     return parts.length ? <PartTiles chars={parts} /> : <span className="hint">{t('atomic')}</span>
   }
   if (type === 'form_link') {
-    const v = value as { kind: FormKind; note: string | null }
+    const v = value as FormLink
     return (
       <span>
-        {kindLabel(v.kind)}
+        {subject?.includes('|') ? <span lang="ja">{sentence(v.kind, subject, v.reverse)}</span> : kindLabel(v.kind)}
         {v.note && <span className="hint"> — {v.note}</span>}
       </span>
     )
@@ -209,9 +214,11 @@ interface EditorProps {
   autoFocus?: boolean
   /** kanji_senses: a column for each group's Bulgarian label too. */
   withBg?: boolean
+  /** form_link: X|Y, so each choice reads as a sentence and a one-way one can be turned round. */
+  subject?: string
 }
 
-export function ValueEditor({ type, value, onChange, groups, char, autoFocus, withBg }: EditorProps) {
+export function ValueEditor({ type, value, onChange, groups, char, autoFocus, withBg, subject }: EditorProps) {
   const lang = useLang()
   const t = S(lang)
 
@@ -222,7 +229,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus, wi
       <textarea className="assoc-text" rows={4} maxLength={1000} value={(value as string | null) ?? ''} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
     )
 
-  if (type === 'form_link') return <FormLinkEditor value={value} onChange={onChange} autoFocus={autoFocus} />
+  if (type === 'form_link') return <FormLinkEditor value={value} onChange={onChange} autoFocus={autoFocus} subject={subject} />
   if (type === 'part_meaning') return <PartMeaningEditor value={value} onChange={onChange} autoFocus={autoFocus} />
 
   if (type === 'kanji_senses') {
@@ -327,12 +334,25 @@ function PartsEditor({ value, onChange, autoFocus }: { value: string[] | null; o
   )
 }
 
-/** A form link's kind and note; the (i) by the kind says what each one changes. */
-function FormLinkEditor({ value, onChange, autoFocus }: { value: TaskValue; onChange: (v: TaskValue) => void; autoFocus?: boolean }) {
+/** `link` read the other way round, or back; `reverse` is only ever there when true. */
+function turned(link: FormLink, reverse: boolean): FormLink {
+  const { reverse: _, ...rest } = link
+  return reverse && ONE_WAY.includes(link.kind) ? { ...rest, reverse: true } : rest
+}
+
+/**
+ * A form link's kind and note; the (i) by the kind says what each one changes.
+ * With the subject, each choice reads as a sentence with the two characters
+ * ("寳 is the old form of 宝"), and ⇄ turns a one-way choice round.
+ */
+function FormLinkEditor({ value, onChange, autoFocus, subject }: { value: TaskValue; onChange: (v: TaskValue) => void; autoFocus?: boolean; subject?: string }) {
   const t = S(useLang())
   const kindLabel = useKindLabel()
+  const sentence = useLinkSentence()
   const [info, toggleInfo] = useKindsInfo()
-  const v = (value as { kind: FormKind; note: string | null } | null) ?? { kind: 'looks_like', note: null }
+  const v = (value as FormLink | null) ?? { kind: 'looks_like', note: null }
+  const reverse = !!v.reverse
+  const label = (k: FormKind) => (subject ? sentence(k, subject, reverse) : kindLabel(k))
   return (
     <>
       <div className="review-field">
@@ -341,13 +361,27 @@ function FormLinkEditor({ value, onChange, autoFocus }: { value: TaskValue; onCh
           <KindsInfoButton open={info} onToggle={toggleInfo} />
         </span>
         {info && <KindsTable of="form" />}
-        <select id="form-kind" className="assoc-text" value={v.kind} autoFocus={autoFocus} onChange={(e) => onChange({ ...v, kind: e.target.value as FormKind })}>
-          {FORM_KINDS.map((k) => (
-            <option key={k} value={k}>
-              {kindLabel(k)}
-            </option>
-          ))}
-        </select>
+        <div className="review-link-row">
+          <select
+            id="form-kind"
+            className="assoc-text"
+            lang={subject ? 'ja' : undefined}
+            value={v.kind}
+            autoFocus={autoFocus}
+            onChange={(e) => onChange(turned({ ...v, kind: e.target.value as FormKind }, reverse))}
+          >
+            {FORM_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {label(k)}
+              </option>
+            ))}
+          </select>
+          {subject && ONE_WAY.includes(v.kind) && (
+            <button type="button" className="clear review-swap" title={t('swapTitle')} aria-pressed={reverse} onClick={() => onChange(turned(v, !reverse))}>
+              {t('swap')}
+            </button>
+          )}
+        </div>
       </div>
       <label className="review-field">
         <span>{t('note')}</span>

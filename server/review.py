@@ -3,7 +3,7 @@
 The task types (TASK-forms-review.md §5, and more since):
 
     decomposition  subject 青            value: its direct parts, ["龶", "月"]; [] = atomic
-    form_link      subject 龶|王          value: {"kind": looks_like, "note": ...}; kind "none" = no link
+    form_link      subject 龶|王          value: {"kind": looks_like, "note": ..., "reverse": true?}; kind "none" = no link
     part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
     kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот", "note"}]
     word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"
@@ -77,6 +77,10 @@ ORIGINS = ("proposal", "suggestion")
 ACTIONS = ("accept", "edit", "reject", "skip")
 CATCH_ALL = "catch-all"
 FORM_KINDS = (*forms.KINDS, "none")
+# A link of these kinds reads one way: subject X|Y says "Y is the old form of
+# X", "X is a form of Y", "X looks like Y". `reverse` reads it from Y to X, so
+# a reviewer can turn a link round without a new item. The others are symmetric.
+ONE_WAY = ("old", "form_of", "looks_like")
 # A part with no meaning in the dictionary (D-015) gets one of two things: its
 # own meaning, when it is a real character that means something where it is
 # used (夋, 堇, 劦), or a name for its shape, when several unrelated old parts
@@ -519,7 +523,10 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if value["kind"] == "form_of" and not note:
             # The rule: a form_of needs historical support, and the note is where it goes.
             raise _bad("form_evidence", "say where this comes from: the old form, or a reference")
-        return {"kind": value["kind"], "note": note}
+        out = {"kind": value["kind"], "note": note}
+        if value.get("reverse") is True and value["kind"] in ONE_WAY:
+            out["reverse"] = True  # only when set, so an unturned link equals what it always was
+        return out
 
     if type_ == "part_meaning":
         if len(subject) != 1 or not _known(subject):
@@ -633,7 +640,7 @@ def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
     if entry is None:
         return None
     if type_ == "form_link":
-        return {"kind": entry["kind"], "note": entry.get("note")}
+        return {k: v for k, v in entry.items() if k != "decision"}
     if type_ == "part_meaning":
         return {k: v for k, v in entry.items() if k != "decision"}
     if type_ == "kanji_senses":
@@ -651,7 +658,13 @@ def current(type_: str, subject: str, data: dict | None = None) -> Any:
         a, b = subject.split("|")
         links = [r for r in forms.links_of(a) if {r["char"], r["other"]} == {a, b}]
         mine = [r for r in links if r["char"] == a] or links
-        return {"kind": mine[0]["kind"], "note": mine[0]["note"]} if mine else {"kind": "none", "note": None}
+        if not mine:
+            return {"kind": "none", "note": None}
+        r = mine[0]
+        out = {"kind": r["kind"], "note": r["note"]}
+        if r["char"] == b and r["kind"] in ONE_WAY:
+            out["reverse"] = True  # built the other way round: 靑 is the old form of 青, asked as 靑|青
+        return out
     if type_ == "bg":
         return _bg_shown(subject)
     return live_value(type_, subject, data)
@@ -1679,12 +1692,15 @@ def word_senses(char: str) -> dict[int, str]:
 
 def _form_link_rows(subject: str, v: dict) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
     """What an accepted form link does to the built ones: the (char, other) rows
-    it adds -- none for "none", both ways round for a positional form -- and the
-    (char, other, kind) rows it takes the place of, every kind both ways."""
+    it adds -- none for "none", both ways round for a positional form, from b
+    to a when reversed -- and the (char, other, kind) rows it takes the place
+    of, every kind both ways."""
     a, b = subject.split("|")
     replaced = [(x, y, k) for k in forms.KINDS for x, y in ((a, b), (b, a))]
     if v["kind"] == "none":
         return [], replaced
+    if v.get("reverse"):
+        a, b = b, a
     return ([(a, b), (b, a)] if v["kind"] == "positional" else [(a, b)]), replaced
 
 

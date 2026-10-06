@@ -19,7 +19,13 @@ const S = strings(
     means: 'Means',
     changes: 'What it changes on the site',
     test: 'Position, or two characters? If one of them is only ever the other, written for a certain position (氵 is never seen alone), it is “how it is written in another position”. If both are characters in their own right that mean the same thing, it is “a separate character for the same thing”.',
-    formNever: 'No form link ever changes a kanji’s parts, the graph’s lines or the study order. Read X as the first character of the card, Y as the second.',
+    formNever: 'No form link ever changes a kanji’s parts, the graph’s lines or the study order. On a card each choice reads as a sentence with its two characters; ⇄ turns an old form, a form of or a looks like round.',
+    x_positional: '{x} and {y} are one character, written for different positions',
+    x_old: '{y} is the old form of {x}',
+    x_form_of: '{x} is a form of {y}, and lends its meaning',
+    x_looks_like: '{x} looks like {y} (a mnemonic only)',
+    x_kin: '{x} and {y} are separate characters for the same thing',
+    x_none: 'no relation between {x} and {y}',
     partNever: 'A part’s meaning never changes its parts, the graph or the study order. It is what the part’s page says it is.',
     k_positional: 'how it is written in another position',
     k_old: 'its old form',
@@ -53,7 +59,13 @@ const S = strings(
     means: 'Значи',
     changes: 'Какво променя в сайта',
     test: 'Позиция или два знака? Ако единият винаги е просто другият, написан за определено място (氵 никога не стои сам), това е „как се пише в друга позиция“. Ако и двата са самостоятелни знаци с едно и също значение, това е „отделен знак за същото нещо“.',
-    formNever: 'Връзка между форми никога не променя частите на канджи, линиите в графа или реда на учене. Четете X като първия знак на картата, а Y като втория.',
+    formNever: 'Връзка между форми никога не променя частите на канджи, линиите в графа или реда на учене. На картата всеки избор се чете като изречение с двата си знака; ⇄ обръща стара форма, „форма на“ или „прилича на“.',
+    x_positional: '{x} и {y} са един знак, написан за различни позиции',
+    x_old: '{y} е старата форма на {x}',
+    x_form_of: '{x} е форма на {y} и заема значението му',
+    x_looks_like: '{x} прилича на {y} (само мнемоника)',
+    x_kin: '{x} и {y} са отделни знаци за едно и също нещо',
+    x_none: 'няма връзка между {x} и {y}',
     partNever: 'Значението на част никога не променя частите ѝ, графа или реда на учене. То е това, което страницата на частта казва, че е тя.',
     k_positional: 'как се пише в друга позиция',
     k_old: 'старата му форма',
@@ -84,12 +96,27 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 export const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'kin', 'none']
+/** The kinds that read one way, and so can be turned round (server/review.py ONE_WAY). */
+export const ONE_WAY: FormKind[] = ['old', 'form_of', 'looks_like']
 export const PART_KINDS: PartKind[] = ['meaning', 'shape']
 
 /** A form link's kind, or a part's, as the editors name it. */
 export function useKindLabel(): (kind: FormKind | PartKind) => string {
   const t = S(useLang())
   return (kind) => t((kind === 'meaning' || kind === 'shape' ? `p_${kind}` : `k_${kind}`) as Key)
+}
+
+/**
+ * A link as a sentence with its two characters, `subject` X|Y read as the
+ * server reads it: 宝|寳 old is "寳 is the old form of 宝"; reversed, the other way.
+ */
+export function useLinkSentence(): (kind: FormKind, subject: string, reverse?: boolean) => string {
+  const t = S(useLang())
+  return (kind, subject, reverse) => {
+    const [a, b] = subject.split('|')
+    const [x, y] = reverse && ONE_WAY.includes(kind) ? [b, a] : [a, b]
+    return t(`x_${kind}` as Key, { x: x || '?', y: y || '?' })
+  }
 }
 
 /** The table itself: each choice, what it means, what it changes. */

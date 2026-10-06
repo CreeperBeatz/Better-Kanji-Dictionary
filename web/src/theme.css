@@ -7737,6 +7737,27 @@ button.review-part {
   margin-top: 2px;
 }
 
+/* A form link's choice, read as a sentence, and ⇄ to read a one-way one the other way round. */
+.review-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-link-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-swap {
+  flex: none;
+  white-space: nowrap;
+}
+
+.review-swap[aria-pressed='true'] {
+  color: var(--ai);
+}
+
 .review-parts-input {
   font-family: var(--mincho);
   font-size: 22px;

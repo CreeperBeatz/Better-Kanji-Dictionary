@@ -125,6 +125,10 @@ change, even if it is technically accurate.
 | *a separate character for the same thing* | X and Y are characters in their own right, with their own readings, that mean the same thing; either can sit in the same place (雅 has 隹 where 鳴 has 鳥) | 隹·鳥 |
 | *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant | 业·業 |
 
+- **Read the sentence.** On a card each choice reads with its two
+  characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
+  a form of and a looks like go one way; if a proposal has them the wrong
+  way round, press **⇄ swap** and accept your answer. No need to reject it.
 - **Position, or two characters?** Looks do not decide it: 氵 has three
   strokes and 水 four, yet 氵 is only ever 水 written on the left, and it
   never stands alone. 隹 and 鳥 are both characters with their own readings

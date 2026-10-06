@@ -401,7 +401,7 @@ function History({ admin }: { admin: boolean }) {
             {d.byCard && <span className="hint"> · @{d.byCard.username ?? d.byCard.name}</span>}
             {CHANGES.has(d.action) && (
               <span className="decision-change">
-                <ValueView type={d.type} value={d.before} /> → <ValueView type={d.type} value={d.after} />
+                <ValueView type={d.type} value={d.before} subject={d.subject} /> → <ValueView type={d.type} value={d.after} subject={d.subject} />
               </span>
             )}
             {!!d.words && <span className="hint"> {t('words', { n: d.words })}</span>}
