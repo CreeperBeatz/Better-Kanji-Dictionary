@@ -23,7 +23,9 @@ import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from '.
 import { SourceChips, SourceNotes } from '../detail/PartsSource'
 import { KindsInfoButton, KindsTable, useKindsInfo, useLinkSentence } from './KindsInfo'
 import { ReportButton } from './ReportButton'
+import { ResearchButton } from './ResearchButton'
 import { same } from './board'
+import { draftOf, partsOptions, setOf } from './cardOptions'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 
 const S = strings(
@@ -137,52 +139,11 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 
-/** The AI's view of a character's parts (pipeline/decomp_drafts.py), on its items' evidence. */
-interface Draft {
-  parts: string[]
-  verdict: 'keep' | 'change'
-  why: string
-  confidence: number
-  lookalikes?: string[]
-  flags?: string[]
-}
-
-interface PartsOption {
-  key: string
-  parts: string[]
-  /** The item whose proposal this is, if one. */
-  item?: ItemDetail
-}
-
 interface Work {
   parts?: { pick: string; custom: string[] }
   forms: Record<string, { pick: 'proposed' | 'now' | 'other'; value: FormLink }>
   meaning?: { pick: 'proposed' | 'other' | 'form' | 'none'; value: PartMeaning }
   reason: string
-}
-
-const setOf = (a: string[]) => [...a].sort().join('')
-
-/**
- * The parts answers on offer, in a fixed order: each source's distinct
- * proposal, today's, the draft, and no parts last. The draft takes the place
- * of any answer with the same parts (it carries that answer's labels), so
- * nothing is offered twice; its own items (an `ai:` source) are the draft.
- */
-function partsOptions(items: ItemDetail[], now: string[], draft: Draft | null): PartsOption[] {
-  const out: PartsOption[] = []
-  const drafted = draft ? setOf(draft.parts) : null
-  const seen = new Set<string>([setOf(now)])
-  for (const i of items) {
-    const p = i.proposed as string[] | null
-    if (!p || i.source.startsWith('ai:') || seen.has(setOf(p)) || setOf(p) === drafted) continue
-    seen.add(setOf(p))
-    out.push({ key: `p:${i.id}`, parts: p, item: i })
-  }
-  if (setOf(now) !== drafted) out.push({ key: 'now', parts: now })
-  if (draft) out.push({ key: 'draft', parts: draft.parts })
-  if (!seen.has('') && drafted !== '') out.push({ key: 'atomic', parts: [] })
-  return out
 }
 
 /** Where the card starts: the draft when there is one, else the first proposal, else as it is. */
@@ -197,14 +158,6 @@ function startWork(card: Card): Work {
   for (const f of forms) work.forms[f.id] = { pick: 'proposed', value: (f.proposed as FormLink) ?? { kind: 'none', note: null } }
   if (meaning) work.meaning = { pick: 'proposed', value: meaning.proposed as PartMeaning }
   return work
-}
-
-function draftOf(items: ItemDetail[]): Draft | null {
-  for (const i of items) {
-    const d = i.evidence?.draft as Draft | undefined
-    if (d) return d
-  }
-  return null
 }
 
 /** The X of a link X|Y as it reads: X is a form of Y; reversed, Y is a form of X. */
@@ -410,6 +363,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         <div>
           <p className="queue-meta">
             {t('kind')} · {t('from', { source: sources })}
+          </p>
+          <p className="card-head-actions">
+            <ResearchButton card={card} />
           </p>
           <ReportButton subject={`kanji:${char}`} from={id} />
         </div>

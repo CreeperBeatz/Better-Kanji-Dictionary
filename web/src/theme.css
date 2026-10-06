@@ -8625,3 +8625,18 @@ button.review-part {
   align-items: center;
   margin-top: 16px;
 }
+
+/* "Research in Claude ↗" on a character's card (review/ResearchButton.tsx). */
+.card-head-actions {
+  margin: 0;
+}
+
+.research-open {
+  font-size: 12.5px;
+  padding: 0;
+}
+
+.research-copied {
+  margin: 2px 0;
+  font-size: 12px;
+}
