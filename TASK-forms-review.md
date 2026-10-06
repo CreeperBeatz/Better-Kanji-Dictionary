@@ -89,6 +89,51 @@ infrastructure, all agreed with Dani:
   `origin` field (`proposal` | `suggestion`) drives the wording in the UI, and
   the queue can filter on it.
 
+### Decided with Dani, 2026-10-06 (the characters stage)
+1. **Production starts with a blank queue.** Local decisions are tries; Dani
+   decides again there (§9). *Why:* start clean, one record of who decided what.
+2. **One card per character**, its questions numbered by kind on every card:
+   **1** built from, **2** related characters, **3** a part with no meaning.
+   *Why:* everything about a character in one place, and the number says what
+   is expected (the handbook's chapters carry the same numbers). Don't split a
+   kind of question into a stage of its own: an old-forms list was built and
+   removed the same day for exactly that.
+3. **Parts rule (D-018):** a base kanji stays whole; otherwise the split the
+   sources give (KanjiVG, IDS, Цалта), then the old form; an easy-to-remember
+   split goes in the notes; what each part "does" (meaning, sound) is out of
+   scope for now. A base pictograph every source splits (貝 見 音 …) is a
+   reviewer's call, on a card (`BASE_CHECK`). *Why:* splitting 日 into 口 helps
+   no learner; this is a dictionary, so mnemonic splits must not pass as real ones.
+4. **Name the source instead of "official / unofficial":** KanjiVG, IDS, Цалта,
+   cjk-decomp, topokanji, or BKD (this dictionary's own) when none gives it.
+   The AI draft is labelled *Sonnet* on the card; once accepted the page says
+   BKD. Цалта shown publicly is fine; quote him properly in a later pass.
+5. **The draft is one answer** ("Use the draft"), just before "No parts" (always
+   last); it takes the place of any answer with the same parts; only the draft
+   has *Edit*; no "something else" when there is a draft. *Why:* fewer, clearer
+   choices; editing starts from the AI's answer.
+6. **Nothing picked where it matters:** a draft below 0.6, or a link check with
+   nothing proposed, starts empty and save waits. *Why:* a tired reviewer must
+   not save an unsure answer unread.
+7. **The bar for "accurate":** every character in scope is backed by two of
+   KanjiVG / IDS / Цалта, or decided by a reviewer. Measured: 360 random
+   characters that pass every rule, at most one doubtful (貝, now a card), so
+   below ~1.3% wrong. Rerun `decomp_drafts.py flags` after the queue.
+8. **Old forms are not reviewed.** They come from an official list (Unihan
+   kJapaneseOldVariant, as the Jōyō table prints them); the card shows them as
+   information with the source, and a doubt is a report. *Why:* only data we
+   drafted or wrote by hand needs a person; the 41 hand-written links stay as checks.
+9. **Цалта's entry on every card the book has**, split or not; his katakana
+   shapes read as the graph's part where it is the same thing (メ is 乂, D-020).
+10. **Mistakes no card can fix are reported** ("Something else is wrong?" on
+    every card and page), never made live: they go to DATA-ISSUES and upstream.
+11. **Research in Claude** opens claude.ai with a prompt holding the card's
+    questions and every answer offered, on the reviewer's own subscription;
+    the prompt is also copied, for when the page opens empty.
+12. **Explanations in the UI are simple technical English** (ASD-STE100 style:
+    short sentences, one fact each, an example), not childish.
+13. Dani's own local keeps of 段 and 里 stand; Dani would decide the same in production.
+
 ### Answered by Dani, 2026-10-02
 1. **Who may suggest:** any signed-in user. A user's suggestion goes into the
    queue. **Reviewers and admins edit directly**: their change goes live at
