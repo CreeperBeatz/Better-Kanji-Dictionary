@@ -12,7 +12,7 @@
  * in one go (server/review.py decide_card).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, dataChanged, type CardDecision, type CharacterCard as Card, type FormLink, type Impact, type ItemDetail, type PartMeaning, type TaskValue } from '../api'
+import { api, dataChanged, type PartsSource, type CardDecision, type CharacterCard as Card, type FormLink, type Impact, type ItemDetail, type PartMeaning, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { typing, useKey } from '../keys'
@@ -38,13 +38,15 @@ const S = strings(
     q_meaning: '{char} has no meaning in the dictionary. What is it?',
     q_meaning_hint: 'A real character with its own meaning, a shape several old parts merged into (a name, not a meaning), or a form of a kanji (step above).',
     useProposal: 'Use the proposal',
-    useDraft: 'Use the AI draft',
+    useDraft: 'Use the draft',
+    draftAgrees: 'the draft agrees',
+    edit: 'Edit',
+    editTitle: 'Start your own answer from this one',
     keepNow: 'Keep it as it is',
     atomic: 'No parts: it is learned as one piece',
     other: 'Something else:',
     noParts: 'no parts',
     noLink: 'no link',
-    draftSays: 'AI draft',
     confidence: 'confidence {n}',
     lookalikes: 'only look alike',
     flagged: 'Why this card',
@@ -53,7 +55,7 @@ const S = strings(
     linkProposed: 'Use the proposal',
     linkNow: 'Leave it as it is',
     linkOther: 'Something else',
-    draftVerdict: 'the part’s AI draft says: {v}',
+    draftVerdict: 'the part’s draft says: {v}',
     v_keep: 'keep it',
     v_reject: 'it is wrong',
     m_proposed: 'Use the proposal',
@@ -89,13 +91,15 @@ const S = strings(
     q_meaning: '{char} няма значение в речника. Какво е?',
     q_meaning_hint: 'Истински знак със свое значение, форма, в която са се слели няколко стари части (име, не значение), или форма на канджи (стъпката по-горе).',
     useProposal: 'Използвайте предложението',
-    useDraft: 'Използвайте черновата на ИИ',
+    useDraft: 'Използвайте черновата',
+    draftAgrees: 'черновата е съгласна',
+    edit: 'Промяна',
+    editTitle: 'Започнете свой отговор от този',
     keepNow: 'Оставете го както е',
     atomic: 'Без части: учи се като едно цяло',
     other: 'Нещо друго:',
     noParts: 'без части',
     noLink: 'няма връзка',
-    draftSays: 'Чернова на ИИ',
     confidence: 'увереност {n}',
     lookalikes: 'само приличат',
     flagged: 'Защо е тази карта',
@@ -104,7 +108,7 @@ const S = strings(
     linkProposed: 'Използвайте предложението',
     linkNow: 'Оставете както е',
     linkOther: 'Нещо друго',
-    draftVerdict: 'черновата на ИИ за частта казва: {v}',
+    draftVerdict: 'черновата за частта казва: {v}',
     v_keep: 'запазете',
     v_reject: 'грешно е',
     m_proposed: 'Използвайте предложението',
@@ -151,7 +155,8 @@ interface PartsOption {
 }
 
 interface Work {
-  parts?: { pick: string; custom: string[] }
+  /** `from`: the answer whose Edit opened the field, when one did. */
+  parts?: { pick: string; custom: string[]; from?: string }
   forms: Record<string, { pick: 'proposed' | 'now' | 'other'; value: FormLink }>
   meaning?: { pick: 'proposed' | 'other' | 'form' | 'none'; value: PartMeaning }
   reason: string
@@ -424,44 +429,70 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               {t('q_parts', { char })}
             </h4>
             <p className="hint">{t('q_parts_hint')}</p>
-            {draft && (
-              <div className="card-draft" data-unsure={draft.confidence < 0.6 || undefined}>
-                <p>
-                  <b>{t('draftSays')}</b> <span className="hint">({t('confidence', { n: draft.confidence })})</span>: {tiles(draft.parts)}
-                </p>
-                <p className="card-draft-why">{draft.why}</p>
-                {!!draft.lookalikes?.length && (
-                  <p className="hint">
-                    <span lang="ja">{draft.lookalikes.join(' ')}</span> {t('lookalikes')}
-                  </p>
-                )}
-                {!!draft.flags?.length && (
-                  <p className="hint">
-                    {t('flagged')}: {draft.flags.join('; ')}
-                  </p>
-                )}
-              </div>
-            )}
             <div className="card-options" role="radiogroup">
-              {options.map((o) => (
-                <label key={o.key} className="card-option" data-on={work.parts!.pick === o.key || undefined}>
-                  <input type="radio" name={`parts-${id}`} checked={work.parts!.pick === o.key} onChange={() => setParts({ pick: o.key })} />
-                  <span className="card-option-label">
-                    {o.key === 'now' ? t('keepNow') : o.key === 'atomic' ? t('atomic') : o.key === 'draft' || o.item?.source.startsWith('ai:') ? t('useDraft') : t('useProposal')}
-                    {o.key !== 'atomic' && <>: {tiles(o.parts)}</>}
-                    {givenBy(o.parts).length > 0 && <SourceChips by={givenBy(o.parts)} onOpen={() => setNotes((n) => !n)} />}
-                    {o.item?.reason && !o.item.source.startsWith('ai:') && <span className="hint card-option-why">{o.item.reason}</span>}
-                  </span>
-                </label>
-              ))}
-              <label className="card-option" data-on={work.parts.pick === 'other' || undefined}>
-                <input type="radio" name={`parts-${id}`} checked={work.parts.pick === 'other'} onChange={() => setParts({ pick: 'other' })} />
+              {options.map((o) => {
+                // The draft's reasoning sits on the answer it agrees with, whichever that is.
+                const isDraft = !!draft && setOf(o.parts) === setOf(draft.parts)
+                const ownDraft = o.key === 'draft' || !!o.item?.source.startsWith('ai:')
+                const by = givenBy(o.parts)
+                const chips = by.length ? by : ownDraft ? (['bkd'] as PartsSource[]) : []
+                const editing = work.parts!.pick === 'other' && work.parts!.from === o.key
+                return (
+                  <div key={o.key} className="card-option-wrap">
+                    <label className="card-option" data-on={work.parts!.pick === o.key || editing || undefined} data-unsure={(isDraft && draft!.confidence < 0.6) || undefined}>
+                      {o.parts.length > 0 && (
+                        <button
+                          type="button"
+                          className="clear card-edit"
+                          title={t('editTitle')}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            setParts({ pick: 'other', custom: o.parts, from: o.key })
+                          }}
+                        >
+                          {t('edit')}
+                        </button>
+                      )}
+                      <input type="radio" name={`parts-${id}`} checked={work.parts!.pick === o.key} onChange={() => setParts({ pick: o.key, from: undefined })} />
+                      <span className="card-option-label">
+                        {o.key === 'now' ? t('keepNow') : o.key === 'atomic' ? t('atomic') : ownDraft ? t('useDraft') : t('useProposal')}
+                        {o.key !== 'atomic' && <>: {tiles(o.parts)}</>}
+                        {chips.length > 0 && <SourceChips by={chips} onOpen={() => setNotes((n) => !n)} />}
+                        {o.item?.reason && !ownDraft && <span className="hint card-option-why">{o.item.reason}</span>}
+                        {isDraft && (
+                          <span className="card-draft">
+                            <span className="hint">
+                              {!ownDraft && `${t('draftAgrees')} · `}
+                              {t('confidence', { n: draft!.confidence })}
+                            </span>{' '}
+                            {draft!.why}
+                            {!!draft!.lookalikes?.length && (
+                              <span className="hint">
+                                {' '}
+                                · <span lang="ja">{draft!.lookalikes.join(' ')}</span> {t('lookalikes')}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                    {editing && <ValueEditor type="decomposition" value={work.parts!.custom} onChange={(v) => setParts({ custom: v as string[] })} />}
+                  </div>
+                )
+              })}
+              <label className="card-option" data-on={(work.parts.pick === 'other' && !work.parts.from) || undefined}>
+                <input type="radio" name={`parts-${id}`} checked={work.parts.pick === 'other' && !work.parts.from} onChange={() => setParts({ pick: 'other', from: undefined })} />
                 <span className="card-option-label">{t('other')}</span>
               </label>
-              {work.parts.pick === 'other' && (
+              {work.parts.pick === 'other' && !work.parts.from && (
                 <ValueEditor type="decomposition" value={work.parts.custom} onChange={(v) => setParts({ custom: v as string[] })} />
               )}
             </div>
+            {!!draft?.flags?.length && (
+              <p className="hint card-flags">
+                {t('flagged')}: {draft.flags.join('; ')}
+              </p>
+            )}
             {notes && <SourceNotes splits={card.context.splits} now={now} />}
             <PartsEvidence detail={partsItems[0]} onKanji={onKanji} onUse={(v) => setParts({ pick: 'other', custom: v as string[] })} impact={false} />
             <div className="card-changes">

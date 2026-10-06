@@ -8455,23 +8455,30 @@ button.review-part {
 }
 
 .card-draft {
-  margin: 8px 0;
-  padding: 6px 10px;
-  border-left: 3px solid var(--ai);
-  background: var(--sumi);
-  font-size: 13px;
-}
-
-.card-draft[data-unsure] {
-  border-left-color: var(--shu);
-}
-
-.card-draft p {
-  margin: 2px 0;
-}
-
-.card-draft-why {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
   color: var(--paper-dim);
+}
+
+.card-option[data-unsure] {
+  box-shadow: inset 3px 0 0 var(--shu);
+}
+
+/* "Edit": start your own answer from this one; the field opens under it. */
+.card-edit {
+  flex: none;
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.card-option-wrap > .review-field {
+  margin: 4px 0 6px 12px;
+}
+
+.card-flags {
+  margin: 0 0 8px;
+  font-size: 12px;
 }
 
 .card-link + .card-link {
