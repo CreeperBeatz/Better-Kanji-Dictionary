@@ -118,10 +118,11 @@ export function ImpactView({ imp, onKanji }: { imp: Impact; onKanji?: OnKanji })
 }
 
 /** A decomposition: the book's split (which `onUse` takes as the answer), the old form, and the impact. */
-export function PartsEvidence({ detail, onKanji, onUse, impact = true }: { detail: ItemDetail; onKanji?: OnKanji; onUse?: (v: TaskValue) => void; impact?: boolean }) {
+/** `oldForm`: false where the old form is shown already (a character's card has it in its head). */
+export function PartsEvidence({ detail, onKanji, onUse, impact = true, oldForm = true }: { detail: ItemDetail; onKanji?: OnKanji; onUse?: (v: TaskValue) => void; impact?: boolean; oldForm?: boolean }) {
   const t = S(useLang())
   const book = detail.evidence?.book
-  const old = detail.context.forms?.old ?? []
+  const old = oldForm ? (detail.context.forms?.old ?? []) : []
   return (
     <div className="queue-evidence">
       {book != null && (

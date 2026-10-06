@@ -12,7 +12,7 @@
  * in one go (server/review.py decide_card).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, dataChanged, type PartsSource, type CardDecision, type CharacterCard as Card, type FormLink, type Impact, type ItemDetail, type PartMeaning, type TaskValue } from '../api'
+import { api, dataChanged, type BookRef, type PartsSource, type CardDecision, type CharacterCard as Card, type FormLink, type Impact, type ItemDetail, type PartMeaning, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { typing, useKey } from '../keys'
@@ -23,6 +23,7 @@ import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from '.
 import { SourceChips, SourceNotes } from '../detail/PartsSource'
 import { KindsInfoButton, KindsTable, useKindsInfo, useLinkSentence } from './KindsInfo'
 import { ReportButton } from './ReportButton'
+import { BookSource } from './BookEvidence'
 import { FormSource } from '../detail/Forms'
 import { ResearchButton } from './ResearchButton'
 import { same } from './board'
@@ -347,9 +348,13 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
 
   if (!card || !work) return <p className="hint">{problem ?? t('loading')}</p>
   const sources = [...new Set(card.items.map((i) => i.source))].join(', ')
-  const steps = [partsItems.length > 0, formItems.length > 0, !!meaningItem].filter(Boolean).length
-  let step = 0
-  const num = () => (steps > 1 ? `${++step} · ` : '')
+  // An item that carries the kanji book's view of it (its split, its old form, its part's meaning) draws the entry itself.
+  const fromBook = (i: ItemDetail) => (i.evidence?.book as BookRef | undefined)?.book === 'kanji'
+  const bookParts = partsItems.find(fromBook)
+  const bookOnItems = card.items.some(fromBook)
+  // Each kind of question has its own number on every card -- 1 parts, 2 relations, 3 a part's
+  // meaning -- so the number says what is asked, as the handbook's chapters do, whichever a card has.
+  const num = (n: 1 | 2 | 3) => `${n} · `
   const tiles = (p: string[]) => (p.length ? <PartTiles chars={p} onKanji={onKanji} /> : <span className="hint">{t('noParts')}</span>)
   const setParts = (patch: Partial<NonNullable<Work['parts']>>) => setWork({ ...work, parts: { ...work.parts!, ...patch } })
   const setForm = (fid: string, patch: Partial<Work['forms'][string]>) => setWork({ ...work, forms: { ...work.forms, [fid]: { ...work.forms[fid], ...patch } } })
@@ -404,6 +409,8 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <dl className="queue-compare">
             <KanjiFacts context={card.context} />
           </dl>
+          {/* The kanji book's entry, on every card it has one for -- its split, if any, is with the parts below. */}
+          {!bookOnItems && card.context.book && <BookSource src={card.context.book} />}
           {!meaningItem && card.context.users && Array.isArray(card.context.users) && <UsedIn chars={card.context.users} onKanji={onKanji} />}
         </div>
         {meaningItem && <PartEvidence detail={meaningItem} onKanji={onKanji} />}
@@ -413,7 +420,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         {work.parts && (
           <section className="card-step">
             <h4>
-              {num()}
+              {num(1)}
               {t('q_parts', { char })}
             </h4>
             <p className="hint">{t('q_parts_hint')}</p>
@@ -481,7 +488,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               </p>
             )}
             {notes && <SourceNotes splits={card.context.splits} now={now} />}
-            <PartsEvidence detail={partsItems[0]} onKanji={onKanji} onUse={(v) => setParts({ pick: 'other', custom: v as string[] })} impact={false} />
+            <PartsEvidence detail={bookParts ?? partsItems[0]} oldForm={false} onKanji={onKanji} onUse={(v) => setParts({ pick: 'other', custom: v as string[] })} impact={false} />
             <div className="card-changes">
               <h5>{t('changes')}</h5>
               {!partsChange ? <p className="hint">{t('noChange')}</p> : impact ? <ImpactView imp={impact} onKanji={onKanji} /> : <p className="hint">{t('loading')}</p>}
@@ -492,7 +499,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         {formItems.length > 0 && (
           <section className="card-step">
             <h4>
-              {num()}
+              {num(2)}
               {t('q_forms', { char })} <KindsInfoButton open={formsInfo} onToggle={toggleFormsInfo} />
             </h4>
             {formsInfo && <KindsTable of="form" />}
@@ -540,7 +547,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         {meaningItem && work.meaning && (
           <section className="card-step">
             <h4>
-              {num()}
+              {num(3)}
               {t('q_meaning', { char })} <KindsInfoButton open={partInfo} onToggle={togglePartInfo} />
             </h4>
             {partInfo && <KindsTable of="part" />}

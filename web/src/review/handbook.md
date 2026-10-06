@@ -83,10 +83,12 @@ dictionary.
 
 ## Characters
 
-> **One card per character.** Up to three questions, in this order: what
-> is it built from, how is it related to other characters, and, for a part
-> with no meaning in the dictionary, what is it? Only the questions that
-> have something waiting are asked.
+> **One card per character.** Up to three questions, each with its own
+> number on every card: **1** what is it built from, **2** how is it
+> related to other characters, and **3**, for a part with no meaning in
+> the dictionary, what is it? Only the questions that have something
+> waiting are asked, so a card can go from 1 straight to 3: the number
+> tells you what is expected, and the chapter of the same number below.
 
 ### How the card works
 
@@ -117,7 +119,7 @@ dictionary.
 - **Something else is wrong?** under the character files a report for
   what the card can't fix (its readings, its English, its levels).
 
-### Built from
+### 1 · Built from
 
 > **Question:** which parts is this character built from, as written today?
 
@@ -188,7 +190,7 @@ change, even if it is technically accurate.
 - **Can't type a part?** Under *Something else*, press *Draw* next to the
   parts field and draw it; picking a candidate adds it to the parts.
 
-### Related characters
+### 2 · Related characters
 
 > **Question:** how does X relate to Y?
 
@@ -252,7 +254,7 @@ The same table is behind the (i) next to *Relation* on every forms card.
 
 <!-- kinds:form -->
 
-### A part with no meaning
+### 3 · A part with no meaning
 
 > **Question:** this part has no meaning in the dictionary. What is it?
 

@@ -33,7 +33,7 @@ def page_file(book: str, page: int) -> Path | None:
     return f if f.is_file() else None
 
 
-_entries: tuple[float, dict[int, dict], dict[str, dict]] | None = None
+_entries: tuple[float, dict[int, dict], dict[str, dict], dict[str, dict]] | None = None
 
 
 def kanji_entry(no: int | None = None, char: str | None = None) -> dict | None:
@@ -46,15 +46,30 @@ def kanji_entry(no: int | None = None, char: str | None = None) -> dict | None:
         return None
     stamp = f.stat().st_mtime
     if _entries is None or _entries[0] != stamp:
-        by_no, by_char = {}, {}
+        by_no, by_char, by_kanji = {}, {}, {}
         for line in f.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             e = json.loads(line)
             if e.get("type") == "kanji" and isinstance(e.get("no"), int):
                 by_no[e["no"]] = e
+                if e.get("kanji"):
+                    by_kanji.setdefault(e["kanji"], e)
             elif e.get("type") == "grapheme" and e.get("char"):
                 by_char.setdefault(e["char"], e)
-        _entries = (stamp, by_no, by_char)
-    _, by_no, by_char = _entries
+        _entries = (stamp, by_no, by_char, by_kanji)
+    _, by_no, by_char, _ = _entries
     return by_no.get(no) if no is not None else by_char.get(char or "")
+
+
+def kanji_ref(char: str) -> dict | None:
+    """Where the kanji book has `char` -- as a kanji, else as a grapheme -- for a
+    card to draw the entry whatever the book says about its parts; None when it hasn't."""
+    kanji_entry(None, None)  # reads the file, or notices it changed
+    if _entries is None:
+        return None
+    _, _, by_char, by_kanji = _entries
+    e = by_kanji.get(char) or by_char.get(char)
+    if e is None:
+        return None
+    return {"book": "kanji", "no": e.get("no"), "char": e.get("kanji") or e.get("char"), "pages": e.get("pages") or []}

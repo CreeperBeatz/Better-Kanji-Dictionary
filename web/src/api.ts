@@ -506,7 +506,7 @@ export interface CardDecision {
 export interface CharacterCard {
   char: string
   items: ItemDetail[]
-  context: ItemDetail['context'] & { parts: string[]; splits: SourceSplit[] }
+  context: ItemDetail['context'] & { parts: string[]; splits: SourceSplit[]; book?: BookRef | null }
 }
 
 export interface ItemDetail extends QueueItem {
