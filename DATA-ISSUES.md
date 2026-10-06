@@ -57,10 +57,20 @@ kanji have this kind of noise is not known.
 - 牛 → 二: a stroke split; 牛 should most likely be atomic.
 
 Source: cjk-decomp / topokanji, through pipeline/decomp.py.
-**Status: in review.** 並 has an IDS proposal (䒑 业) in the queue. 五, 段 and
-為 were added to the queue as checks on 2026-10-05.
-午 has an IDS proposal (𠂉 十) in the queue, save it with the parts cleared
-(atomic). 牛 is not in the queue yet.
+More of the same, found 2026-10-06 in a random sample of 80 in-scope kanji
+that never reach the queue (no source disagrees, so nothing flags them):
+車 = 二 日 and 斤 = ⺁ 丅 (stroke splits), 以 = 丨 丶 人 (bare strokes from a
+source), 皮 = 又 and 良 = 艮 (parts lost), 且 = 目 (a lookalike), and, open to
+argument, 交 = 亠 父 and 自 = 目. That is 6–8 in 80, so roughly 150 of the
+1,950 in-scope kanji the queue never shows.
+
+Source: cjk-decomp / topokanji, through pipeline/decomp.py.
+**Status: partly fixed.** 午 is fixed (atomic, by review). 並 has an IDS
+proposal (䒑 业) in the queue. 五, 段 and 為 went into the queue as checks,
+but all three were closed with *reject*. On a check card, *reject* does the
+same as *looks right, keep it*: it closes the card and changes nothing. So
+五 = 力, 段 = 殳 and 為 = 灬 are still live (2026-10-06). 牛 and the
+sample's kanji are not in the queue.
 
 ### D-005 · 龰 has no form link to 止
 *Found 2026-10-04.* 龰 (the bottom of 足 走 定) is 止 written at the bottom,
@@ -130,6 +140,19 @@ Kanken levels follow the same old lists (岡 = 2級, now 7級), so the book
 can't be used to fix it.
 **Status: open.** Needs the current official grade list, which also gives
 the current Kanken levels for the jōyō kanji.
+
+### D-017 · Old forms that are compatibility code points
+*Found 2026-10-06.* 62 of the 366 Unihan old forms are CJK compatibility
+ideographs: 侮 > 侮 (U+FA30), 僧 > 僧, 器 > 器, 墨 > 墨. The old shape differs
+from today's only in a detail (每 for 毎, 臭's 犬). Many fonts draw the two
+the same, so the page says "the old form of 侮 is 侮". Unicode
+normalisation (NFC), which copy-paste and many tools apply, turns the old
+code point into the modern one.
+Source: Unihan kJapaneseOldVariant, through
+pipeline/forms.py.
+**Status: open.** These could show the font_old glyphs (jp78/jp83) instead
+of the text character, or be marked "a font difference, not a different
+character".
 
 ## Fixed
 
