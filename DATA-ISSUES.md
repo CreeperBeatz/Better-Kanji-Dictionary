@@ -214,6 +214,20 @@ pipeline/decomp_sources.py.
 recovers 34. The other 34 use a shape the graph has no part for (施's 𭤨,
 賞's 𫩠, 歓's 𮥶): still left out, rather than read as something else.
 
+### D-021 · Latin letters inside Bulgarian words
+*Found 2026-10-06.* The machine translation typed some Bulgarian words with a
+Latin letter: граничa, чертa and дashi, and какà and самò with a Latin
+stressed vowel. The 5 meaning drafts have умe (梅), групa (輩, 塊), старa
+(薩) and решa (櫛). The words look right but search never finds them.
+Words that are wholly Latin (NHK, COVID-19, Pieris japonica) are correct.
+Source: the Bulgarian translation (`mt:claude-sonnet-5`) and the meanings
+drafts.
+**Status: in review.** The 11 cards stay as they are, for reviewers to fix.
+The review server now refuses Bulgarian that a person saves with a Latin
+letter inside a Cyrillic word, so such a card can't be accepted as it is.
+The meanings board doesn't show Bulgarian labels and doesn't check them: the
+kanji's Bulgarian card does.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
