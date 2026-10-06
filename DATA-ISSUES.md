@@ -119,6 +119,18 @@ the other 22 forms of agreed with links already waiting. The drafts judged
 18 waiting form links wrong (丷|从, 丷|八, ⺀|皿, ⺁|厂, 龷|北 …): each says
 so on its part's card, for the reviewer to reject.
 
+### D-016 · School grades from before the 2020 revision
+*Found 2026-10-06.* The 2020 school curriculum moved the 20 prefecture
+kanji (茨 媛 岡 潟 岐 熊 香 佐 埼 崎 滋 鹿 縄 井 沖 栃 奈 梨 阪 阜) into
+grade 4, and shifted some others between grades 4–6. Our data still gives
+them grade 8 (secondary school): 岡 has grade 8. Anything that reads the
+grade (ordering, filters) treats them as later kanji than they are.
+Source: KANJIDIC's `grade`. Found while comparing Tsalta's kanji book, whose
+Kanken levels follow the same old lists (岡 = 2級, now 7級), so the book
+can't be used to fix it.
+**Status: open.** Needs the current official grade list, which also gives
+the current Kanken levels for the jōyō kanji.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
