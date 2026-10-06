@@ -65,12 +65,16 @@ argument, 交 = 亠 父 and 自 = 目. That is 6–8 in 80, so roughly 150 of th
 1,950 in-scope kanji the queue never shows.
 
 Source: cjk-decomp / topokanji, through pipeline/decomp.py.
-**Status: partly fixed.** 午 is fixed (atomic, by review). 並 has an IDS
-proposal (䒑 业) in the queue. 五, 段 and 為 went into the queue as checks,
-but all three were closed with *reject*. On a check card, *reject* does the
-same as *looks right, keep it*: it closes the card and changes nothing. So
-五 = 力, 段 = 殳 and 為 = 灬 are still live (2026-10-06). 牛 and the
-sample's kanji are not in the queue.
+**Status: in review** (2026-10-06). The queue was started over (every card
+back, nothing decided), so 午's fix is undone until its card is decided
+again. A check card has no *reject* any more: a character's card asks what
+it is built from, with answers that say what they do. Rules now look at
+every character in scope (pipeline/decomp_drafts.py: one part only, strokes
+in no part, a bare stroke, no source splits it, these data issues), and a
+Sonnet draft with its proof sits on every parts card: 1,010 characters, 571
+drafted differently from today (161 at confidence 0.8 or more). All of the
+kanji named above have a card. See D-018 for what the drafts say about the
+basic kanji.
 
 ### D-005 · 龰 has no form link to 止
 *Found 2026-10-04.* 龰 (the bottom of 足 走 定) is 止 written at the bottom,
@@ -153,6 +157,22 @@ pipeline/forms.py.
 **Status: open.** These could show the font_old glyphs (jp78/jp83) instead
 of the text character, or be marked "a font difference, not a different
 character".
+
+### D-018 · The basic pictographs are split into lookalikes
+*Found 2026-10-06,* by the parts drafts (D-004). The graph gives the most
+used simple kanji parts that only look like pieces of them: 日 = 口 (382
+in-scope kanji contain 日), 土 = 十 (370), 木 = 八 十 (318), 田 = 冂 土,
+大 = 人, 王 = 土, 白 = 日, 小 = 八, 中 = 口, 宀 = 冖, 艹 = 卄, 扌 = 二.
+By the handbook's rule (the 午 case: a lookalike is not a part) each of
+them is atomic, and the drafts say so, mostly at confidence 0.85–0.95.
+Through them, 1,611 of the 2,679 in-scope kanji contain a character whose
+parts a confident draft would change.
+Source: cjk-decomp / KRADFILE-style visual splits, through pipeline/decomp.py.
+**Status: in review, with a question first.** The study order was first
+built on *visual* containment (FINDINGS.md: 時 contains 寺 because it shows
+it). The handbook's rule since 2026-10-05 is containment by *parts*. The two
+disagree exactly here: under the first, 白 waits for 日; under the second, it
+doesn't. Decide the rule before accepting these cards in bulk.
 
 ## Fixed
 
