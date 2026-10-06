@@ -82,6 +82,11 @@ DATA_ISSUES = {
 }
 
 
+# Base pictographs every source splits, so no rule sees them (the 300 audit found 貝 = 八 目):
+# Dani, 2026-10-06, "put them on cards" -- whole, or the sources' split, is a reviewer's call.
+BASE_CHECK = "貝音穴玄見辛舛元舌支高"
+
+
 def strokes(db) -> dict[str, int]:
     out = {c: n for c, n in db.execute("SELECT char, strokes FROM kanji WHERE strokes IS NOT NULL")}
     for c, paths in db.execute("SELECT char, paths FROM stroke"):
@@ -104,6 +109,8 @@ def flags() -> tuple[dict[str, list[str]], dict]:
         parts = children.get(x, [])
         if x in DATA_ISSUES:
             out[x].append(DATA_ISSUES[x])
+        if x in BASE_CHECK and children.get(x):
+            out[x].append("a base pictograph every source splits: whole, or their split? (D-018)")
         if not parts:
             continue
         if len(parts) == 1:
@@ -211,7 +218,7 @@ def prepare(new: bool = False, audit: int = 0, seed: int = 20261006, exclude: st
             "old": old.get(c),
             "oldIds": ids.get(old[c]) if c in old else None,
         })
-    prefix = "A" if audit else "E" if new else "D"
+    prefix = "A" if audit else (new if isinstance(new, str) else "E") if new else "D"
     for f in IN.glob(f"{prefix}-*.json"):
         f.unlink()
     for i in range(0, len(rows), PER_BATCH):
@@ -226,7 +233,7 @@ VERDICTS = ("keep", "change")
 
 def read(only: str | None = None) -> tuple[list[dict], list[str]]:
     good, problems = [], []
-    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or '[DE]-*'}.json", problems):
+    for inp, batch, out in proposals.outputs(IN, OUT, f"{only or '[DEF]-*'}.json", problems):
         asked = {r["char"]: r for r in batch["chars"]}
         seen = set()
         for d in out.get("chars", []):
@@ -333,7 +340,8 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("flags")
     pp = sub.add_parser("prepare")
-    pp.add_argument("--new", action="store_true")
+    pp.add_argument("--new", nargs="?", const=True, default=False,
+                    help="a later pass; optionally its batch letter (E by default, F for the next …)")
     pp.add_argument("--audit", type=int, default=0, help="a random sample of this many that pass every rule")
     pp.add_argument("--seed", type=int, default=20261006)
     pp.add_argument("--exclude", help="a glob of earlier audit batches whose characters are not drawn again")
