@@ -133,8 +133,10 @@ def ids_parts(ids: str, self_char: str) -> list[str] | None:
     return list(dict.fromkeys(out))
 
 
-def kanjivg() -> dict[str, list[str]]:
-    """char -> the elements KanjiVG groups directly under the glyph."""
+def kanjivg(whole: bool = False) -> dict[str, list[str]]:
+    """char -> the elements KanjiVG groups directly under the glyph. With
+    `whole`, a glyph drawn with no element group at all is there too, as []:
+    KanjiVG treats it as one piece."""
     out: dict[str, list[str]] = {}
     ns = "{http://kanjivg.tagaini.net}"
     with gzip.open(DATA / "kanjivg.xml.gz", "rb") as f:
@@ -162,6 +164,8 @@ def kanjivg() -> dict[str, list[str]]:
                     walk(root)
                 if parts and not loose:
                     out[chr(int(m.group(1), 16))] = list(dict.fromkeys(parts))
+                elif whole and not parts and root is not None:
+                    out[chr(int(m.group(1), 16))] = []
             el.clear()
     return out
 

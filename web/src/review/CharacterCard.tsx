@@ -20,6 +20,7 @@ import { FontStrip } from '../detail/FontStrip'
 import { DictLinks } from './DictLinks'
 import { KanjiFacts, PartMeaningView, PartTiles, strokesOk, ValueEditor } from './editors'
 import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from './Evidence'
+import { SourceChips, SourceNotes } from '../detail/PartsSource'
 import { useLinkSentence } from './KindsInfo'
 import { ReportButton } from './ReportButton'
 import { same } from './board'
@@ -31,7 +32,7 @@ const S = strings(
     from: 'from {source}',
     loading: 'loading',
     q_parts: 'What is {char} built from, as written today?',
-    q_parts_hint: 'Each part must do a job in it: meaning, sound, or a kanji written for that position. A lookalike is not a part.',
+    q_parts_hint: 'Base kanji stay whole. Otherwise take the split the sources give (the labels say which); history only when none helps; your own only when nothing else works.',
     q_forms: 'How is {char} related to these characters?',
     q_forms_hint: 'A form link never changes parts. “A form of” lends its meaning to every kanji with the part: check the lists.',
     q_meaning: '{char} has no meaning in the dictionary. What is it?',
@@ -82,7 +83,7 @@ const S = strings(
     from: 'от {source}',
     loading: 'зареждане',
     q_parts: 'От какво е построен {char}, както се пише днес?',
-    q_parts_hint: 'Всяка част трябва да върши работа в него: значение, звук или канджи, написано за това място. Нещо, което само прилича, не е част.',
+    q_parts_hint: 'Основните канджи остават цели. Иначе вземете делението от източниците (етикетите казват кои); историята само ако те не помагат; свое само ако нищо друго не става.',
     q_forms: 'Как е свързан {char} с тези знаци?',
     q_forms_hint: 'Връзка между форми никога не променя частите. „Форма на“ заема значението си на всяко канджи с частта: проверете списъците.',
     q_meaning: '{char} няма значение в речника. Какво е?',
@@ -212,6 +213,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const [start, setStart] = useState<Work | null>(null)
   const [impact, setImpact] = useState<Impact | null>(null)
   const [busy, setBusy] = useState(false)
+  const [notes, setNotes] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
@@ -367,6 +369,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const setForm = (fid: string, patch: Partial<Work['forms'][string]>) => setWork({ ...work, forms: { ...work.forms, [fid]: { ...work.forms[fid], ...patch } } })
   const setMeaning = (patch: Partial<NonNullable<Work['meaning']>>) => setWork({ ...work, meaning: { ...work.meaning!, ...patch } })
   const verdicts = (meaningItem?.evidence?.formLinks ?? {}) as Record<string, 'keep' | 'reject'>
+  // Which sources give a split: KanjiVG, IDS, the kanji book, cjk-decomp …
+  const splitKey = (p: string[]) => [...p].sort().join('')
+  const givenBy = (p: string[]) => card.context.splits.filter((s) => splitKey(s.parts) === splitKey(p)).map((s) => s.source)
 
   // What saving would do, in a sentence each.
   const summary: string[] = []
@@ -444,7 +449,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                   <span className="card-option-label">
                     {o.key === 'now' ? t('keepNow') : o.key === 'atomic' ? t('atomic') : o.key === 'draft' || o.item?.source.startsWith('ai:') ? t('useDraft') : t('useProposal')}
                     {o.key !== 'atomic' && <>: {tiles(o.parts)}</>}
-                    {o.item && <span className="hint"> · {o.item.source}</span>}
+                    {givenBy(o.parts).length > 0 && <SourceChips by={givenBy(o.parts)} onOpen={() => setNotes((n) => !n)} />}
                     {o.item?.reason && !o.item.source.startsWith('ai:') && <span className="hint card-option-why">{o.item.reason}</span>}
                   </span>
                 </label>
@@ -457,6 +462,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                 <ValueEditor type="decomposition" value={work.parts.custom} onChange={(v) => setParts({ custom: v as string[] })} />
               )}
             </div>
+            {notes && <SourceNotes splits={card.context.splits} now={now} />}
             <PartsEvidence detail={partsItems[0]} onKanji={onKanji} onUse={(v) => setParts({ pick: 'other', custom: v as string[] })} impact={false} />
             <div className="card-changes">
               <h5>{t('changes')}</h5>

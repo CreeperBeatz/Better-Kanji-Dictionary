@@ -56,7 +56,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import auth, bg_overlay, forms, scope, store
+from . import auth, bg_overlay, decomp_sources, forms, scope, store
 from .db import query, query_one
 from .errors import AppError
 from .routes.graph import children_of, parents_map, parents_of
@@ -1412,7 +1412,9 @@ def character_card(char: str) -> dict:
         "char": char,
         "items": [item(i) for i in ids],
         "context": {"char": char, **_kanji_info(char), "forms": forms.forms_of(char), "users": users,
-                    "old": _old_forms(users[:40]), "parts": _children(char)},
+                    "old": _old_forms(users[:40]), "parts": _children(char),
+                    # Each source's split, so every answer can say who gives it.
+                    "splits": decomp_sources.splits(char)},
     }
 
 

@@ -8531,3 +8531,69 @@ button.review-part {
   background: var(--sumi);
   font-size: 12.5px;
 }
+
+/* Where a split comes from (detail/PartsSource.tsx): a label per source. */
+.source-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.source-chip {
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 0 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 9px;
+  background: var(--sumi);
+  color: var(--paper-dim);
+  cursor: pointer;
+}
+
+.source-chip[data-source='bkd'] {
+  border-color: var(--ai);
+  color: var(--paper);
+}
+
+.parts-from {
+  font-size: 13px;
+  color: var(--paper-dim);
+}
+
+.parts-from p {
+  margin: 6px 0;
+}
+
+.parts-from-toggle {
+  font-size: 12px;
+}
+
+.source-notes {
+  margin: 6px 0 10px;
+  font-size: 12.5px;
+}
+
+.source-notes > div {
+  padding: 4px 0 4px 8px;
+  border-left: 2px solid var(--rule);
+}
+
+.source-notes > div[data-agrees] {
+  border-left-color: var(--ai);
+}
+
+.source-notes dt {
+  color: var(--paper);
+}
+
+.source-notes dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.source-split {
+  color: var(--paper-dim);
+  font-weight: normal;
+}

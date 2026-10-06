@@ -35,6 +35,21 @@ export interface KanjiNode {
   form?: string
 }
 
+/** Where a decomposition comes from (server/decomp_sources.py); `bkd` is this dictionary's own. */
+export type PartsSource = 'kanjivg' | 'ids' | 'tsalta' | 'cjk-decomp' | 'topokanji' | 'bkd'
+
+/** One source's split of a character, in the graph's own characters; [] = one piece. */
+export interface SourceSplit {
+  source: PartsSource
+  parts: string[]
+}
+
+export interface PartsFrom {
+  /** The sources that split it as it is split now: bkd when none does. */
+  by: PartsSource[]
+  splits: SourceSplit[]
+}
+
 export interface GraphResponse {
   focus: KanjiNode
   /** SVG path data in writing order, on KanjiVG's 109x109 canvas. */
@@ -44,6 +59,8 @@ export interface GraphResponse {
     nodes: KanjiNode[]
     edges: { parent: string; child: string }[]
   }
+  /** Which sources split it the way it is split now; absent offline or with an older database. */
+  partsFrom?: PartsFrom | null
   counts: {
     containers: number
     containersJoyo: number
@@ -489,7 +506,7 @@ export interface CardDecision {
 export interface CharacterCard {
   char: string
   items: ItemDetail[]
-  context: ItemDetail['context'] & { parts: string[] }
+  context: ItemDetail['context'] & { parts: string[]; splits: SourceSplit[] }
 }
 
 export interface ItemDetail extends QueueItem {

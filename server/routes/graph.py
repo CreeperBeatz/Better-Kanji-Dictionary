@@ -20,7 +20,7 @@ import json
 
 from fastapi import APIRouter, HTTPException, Query
 
-from .. import bg_overlay, forms, store
+from .. import bg_overlay, decomp_sources, forms, store
 from ..db import query, query_one
 
 router = APIRouter(prefix="/api/kanji", tags=["graph"])
@@ -415,6 +415,8 @@ def get_kanji(char: str) -> dict:
         "strokes": json.loads(stroke_row["paths"]) if stroke_row else [],
         "containers": containers,
         "components": {"nodes": components, "edges": edges},
+        # Which sources split it this way (KanjiVG, IDS, the kanji book …), or bkd: our own.
+        "partsFrom": decomp_sources.parts_from(char, children_of([char]).get(char, [])),
         "counts": {
             "containers": len(containers),
             "containersJoyo": sum(1 for c in containers if c["joyo"]),

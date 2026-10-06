@@ -6,6 +6,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
 import { realMeanings } from './meanings'
 import { KanjiEditButton } from '../review/PageEdit'
+import { PartsSourceLine } from './PartsSource'
 import { FontStrip } from './FontStrip'
 import { Forms, useForms } from './Forms'
 import { StrokeOrder } from './StrokeOrder'
@@ -85,7 +86,12 @@ const S = strings(
  * the server; the rest the device can answer by itself from the offline pack,
  * so the panel fills in before the graph arrives, and without a connection.
  */
-export type DetailData = Pick<GraphResponse, 'focus' | 'strokes'> & { counts?: GraphResponse['counts'] }
+export type DetailData = Pick<GraphResponse, 'focus' | 'strokes'> & {
+  counts?: GraphResponse['counts']
+  /** From the server only: the parts, and which sources split it so. */
+  components?: GraphResponse['components']
+  partsFrom?: GraphResponse['partsFrom']
+}
 
 interface Props {
   data: DetailData
@@ -381,6 +387,10 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             </>
           )}
         </p>
+      )}
+
+      {!isPreview && data.partsFrom && data.components && (
+        <PartsSourceLine from={data.partsFrom} parts={data.components.nodes.filter((x) => x.depth === 1).map((x) => x.char)} />
       )}
 
       {!isPreview && <KanjiEditButton char={data.focus.char} onSignIn={onSignIn} />}

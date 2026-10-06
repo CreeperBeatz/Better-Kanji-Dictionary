@@ -768,6 +768,14 @@ def build_fonts(db: sqlite3.Connection) -> None:
     fonts.build(db)
 
 
+@stage("sources", "KanjiVG + IDS + the kanji book + the graph's own files -> each source's split, for the page to name")
+def build_sources(db: sqlite3.Connection) -> None:
+    """See pipeline/decomp_sources.py. Needs the graph and forms stages."""
+    import decomp_sources
+
+    decomp_sources.build(db)
+
+
 # ---------------------------------------------------------------- driver
 
 

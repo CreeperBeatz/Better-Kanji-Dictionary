@@ -110,27 +110,37 @@ dictionary.
 
 > **Question:** which parts is this character built from, as written today?
 
+#### Which split to take
+
+There is no official decomposition of Japanese kanji. Each answer on the
+card shows which sources give it (KanjiVG, IDS, Цалта's book, cjk-decomp);
+press a label for what each source is and how each splits the character.
+Take them in this order:
+
+1. **Base kanji stay whole.** 日 木 土 田 大 王 白 are learned as pictures.
+   A split into lookalikes or strokes (日 = 口, 木 = 八 + 十) is neither a
+   source's analysis nor a help: pick *no parts*.
+2. **The split the sources give.** KanjiVG first (it is drawn for Japanese),
+   then IDS and Цалта's book. 春 is 𡗗 + 日, as they all say, not 三 + 人 + 日.
+3. **History, when no source helps.** The old form decides between two
+   groupings visible today (従, below). It never adds a part that is gone.
+4. **Your own split** only when none of the above gives one a learner can
+   use (兼). It shows on the page as *BKD*, this dictionary's own. An easier
+   way to see a shape that a source already splits (𡗗 as 三 + 人) goes in
+   the associations, not in the parts.
+
+What each part *does* (meaning, sound) is not judged here for now.
+
 #### What counts as a part
 
-- **Each part should mean something in this character.** A data source that
-  splits a shape into stroke groups (IDS often does) is describing the
-  drawing, not the character. Don't use it.
-- **Start from the simplest part, not a stroke.** A learner begins with the
-  smallest piece that is a kanji or a real part. If a character can't be
-  split into such pieces, it has no parts (it is atomic), and that is fine:
-  a small picture like 午 is learned as one piece.
-- **A lookalike is not a part.** 午 visibly contains 干, but 干 (a shield)
-  does nothing in 午 (a pestle). Ask what the piece does in this character:
-  meaning, sound, or its source kanji written for that position. If it
-  does none of these, it only looks alike. Lookalikes go in *Similar → looks*, where a
-  learner sees them side by side. Your own way of seeing a shape (決 as
-  person + ユ) goes in your associations, not in the parts.
-- **Bare strokes are parts only when they mean something.** Data sources love
-  to chop real parts into strokes (口 → 丨一), so their stroke splits are
-  refused outright. You can still use a stroke (一 丨 丶 丿 乙 亅 …) after a
-  confirmation, when it carries meaning in that character: 主 is 丶 + 王, a
-  lampstand (王) with its flame (丶). If the stroke is only there because the
-  drawing has it, leave it out.
+- **Bare strokes are not parts.** Data sources chop real parts into strokes
+  (口 → 丨一); those splits are refused outright. A stroke can still be a
+  part after a confirmation, where it plainly is one (主 is 丶 + 王, the flame
+  on a lampstand).
+- **A lookalike is not a part.** 午 visibly contains 干, but no source
+  splits it so. Lookalikes go in *Similar → looks*, where a learner sees
+  them side by side.
+- **Nothing lost.** A split covers the whole shape: 皮 is not just 又.
 
 #### Today's shape, and when the old form decides
 

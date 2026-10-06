@@ -141,6 +141,8 @@ class Decomposition:
         self.compound = compound  # characters KRADFILE breaks into several radicals
         self.as_build_py = as_build_py
         self._direct_cache: dict[str, list[str]] = {}
+        # Where each line came from: cjk-decomp, topokanji (cjk-override.txt), bkd (CURATED), user.
+        self.origin: dict[str, str] = {}
 
     # ---------------------------------------------------------------- loading
 
@@ -148,7 +150,8 @@ class Decomposition:
     def load(cls, *, user_overrides: bool = True, as_build_py: bool = False) -> "Decomposition":
         """`as_build_py=True` reproduces build.py exactly, for the regression check."""
         raw: dict[str, tuple[str, list[str]]] = {}
-        for path in (DATA / "cjk-decomp.txt", DATA / "cjk-override.txt"):
+        origin: dict[str, str] = {}
+        for path, name in ((DATA / "cjk-decomp.txt", "cjk-decomp"), (DATA / "cjk-override.txt", "topokanji")):
             if not path.exists():
                 raise FileNotFoundError(f"{path} missing -- run pipeline/fetch_sources.py")
             with path.open(encoding="utf-8") as f:
@@ -161,11 +164,14 @@ class Decomposition:
                         continue
                     ch, typ, args = m.group(1), m.group(2), m.group(3)
                     raw[ch] = (typ, [p for p in args.split(",") if p])
+                    origin[ch] = name
 
         if not as_build_py:
             raw.update({ch: ("curated", parts) for ch, parts in CURATED.items()})
+            origin.update(dict.fromkeys(CURATED, "bkd"))
         grass, compound = (frozenset(), frozenset()) if as_build_py else _krad_sets()
         d = cls(raw, grass, as_build_py, compound)
+        d.origin = origin
         if user_overrides and USER_OVERRIDES.exists():
             d.apply_user_overrides(json.loads(USER_OVERRIDES.read_text(encoding="utf-8")))
         return d
@@ -174,6 +180,7 @@ class Decomposition:
         """Overrides are {char: [component, ...]}; an empty list means atomic."""
         for ch, comps in overrides.items():
             self.raw[ch] = ("user", list(comps))
+            self.origin[ch] = "user"
         self._direct_cache.clear()
 
     # ---------------------------------------------------------------- queries
