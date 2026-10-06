@@ -72,7 +72,7 @@ def main() -> int:
 
     print("progress")
     review.add_item("part_meaning", "𠂇", {"kind": "meaning", "en": "hand"}, "ai:test")
-    check("part meanings are a stage", "part_meaning" in review.progress()["stages"])
+    check("part meanings count under characters", "character" in review.progress()["stages"])
 
     print("bare numbers")
     check("卌 keeps 40", real_meanings(["40"]) == ["40"])

@@ -7,6 +7,13 @@ The task types (TASK-forms-review.md §5, and more since):
     part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
     kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот", "note"}]
     word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"
+    bg             subject word:123 | kanji:生   value: the Bulgarian, per sense / per meaning
+    report         subject word:123 | kanji:生   value: {"about": english | ..., "text": ...}; never live
+
+Parts, forms and part meanings are decided together, on one card per
+character (`character_card`, `decide_card`): a reviewer answers "what is it
+built from", "is it another kanji written differently", "what does it mean"
+for the same character at once, so the three answers can't contradict.
 
 An **item** is a change waiting for a person: a `proposal` (newly marked data
 loaded into the queue: an IDS diff, an AI draft) or a `suggestion` (a user
@@ -66,15 +73,27 @@ EXPORTS = {
     "part_meaning": ROOT / "data" / "part_meanings.json",
 }
 
-TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "bg", "en_report")
+TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "bg", "report")
+# The three types a character's card decides together; the queue lists them as one stage.
+CHARACTER_TYPES = ("decomposition", "form_link", "part_meaning")
+CHARACTER = "character"
 
-# A report that a word's English (JMdict's) is wrong, in the reporter's words.
-# It changes nothing on the site: JMdict is the reference, so a reviewer checks
-# the report, and a real mistake is logged in DATA-ISSUES.md and sent to JMdict
-# to be fixed at the source (Dani, 2026-10-05).
-EN_REPORT_MAX = 1000
+# A report that something is wrong that no card or edit can fix: a word's
+# English (JMdict's), a kanji's dictionary meanings or readings, its levels,
+# its similar kanji -- in the reporter's words. It changes nothing on the site:
+# those come from reference dictionaries, so a reviewer checks the report, and
+# a real mistake is logged in DATA-ISSUES.md and sent upstream to be fixed at
+# the source (Dani, 2026-10-05; widened from the English alone 2026-10-06).
+REPORT_MAX = 1000
+REPORT_ABOUT = {
+    "word": ("english", "reading", "other"),
+    "kanji": ("meanings", "readings", "levels", "parts", "forms", "similar", "strokes", "other"),
+}
 ORIGINS = ("proposal", "suggestion")
-ACTIONS = ("accept", "edit", "reject", "skip")
+# keep: leave it as it is now. A check with nothing proposed is kept when
+# today's value is right; a proposal is kept-against when today's beats it.
+# Unlike reject, it says what the reviewer meant: the value stays, on purpose.
+ACTIONS = ("accept", "edit", "keep", "reject", "skip")
 CATCH_ALL = "catch-all"
 FORM_KINDS = (*forms.KINDS, "none")
 # A link of these kinds reads one way: subject X|Y says "Y is the old form of
@@ -414,8 +433,8 @@ def _bad_words() -> AppError:
     return _bad("words_invalid", "words are a map of word id to group")
 
 
-def _known_type(type_: str) -> None:
-    if type_ not in TYPES:
+def _known_type(type_: str, character: bool = False) -> None:
+    if type_ not in TYPES and not (character and type_ == CHARACTER):
         raise _bad("bad_type", "unknown task type")
 
 
@@ -598,16 +617,21 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             return out
         raise _bad("bad_subject", "that is not a subject of this type")
 
-    if type_ == "en_report":
+    if type_ == "report":
         kind, key = _target(subject)
-        if kind != "word" or not key.isdigit() or not query_one("SELECT 1 AS x FROM word WHERE id = ?", (int(key),)):
-            raise _bad("bad_subject", "no such word")
+        if kind == "word":
+            if not key.isdigit() or not query_one("SELECT 1 AS x FROM word WHERE id = ?", (int(key),)):
+                raise _bad("bad_subject", "no such word")
+        elif kind != "kanji" or len(key) != 1 or not _known(key):
+            raise _bad("bad_subject", "a report is about a word or a character")
         if value is None:
             return None
-        text = " ".join(str(value).split()) if isinstance(value, str) else ""
+        if not isinstance(value, dict) or value.get("about") not in REPORT_ABOUT[kind]:
+            raise _bad("report_about", "say what the report is about")
+        text = " ".join(str(value.get("text") or "").split())
         if len(text) < 3:
-            raise _bad("report_empty", "say what is wrong with the English")
-        return text[:EN_REPORT_MAX]
+            raise _bad("report_empty", "say what is wrong")
+        return {"about": value["about"], "text": text[:REPORT_MAX]}
 
     # word_sense
     char, wid = _split(subject)
@@ -630,7 +654,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
 
 def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
     """The overlay's value for the subject, None when nothing overrides the built data."""
-    if type_ == "en_report":
+    if type_ == "report":
         return None  # a report is never live
     if type_ == "decomposition":
         ov = store.decomposition_overrides().get(subject)
@@ -697,8 +721,8 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
     `explicit_words`: the reviewer placed the kanji's words themselves (the
     meanings board), so none are reopened or auto-accepted behind their back.
     """
-    if type_ == "en_report":
-        return  # confirmed or not, the site's English stays JMdict's
+    if type_ == "report":
+        return  # confirmed or not, the site stays as its sources have it
     if type_ == "decomposition":
         if value is None:
             store.clear_decomposition(subject)
@@ -783,16 +807,7 @@ AUTO_CONFIDENCE = 0.8
 def word_rule(item: dict, accepted_ids: set[str]) -> bool:
     """TASK §6 for a word's meaning: two independent runs agree, both are
     confident, and their pick is one of the kanji's accepted groups."""
-    runs = (item.get("evidence") or {}).get("runs") or []
-    if len(runs) < 2:
-        return False
-    picks = {r.get("sense") for r in runs}
-    return (
-        len(picks) == 1
-        and item["proposed"] in picks
-        and all(float(r.get("confidence") or 0) >= AUTO_CONFIDENCE for r in runs)
-        and item["proposed"] in accepted_ids | {CATCH_ALL}
-    )
+    return _runs_agree(item) and item["proposed"] in accepted_ids | {CATCH_ALL}
 
 
 def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
@@ -1028,48 +1043,55 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     it so far. They are left undecided and come back together as a follow-up
     item for the same kanji at the end of the queue, groups fixed, only them.
     """
-    if action not in ACTIONS:
-        raise _bad("bad_action", "action is accept, edit, reject or skip")
-    reason = _text(reason)
     with _change() as data:
-        item = data["items"].get(item_id)
-        if not item:
-            raise AppError(404, "item_not_found", "no such item")
-        if item["status"] != "open":
-            raise AppError(409, "item_closed", "this item was already decided")
-        type_, subject = item["type"], item["subject"]
+        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, notes)
 
-        if action == "skip":
-            if user_id not in item["skipped_by"]:
-                item = _update(data, item, skipped_by=[*item["skipped_by"], user_id])
-            return dict(item)
 
-        if action == "reject":
-            d = _decision("reject", type_, subject, None, None, user_id, item_id, reason)
-            item = _close(data, item, "rejected", d)
-            data["decisions"].append(d)
-            return dict(item)
+def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
+            words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
+            notes: dict | None = None) -> dict:
+    """decide() inside a change already open: a character's card decides several items in one."""
+    if action not in ACTIONS:
+        raise _bad("bad_action", "action is accept, edit, keep, reject or skip")
+    item = data["items"].get(item_id)
+    if not item:
+        raise AppError(404, "item_not_found", "no such item")
+    if item["status"] != "open":
+        raise AppError(409, "item_closed", "this item was already decided")
+    type_, subject = item["type"], item["subject"]
 
-        if action == "accept" and item["proposed"] is None:
-            raise _bad("needs_edit", "this item has no proposal to accept; pick a value")
-        after = validate(type_, subject, item["proposed"] if action == "accept" else value, data)
-        if after is None:
-            raise _bad("needs_value", "pick a value")
-        before = live_value(type_, subject, data)
-        explicit = _on_the_board(type_, words)
-        d = _decision(action, type_, subject, before, after, user_id, item_id, reason)
-        _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
-        item = _close(data, item, "accepted" if action == "accept" else "edited", d)
-        data["decisions"].append(d)
-        if explicit:
-            held = _skipped(skip)
-            _place_words(data, subject, {k: v for k, v in words.items() if str(k) not in held}, user_id, d["id"])
-            if held:
-                _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
-                          f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
-        if type_ == "bg" and (labels or notes) and subject.startswith("kanji:"):
-            _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], notes or {})
+    if action == "skip":
+        if user_id not in item["skipped_by"]:
+            item = _update(data, item, skipped_by=[*item["skipped_by"], user_id])
         return dict(item)
+
+    if action in ("reject", "keep"):
+        # Nothing changes either way; "keep" says today's value is right, on purpose.
+        d = _decision(action, type_, subject, None, None, user_id, item_id, reason)
+        item = _close(data, item, "rejected" if action == "reject" else "kept", d)
+        data["decisions"].append(d)
+        return dict(item)
+
+    if action == "accept" and item["proposed"] is None:
+        raise _bad("needs_edit", "this item has no proposal to accept; pick a value")
+    after = validate(type_, subject, item["proposed"] if action == "accept" else value, data)
+    if after is None:
+        raise _bad("needs_value", "pick a value")
+    before = live_value(type_, subject, data)
+    explicit = _on_the_board(type_, words)
+    d = _decision(action, type_, subject, before, after, user_id, item_id, reason)
+    _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
+    item = _close(data, item, "accepted" if action == "accept" else "edited", d)
+    data["decisions"].append(d)
+    if explicit:
+        held = _skipped(skip)
+        _place_words(data, subject, {k: v for k, v in words.items() if str(k) not in held}, user_id, d["id"])
+        if held:
+            _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
+                      f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
+    if type_ == "bg" and (labels or notes) and subject.startswith("kanji:"):
+        _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], notes or {})
+    return dict(item)
 
 
 def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str, notes: Any = None) -> None:
@@ -1176,8 +1198,8 @@ def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | Non
     (None: in no group), as the reviewer left them. As in `decide`, each word
     that moves is a decision under this one, reverted with it.
     """
-    if type_ == "en_report":
-        raise _bad("report_queued", "a report on the English goes to the review queue")
+    if type_ == "report":
+        raise _bad("report_queued", "a report goes to the review queue")
     with _change() as data:
         after = validate(type_, subject, value, data)
         before = live_value(type_, subject, data)
@@ -1272,7 +1294,7 @@ def _view(item: dict, names: dict, data: dict) -> dict:
     out = {k: v for k, v in item.items() if k != "skipped_by"}
     out["current"] = current(item["type"], item["subject"], data)
     kind, key = _target(item["subject"])
-    if item["type"] in ("bg", "en_report") and kind == "word":
+    if item["type"] in ("bg", "report") and kind == "word":
         out["label"] = _label(int(key)) or item["subject"]
     elif item["type"] == "word_sense":
         out["label"] = _label(_word_of(item["subject"]))
@@ -1287,7 +1309,7 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     out, or only your skips with `skipped`. `types` counts what waits per type
     (for the filter, before the type is picked), `skipped` how many you skipped."""
     if type_ is not None:
-        _known_type(type_)
+        _known_type(type_, character=True)
     if origin is not None:
         _known_origin(origin)
     data = _read()
@@ -1309,23 +1331,125 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         and (origin is None or i["origin"] == origin)
     ]
     mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
-    types = {t: 0 for t in TYPES}
+    anchor = _anchors(data)
+    types = {t: 0 for t in TYPES if t not in CHARACTER_TYPES}
+    types[CHARACTER] = len({anchor(i) for i in mine if i["type"] in CHARACTER_TYPES})
     for i in mine:
-        types[i["type"]] += 1
-    # The meanings stage holds a kanji's groups and its single words both.
+        if i["type"] not in CHARACTER_TYPES:
+            types[i["type"]] += 1
+    # The meanings stage holds a kanji's groups and its single words both;
+    # the character stage, a character's parts, forms and part meaning.
     def wanted(i: dict) -> bool:
-        return type_ is None or i["type"] == type_ or (type_ == "kanji_senses" and i["type"] == "word_sense")
+        return (type_ is None or i["type"] == type_ or (type_ == "kanji_senses" and i["type"] == "word_sense")
+                or (type_ == CHARACTER and i["type"] in CHARACTER_TYPES))
 
     rows = [i for i in mine if wanted(i)]
     rows.sort(key=lambda i: (-(i.get("priority") or 0), i["created"]))
-    rows = _by_kanji(rows)
-    names = _names({i["created_by"] for i in rows[:limit]})
+    rows = _by_character(_by_kanji(rows), anchor)
+    names = _names({i["created_by"] for i in rows[:limit] if i["type"] != CHARACTER})
     return {
         "total": len(rows),
-        "items": [_view(i, names, data) for i in rows[:limit]],
+        "items": [i if i["type"] == CHARACTER else _view(i, names, data) for i in rows[:limit]],
         "types": types,
-        "skipped": sum(1 for i in waiting if user_id in i["skipped_by"] and wanted(i)),
+        "skipped": len(_by_character([i for i in waiting if user_id in i["skipped_by"] and wanted(i)], anchor)),
     }
+
+
+def _anchors(data: dict):
+    """Which character's card an item is on: its subject, or for a form link X|Y,
+    X -- unless only Y has a card of its own (parts or a part meaning waiting)."""
+    hosts = {i["subject"] for i in data["items"].values()
+             if i["status"] == "open" and i["type"] in ("decomposition", "part_meaning")}
+
+    def anchor(i: dict) -> str:
+        if i["type"] != "form_link":
+            return i["subject"]
+        a, b = i["subject"].split("|")
+        return b if b in hosts and a not in hosts else a
+
+    return anchor
+
+
+def _by_character(rows: list[dict], anchor) -> list[dict]:
+    """A character's parts, forms and part-meaning items as one card, at the
+    place its first item had: the queue lists the card, the card holds the items."""
+    out, cards = [], {}
+    for i in rows:
+        if i["type"] not in CHARACTER_TYPES:
+            out.append(i)
+            continue
+        c = anchor(i)
+        card = cards.get(c)
+        if card is None:
+            card = cards[c] = {
+                "id": f"char:{c}", "type": CHARACTER, "subject": c, "origin": "proposal", "sources": [],
+                "kinds": [], "items": [], "proposed": None, "current": None, "evidence": None, "reason": None,
+                "status": "open", "priority": i.get("priority") or 0, "createdBy": None,
+            }
+            out.append(card)
+        card["items"].append(i["id"])
+        if i["type"] not in card["kinds"]:
+            card["kinds"].append(i["type"])
+        if i["source"] not in card["sources"]:
+            card["sources"].append(i["source"])
+        if i["origin"] == "suggestion":
+            card["origin"] = "suggestion"
+    for card in cards.values():
+        card["source"] = ", ".join(card["sources"])
+    return out
+
+
+def character_card(char: str) -> dict:
+    """Everything waiting about one character, each item as `item` shows it, and the character's own facts."""
+    data = _read()
+    anchor = _anchors(data)
+    ids = [i["id"] for i in sorted(data["items"].values(), key=lambda i: (-(i.get("priority") or 0), i["created"]))
+           if i["status"] == "open" and i["type"] in CHARACTER_TYPES and anchor(i) == char]
+    if not ids:
+        raise AppError(404, "card_empty", "nothing waits about this character")
+    users = users_of(char)
+    return {
+        "char": char,
+        "items": [item(i) for i in ids],
+        "context": {"char": char, **_kanji_info(char), "forms": forms.forms_of(char), "users": users,
+                    "old": _old_forms(users[:40]), "parts": _children(char)},
+    }
+
+
+def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | None = None) -> list[dict]:
+    """A character's card, decided as one: every item on it, in one change.
+
+    `decisions`: [{"item", "action", "value"}], one per open item on the card;
+    all "skip" to leave the card for later. A part named as a shape and a
+    "form of" for the same part can't both be right (the shape would win on
+    the page and the form of lend nothing), so that pair is refused.
+    """
+    if not isinstance(decisions, list) or not decisions:
+        raise _bad("card_decisions", "decide every item on the card")
+    reason = _text(reason)
+    with _change() as data:
+        anchor = _anchors(data)
+        open_ids = {i["id"] for i in data["items"].values()
+                    if i["status"] == "open" and i["type"] in CHARACTER_TYPES and anchor(i) == char}
+        asked = [d.get("item") for d in decisions if isinstance(d, dict)]
+        if len(asked) != len(decisions) or set(asked) != open_ids or len(set(asked)) != len(asked):
+            raise AppError(409, "card_changed", "this card changed since it was opened; open it again")
+        order = {"decomposition": 0, "form_link": 1, "part_meaning": 2}
+        decisions = sorted(decisions, key=lambda d: order[data["items"][d["item"]]["type"]])
+        changes = {"accept", "edit"}
+        shape = any(
+            d["action"] in changes and data["items"][d["item"]]["type"] == "part_meaning"
+            and ((d.get("value") if d["action"] == "edit" else data["items"][d["item"]]["proposed"]) or {}).get("kind") == "shape"
+            for d in decisions
+        )
+        for d in decisions:
+            it = data["items"][d["item"]]
+            v = d.get("value") if d["action"] == "edit" else it["proposed"]
+            if shape and d["action"] in changes and it["type"] == "form_link" and (v or {}).get("kind") == "form_of":
+                x = it["subject"].split("|")[1 if v.get("reverse") else 0]
+                if x == char:
+                    raise _bad("shape_and_form_of", "a shape and a form of can't both be right: pick one")
+        return [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason) for d in decisions]
 
 
 def _by_kanji(rows: list[dict]) -> list[dict]:
@@ -1445,8 +1569,10 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
             ],
         }
     kind, key = _target(subject)
-    if type_ == "en_report":
-        return {"word": _fetch_word(int(key))}
+    if type_ == "report":
+        if kind == "word":
+            return {"word": _fetch_word(int(key))}
+        return {"char": key, **_kanji_info(key), "forms": forms.forms_of(key)}
     if type_ == "bg":
         if kind == "word":
             wid = int(key)
@@ -1567,7 +1693,19 @@ def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
         "group": group,
         "confidence": ev.get("confidence"),
         "agree": ev.get("agree"),
+        # Two drafting runs put it in the same group, both sure: the board starts it ticked.
+        "sure": bool(item and item["status"] == "open" and _runs_agree(item)),
     }
+
+
+def _runs_agree(item: dict) -> bool:
+    """Two independent runs agree on the item's proposal, both at AUTO_CONFIDENCE or more."""
+    runs = (item.get("evidence") or {}).get("runs") or []
+    return (
+        len(runs) >= 2
+        and {r.get("sense") for r in runs} == {item["proposed"]}
+        and all(float(r.get("confidence") or 0) >= AUTO_CONFIDENCE for r in runs)
+    )
 
 
 def _on_board(r: dict) -> bool:
@@ -1696,6 +1834,16 @@ def progress() -> dict:
         count["total"] += 1
         if i["status"] != "open":
             count["done"] += 1
+    # Parts, forms and part meanings are decided a character at a time: one task per card.
+    anchor = _anchors(data)
+    cards: dict[str, bool] = {}
+    for i in data["items"].values():
+        if i["type"] in CHARACTER_TYPES and i["status"] != "withdrawn":
+            c = anchor(i)
+            cards[c] = cards.get(c, True) and i["status"] != "open"
+    for t in CHARACTER_TYPES:
+        del stages[t]
+    stages[CHARACTER] = {"done": sum(cards.values()), "total": len(cards)}
     # The kanji in scope (server/scope.py) that have a meanings task.
     targets = sorted(subjects("kanji_senses", data))
 

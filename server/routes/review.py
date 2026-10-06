@@ -45,6 +45,17 @@ def decide(item_id: str, payload: dict = Body(...), me: dict = Depends(reviewer)
                                   payload.get("words"), payload.get("skip"), payload.get("labels"), payload.get("notes"))}
 
 
+@router.get("/characters/{char}")
+def character(char: str, _: dict = Depends(reviewer)) -> dict:
+    """A character's card: its parts, forms and part-meaning items, decided together."""
+    return review.character_card(char)
+
+
+@router.post("/characters/{char}/decide")
+def decide_character(char: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
+    return {"items": review.decide_card(char, payload.get("decisions"), me["id"], payload.get("reason"))}
+
+
 @router.get("/progress")
 def progress(_: dict = Depends(reviewer)) -> dict:
     return review.progress()
@@ -63,9 +74,11 @@ def suggest(payload: dict = Body(...), me: dict = Depends(require_user)) -> dict
     type_, subject, value = payload.get("type", ""), payload.get("subject", ""), payload.get("value")
     reason = payload.get("reason")
     words = payload.get("words") if type_ == "kanji_senses" else None
-    if type_ == "en_report":
-        # Reviewers too: the English is JMdict's, so a report is checked, never made live.
-        return _queued(me, type_, subject, value, reason or value)
+    if type_ == "report":
+        # Reviewers too: what it is about comes from a reference dictionary, so a report is checked, never made live.
+        text = value.get("text") if isinstance(value, dict) else None
+        evidence = {"from": payload["from"]} if isinstance(payload.get("from"), str) else None
+        return _queued(me, type_, subject, value, reason or text, evidence)
     if auth.has_role(me, "reviewer"):
         return {"applied": True, "decision": review.direct(type_, subject, value, me["id"], reason, words)}
     if not (reason or "").strip():

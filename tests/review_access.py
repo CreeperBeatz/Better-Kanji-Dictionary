@@ -69,7 +69,10 @@ def main() -> int:
 
         print("the reviewer decides")
         _, q = call("GET", "/api/review/queue", "reviewer")
-        it = next(i for i in q["items"] if i["subject"] == "青")
+        card = next(i for i in q["items"] if i["subject"] == "青")
+        check("parts are listed as the character's card", card["type"] == "character" and card["kinds"] == ["decomposition"], card)
+        _, c = call("GET", "/api/review/characters/%E9%9D%92", "reviewer")
+        it = c["items"][0]
         check("the item shows today's parts", sorted(it["current"]) == sorted(["龶", "月"]), it["current"])
         check("it says where it came from", it["origin"] == "suggestion")
         _, detail = call("GET", f"/api/review/items/{it['id']}", "reviewer")
@@ -106,6 +109,24 @@ def main() -> int:
 
         time.sleep(0.3)
         check("several decompositions, one pack rebuild", len(flushed) == 1, flushed)
+
+        print("a character's card is decided as one")
+        chk = review.add_item("decomposition", "牛", None, "parts-check", reason="check: one part only")
+        fl = review.add_item("form_link", "牛|牜", {"kind": "positional", "note": None}, "ai:test")
+        _, c = call("GET", "/api/review/characters/%E7%89%9B", "reviewer")
+        check("the card holds both items", {i["id"] for i in c["items"]} == {chk["id"], fl["id"]}, [i["id"] for i in c["items"]])
+        status, res = call("POST", "/api/review/characters/%E7%89%9B/decide", "reviewer", {"decisions": [{"item": chk["id"], "action": "keep"}]})
+        check("leaving an item out is 409", (status, res.get("code")) == (409, "card_changed"), (status, res))
+        status, res = call("POST", "/api/review/characters/%E7%89%9B/decide", "reviewer", {"decisions": [
+            {"item": chk["id"], "action": "keep"}, {"item": fl["id"], "action": "accept"}]})
+        check("the card is decided", status == 200 and [i["status"] for i in res["items"]] == ["kept", "accepted"], (status, res))
+        check("keep changes nothing", "牛" not in store.decomposition_overrides())
+        check("kept is logged as kept", review._read()["decisions"][-2]["action"] == "keep")
+
+        print("reports: on a word or a kanji, never live")
+        status, res = call("POST", "/api/review/suggest", "reviewer", {"type": "report", "subject": "kanji:合", "value": {"about": "meanings", "text": "0.1 is a bare unit"}})
+        check("a reviewer's report is queued too", status == 200 and res["applied"] is False, (status, res))
+        check("a report needs what it is about", call("POST", "/api/review/suggest", "user", {"type": "report", "subject": "kanji:合", "value": {"about": "taste", "text": "nope"}, "reason": "x"})[0] == 400)
 
         print("meanings: senses, then words, and reopening")
         senses = [{"id": "life", "en": "life, birth"}, {"id": "raw", "en": "raw, fresh"}]
@@ -181,10 +202,10 @@ def main() -> int:
         got = review._read()["items"][src["id"]]
         check("restated in place", (changed, refused) == (1, 0) and got["proposed"] == ["言", "舌"] and got["status"] == "open", got)
         check("a restatement that fails validation leaves it", review.restate({src["id"]: {"proposed": ["話"]}}) == (0, 1))
-        before = review.progress()["stages"]["decomposition"]
+        before = review.progress()["stages"]["character"]
         check("withdrawn", review.withdraw([src["id"]], "the book no longer gives it") == 1)
-        check("out of the queue", all(i["id"] != src["id"] for i in call("GET", "/api/review/queue?type=decomposition", "reviewer")[1]["items"]))
-        after = review.progress()["stages"]["decomposition"]
+        check("out of the queue", all(src["id"] not in i.get("items", [i["id"]]) for i in call("GET", "/api/review/queue?type=character", "reviewer")[1]["items"]))
+        after = review.progress()["stages"]["character"]
         check("not counted as a task done", after["done"] == before["done"] and after["total"] == before["total"] - 1, (before, after))
         check("free to be asked again by another source", "話" not in review.subjects("decomposition"))
 

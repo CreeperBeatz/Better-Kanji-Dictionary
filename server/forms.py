@@ -82,14 +82,16 @@ def graph_families() -> dict[str, set[str]]:
     """What the graph shows above a focus besides its own containers: 細 is
     built from 糹, which is 糸 written at the left, so focusing 糸 shows it.
 
-    Only positional links without a note. A note marks a grouping that would
-    otherwise surprise (月 at the left of 腕 is 肉), and those stay apart:
-    focusing 肉 must not show the moon in 明. Kin (隹 鳥) never merge -- 鳴
-    does not look like it contains 隹.
+    Positional links without a note, and every "form of" (龰 is 止 at the
+    bottom, so focusing 止 shows 足 走). A positional note marks a grouping
+    that would otherwise surprise (月 at the left of 腕 is 肉), and those stay
+    apart: focusing 肉 must not show the moon in 明. A form of's note is its
+    evidence, not a warning. Kin (隹 鳥) never merge -- 鳴 does not look like
+    it contains 隹.
     """
     out: dict[str, set[str]] = {}
     for r in _links():
-        if r["kind"] == "positional" and not r["note"]:
+        if (r["kind"] == "positional" and not r["note"]) or r["kind"] == "form_of":
             a, b = r["char"], r["other"]
             out.setdefault(a, {a}).add(b)
             out.setdefault(b, {b}).add(a)
