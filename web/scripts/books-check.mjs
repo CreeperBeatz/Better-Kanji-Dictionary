@@ -1,7 +1,7 @@
 // Usage: SANDBOX=<sandbox dir> node scripts/books-check.mjs [base]  (against tests/sandbox.py --dir <sandbox dir>)
 // After tests/load_sandbox.py with the print dictionaries beside the repo
 // (pipeline/book_sources.py): each kind of card shows what the books say, a
-// page button opens the scan, "use this split" fills the answer, and a book's
+// card opens its page's scan by itself, "use this split" fills the answer, and a book's
 // term goes into a Bulgarian card with a click.
 import { DatabaseSync } from 'node:sqlite'
 import { chromium } from 'playwright'
@@ -26,8 +26,8 @@ async function open(slug, item) {
   await wait(1200)
 }
 
+/** The card opens its entry's first page by itself. */
 async function pageOpens(shot) {
-  await admin.locator('.book-page').first().click()
   await admin.waitForSelector('.book-scan img', { timeout: 10000 })
   await wait(300)
   const w = await admin.locator('.book-scan img').first().evaluate((img) => img.naturalWidth)

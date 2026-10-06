@@ -58,9 +58,10 @@ dictionary.
 - **A second opinion, not the answer.** The books were made by people, but
   they were transcribed by an AI. The kanji book also splits kanji the way a
   mnemonic course would, not always by today's shape.
-- **Check it against the page.** The page button (*p. 163*) opens the scan
-  under the box; click it to zoom. When the box says *the transcription may
-  be wrong here*, look at the page before you use anything from it.
+- **Check it against the page.** The card opens the entry's printed page
+  under the box (the *p. 163* button hides or shows it); click the page to
+  zoom. When the box says *the transcription may be wrong here*, look at the
+  page before you use anything from it.
 - **Where it shows:**
   - on **parts**, the book's split, with *use this split* to make it your
     answer;

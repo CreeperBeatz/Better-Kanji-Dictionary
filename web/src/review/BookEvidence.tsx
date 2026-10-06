@@ -101,10 +101,20 @@ function PageScan({ book, page }: { book: BookRef['book']; page: number }) {
   )
 }
 
-/** Which book and entry, its pages (each opens its scan), what the agent was unsure of, and the book's view. */
-export function BookSource({ src, children }: { src: BookRef; children?: ReactNode }) {
+/**
+ * Which book and entry, its pages (each opens its scan), what the agent was
+ * unsure of, and the book's view. `open`: its first page is shown from the
+ * start -- the scan is what the transcription is checked against.
+ */
+export function BookSource(props: { src: BookRef; open?: boolean; children?: ReactNode }) {
+  // A new entry starts afresh: the page open on the last card is not this one's.
+  const { book, no, pages } = props.src
+  return <Source key={`${book}/${no ?? ''}/${pages.join(',')}`} {...props} />
+}
+
+function Source({ src, open: first = false, children }: { src: BookRef; open?: boolean; children?: ReactNode }) {
   const t = S(useLang())
-  const [open, setOpen] = useState<number | null>(null)
+  const [open, setOpen] = useState<number | null>(first ? (src.pages[0] ?? null) : null)
   return (
     <div className="book-src">
       <p className="book-head">
@@ -152,7 +162,7 @@ export function BookSplitView({
   const t = S(useLang())
   const split = view.split
   return (
-    <BookSource src={view}>
+    <BookSource src={view} open>
       <p className="book-parts">
         <span className="hint">{t('splits')} </span>
         {view.parts.map((p, i) => (
@@ -185,7 +195,7 @@ export function BookSplitView({
 export function BookOldView({ view }: { view: BookOld }) {
   const t = S(useLang())
   return (
-    <BookSource src={view}>
+    <BookSource src={view} open>
       <p lang="ja">{t('oldForm', { old: view.old })}</p>
     </BookSource>
   )
@@ -203,7 +213,7 @@ export function BookPartPanel({ view }: { view: BookPartView }) {
         </p>
       )}
       {view.entry && (
-        <BookSource src={view.entry}>
+        <BookSource src={view.entry} open>
           <p>
             <span className="hint">{t('itsEntry')}: </span>
             {view.entry.name && <b lang="bg">{view.entry.name}</b>}
@@ -212,7 +222,7 @@ export function BookPartPanel({ view }: { view: BookPartView }) {
         </BookSource>
       )}
       {view.seen.map((s) => (
-        <BookSource key={`${s.no}`} src={s}>
+        <BookSource key={`${s.no}`} src={s} open={!view.entry && s === view.seen[0]}>
           <p>
             <span className="hint">{t('namedIn')} </span>
             <span lang="ja">{s.char}</span>: <span lang="bg">{s.name}</span>
@@ -279,7 +289,7 @@ export function BookKeywordPanel({ view, value, onChange }: { view: BookKeyword;
     </p>
   )
   return (
-    <BookSource src={view}>
+    <BookSource src={view} open>
       {row(t('keyword'), view.keyword)}
       {view.alt && row(t('alt'), view.alt)}
     </BookSource>
@@ -295,7 +305,7 @@ export function BookGlossPanel({ views, value, onChange }: { views: BookGloss[];
   return (
     <div className="book-glosses">
       {views.map((v, k) => (
-        <BookSource key={k} src={v}>
+        <BookSource key={k} src={v} open={k === 0}>
           <p>
             <span lang="ja" className="book-ja">
               {v.ja}
