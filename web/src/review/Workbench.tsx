@@ -334,7 +334,7 @@ function History({ admin }: { admin: boolean }) {
     setProblem(null)
     try {
       await api.revert(d.id)
-      if (d.type === 'decomposition' || d.type === 'form_link') dataChanged()
+      if (d.type === 'decomposition' || d.type === 'form_link' || d.type === 'part_meaning') dataChanged()
       load()
     } catch (e) {
       setProblem(errorText(e, lang))

@@ -48,7 +48,7 @@ const S = strings(
 )
 
 type Key = Parameters<ReturnType<typeof S>>[0]
-const ROWS: [keyof Omit<FormsResponse, 'char' | 'meaning'>, Key][] = [
+const ROWS: [keyof Omit<FormsResponse, 'char' | 'meaning' | 'part'>, Key][] = [
   ['old', 'old'],
   ['new', 'new'],
   ['formOf', 'formOf'],

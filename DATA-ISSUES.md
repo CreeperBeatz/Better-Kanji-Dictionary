@@ -109,7 +109,15 @@ borrow one from, so their page says "no recorded meaning". The most used are
 Also 卌's KANJIDIC meaning is "40", which `real_meanings` drops as filler.
 Source: KANJIDIC has no entry for most bound parts; the form links are
 incomplete.
-**Status: open.**
+**Status: in review** (2026-10-06). 卌 is fixed: a bare number is kept when
+it is a kanji's only meaning. A new stage, *part meanings* (`part_meaning`),
+holds a part's own meaning or a shape's name, shown on its page in place of
+"no recorded meaning". All 186 other parts were drafted
+(`pipeline/part_drafts.py`, Sonnet subagents): 102 shapes, 45 meanings, 39
+forms of a kanji. Queued locally: 147 part meanings and 17 new form links;
+the other 22 forms of agreed with links already waiting. The drafts judged
+18 waiting form links wrong (丷|从, 丷|八, ⺀|皿, ⺁|厂, 龷|北 …): each says
+so on its part's card, for the reviewer to reject.
 
 ## Fixed
 

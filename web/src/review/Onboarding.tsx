@@ -105,7 +105,7 @@ function cards(go: (i: number) => void): Card[] {
       body: (
         <List label="Getting around">
           <li>
-            Pick a <b>stage</b> at the top (parts, forms, meanings, Bulgarian, reports) or <b>all</b>. A greyed stage has
+            Pick a <b>stage</b> at the top (parts, forms, part meanings, meanings, Bulgarian, reports) or <b>all</b>. A greyed stage has
             nothing waiting yet.
           </li>
           <li>Cards come most important first, which mostly means the most frequent kanji and words first.</li>
@@ -180,7 +180,7 @@ function cards(go: (i: number) => void): Card[] {
       more: 'Forms',
       body: (
         <>
-          <List label="The four links">
+          <List label="The main links">
             <li>
               <b>same part in another position</b>: <J>人·亻</J>, <J>水·氵</J>
             </li>
@@ -196,7 +196,15 @@ function cards(go: (i: number) => void): Card[] {
           </List>
           <List label="Look out" tone="watch">
             <li>
-              <i>is a form of</i> needs history behind it: the old form, or a reference.
+              <i>is a form of</i> needs history behind it: the old form, or a reference. And it must hold in nearly
+              all the kanji listed under the part: its meaning is lent to every one.
+            </li>
+            <li>
+              The <b>(i)</b> beside <i>Relation</i> says what each link changes on the site.
+            </li>
+            <li>
+              A part with no meaning at all has its own stage, <b>part meanings</b>: a meaning of its own, or a shape
+              with only a name (<J>丷</J> is <J>八</J> in <J>半</J>, grains in <J>米</J>).
             </li>
             <li>
               Reject a <i>looks like</i> that points at a kanji the learner will meet with a different meaning.
@@ -329,7 +337,7 @@ function cards(go: (i: number) => void): Card[] {
             <dt>
               <kbd>r</kbd> reject
             </dt>
-            <dd>Only on parts, forms and people’s suggestions: things that can be wrong as a whole.</dd>
+            <dd>Only on parts, forms, part meanings and people’s suggestions: things that can be wrong as a whole.</dd>
             <dt>reset card</dt>
             <dd>Throw away your changes and start again from the proposal.</dd>
             <dt>

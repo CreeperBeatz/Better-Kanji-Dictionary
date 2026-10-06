@@ -83,6 +83,26 @@ def parents_with_forms(char: str, families: dict[str, set[str]]) -> dict[str, st
 # lets the client keep the ones that lead somewhere at the level.
 
 _reach_cache: tuple[object, dict[str, tuple[bool, int | None]]] | None = None
+_parents_cache: tuple[object, dict[str, set[str]]] | None = None
+
+
+def parents_map() -> dict[str, set[str]]:
+    """Every character's direct containers, overrides applied: from the whole
+    edge table once, then again whenever the overrides change. Never mutate it."""
+    global _parents_cache
+    ov = store.decomposition_overrides()
+    cached = _parents_cache
+    if cached is not None and cached[0] is ov:
+        return cached[1]
+    parents: dict[str, set[str]] = {}
+    for r in query("SELECT parent, child FROM edge"):
+        if r["parent"] not in ov:
+            parents.setdefault(r["child"], set()).add(r["parent"])
+    for p, comps in ov.items():
+        for c in comps:
+            parents.setdefault(c, set()).add(p)
+    _parents_cache = (ov, parents)
+    return parents
 
 
 def reach() -> dict[str, tuple[bool, int | None]]:
@@ -99,13 +119,7 @@ def reach() -> dict[str, tuple[bool, int | None]]:
     if cached is not None and cached[0] is ov:
         return cached[1]
 
-    parents: dict[str, set[str]] = {}
-    for r in query("SELECT parent, child FROM edge"):
-        if r["parent"] not in ov:
-            parents.setdefault(r["child"], set()).add(r["parent"])
-    for p, comps in ov.items():
-        for c in comps:
-            parents.setdefault(c, set()).add(p)
+    parents = parents_map()
     rank = {r["char"]: (r["freq"] is not None, r["jlpt"]) for r in query("SELECT char, freq, jlpt FROM kanji")}
 
     out: dict[str, tuple[bool, int | None]] = {}

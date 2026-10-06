@@ -19,6 +19,7 @@ import {
   type BoardWord,
   type FormKind,
   type MeaningGroup,
+  type PartMeaning,
   type TaskType,
   type TaskValue,
   type Word,
@@ -45,6 +46,9 @@ const S = strings(
     s_senses: 'Meaning groups',
     s_parts: 'Parts',
     s_form: 'Forms',
+    s_part: 'What this part is',
+    partHint: '{char} has no meaning in the dictionary. Give it its own, or name it as a shape that has none.',
+    partNone: 'Nothing recorded yet.',
     s_bg: 'Bulgarian',
     s_groups: 'Meaning in this word',
     s_en: 'The English meaning is wrong',
@@ -92,6 +96,9 @@ const S = strings(
     s_senses: 'Групи значения',
     s_parts: 'Части',
     s_form: 'Форми',
+    s_part: 'Какво е тази част',
+    partHint: '{char} няма значение в речника. Дайте ѝ свое или я назовете като форма, която няма такова.',
+    partNone: 'Още нищо не е записано.',
     s_bg: 'Български',
     s_groups: 'Значение в тази дума',
     s_en: 'Английското значение е грешно',
@@ -390,6 +397,8 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   const [notesBg, setNotesBg] = useState<Record<string, string>>({})
   const [parts, setParts] = useState<string[]>([])
   const [form, setForm] = useState(NO_FORM)
+  // What the part is, once edited; until then the dialog shows what the page has.
+  const [part, setPart] = useState<PartMeaning | null>(null)
   const [bg, setBg] = useState<string[]>([])
   const [fresh, setFresh] = useState(0)
 
@@ -434,6 +443,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     }
     if (section === 'parts') setParts(now.parts)
     if (section === 'form') setForm(NO_FORM)
+    if (section === 'part') setPart(null)
     if (section === 'bg') {
       setBg(now.bg)
       setLabels(labelsOf(now.accepted))
@@ -475,6 +485,7 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     if (!same(parts, now.parts)) changes.push({ key: 'parts', section: 'parts', type: 'decomposition', subject: char, value: parts })
     const other = [...form.other.trim()][0]
     if (other) changes.push({ key: 'form', section: 'form', type: 'form_link', subject: `${char}|${other}`, value: { kind: form.kind, note: form.note } })
+    if (part && !same(part, forms?.part ?? null)) changes.push({ key: 'part', section: 'part', type: 'part_meaning', subject: char, value: part })
     const cleanBg = bg.map((m) => m.trim()).filter(Boolean)
     if (!same(cleanBg, now.bg)) changes.push({ key: 'bg', section: 'bg', type: 'bg', subject: `kanji:${char}`, value: cleanBg })
   }
@@ -538,6 +549,21 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                 )}
               </>,
             )}
+            {now.english.length === 0 &&
+              section(
+                'part',
+                t('s_part'),
+                on.has('part') ? (
+                  <>
+                    <p className="hint">{t('partHint', { char })}</p>
+                    <ValueEditor type="part_meaning" value={part ?? forms?.part ?? null} onChange={(v) => setPart(v as PartMeaning)} />
+                  </>
+                ) : forms?.part ? (
+                  <ValueView type="part_meaning" value={forms.part} />
+                ) : (
+                  <p className="hint">{t('partNone')}</p>
+                ),
+              )}
             {section(
               'bg',
               t('s_bg'),

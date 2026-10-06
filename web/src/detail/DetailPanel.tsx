@@ -38,6 +38,8 @@ const S = strings(
     allWords: 'See all words with {char} →',
     hidden: '{n} hidden, see all words',
     formOf: 'a form of {char}',
+    shape: 'a shape: “{name}”',
+    shapeNone: 'no meaning of its own',
     openEntry: 'Open this entry',
     openReading: 'Open {word}, read {reading}',
     builtFrom_one: 'Built from {b} part',
@@ -67,6 +69,8 @@ const S = strings(
     allWords: 'Всички думи с {char} →',
     hidden: '{n} скрити, вижте всички думи',
     formOf: 'форма на {char}',
+    shape: 'форма: „{name}“',
+    shapeNone: 'няма свое значение',
     openEntry: 'Отворете тази статия',
     openReading: 'Отворете {word}, четено {reading}',
     builtFrom_one: 'Изграден от {b} част',
@@ -121,14 +125,27 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   const own = meaningsOf({ meanings: realMeanings(node.meanings), meaningsBg: node.meaningsBg }, lang).value
   const forms = useForms(node.char, own.length === 0)
   const [lead, ...rest] = own
-  const borrowed = own.length === 0 ? forms?.meaning : null
+  // A reviewed part meaning (server/review.py), or a shape's name: before anything borrowed.
+  const part = own.length === 0 ? forms?.part : null
+  const borrowed = own.length === 0 && !part ? forms?.meaning : null
   const lent = borrowed ? meaningsOf(borrowed, lang).value : []
+  const partLabel = part && ((lang === 'bg' && part.bg) || part.en)
+  const partNote = part && ((lang === 'bg' && part.noteBg) || part.note)
   return (
     <div className="detail-head">
       <span className="detail-glyph">{node.char}</span>
       <div>
         <p className="detail-meanings">
-          {borrowed ? (
+          {part ? (
+            part.kind === 'shape' ? (
+              <>
+                {t('shape', { name: partLabel ?? '' })}
+                <span className="rest"> {t('shapeNone')}</span>
+              </>
+            ) : (
+              partLabel
+            )
+          ) : borrowed ? (
             <>
               {t('formOf', { char: borrowed.from })}
               {lent.length > 0 && <span className="rest"> {lent.slice(0, 3).join(', ')}</span>}
@@ -140,6 +157,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
             </>
           )}
         </p>
+        {partNote && <p className="detail-part-note">{partNote}</p>}
       </div>
       <KanjiMeta node={node} />
     </div>

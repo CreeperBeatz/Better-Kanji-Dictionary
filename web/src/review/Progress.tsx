@@ -14,16 +14,18 @@ const S = strings(
     tasksShort: '{done} / {total} tasks',
     verified: '{pct} of the dictionary verified',
     verifiedShort: '{pct} verified',
-    verifiedLong: '{n} of {total} kanji verified (every kanji with a JLPT level, jōyō or a newspaper rank): nothing open on their parts or forms, meanings accepted, every word placed.',
+    verifiedLong: '{n} of {total} kanji verified (every kanji with a JLPT level, jōyō or a newspaper rank): nothing open on their parts, forms or part meanings, meanings accepted, every word placed.',
     open: 'Open the progress page',
     stages: 'By stage',
     s_decomposition: 'Parts',
     s_form_link: 'Forms',
+    s_part_meaning: 'Part meanings',
     s_kanji_senses: 'Meanings',
     s_bg: 'Bulgarian translations',
     s_en_report: 'Reports',
     d_decomposition: 'which parts each character visibly contains',
     d_form_link: 'how bound shapes relate to the kanji they come from',
+    d_part_meaning: 'what a part with no meaning in the dictionary is: a meaning of its own, or a shape with only a name',
     d_kanji_senses: 'one per kanji: its groups, with its words placed on the board; and the odd single word (a suggestion, or one whose group changed)',
     d_bg: 'the machine-translated Bulgarian: one card per word, one per kanji',
     d_en_report: 'reports that a word’s English (from JMdict) is wrong; real mistakes go to JMdict',
@@ -39,16 +41,18 @@ const S = strings(
     tasksShort: '{done} / {total} задачи',
     verified: '{pct} от речника е проверен',
     verifiedShort: '{pct} проверени',
-    verifiedLong: '{n} от {total} канджи са проверени (всички с ниво от JLPT, джойо или място във вестниците): нищо отворено за частите или формите им, значенията са приети, всяка дума е разпределена.',
+    verifiedLong: '{n} от {total} канджи са проверени (всички с ниво от JLPT, джойо или място във вестниците): нищо отворено за частите, формите или значенията на частите им, значенията са приети, всяка дума е разпределена.',
     open: 'Отворете страницата с напредъка',
     stages: 'По етапи',
     s_decomposition: 'Части',
     s_form_link: 'Форми',
+    s_part_meaning: 'Значения на части',
     s_kanji_senses: 'Значения',
     s_bg: 'Преводи на български',
     s_en_report: 'Доклади',
     d_decomposition: 'кои части съдържа видимо всеки знак',
     d_form_link: 'как свързаните форми се отнасят към канджито, от което идват',
+    d_part_meaning: 'какво е част без значение в речника: със свое значение или форма само с име',
     d_kanji_senses: 'по една за канджи: групите му, с думите, разпределени на дъската; и по някоя отделна дума (предложение или дума, чиято група се е променила)',
     d_bg: 'машинно преведеният български: по една карта за дума и за канджи',
     d_en_report: 'доклади, че английският на дума (от JMdict) е грешен; истинските грешки отиват в JMdict',
@@ -63,7 +67,7 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 // As in the queue: a single word's meaning is counted under meanings, with its kanji's card.
-const STAGES: TaskType[] = ['decomposition', 'form_link', 'kanji_senses', 'bg', 'en_report']
+const STAGES: TaskType[] = ['decomposition', 'form_link', 'part_meaning', 'kanji_senses', 'bg', 'en_report']
 
 function pct(done: number, total: number): string {
   if (!total) return '0%'

@@ -4,12 +4,14 @@
  *
  *   decomposition  the direct parts, as typed characters
  *   form_link      a kind and a note
+ *   part_meaning   a meaning, or a shape's name, in en and bg, and a note
  *   kanji_senses   1 to 6 meaning groups, each an id and a label in en and bg
  *   word_sense     one of the kanji's groups, or the catch-all
  */
 import { lazy, Suspense, useState } from 'react'
-import { type FormKind, type ItemDetail, type MeaningGroup, type TaskType, type TaskValue } from '../api'
+import { type FormKind, type ItemDetail, type MeaningGroup, type PartMeaning, type TaskType, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
+import { FORM_KINDS, KindsInfoButton, KindsTable, PART_KINDS, useKindLabel, useKindsInfo } from './KindsInfo'
 
 // Not needed until its button is pressed.
 const DrawPad = lazy(() => import('../draw/DrawPad').then((m) => ({ default: m.DrawPad })))
@@ -26,14 +28,17 @@ const S = strings(
     hideDraw: 'Hide drawing',
     confirmStroke: '{parts}: a single stroke. Use it as a part anyway? Only when it means something in this character, like the flame 丶 on 主.',
     kind: 'Relation',
-    k_positional: 'the same part in another position',
-    k_old: 'its old form',
-    k_form_of: 'is a form of (lends its meaning)',
-    k_looks_like: 'looks like (a mnemonic only)',
-    k_kin: 'the same thing, drawn differently',
-    k_none: 'no relation',
     note: 'Note',
     noteHint: 'For “a form of”, say where it comes from: the old form, or a reference.',
+    partKind: 'This part is',
+    partEn: 'English: the meaning, or the shape’s name',
+    partEnHint: '1 to 5 words. A shape’s name says what it looks like (“two drops”), never what it means.',
+    partBg: 'Bulgarian',
+    partNote: 'Note',
+    partNoteHint: 'For a shape: what it is in which kanji, with old forms (“八 in 半; grains in 米”). For a meaning: how it works in a kanji or two.',
+    partNoteBg: 'Note in Bulgarian',
+    shapeNamed: 'a shape: “{name}”',
+    noOwnMeaning: 'no meaning of its own',
     groups: 'Meaning groups',
     groupsHint: '1 to 6, by what the kanji does in words. Words the kanji brings no meaning to have their own box, which always exists.',
     id: 'id',
@@ -58,14 +63,17 @@ const S = strings(
     hideDraw: 'Скрийте рисуването',
     confirmStroke: '{parts}: отделна черта. Да се използва ли все пак като част? Само ако значи нещо в този знак, като пламъка 丶 в 主.',
     kind: 'Връзка',
-    k_positional: 'същата част в друга позиция',
-    k_old: 'старата му форма',
-    k_form_of: 'е форма на (заема значението му)',
-    k_looks_like: 'прилича на (само мнемоника)',
-    k_kin: 'същото нещо, нарисувано различно',
-    k_none: 'няма връзка',
     note: 'Бележка',
     noteHint: 'За „форма на“ кажете откъде идва: старата форма или справочник.',
+    partKind: 'Тази част е',
+    partEn: 'Английски: значението или името на формата',
+    partEnHint: 'От 1 до 5 думи. Името на форма казва как изглежда („две капки“), никога какво значи.',
+    partBg: 'Български',
+    partNote: 'Бележка',
+    partNoteHint: 'За форма: какво е тя в кое канджи, със старите форми („八 в 半; зърна в 米“). За значение: как работи в едно-две канджи.',
+    partNoteBg: 'Бележка на български',
+    shapeNamed: 'форма: „{name}“',
+    noOwnMeaning: 'няма свое значение',
     groups: 'Групи значения',
     groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Думите, на които канджито не внася значение, имат своя кутия, която винаги съществува.',
     id: 'код',
@@ -80,9 +88,6 @@ const S = strings(
     readings: 'Четения',
   },
 )
-
-type Key = Parameters<ReturnType<typeof S>>[0]
-const FORM_KINDS: FormKind[] = ['positional', 'old', 'form_of', 'looks_like', 'kin', 'none']
 
 /**
  * Single strokes (server/review.py STROKES). The server refuses them as parts
@@ -120,12 +125,12 @@ export function KanjiFacts({ context: c }: { context: ItemDetail['context'] }) {
           <dd>{c.kanjidic.join(', ')}</dd>
         </>
       )}
-      {(c.on?.length || c.kun?.length) && (
+      {(c.on?.length || c.kun?.length) ? (
         <>
           <dt>{t('readings')}</dt>
           <dd lang="ja">{[...(c.on ?? []), ...(c.kun ?? [])].join('、')}</dd>
         </>
-      )}
+      ) : null}
     </>
   )
 }
@@ -153,6 +158,7 @@ export function PartTiles({ chars, onKanji }: { chars: string[]; onKanji?: (char
 export function ValueView({ type, value, groups }: { type: TaskType; value: TaskValue; groups?: MeaningGroup[] | null }) {
   const lang = useLang()
   const t = S(lang)
+  const kindLabel = useKindLabel()
   if (value === null || value === undefined)
     return <span className="hint">{t(type === 'decomposition' || type === 'form_link' ? 'sourceData' : 'noneYet')}</span>
   if (type === 'decomposition') {
@@ -163,11 +169,12 @@ export function ValueView({ type, value, groups }: { type: TaskType; value: Task
     const v = value as { kind: FormKind; note: string | null }
     return (
       <span>
-        {t(`k_${v.kind}` as Key)}
+        {kindLabel(v.kind)}
         {v.note && <span className="hint"> — {v.note}</span>}
       </span>
     )
   }
+  if (type === 'part_meaning') return <PartMeaningView value={value as PartMeaning} />
   if (type === 'en_report') return <span className="review-report">{value as string}</span>
   if (type === 'bg') {
     return (
@@ -215,28 +222,8 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus, wi
       <textarea className="assoc-text" rows={4} maxLength={1000} value={(value as string | null) ?? ''} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
     )
 
-  if (type === 'form_link') {
-    const v = (value as { kind: FormKind; note: string | null } | null) ?? { kind: 'looks_like', note: null }
-    return (
-      <>
-        <label className="review-field">
-          <span>{t('kind')}</span>
-          <select className="assoc-text" value={v.kind} autoFocus={autoFocus} onChange={(e) => onChange({ ...v, kind: e.target.value as FormKind })}>
-            {FORM_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {t(`k_${k}` as Key)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="review-field">
-          <span>{t('note')}</span>
-          <input className="assoc-text" maxLength={300} value={v.note ?? ''} onChange={(e) => onChange({ ...v, note: e.target.value })} />
-          <span className="hint">{t('noteHint')}</span>
-        </label>
-      </>
-    )
-  }
+  if (type === 'form_link') return <FormLinkEditor value={value} onChange={onChange} autoFocus={autoFocus} />
+  if (type === 'part_meaning') return <PartMeaningEditor value={value} onChange={onChange} autoFocus={autoFocus} />
 
   if (type === 'kanji_senses') {
     const list = (value as MeaningGroup[] | null) ?? []
@@ -337,5 +324,101 @@ function PartsEditor({ value, onChange, autoFocus }: { value: string[] | null; o
         </div>
       )}
     </div>
+  )
+}
+
+/** A form link's kind and note; the (i) by the kind says what each one changes. */
+function FormLinkEditor({ value, onChange, autoFocus }: { value: TaskValue; onChange: (v: TaskValue) => void; autoFocus?: boolean }) {
+  const t = S(useLang())
+  const kindLabel = useKindLabel()
+  const [info, toggleInfo] = useKindsInfo()
+  const v = (value as { kind: FormKind; note: string | null } | null) ?? { kind: 'looks_like', note: null }
+  return (
+    <>
+      <div className="review-field">
+        <span>
+          <label htmlFor="form-kind">{t('kind')}</label>
+          <KindsInfoButton open={info} onToggle={toggleInfo} />
+        </span>
+        {info && <KindsTable of="form" />}
+        <select id="form-kind" className="assoc-text" value={v.kind} autoFocus={autoFocus} onChange={(e) => onChange({ ...v, kind: e.target.value as FormKind })}>
+          {FORM_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {kindLabel(k)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <label className="review-field">
+        <span>{t('note')}</span>
+        <input className="assoc-text" maxLength={300} value={v.note ?? ''} onChange={(e) => onChange({ ...v, note: e.target.value })} />
+        <span className="hint">{t('noteHint')}</span>
+      </label>
+    </>
+  )
+}
+
+/** What a part is, read-only: its meaning, or a shape's name marked as one. */
+export function PartMeaningView({ value: v }: { value: PartMeaning }) {
+  const lang = useLang()
+  const t = S(lang)
+  const label = (lang === 'bg' && v.bg) || v.en
+  const note = (lang === 'bg' && v.noteBg) || v.note
+  return (
+    <span className="review-part-meaning">
+      {v.kind === 'shape' ? (
+        <>
+          {t('shapeNamed', { name: label })} <span className="hint">({t('noOwnMeaning')})</span>
+        </>
+      ) : (
+        <b>{label}</b>
+      )}
+      {lang !== 'bg' && v.bg && <span className="hint" lang="bg"> · {v.bg}</span>}
+      {note && <span className="hint review-part-note">{note}</span>}
+    </span>
+  )
+}
+
+function PartMeaningEditor({ value, onChange, autoFocus }: { value: TaskValue; onChange: (v: TaskValue) => void; autoFocus?: boolean }) {
+  const t = S(useLang())
+  const kindLabel = useKindLabel()
+  const [info, toggleInfo] = useKindsInfo()
+  const v = (value as PartMeaning | null) ?? { kind: 'shape', en: '', bg: null, note: null, noteBg: null }
+  const set = (patch: Partial<PartMeaning>) => onChange({ ...v, ...patch })
+  return (
+    <>
+      <div className="review-field">
+        <span>
+          {t('partKind')}
+          <KindsInfoButton open={info} onToggle={toggleInfo} />
+        </span>
+        {info && <KindsTable of="part" />}
+        <div className="review-pick" role="radiogroup" aria-label={t('partKind')}>
+          {PART_KINDS.map((k) => (
+            <button type="button" key={k} role="radio" aria-checked={v.kind === k} data-on={v.kind === k} onClick={() => set({ kind: k })}>
+              {kindLabel(k)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="review-field">
+        <span>{t('partEn')}</span>
+        <input className="assoc-text" maxLength={40} value={v.en} autoFocus={autoFocus} onChange={(e) => set({ en: e.target.value })} />
+        <span className="hint">{t('partEnHint')}</span>
+      </label>
+      <label className="review-field">
+        <span>{t('partBg')}</span>
+        <input className="assoc-text" lang="bg" maxLength={40} value={v.bg ?? ''} onChange={(e) => set({ bg: e.target.value || null })} />
+      </label>
+      <label className="review-field">
+        <span>{t('partNote')}</span>
+        <textarea className="assoc-text" rows={3} maxLength={400} value={v.note ?? ''} onChange={(e) => set({ note: e.target.value || null })} />
+        <span className="hint">{t('partNoteHint')}</span>
+      </label>
+      <label className="review-field">
+        <span>{t('partNoteBg')}</span>
+        <textarea className="assoc-text" lang="bg" rows={3} maxLength={400} value={v.noteBg ?? ''} onChange={(e) => set({ noteBg: e.target.value || null })} />
+      </label>
+    </>
   )
 }

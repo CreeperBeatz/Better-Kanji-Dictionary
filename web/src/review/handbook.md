@@ -40,7 +40,7 @@ word written in jōyō kanji has one.)
 | **save my answer** | Replaces *accept* once you changed something, and saves your version. | every card |
 | **skip** | Leaves it for now. Skipped cards wait under *skipped* in the queue bar. | every card |
 | **reset card** | Throws away what you changed and starts again from the proposal (greyed when there is nothing to throw away). | every card |
-| **reject** | The proposal is wrong as a whole. | parts, forms, people's suggestions |
+| **reject** | The proposal is wrong as a whole. | parts, forms, part meanings, people's suggestions |
 
 Meanings and Bulgarian have no *reject*: they are shaped until they are
 right, then accepted, or skipped.
@@ -122,10 +122,70 @@ change, even if it is technically accurate.
 | *its old form* | Y is the pre-reform shape of X | 青·靑, 会·會 |
 | *is a form of* | X is Y squashed or moved, and lends Y's meaning. Needs history behind it (the old form, a reference). One per bound form. | 龰·止 |
 | *looks like* | a mnemonic lookalike only, always shown as such | 龶 looks like 王 |
+| *the same thing, drawn differently* | X and Y are one thing, but neither is inside the other's kanji | 隹·鳥 |
+| *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant | 业·業 |
 
 - Reject a *looks like* that points at a kanji with the wrong meaning that
   the learner will also meet.
 - A form link never changes parts.
+
+### Judge it by the kanji
+
+Each card shows both characters in every font we have (the old 1978/1983
+shapes too, where a font draws them differently), and under each one every
+kanji with a rating (common, jōyō or JLPT) that contains it, most frequent
+first. Read the two lists side by side:
+
+- **An *is a form of* must hold in nearly all of X's kanji.** Its meaning
+  is lent to every one of them. If X is Y in 来 but something else in 前,
+  米 and 首, it is not a form of Y: it is a shape (see *Part meanings*),
+  and the link is rejected.
+- **A *same part in another position* should fill the same role** in both
+  lists: 氵 in 海 does what 水 does in 泉.
+
+### What each link changes on the site
+
+The same table is behind the (i) next to *Relation* on every forms card.
+
+<!-- kinds:form -->
+
+## Part meanings
+
+> **Question:** this part has no meaning in the dictionary. What is it?
+
+The page of a part with no meaning says "no recorded meaning". Many of
+them are among the most common parts there are (丷 is in 243 rated kanji).
+A part is one of three things, and only two of them are decided here:
+
+| It is | Decided as | Example |
+|---|---|---|
+| one kanji, squashed or moved, in nearly all its kanji | a form link: *is a form of*, in the forms queue | 𠂇 is 又, the hand in 左 右 友 |
+| a real character that brings its own meaning | *its own meaning* | 劦, joint effort, in 協 脅 |
+| a shape that several unrelated old parts merged into | *a shape with no meaning*, with a name | 丷: 八 in 半, grains in 米, hair in 首 |
+
+<!-- kinds:part -->
+
+### Writing one
+
+- **A shape's name is a name, not a meaning.** Say what it looks like:
+  "two drops", "slanted cap". The page shows it as "a shape: “two drops”",
+  with "no meaning of its own" beside it. Never pick a name that sounds
+  like a meaning a learner would then read into every kanji.
+- **Use your own words.** Not Heisig's primitive names (*Remembering the
+  Kanji*) and not WaniKani's radical names: both are closed, and this
+  dictionary will be open.
+- **The note is what makes a shape useful.** Say what it is in which kanji,
+  with the old forms: "八 (split) in 半; grains in 米; the top of 止 in 前
+  (old form 歬)". Give the Japanese name where there is one (つかんむり for ⺍).
+- **A meaning is the one it has in Japanese kanji.** Unihan's line is
+  written for Chinese; it often gives a surname or a river. When a part
+  mostly gives the sound, keep its meaning short and say so in the note.
+- **A shape and a form of cannot both be right.** The card lists the form
+  links for the part still waiting, with what the draft thinks of each.
+  When you accept a shape, go to those and reject the form of; a shape on
+  the page wins over a form of in any case.
+- **If it really is a form of a kanji**, reject the card and accept (or
+  add, on the part's page) the form link instead.
 
 ## Meanings
 
@@ -274,6 +334,24 @@ report lands here. Nothing on the site changes, whatever you decide.
 
 Decisions that took thought. When you meet one, write your reasoning in the
 reason field and tell the admin, so it can be added here.
+
+### 丷: a shape, not a form of 从 or 八
+
+*Seen 2026-10-06.* 丷 had two *is a form of* proposals waiting: 从 (from
+来, old form 來) and 八 (from 曽, old form 曾).
+
+- **Each holds in one or two kanji.** 丷 is in 243 rated kanji. In 半 it is
+  八, split; in 米 it is grains; in 首 hair; in 前 the top of 止 (歬). A form
+  of lends its meaning to all 243: 前 would "contain" from or eight.
+- **So it is a shape.** Several unrelated old parts became the same two
+  strokes. No meaning is true across them.
+
+> **Decision:** reject both form links. Accept 丷 as *a shape with no
+> meaning*, named for what it looks like, with a note saying what it is in
+> which kanji.
+
+> **Lesson:** before accepting a form of for a bound part, read the list of
+> its kanji on the card. If Y is only right in a few, it is a shape.
 
 ### 龰: a stroke split against a variant of the same part
 

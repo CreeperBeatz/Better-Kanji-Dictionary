@@ -22,6 +22,8 @@ KINDS = ("positional", "old", "form_of", "looks_like", "kin")
 
 # Set by server/review.py: (char) -> (added rows, removed (char, other, kind) keys).
 overlay: Callable[[], tuple[list[dict], set[tuple[str, str, str]]]] | None = None
+# Set by server/review.py: a part's reviewed meaning or shape name, or None.
+part_meaning: Callable[[str], dict | None] | None = None
 
 # KANJIDIC sometimes files only a radical's number where a meaning would be:
 # 亻 "Radical Number 9", 耂 "Variant Of Radical 125". Those say nothing to a
@@ -29,8 +31,14 @@ overlay: Callable[[], tuple[list[dict], set[tuple[str, str, str]]]] | None = Non
 _FILLER = re.compile(r"\b(radical|number|variant|of)\b|\bno\.|[\d().,\s-]+", re.I)
 
 
+_NUMBER = re.compile(r"^[\d,.]+$")
+
+
 def real_meanings(meanings: list[str]) -> list[str]:
-    return [m for m in meanings if _FILLER.sub("", m).strip()]
+    """A bare number is a meaning only when nothing else is: 卌 is "40", while
+    万's "10,000" repeats "Ten Thousand" and 合's "0.1" is an old unit."""
+    real = [m for m in meanings if _FILLER.sub("", m).strip()]
+    return real or [m for m in meanings if _NUMBER.match(m.strip())]
 
 
 def _links() -> list[dict]:
@@ -155,10 +163,12 @@ def forms_of(char: str) -> dict:
     named = {i["char"] for group in out.values() for i in group}
     out["variants"] = [item(v) for v in variants if v not in named and v != char]
 
-    # A bound part with nothing of its own to say borrows the meaning of what it is a form of.
+    # A bound part with nothing of its own to say borrows the meaning of what it
+    # is a form of -- unless a reviewer gave it one, or named it as a shape.
     own = nodes.get(char)
+    part = part_meaning(char) if part_meaning else None
     borrowed = None
-    if out["formOf"] and not (own and own["meanings"]):
+    if out["formOf"] and not part and not (own and own["meanings"]):
         whole = out["formOf"][0]
         borrowed = {"from": whole["char"], "meanings": whole["meanings"], "meaningsBg": whole["meaningsBg"]}
-    return {"char": char, "meaning": borrowed, **out}
+    return {"char": char, "meaning": borrowed, "part": part, **out}

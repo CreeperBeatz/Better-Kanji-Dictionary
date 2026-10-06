@@ -1,9 +1,10 @@
 """The labeling queue: items to decide, every decision, and what they made live.
 
-Four task types (TASK-forms-review.md §5):
+The task types (TASK-forms-review.md §5, and more since):
 
     decomposition  subject 青            value: its direct parts, ["龶", "月"]; [] = atomic
     form_link      subject 龶|王          value: {"kind": looks_like, "note": ...}; kind "none" = no link
+    part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
     kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот", "note"}]
     word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"
 
@@ -24,7 +25,7 @@ not in the data database, which is rebuilt and swapped on deploys. Copy it
 with `python -m server.review backup <file>`, which is safe while the server runs. `python -m server.review export`
 writes the accepted state to tracked files for the pipeline and for git
 (data/decomp_overrides.json, data/form_overrides.json,
-data/meaning_groups.json); nothing writes those files on its own, so a
+data/meaning_groups.json, data/part_meanings.json); nothing writes those files on its own, so a
 `git reset --hard` on deploy can never lose a reviewer's work.
 
 An accepted decomposition changes the offline pack, which takes over a
@@ -51,7 +52,7 @@ from typing import Any
 from . import auth, bg_overlay, forms, scope, store
 from .db import query, query_one
 from .errors import AppError
-from .routes.graph import children_of, parents_of
+from .routes.graph import children_of, parents_map, parents_of
 from .routes.search import _fetch_words
 
 ROOT = Path(__file__).parent.parent
@@ -62,9 +63,10 @@ EXPORTS = {
     "decomposition": ROOT / "data" / "decomp_overrides.json",
     "form_link": ROOT / "data" / "form_overrides.json",
     "meaning": ROOT / "data" / "meaning_groups.json",
+    "part_meaning": ROOT / "data" / "part_meanings.json",
 }
 
-TYPES = ("decomposition", "form_link", "kanji_senses", "word_sense", "bg", "en_report")
+TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "bg", "en_report")
 
 # A report that a word's English (JMdict's) is wrong, in the reporter's words.
 # It changes nothing on the site: JMdict is the reference, so a reviewer checks
@@ -75,6 +77,12 @@ ORIGINS = ("proposal", "suggestion")
 ACTIONS = ("accept", "edit", "reject", "skip")
 CATCH_ALL = "catch-all"
 FORM_KINDS = (*forms.KINDS, "none")
+# A part with no meaning in the dictionary (D-015) gets one of two things: its
+# own meaning, when it is a real character that means something where it is
+# used (夋, 堇, 劦), or a name for its shape, when several unrelated old parts
+# merged into it and no one meaning is true in all its kanji (丷 is 八 in 半,
+# grains in 米, hair in 首). A shape's name is shown as a name, never as a meaning.
+PART_KINDS = ("meaning", "shape")
 # What a decision changed: these can be reverted. skip/reject change nothing.
 CHANGES = ("accept", "edit", "direct", "auto", "revert", "reopen")
 
@@ -110,7 +118,7 @@ def _empty() -> dict:
     return {
         "items": {},
         "decisions": [],
-        "live": {"form_link": {}, "kanji_senses": {}, "word_sense": {}, "bg": {}},
+        "live": {"form_link": {}, "part_meaning": {}, "kanji_senses": {}, "word_sense": {}, "bg": {}},
         "pack_key": None,
     }
 
@@ -513,6 +521,22 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             raise _bad("form_evidence", "say where this comes from: the old form, or a reference")
         return {"kind": value["kind"], "note": note}
 
+    if type_ == "part_meaning":
+        if len(subject) != 1 or not _known(subject):
+            raise _bad("bad_subject", "a part meaning is of one character in the graph")
+        if value is None:
+            return None
+        if not isinstance(value, dict) or value.get("kind") not in PART_KINDS:
+            raise _bad("part_kind", "kind must be meaning or shape")
+        en = " ".join(str(value.get("en") or "").split())
+        if not en or len(en) > 40 or len(en.split()) > 5:
+            raise _bad("part_label", "the meaning or the shape's name is 1 to 5 words")
+
+        def text(k: str, n: int) -> str | None:
+            return " ".join(str(value.get(k) or "").split())[:n] or None
+
+        return {"kind": value["kind"], "en": en, "bg": text("bg", 40), "note": text("note", 400), "noteBg": text("noteBg", 400)}
+
     if type_ == "kanji_senses":
         if len(subject) != 1:
             raise _bad("bad_subject", "senses are of one kanji")
@@ -610,6 +634,8 @@ def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
         return None
     if type_ == "form_link":
         return {"kind": entry["kind"], "note": entry.get("note")}
+    if type_ == "part_meaning":
+        return {k: v for k, v in entry.items() if k != "decision"}
     if type_ == "kanji_senses":
         return entry["senses"]
     if type_ == "bg":
@@ -674,7 +700,7 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
         return
     if value is None:
         _set_live(data, type_, subject, None)
-    elif type_ == "form_link":
+    elif type_ in ("form_link", "part_meaning"):
         _set_live(data, type_, subject, {**value, "decision": decision})
     elif type_ == "kanji_senses":
         before = _senses(data, subject) or []
@@ -1319,7 +1345,25 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
         return out
     if type_ == "form_link":
         a, b = subject.split("|")
-        return {"a": forms.forms_of(a), "b": forms.forms_of(b)}
+        nodes = forms._nodes([a, b])
+        return {
+            "a": forms.forms_of(a), "b": forms.forms_of(b),
+            # Each side's own meanings, and the kanji in scope it is in: does X act like Y in them?
+            "meanings": {k: (nodes.get(c) or {}).get("meanings", []) for k, c in (("a", a), ("b", b))},
+            "users": {"a": users_of(a), "b": users_of(b)},
+        }
+    if type_ == "part_meaning":
+        users = users_of(subject)
+        return {
+            "char": subject, **_kanji_info(subject), "forms": forms.forms_of(subject), "users": users,
+            "old": _old_forms(users[:40]),
+            # Open form links about the part: a form_of lends a meaning, so it and a shape name cannot both be right.
+            "formItems": [
+                {"id": i["id"], "subject": i["subject"], "proposed": i["proposed"]}
+                for i in data["items"].values()
+                if i["type"] == "form_link" and i["status"] == "open" and subject in i["subject"].split("|")
+            ],
+        }
     kind, key = _target(subject)
     if type_ == "en_report":
         return {"word": _fetch_word(int(key))}
@@ -1338,6 +1382,41 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
             return {"word": _fetch_word(wid), "built": _bg_built(subject), "groups": groups}
         return {"char": key, **_kanji_info(key), "built": _bg_built(subject), "senses": _senses(data, key)}
     return {"forms": forms.forms_of(subject)}
+
+
+_ranked: dict[str, tuple] | None = None
+
+
+def users_of(char: str) -> list[str]:
+    """The kanji in scope (server/scope.py) built from `char` at any depth,
+    most frequent first: what a reviewer of its forms or meaning checks it against."""
+    global _ranked
+    if _ranked is None:
+        _ranked = {
+            r["char"]: (r["freq"] is None, r["freq"] or 0, r["jlpt"] is None, -(r["jlpt"] or 0), r["strokes"] or 99, r["char"])
+            for r in query(f"SELECT k.char, k.freq, k.jlpt, k.strokes FROM kanji k WHERE {scope.KANJI}")
+        }
+    parents = parents_map()
+    seen: set[str] = set()
+    level = [char]
+    while level:
+        nxt = []
+        for c in level:
+            for p in parents.get(c, ()):
+                if p not in seen and p != char:
+                    seen.add(p)
+                    nxt.append(p)
+        level = nxt
+    return sorted((c for c in seen if c in _ranked), key=_ranked.__getitem__)
+
+
+def _old_forms(chars: list[str]) -> dict[str, str]:
+    """The old (pre-1946) form of each, where it has one: 前 -> 歬 shows what 丷 was."""
+    if not chars:
+        return {}
+    marks = ",".join("?" * len(chars))
+    return {r["char"]: r["other"] for r in query(
+        f"SELECT char, other FROM char_form WHERE kind = 'old' AND char IN ({marks})", tuple(chars))}
 
 
 def _kanji_info(char: str) -> dict:
@@ -1516,7 +1595,7 @@ def history(user_id: str | None, limit: int = 100, type_: str | None = None, by:
 def progress() -> dict:
     """How far review has got: tasks decided per stage, and how many in-scope
     kanji are fully verified -- nothing open on its parts (to any depth) or
-    its forms, its meanings accepted, and none of its words waiting.
+    its forms or its parts' meanings, its meanings accepted, and none of its words waiting.
 
     A task is what a reviewer decides in one go. A kanji's meanings are one,
     with all its drafted words on the board, so drafted word placements are
@@ -1554,7 +1633,7 @@ def progress() -> dict:
             memo[c] = frozenset({c}).union(*(below(k) for k in kids.get(c, [])))
         return memo[c]
 
-    open_forms = {c for s in open_by["form_link"] for c in s.split("|")}
+    open_forms = {c for s in open_by["form_link"] for c in s.split("|")} | open_by["part_meaning"]
     open_words = {_char(s) for s in open_by["word_sense"]}
     senses = data["live"]["kanji_senses"]
     verified = sum(
@@ -1623,6 +1702,14 @@ def _form_overlay() -> tuple[list[dict], set[tuple[str, str, str]]]:
 forms.overlay = _form_overlay
 
 
+def part_meaning_of(char: str) -> dict | None:
+    """A part's reviewed meaning or shape name, as the page shows it."""
+    return live_value("part_meaning", char)
+
+
+forms.part_meaning = part_meaning_of
+
+
 # ---------------------------------------------------------------- the offline pack
 
 
@@ -1686,7 +1773,9 @@ def export() -> dict[str, int]:
         "words": {k: v["sense"] for k, v in sorted(data["live"]["word_sense"].items())},
     }
     EXPORTS["meaning"].write_text(json.dumps(meaning, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    return {"decomposition": len(ov), "form_link": len(data["live"]["form_link"]),
+    parts = dict(sorted(data["live"]["part_meaning"].items()))
+    EXPORTS["part_meaning"].write_text(json.dumps(parts, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return {"decomposition": len(ov), "form_link": len(data["live"]["form_link"]), "part_meaning": len(parts),
             "kanji_senses": len(meaning["senses"]), "word_sense": len(meaning["words"])}
 
 

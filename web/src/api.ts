@@ -97,6 +97,8 @@ export interface FormsResponse {
   char: string
   /** A bound part with no meaning of its own borrows the meaning of what it is a form of. */
   meaning: { from: string; meanings: string[]; meaningsBg: string[] | null } | null
+  /** A part's reviewed meaning, or the name of a shape that has none of its own (丷). */
+  part: PartMeaning | null
   old: FormItem[]
   new: FormItem[]
   positional: FormItem[]
@@ -320,9 +322,25 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType = 'decomposition' | 'form_link' | 'kanji_senses' | 'word_sense' | 'bg' | 'en_report'
+export type TaskType = 'decomposition' | 'form_link' | 'part_meaning' | 'kanji_senses' | 'word_sense' | 'bg' | 'en_report'
 export type Origin = 'proposal' | 'suggestion'
 export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'kin' | 'none'
+export type PartKind = 'meaning' | 'shape'
+
+/**
+ * What a part with no meaning in the dictionary is (server/review.py): a
+ * real character with a meaning of its own (劦, joint effort), or a shape
+ * several old parts merged into, with a name and no meaning (丷).
+ */
+export interface PartMeaning {
+  kind: PartKind
+  /** The meaning, or the shape's name. */
+  en: string
+  bg: string | null
+  /** For a shape: what it comes from in which kanji. */
+  note: string | null
+  noteBg: string | null
+}
 
 /** One meaning group of a kanji, as the words it is used in divide it. */
 export interface MeaningGroup {
@@ -339,7 +357,7 @@ export interface MeaningGroup {
  * What each type's value is: parts, a link, meaning groups, one group's id, or
  * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings.
  */
-export type TaskValue = string[] | { kind: FormKind; note: string | null } | MeaningGroup[] | string | null
+export type TaskValue = string[] | { kind: FormKind; note: string | null } | PartMeaning | MeaningGroup[] | string | null
 
 /** A change waiting in the labeling queue (server/review.py). */
 export interface QueueItem {
@@ -457,6 +475,17 @@ export interface ItemDetail extends QueueItem {
     groups?: { char: string; group: string | null; en: string | null; bg: string | null }[]
     /** kanji_senses: its common words (and any placed), each in its group now. */
     board?: BoardWord[]
+    /**
+     * The kanji in scope built from the subject at any depth, most frequent
+     * first: for a part's meaning, the part's; for a form link, each side's.
+     */
+    users?: string[] | { a: string[]; b: string[] }
+    /** form_link: each side's own meanings. */
+    meanings?: { a: string[]; b: string[] }
+    /** part_meaning: the old form of those kanji, where they have one. */
+    old?: Record<string, string>
+    /** part_meaning: the form links about the part still waiting in the queue. */
+    formItems?: { id: string; subject: string; proposed: { kind: FormKind; note: string | null } | null }[]
   }
 }
 

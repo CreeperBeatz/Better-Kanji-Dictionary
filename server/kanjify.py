@@ -31,7 +31,7 @@ import json
 import re
 from functools import lru_cache
 
-from . import kanji_parts, semantic
+from . import forms, kanji_parts, semantic
 from .db import query_one
 
 MODEL = "openai/gpt-6-luna"
@@ -80,6 +80,10 @@ def _meaning(char: str, seen: frozenset[str] = frozenset()) -> str:
     meanings = [m for m in json.loads(row["meanings"]) if "radical" not in m.lower()] if row else []
     if meanings:
         return ", ".join(meanings[:2]).lower()
+    # A reviewed part meaning; a shape has only a name, said as one (丷 is no "horns" in 前).
+    part = forms.part_meaning(char) if forms.part_meaning else None
+    if part:
+        return part["en"].lower() if part["kind"] == "meaning" else f"the shape called {part['en']}"
     for other in sorted(kanji_parts.forms(char) - seen - {char}):
         m = _meaning(other, seen | {char})
         if m:

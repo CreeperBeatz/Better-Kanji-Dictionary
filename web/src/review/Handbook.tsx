@@ -7,12 +7,17 @@
  * one card per case. Contents beside it (a fold above it on a phone) list the
  * sections and their ### headings, and mark the one being read. The start
  * guide (Onboarding.tsx) opens from the top and from the contents.
+ *
+ * A line `<!-- kinds:form -->` or `<!-- kinds:part -->` in the markdown is
+ * where the table of what each choice changes goes (KindsInfo.tsx): the same
+ * one the queue shows behind its (i), so the two never disagree.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Components } from 'react-markdown'
 import Markdown from '../detail/Markdown'
 import { strings, useLang } from '../i18n'
 import text from './handbook.md?raw'
+import { KindsTable } from './KindsInfo'
 
 const S = strings(
   {
@@ -64,6 +69,21 @@ function parse(md: string) {
     return { id: slug(name), title: plain(name), body, subs }
   })
   return { title, intro, sections }
+}
+
+const KINDS = /^<!-- kinds:(form|part) -->\r?$/m
+
+/** A section's markdown, with the kinds tables where it marks them. */
+function Body({ text }: { text: string }) {
+  // split with a capture group: text, kind, text, kind, ...
+  const pieces = text.split(KINDS)
+  return (
+    <>
+      {pieces.map((p, i) =>
+        i % 2 ? <KindsTable key={i} of={p as 'form' | 'part'} /> : p.trim() && <Markdown key={i} text={p} components={H3} />,
+      )}
+    </>
+  )
 }
 
 /** The Cases: what comes before the first case, then one card per case. */
@@ -235,7 +255,7 @@ export default function Handbook({ section, onStart }: { section?: string; onSta
         {sections.map((s) => (
           <section key={s.id} className="handbook-section" data-cases={s.title === 'Cases' || undefined}>
             <h2 id={s.id}>{s.title}</h2>
-            {s.title === 'Cases' ? <Cases body={s.body} /> : <Markdown text={s.body} components={H3} />}
+            {s.title === 'Cases' ? <Cases body={s.body} /> : <Body text={s.body} />}
           </section>
         ))}
       </article>
