@@ -9185,3 +9185,16 @@ button.review-part {
   color: #111;
   font-weight: 400;
 }
+
+/* 漢字ペディア: a line like the books', with a link and nothing to unfold. */
+.dict-link {
+  cursor: default;
+}
+
+.dict-link::before {
+  content: '';
+}
+
+.dict-link a {
+  text-decoration: none;
+}

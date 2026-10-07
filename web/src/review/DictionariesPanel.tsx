@@ -23,7 +23,8 @@ const S = strings(
     title: 'Other dictionaries',
     hint: 'Each sense shows the group its words on the board are in now. Amber: its words are split between groups. A sense with no word on the board shows none.',
     elsewhere: '{n} words on the board are in another group than the rest of their dictionary sense (amber on the board).',
-    kanjipedia: '漢字ペディア',
+    kanjipedia: '漢字ペディア (漢検漢字辞典)',
+    openDict: 'open in dictionary',
     kanjipediaTitle: 'The 漢検漢字辞典 on kanjipedia.jp, in a new tab: its numbered meanings, each with example words',
     kodansha: 'Kodansha Kanji Learner’s Dictionary',
     core: 'core meaning',
@@ -51,7 +52,8 @@ const S = strings(
     title: 'Други речници',
     hint: 'Всяко значение показва групата, в която са думите му на дъската сега. Кехлибарено: думите му са разделени между групи. Значение без дума на дъската не показва група.',
     elsewhere: '{n} думи на дъската са в друга група от останалите думи на значението си в речника (кехлибарени на дъската).',
-    kanjipedia: '漢字ペディア',
+    kanjipedia: '漢字ペディア (漢検漢字辞典)',
+    openDict: 'отвори в речника',
     kanjipediaTitle: '漢検漢字辞典 на kanjipedia.jp, в нов раздел: номерираните значения, всяко с примерни думи',
     kodansha: 'Kodansha Kanji Learner’s Dictionary',
     core: 'основно значение',
@@ -321,9 +323,6 @@ export function DictionariesPanel({
     <section className="dicts">
       <header className="dicts-head">
         <h4>{t('title')}</h4>
-        <a className="dict-open" href={dicts.kanjipedia} target="_blank" rel="noopener" title={t('kanjipediaTitle')}>
-          {t('kanjipedia')} <span aria-hidden>↗</span>
-        </a>
         <p className="hint">{t('hint')}</p>
         {away.size > 0 && <p className="dicts-away">{t('elsewhere', { n: away.size })}</p>}
       </header>
@@ -362,6 +361,13 @@ export function DictionariesPanel({
             </div>
           </details>
         )}
+        {/* Read on its own site, never copied: a line with a link, nothing to unfold. */}
+        <p className="book-head dict-sum dict-link">
+          <span className="book-from">{t('from')}:</span> <span className="book-name">{t('kanjipedia')}</span>
+          <a className="clear book-page" href={dicts.kanjipedia} target="_blank" rel="noopener" title={t('kanjipediaTitle')}>
+            {t('openDict')} ↗
+          </a>
+        </p>
         {dicts.tsalta && (
           <details className="dict" data-src="tsalta">
             {head('tsalta', t('tsalta'), dicts.tsalta.no, 'kanji', dicts.tsalta.pages)}
