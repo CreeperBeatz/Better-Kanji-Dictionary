@@ -4,6 +4,9 @@
     python pipeline/meaning_redraft.py add-etymology      # after pipeline/wiktionary_etymology.py
     # run A: one Sonnet subagent per in/A-*.json (meaning_prompt.md + meaning_dicts_prompt.md)
     python pipeline/meaning_redraft.py check-extras [--batch NNN]
+    # kanji whose glyph origin Wiktionary keeps under the old form (会 under 會):
+    python pipeline/meaning_redraft.py prepare-origins
+    # one subagent per in/O-*.json (pipeline/origin_prompt.md), writing out/O-*.json
     python pipeline/meaning_drafts.py --drafts data/drafts/meanings-v2 prepare-b [--batch NNN]
     # run B: one subagent per in/B-*.json
     python pipeline/meaning_drafts.py --drafts data/drafts/meanings-v2 check
@@ -100,6 +103,41 @@ def add_etymology() -> None:
     print(f"{n} kanji carry Wiktionary's glyph origin")
 
 
+ORIGIN_BATCH = 40  # kanji per old-form origin batch
+
+
+def prepare_origins() -> None:
+    """O-batches: the in-scope kanji with no glyph origin of their own whose old form has one."""
+    from server import forms
+
+    md.DRAFTS, md.IN, md.OUT = proposals.folders(DRAFTS)
+    etym = json.loads(ETYMOLOGY.read_text(encoding="utf-8"))
+    with md._db() as db:
+        chars = scope.kanji(db)
+    todo = []
+    for c in chars:
+        if c in etym:
+            continue
+        old = next((o["char"] for o in forms.forms_of(c)["old"] if o["char"] in etym), None)
+        if old:
+            todo.append({"char": c, "old": old, "etymology": " / ".join(etym[old])[:ETYMOLOGY_CHARS]})
+    for i in range(0, len(todo), ORIGIN_BATCH):
+        name = f"O-{i // ORIGIN_BATCH:03d}"
+        md._write(md.IN / f"{name}.json", {"batch": name, "kanji": todo[i:i + ORIGIN_BATCH]})
+    print(f"{len(todo)} kanji in {-(-len(todo) // ORIGIN_BATCH)} batches -> {md.IN.relative_to(proposals.ROOT)}/O-*.json")
+
+
+def read_origins() -> dict[str, dict]:
+    """The old-form origins written so far: char -> {origin, originSure}."""
+    out: dict[str, dict] = {}
+    for f in sorted(md.OUT.glob("O-*.json")):
+        for c, e in (json.loads(f.read_text(encoding="utf-8")).get("kanji") or {}).items():
+            o = e.get("origin") if isinstance(e, dict) else None
+            if isinstance(o, str) and o.strip():
+                out[c] = {"origin": o.strip(), "originSure": e.get("originSure") is True}
+    return out
+
+
 def read_extras(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
     """Run A's extras, each kanji's checked against its own groups and placements."""
     md.DRAFTS, md.IN, md.OUT = proposals.folders(DRAFTS)
@@ -149,6 +187,10 @@ def read_extras(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
             else:
                 x["link"] = link.strip() if link else None
             good[c] = x
+    # A kanji with no origin of its own takes the one written from its old form.
+    for c, o in read_origins().items():
+        if c in good and not good[c].get("origin"):
+            good[c].update(o)
     return good, problems
 
 
@@ -227,6 +269,7 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("prepare")
     sub.add_parser("add-etymology")
+    sub.add_parser("prepare-origins")
     ce = sub.add_parser("check-extras")
     ce.add_argument("--batch", help="just this batch's number, e.g. 007")
     proposals.load_parser(sub, "load")
@@ -235,6 +278,8 @@ def main() -> int:
         prepare()
     elif args.cmd == "add-etymology":
         add_etymology()
+    elif args.cmd == "prepare-origins":
+        prepare_origins()
     elif args.cmd == "check-extras":
         check_extras(args.batch)
     else:
