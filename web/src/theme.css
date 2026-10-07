@@ -8856,14 +8856,16 @@ button.review-part {
   content: '▾';
 }
 
+/* What the book says at a glance, beside its link: plain text, not a link's colour. */
 .dict-core {
-  margin-left: 8px;
-  color: var(--ai);
+  margin-left: 12px;
+  color: var(--paper-dim);
   letter-spacing: 0.04em;
 }
 
 .dict-split-n {
-  margin-left: 8px;
+  margin-left: 12px;
+  cursor: help;
   padding: 0 5px;
   border: 1px solid #cfa25a;
   border-radius: 3px;

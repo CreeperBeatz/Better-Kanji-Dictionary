@@ -23,11 +23,14 @@ const S = strings(
     title: 'Other dictionaries',
     hint: 'Each sense shows the group its words on the board are in now. Amber: its words are split between groups. A sense with no word on the board shows none.',
     elsewhere: '{n} words on the board are in another group than the rest of their dictionary sense (amber on the board).',
+    elsewhere1: '1 word on the board is in another group than the rest of its dictionary sense (amber on the board).',
     kanjipedia: '漢字ペディア (漢検漢字辞典)',
     openDict: 'open in dictionary',
     kanjipediaTitle: 'The 漢検漢字辞典 on kanjipedia.jp, in a new tab: its numbered meanings, each with example words',
     kodansha: 'Kodansha Kanji Learner’s Dictionary',
     core: 'core meaning',
+    coreLabel: 'core:',
+    classes: 'The book’s marks for the kanji: 常 jōyō, 教1–6 the school grade it is taught in, 人 a name kanji, 国字 made in Japan',
     onSenses: 'compounds by sense',
     kun: 'kun words',
     special: 'special readings',
@@ -46,17 +49,22 @@ const S = strings(
     fromBook: 'From the book',
     from: 'From',
     tsalta: 'Цалта’s kanji book',
-    nSplit: '{n} split',
+    nSplit: '{n} senses split',
+    nSplit1: '1 sense split',
+    nSplitTitle: 'Senses of this dictionary whose words on the board are in more than one group. Open it: their chips are amber.',
   },
   {
     title: 'Други речници',
     hint: 'Всяко значение показва групата, в която са думите му на дъската сега. Кехлибарено: думите му са разделени между групи. Значение без дума на дъската не показва група.',
     elsewhere: '{n} думи на дъската са в друга група от останалите думи на значението си в речника (кехлибарени на дъската).',
+    elsewhere1: '1 дума на дъската е в друга група от останалите думи на значението си в речника (кехлибарена на дъската).',
     kanjipedia: '漢字ペディア (漢検漢字辞典)',
     openDict: 'отвори в речника',
     kanjipediaTitle: '漢検漢字辞典 на kanjipedia.jp, в нов раздел: номерираните значения, всяко с примерни думи',
     kodansha: 'Kodansha Kanji Learner’s Dictionary',
     core: 'основно значение',
+    coreLabel: 'основно:',
+    classes: 'Знаците на книгата за канджито: 常 джойо, 教1–6 класът, в който се учи, 人 канджи за имена, 国字 създадено в Япония',
     onSenses: 'сложни думи по значение',
     kun: 'кун думи',
     special: 'особени четения',
@@ -75,7 +83,9 @@ const S = strings(
     fromBook: 'От книгата',
     from: 'От',
     tsalta: 'Канджи речникът на Цалта',
-    nSplit: '{n} разделени',
+    nSplit: '{n} значения разделени',
+    nSplit1: '1 значение разделено',
+    nSplitTitle: 'Значения от този речник, чиито думи на дъската са в повече от една група. Отворете го: техните етикети са кехлибарени.',
   },
 )
 
@@ -314,7 +324,11 @@ export function DictionariesPanel({
         {no != null && <> · №{no}</>}
         {book && <OpenBook book={book} pages={pages} />}
         {extra}
-        {n > 0 && <span className="dict-split-n">{t('nSplit', { n })}</span>}
+        {n > 0 && (
+          <span className="dict-split-n" title={t('nSplitTitle')}>
+            {n === 1 ? t('nSplit1') : t('nSplit', { n })}
+          </span>
+        )}
       </summary>
     )
   }
@@ -324,12 +338,14 @@ export function DictionariesPanel({
       <header className="dicts-head">
         <h4>{t('title')}</h4>
         <p className="hint">{t('hint')}</p>
-        {away.size > 0 && <p className="dicts-away">{t('elsewhere', { n: away.size })}</p>}
+        {away.size > 0 && <p className="dicts-away">{away.size === 1 ? t('elsewhere1') : t('elsewhere', { n: away.size })}</p>}
       </header>
       <div className="dicts-list">
         {k && (
           <details className="dict" data-src="kodansha">
-            {head('kodansha', t('kodansha'), k.no, 'kodansha', k.pages, <span className="dict-core">{k.core.join(' · ')}</span>)}
+            {head('kodansha', t('kodansha'), k.no, 'kodansha', k.pages, <span className="dict-core" title={t('core')}>
+                {t('coreLabel')} {k.core.join(' · ')}
+              </span>)}
             {kodanshaEntry(k)}
           </details>
         )}
@@ -342,7 +358,7 @@ export function DictionariesPanel({
               'kangorin',
               g.pages,
               (g.old || g.classes.length > 0) && (
-                <span className="dict-core" lang="ja">
+                <span className="dict-core" lang="ja" title={t('classes')}>
                   {g.old && `〖${g.old}〗 `}
                   {g.classes.join(' ')}
                 </span>
