@@ -23,6 +23,8 @@ const SLUGS: Record<TaskType, string> = {
   part_meaning: 'part-meanings',
   kanji_senses: 'meanings',
   word_sense: 'word-meanings',
+  kanji_extras: 'extras',
+  usage: 'usage',
   bg: 'bulgarian',
   report: 'reports',
 }

@@ -372,6 +372,32 @@ Three kinds of word go there:
   have one kanji in this box and another in a real group: each kanji is
   judged on its own.
 
+### About the kanji: the extras
+
+The card also carries what learners will read beside the groups. It was
+drafted with them; check it like the groups, and fix or empty what is wrong.
+
+- **Per group:**
+  - a line on what the kanji does in its words;
+  - *original meaning*, ticked where Kodansha marks the kanji's original
+    meaning and most of that sense's words are in this group;
+  - its **best examples**: the starred words (☆ on a word card). Star 2–3
+    common, clear words.
+  - **Same meaning here**: kanji that mean what this group means
+    (生 *life* → 命). Candidates come from Kodansha's synonyms; a struck-out
+    one is not kept. Those our own data links start ticked. Tick what a
+    learner should see; Kodansha's own word is in the tooltip, for you only.
+- **Per kanji**, in *About the kanji* under the board:
+  - **How it was built**, from Wiktionary's glyph origin only: nothing that
+    source does not say. Tick *uncertain* when it says so.
+  - **How its meanings connect**: one sentence, empty when they don't.
+  - **Easy to mix up**: kanji that share a kun reading with it (生 いきる 活).
+    Keep the pairs a learner really confuses.
+  - *Made in Japan (kokuji)* shows for the kanji that are; nothing to check.
+
+Accepting the card decides all of it with the groups. The Bulgarian of the
+lines is on the kanji's Bulgarian card.
+
 ### One word at a time
 
 > **Question:** in this word, which of the kanji's groups is the kanji using?
@@ -424,6 +450,23 @@ English is still what you translate.
   Either way it shows on the site at once. Search by Bulgarian text still
   uses the old wording until the data is rebuilt.
 - **Not sure?** *Skip* it, and come back to it from *skipped*.
+- **A kanji card's lines.** Under the groups, check the Bulgarian of each
+  group's line, of *how it was built* and of *how its meanings connect*,
+  against the English beside them.
+
+## Which kanji to write
+
+> **Question:** does the translation say what Bunkacho's Japanese says?
+
+One card per kun reading that several kanji share (はやい: 早い for time,
+速い for speed). The Japanese is Bunkacho's report on 異字同訓 (2014) and
+stays as it is; the English and the Bulgarian are machine translations.
+
+- **Definitions.** Each spelling's definition in English and in Bulgarian:
+  faithful, and short. The difference between the spellings is the point.
+- **Examples.** 2–4 per spelling, picked from the report's. Check the kana
+  and both translations; remove (✕) one that does not show the difference.
+- **Notes.** The report's notes on borderline cases, translated.
 
 ## Reports
 

@@ -689,6 +689,9 @@ def words_with(
     return {
         "char": char,
         "senses": senses,
+        # The kanji's reviewed origin, how its groups link, the kanji it is easy to mix up with.
+        "extras": review.extras_of(char),
+        "kokuji": char in review.kokuji(),
         "groups": groups,
         "rest": {"total": len(rest), "offset": offset, "words": [fetched[w] for w in page if w in fetched]},
     }

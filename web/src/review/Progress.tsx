@@ -19,10 +19,12 @@ const S = strings(
     stages: 'By stage',
     s_character: 'Characters',
     s_kanji_senses: 'Meanings',
+    s_usage: 'Which kanji to write',
     s_bg: 'Bulgarian translations',
     s_report: 'Reports',
     d_character: 'one card per character: what it is built from, which kanji it is a form of, and what a part with no meaning is',
     d_kanji_senses: 'one per kanji: its groups, with its words placed on the board; and the odd single word (a suggestion, or one whose group changed)',
+    d_usage: 'one per shared kun reading (はやい: 早い or 速い): Bunkacho’s usage notes, translated, checked against the Japanese',
     d_bg: 'the machine-translated Bulgarian: one card per word, one per kanji',
     d_report: 'mistakes people found that no card can fix (a word’s English, a kanji’s readings, levels…); real ones go to DATA-ISSUES and upstream',
     of: '{done} of {total}',
@@ -42,10 +44,12 @@ const S = strings(
     stages: 'По етапи',
     s_character: 'Знаци',
     s_kanji_senses: 'Значения',
+    s_usage: 'Кое канджи да се пише',
     s_bg: 'Преводи на български',
     s_report: 'Доклади',
     d_character: 'по една карта за знак: от какво е построен, форма на кое канджи е и какво е част без значение',
     d_kanji_senses: 'по една за канджи: групите му, с думите, разпределени на дъската; и по някоя отделна дума (предложение или дума, чиято група се е променила)',
+    d_usage: 'по една за общо четене кун (はやい: 早い или 速い): бележките на Бункачо за употребата, преведени и сверени с японския',
     d_bg: 'машинно преведеният български: по една карта за дума и за канджи',
     d_report: 'грешки, които никоя карта не може да поправи (английският на дума, четенията, нивата на канджи…); истинските отиват в DATA-ISSUES и при източника',
     of: '{done} от {total}',
@@ -59,7 +63,7 @@ const S = strings(
 
 type Key = Parameters<ReturnType<typeof S>>[0]
 // As in the queue: a single word's meaning is counted under meanings, with its kanji's card.
-const STAGES: TaskType[] = ['character', 'kanji_senses', 'bg', 'report']
+const STAGES: TaskType[] = ['character', 'kanji_senses', 'usage', 'bg', 'report']
 
 function pct(done: number, total: number): string {
   if (!total) return '0%'

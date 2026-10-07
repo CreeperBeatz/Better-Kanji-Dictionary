@@ -339,7 +339,17 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType = 'decomposition' | 'form_link' | 'part_meaning' | 'kanji_senses' | 'word_sense' | 'bg' | 'report' | 'character'
+export type TaskType =
+  | 'decomposition'
+  | 'form_link'
+  | 'part_meaning'
+  | 'kanji_senses'
+  | 'word_sense'
+  | 'kanji_extras'
+  | 'usage'
+  | 'bg'
+  | 'report'
+  | 'character'
 /** What a report is about: a word's or a kanji's (server/review.py REPORT_ABOUT). */
 export type ReportAbout = 'english' | 'reading' | 'meanings' | 'readings' | 'levels' | 'parts' | 'forms' | 'similar' | 'strokes' | 'other'
 /** Something wrong that no card or edit can fix, in the reporter's words; never live. */
@@ -385,13 +395,65 @@ export interface MeaningGroup {
   note: string | null
   /** The note in Bulgarian, set on the Bulgarian card. */
   noteBg?: string | null
+  /** What the kanji does in this group's words, a sentence or two; its Bulgarian is set on the Bulgarian card. */
+  about?: string
+  aboutBg?: string
+  /** The 2-3 words that show the group best (word ids, placed in it). */
+  examples?: number[]
+  /** The group holds the kanji's original meaning. */
+  original?: boolean
+  /** Kanji of the same meaning in this group. */
+  similar?: string[]
+}
+
+/** A kanji easy to mix up with another: they share a kun reading. */
+export interface Mixup {
+  char: string
+  reading: string
+}
+
+/** A kanji's extras (server/review.py kanji_extras): decided on its meanings card, their Bulgarian on its Bulgarian card. */
+export interface KanjiExtras {
+  /** How the character was built, from Wiktionary's glyph origin. */
+  origin: string | null
+  originBg: string | null
+  /** False when the source calls the explanation uncertain. */
+  originSure: boolean | null
+  /** How its groups connect. */
+  link: string | null
+  linkBg: string | null
+  mixups: Mixup[]
+}
+
+/** A candidate link from Kodansha (reviewers only): `gloss` is Kodansha's word, `en` our keyword. */
+export interface LinkCandidate {
+  char: string
+  gloss: string
+  en: string | null
+  ticked: boolean
+  reading?: string
+  sense?: string
+}
+
+/** Which kanji to write for a shared kun reading: Bunkacho's report, translated. */
+export interface UsageCard {
+  reading: string
+  no: number | null
+  spellings: {
+    kanji: string
+    def: string | null
+    defEn: string | null
+    defBg: string | null
+    examples: { ja: string; kana: string | null; en: string | null; bg: string | null }[]
+  }[]
+  notes: { ja: string | null; en: string | null; bg: string | null }[]
 }
 
 /**
  * What each type's value is: parts, a link, meaning groups, one group's id, or
  * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings.
  */
-export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | string | null
+export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | KanjiExtras | UsageCard | string | null
 
 /** A change waiting in the labeling queue (server/review.py). */
 export interface QueueItem {
@@ -540,6 +602,10 @@ export interface ItemDetail extends QueueItem {
     old?: Record<string, string>
     /** part_meaning: the form links about the part still waiting in the queue. */
     formItems?: { id: string; subject: string; proposed: FormLink | null }[]
+    /** kanji_senses and a kanji's bg: its extras -- the open item's draft, else what is accepted -- and whether it was made in Japan. */
+    extras?: { item: string | null; value: KanjiExtras | null; kokuji: boolean }
+    /** usage: the kanji the card is about. */
+    kanji?: { char: string; kanjidic?: string[]; curated?: string | null }[]
   }
 }
 
@@ -679,6 +745,9 @@ export interface BookGloss extends BookRef {
 export interface WordsWithResponse {
   char: string
   senses: MeaningGroup[] | null
+  /** The kanji's reviewed extras, and whether it was made in Japan. */
+  extras?: KanjiExtras | null
+  kokuji?: boolean
   /** One per accepted group, the catch-all (`catch-all`) last when it has words. */
   groups: (MeaningGroup & { words: Word[] })[]
   rest: { total: number; offset: number; words: Word[] }
@@ -1097,7 +1166,22 @@ export const api = {
     labels?: Record<string, string>,
     /** Likewise, group id -> the group's Bulgarian note. */
     notes?: Record<string, string>,
-  ) => send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', { action, value, reason, words, skip, labels, notes }),
+    /** A kanji's meanings or Bulgarian card: its extras as left on the card. */
+    extras?: KanjiExtras,
+    /** A kanji's Bulgarian card: group id -> the Bulgarian of the group's `about`. */
+    aboutBg?: Record<string, string>,
+  ) =>
+    send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', {
+      action,
+      value,
+      reason,
+      words,
+      skip,
+      labels,
+      notes,
+      extras,
+      aboutBg,
+    }),
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
 

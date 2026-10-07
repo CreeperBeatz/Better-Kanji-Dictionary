@@ -5,7 +5,7 @@
  * tomorrow, picks up where it was left. Deciding the item (accept, edit,
  * reject) throws it away; skipping keeps it.
  */
-import type { TaskValue } from '../api'
+import type { KanjiExtras, TaskValue } from '../api'
 
 const PREFIX = 'betterrtk:review-draft:'
 const KEEP_DAYS = 30
@@ -28,6 +28,10 @@ export interface ItemDraft {
   labels?: Record<string, string>
   /** And their Bulgarian notes. */
   notes?: Record<string, string>
+  /** A kanji's Bulgarian card: the Bulgarian of each group's about, by group id. */
+  aboutBg?: Record<string, string>
+  /** A kanji's extras as edited on its meanings or Bulgarian card. */
+  extras?: KanjiExtras
   board?: BoardDraft
   /** A character's card: each step's answer (CharacterCard.tsx). */
   card?: unknown

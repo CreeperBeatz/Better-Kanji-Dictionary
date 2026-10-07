@@ -223,6 +223,52 @@ def main() -> int:
         check("not counted as a task done", after["done"] == before["done"] and after["total"] == before["total"] - 1, (before, after))
         check("free to be asked again by another source", "話" not in review.subjects("decomposition"))
 
+        print("a kanji's extras: on its groups, and decided with them on the meanings card")
+        rows = query("SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id WHERE wc.char = '水' AND w.common = 1 LIMIT 2")
+        ex = [r["id"] for r in rows]
+        groups = [{"id": "water", "en": "water", "about": "  The liquid.  ", "examples": ex, "original": True, "similar": ["氷"]}]
+        bad = review.add_items([{"type": "kanji_senses", "subject": "水", "proposed": [{**groups[0], "examples": [wid]}], "source": "ai:test"}])
+        check("an example that is not a word of the kanji is refused", bad == (0, 1), bad)
+        bad = review.add_items([{"type": "kanji_senses", "subject": "水", "proposed": [{**groups[0], "similar": ["水"]}], "source": "ai:test"}])
+        check("a kanji similar to itself is refused", bad == (0, 1), bad)
+        g = review.add_item("kanji_senses", "水", groups, "ai:test")
+        check("the group's extras are kept, cleaned", g["proposed"][0] == {"id": "水.water", "en": "water", "bg": None, "note": None, "noteBg": None,
+                                                                         "about": "The liquid.", "examples": ex, "original": True, "similar": ["氷"]}, g["proposed"])
+        plain = review.validate("kanji_senses", "水", [{"id": "water", "en": "water"}])
+        check("a group without extras is as it always was", plain == [{"id": "水.water", "en": "water", "bg": None, "note": None, "noteBg": None}], plain)
+        note = {"origin": "A stream.", "originSure": True, "link": None, "mixups": [{"char": "氷", "reading": "こおり"}]}
+        x = review.add_item("kanji_extras", "水", note, "ai:test")
+        check("extras are not listed in the queue on their own", all(i["id"] != x["id"] for i in call("GET", "/api/review/queue", "reviewer")[1]["items"]))
+        check("nor counted as a stage", "kanji_extras" not in call("GET", "/api/review/queue", "reviewer")[1]["types"])
+        status, d = call("GET", f"/api/review/items/{g['id']}", "reviewer")
+        check("the meanings card carries them", status == 200 and d["context"]["extras"]["item"] == x["id"] and d["context"]["extras"]["value"]["origin"] == "A stream.", d.get("context", {}).get("extras"))
+        edited = {**note, "link": "One meaning only."}
+        status, _ = call("POST", f"/api/review/items/{g['id']}/decide", "reviewer", {"action": "accept", "words": {}, "extras": edited})
+        check("deciding the card decides them", status == 200 and review.extras_of("水")["link"] == "One meaning only.", review.extras_of("水"))
+        check("as an edit of their item", review._read()["items"][x["id"]]["status"] == "edited")
+        check("the site's groups carry the extras", review.senses_of("水")[0].get("about") == "The liquid.")
+        bad = call("POST", "/api/review/edit", "reviewer", {"type": "kanji_extras", "subject": "水", "value": {"mixups": [{"char": "水", "reading": "みず"}]}})
+        check("a kanji to mix up with itself is refused", bad[0] == 400, bad)
+        b = review.add_item("bg", "kanji:水", ["вода"], "mt:test")
+        status, d = call("GET", f"/api/review/items/{b['id']}", "reviewer")
+        check("the Bulgarian card carries the extras too", status == 200 and d["context"]["extras"]["value"]["link"] == "One meaning only.", d.get("context", {}).get("extras"))
+        status, _ = call("POST", f"/api/review/items/{b['id']}/decide", "reviewer", {
+            "action": "accept", "aboutBg": {"水.water": "Течността."}, "extras": {**edited, "originBg": "Поток."}})
+        check("it sets each group's about in Bulgarian", status == 200 and review.senses_of("水")[0].get("aboutBg") == "Течността.", review.senses_of("水"))
+        check("and the origin's", review.extras_of("水")["originBg"] == "Поток.", review.extras_of("水"))
+
+        print("usage cards")
+        card = {"reading": "はやい", "spellings": [
+            {"kanji": "早い", "def": "時期が前", "defEn": "early", "defBg": "рано", "examples": [{"ja": "早く起きる。", "kana": "はやくおきる。", "en": "get up early", "bg": "ставам рано"}]},
+            {"kanji": "速い", "def": "スピードがある", "defEn": "fast", "defBg": "бързо", "examples": []}], "notes": []}
+        u = review.add_item("usage", "はやい", card, "bunkacho")
+        check("a usage card is queued", any(i["id"] == u["id"] for i in call("GET", "/api/review/queue?type=usage", "reviewer")[1]["items"]))
+        status, d = call("GET", f"/api/review/items/{u['id']}", "reviewer")
+        check("its context names its kanji", status == 200 and [k["char"] for k in d["context"]["kanji"]] == ["早", "速"], d.get("context"))
+        status, _ = call("POST", f"/api/review/items/{u['id']}/decide", "reviewer", {"action": "accept"})
+        check("and accepted", status == 200 and review.live_value("usage", "はやい")["spellings"][1]["defEn"] == "fast")
+        check("one spelling is not a card", review.add_items([{"type": "usage", "subject": "x", "proposed": {"spellings": card["spellings"][:1]}, "source": "t"}]) == (0, 1))
+
         print("admin-only lists")
         for who, want in (("reviewer", 403), ("admin", 200)):
             check(f"{who} GET auto is {want}", call("GET", "/api/review/auto", who)[0] == want)

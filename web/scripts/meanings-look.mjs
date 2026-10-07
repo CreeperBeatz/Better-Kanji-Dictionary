@@ -21,7 +21,7 @@ const db = new DatabaseSync(`${SANDBOX}/review/review.db`, { readOnly: true })
 const TYPE = process.env.TYPE ?? 'kanji_senses'
 const it = db.prepare("SELECT id FROM item WHERE type = ? AND subject = ? AND status = 'open'").get(TYPE, char)
 if (!it) throw new Error(`no open meanings item for ${char}`)
-await page.goto(`${WEB}/review/queue/${TYPE === 'bg' ? 'bulgarian' : 'meanings'}/${it.id}`, { waitUntil: 'networkidle' })
+await page.goto(`${WEB}/review/queue/${{ bg: 'bulgarian', usage: 'usage' }[TYPE] ?? 'meanings'}/${it.id}`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(1500)
 await page.screenshot({ path: `${SHOTS}/${shot}.png`, fullPage: true })
 // OPEN=<n>: unfold the first n dictionaries; PAGE=1: open the first one's page popup.

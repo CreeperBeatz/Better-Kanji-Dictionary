@@ -10,7 +10,19 @@
  *   report         what it is about, and what is wrong, in the reporter's words
  */
 import { lazy, Suspense, useState } from 'react'
-import { type FormKind, type FormLink, type ItemDetail, type MeaningGroup, type PartMeaning, type Report, type ReportAbout, type TaskType, type TaskValue } from '../api'
+import {
+  type FormKind,
+  type FormLink,
+  type ItemDetail,
+  type MeaningGroup,
+  type PartMeaning,
+  type Report,
+  type ReportAbout,
+  type TaskType,
+  type TaskValue,
+  type UsageCard,
+} from '../api'
+import { UsageEditor } from './Extras'
 import { strings, useLang } from '../i18n'
 import { FORM_KINDS, KindsInfoButton, KindsTable, ONE_WAY, PART_KINDS, useKindLabel, useKindsInfo, useLinkSentence } from './KindsInfo'
 
@@ -238,6 +250,18 @@ export function ValueView({ type, value, groups, subject }: { type: TaskType; va
     )
   }
   if (type === 'part_meaning') return <PartMeaningView value={value as PartMeaning} />
+  if (type === 'usage') {
+    const u = value as UsageCard
+    return (
+      <ul className="review-usage">
+        {u.spellings.map((s) => (
+          <li key={s.kanji}>
+            <b lang="ja">{s.kanji}</b> {lang === 'bg' ? s.defBg : s.defEn}
+          </li>
+        ))}
+      </ul>
+    )
+  }
   if (type === 'report') {
     const r = value as Report
     return (
@@ -293,6 +317,7 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus, wi
 
   if (type === 'form_link') return <FormLinkEditor value={value} onChange={onChange} autoFocus={autoFocus} subject={subject} />
   if (type === 'part_meaning') return <PartMeaningEditor value={value} onChange={onChange} autoFocus={autoFocus} />
+  if (type === 'usage') return value ? <UsageEditor value={value as UsageCard} onChange={onChange} /> : null
 
   if (type === 'kanji_senses') {
     const list = (value as MeaningGroup[] | null) ?? []

@@ -51,5 +51,7 @@ export function finalizeBoard(char: string, groups: MeaningGroup[], placements: 
     const to = b && rename[b] ? rename[b] : b
     words[Number(id)] = to && ids.has(to) ? to : null
   }
-  return { groups: out, words }
+  // A best example moved out of its group is no longer one of its examples.
+  const kept = out.map((g) => (g.examples?.some((w) => words[w] !== g.id) ? { ...g, examples: g.examples.filter((w) => words[w] === g.id) } : g))
+  return { groups: kept, words }
 }

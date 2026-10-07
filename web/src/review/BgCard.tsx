@@ -5,8 +5,9 @@
  * edit, and what is saved shows on the site at once (server/bg_overlay.py).
  */
 import type { ReactNode } from 'react'
-import type { BookGloss, BookKeyword, ItemDetail, MeaningGroup, Sense } from '../api'
+import type { BookGloss, BookKeyword, ItemDetail, KanjiExtras, MeaningGroup, Sense } from '../api'
 import { BookGlossPanel, BookKeywordPanel } from './BookEvidence'
+import { BgExtras } from './Extras'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, KanjiFacts } from './editors'
 
@@ -57,6 +58,10 @@ export function BgCard({
   onLabels,
   notes,
   onNotes,
+  aboutBg = {},
+  onAboutBg = () => {},
+  extras = null,
+  onExtras = () => {},
 }: {
   detail: ItemDetail
   value: string[]
@@ -67,6 +72,12 @@ export function BgCard({
   /** And their Bulgarian notes, beside the English ones. */
   notes: Record<string, string>
   onNotes: (n: Record<string, string>) => void
+  /** A kanji card: the Bulgarian of each group's about, by group id. */
+  aboutBg?: Record<string, string>
+  onAboutBg?: (v: Record<string, string>) => void
+  /** And the kanji's extras, for the Bulgarian of its origin and link. */
+  extras?: KanjiExtras | null
+  onExtras?: (v: KanjiExtras) => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -150,6 +161,9 @@ export function BgCard({
           hint={t('groupsHint')}
           marks
         />
+      )}
+      {c.senses && (c.senses.some((g) => g.about) || extras?.origin || extras?.link) && (
+        <BgExtras groups={c.senses} aboutBg={aboutBg} onAboutBg={onAboutBg} extras={extras} onExtras={onExtras} />
       )}
     </div>
   )

@@ -24,6 +24,7 @@ import type { Placements } from './board'
 import { elsewhere } from './dictMatch'
 import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
+import { GroupExtras, type Candidates } from './Extras'
 
 const S = strings(
   {
@@ -77,6 +78,8 @@ const S = strings(
     dictKangorin: '新漢語林 gives it as an example of {sense}',
     dictTsalta: 'In Цалта’s kanji book: {gloss}',
     dictElsewhere: 'Most of this sense’s other words are in another group. It does not start ticked.',
+    star: 'One of the group’s best examples',
+    unstar: 'Not one of the best examples',
   },
   {
     groups: 'Групи значения',
@@ -129,6 +132,8 @@ const S = strings(
     dictKangorin: '新漢語林 я дава като пример за {sense}',
     dictTsalta: 'В книгата на Цалта: {gloss}',
     dictElsewhere: 'Повечето други думи от това значение са в друга група. Не започва отметната.',
+    star: 'Един от най-добрите примери на групата',
+    unstar: 'Не е от най-добрите примери',
   },
 )
 
@@ -169,6 +174,7 @@ export function MeaningsBoard({
   plain = false,
   only,
   dicts,
+  candidates,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -201,6 +207,12 @@ export function MeaningsBoard({
   only?: number
   /** Other dictionaries' entries (review/dictMatch.ts): their badges on the words; a word one places elsewhere starts unticked. */
   dicts?: KanjiDictionaries | null
+  /**
+   * In the queue, a kanji's meanings card: Kodansha's candidates for each
+   * group's same-meaning kanji. With it, each group shows its extras (about,
+   * original meaning, best examples, same meaning) to check and edit.
+   */
+  candidates?: Candidates
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -317,6 +329,30 @@ export function MeaningsBoard({
   }
 
   const gloss = (w: BoardWord) => (lang === 'bg' && w.glossBg) || w.gloss
+  // A group's extras are edited in the queue's meanings card only, not for one word or a follow-up.
+  const extras = !!candidates && checks && !followUp
+  const headwords = useMemo(() => new Map(words.map((w) => [w.id, w.headword])), [words])
+  function star(w: BoardWord, from: Bucket) {
+    const i = groups.findIndex((g) => g.id === from)
+    if (!extras || i < 0) return null
+    const ex = groups[i].examples ?? []
+    const on = ex.includes(w.id)
+    return (
+      <button
+        type="button"
+        className="board-star"
+        data-on={on || undefined}
+        aria-pressed={on}
+        title={t(on ? 'unstar' : 'star')}
+        onClick={(e) => {
+          e.stopPropagation()
+          setGroup(i, { examples: on ? ex.filter((x) => x !== w.id) : [...ex, w.id].slice(-4) })
+        }}
+      >
+        {on ? '★' : '☆'}
+      </button>
+    )
+  }
 
   function card(w: BoardWord, from: Bucket) {
     // With one word to place, the others are only there to be seen.
@@ -362,6 +398,7 @@ export function MeaningsBoard({
             </label>
           )}
           {w.headword}
+          {star(w, from)}
         </span>
         <span className="board-reading" lang="ja">
           {w.reading}
@@ -588,6 +625,9 @@ export function MeaningsBoard({
             <button className="clear" onClick={() => removeGroup(i)}>
               {t('remove')}
             </button>
+            {extras && (
+              <GroupExtras char={char} group={g} onChange={(patch) => setGroup(i, patch)} candidates={candidates!} headwords={headwords} />
+            )}
           </div>
           ),
         ),

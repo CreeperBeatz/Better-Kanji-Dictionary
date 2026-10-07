@@ -5,7 +5,12 @@ The task types (TASK-forms-review.md §5, and more since):
     decomposition  subject 青            value: its direct parts, ["龶", "月"]; [] = atomic
     form_link      subject 龶|王          value: {"kind": looks_like, "note": ..., "reverse": true?}; kind "none" = no link
     part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
-    kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот", "note"}]
+    kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот", "note",
+                                                  "about", "aboutBg", "examples": [word ids], "original", "similar": ["命"]}]
+    kanji_extras   subject 生            value: {"origin", "originBg", "originSure", "link", "linkBg",
+                                                 "mixups": [{"char": "産", "reading": "うまれる"}]}
+    usage          subject はやい・…      value: {"reading", "no", "spellings": [{"kanji", "def", "defEn", "defBg",
+                                                 "examples": [{"ja", "kana", "en", "bg"}]}], "notes": [{"ja", "en", "bg"}]}
     word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"
     bg             subject word:123 | kanji:生   value: the Bulgarian, per sense / per meaning
     report         subject word:123 | kanji:生   value: {"about": english | ..., "text": ...}; never live
@@ -14,6 +19,11 @@ Parts, forms and part meanings are decided together, on one card per
 character (`character_card`, `decide_card`): a reviewer answers "what is it
 built from", "is it another kanji written differently", "what does it mean"
 for the same character at once, so the three answers can't contradict.
+
+A kanji's extras (its origin, how its groups link, the kanji it is easy to
+mix up with) are decided on its meanings card with its groups, as one
+(`decide(..., extras=...)`); their Bulgarian on its Bulgarian card. A usage
+card (which kanji to write for はやい) is a card of its own.
 
 An **item** is a change waiting for a person: a `proposal` (newly marked data
 loaded into the queue: an IDS diff, an AI draft) or a `suggestion` (a user
@@ -71,11 +81,16 @@ EXPORTS = {
     "form_link": ROOT / "data" / "form_overrides.json",
     "meaning": ROOT / "data" / "meaning_groups.json",
     "part_meaning": ROOT / "data" / "part_meanings.json",
+    # Which kanji to write for a shared kun reading: Bunkacho's report, translated and reviewed.
+    "usage": ROOT / "data" / "usage_cards.json",
     # Read by pipeline/build_db.py (stage bg) and by jmdict-kanjidic-bg's scripts/build.py.
     "bg": ROOT / "data" / "bg_reviewed.json",
 }
 
-TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "bg", "report")
+TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "kanji_extras", "usage", "bg", "report")
+# Decided on another type's card, never listed in the queue on their own: a
+# kanji's extras ride on its meanings card.
+RIDERS = ("kanji_extras",)
 # The three types a character's card decides together; the queue lists them as one stage.
 CHARACTER_TYPES = ("decomposition", "form_link", "part_meaning")
 CHARACTER = "character"
@@ -143,7 +158,8 @@ def _empty() -> dict:
     return {
         "items": {},
         "decisions": [],
-        "live": {"form_link": {}, "part_meaning": {}, "kanji_senses": {}, "word_sense": {}, "bg": {}},
+        "live": {"form_link": {}, "part_meaning": {}, "kanji_senses": {}, "word_sense": {}, "kanji_extras": {},
+                 "usage": {}, "bg": {}},
         "pack_key": None,
     }
 
@@ -590,8 +606,39 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
                 "bg": (s.get("bg") or "").strip()[:40] or None,
                 "note": (s.get("note") or "").strip()[:200] or None,
                 "noteBg": (s.get("noteBg") or "").strip()[:200] or None,
+                **_group_extras(subject, s),
             })
         return out
+
+    if type_ == "kanji_extras":
+        if len(subject) != 1 or not _known(subject):
+            raise _bad("bad_subject", "extras are of one kanji")
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise _bad("extras_invalid", "extras are an origin, a link and kanji to mix up")
+        out = {k: _prose(value.get(k), 600) for k in ("origin", "originBg", "link", "linkBg")}
+        out["originSure"] = (value.get("originSure") is not False) if out["origin"] else None
+        mix, seen = [], set()
+        for m in value.get("mixups") or []:
+            c = m.get("char") if isinstance(m, dict) else None
+            r = " ".join(str(m.get("reading") or "").split())[:20] if isinstance(m, dict) else ""
+            if not isinstance(c, str) or len(c) != 1 or c == subject or not _known(c) or not r:
+                raise _bad("extras_mixup", "a kanji to mix up is one kanji and the reading they share")
+            if c not in seen:
+                seen.add(c)
+                mix.append({"char": c, "reading": r})
+        if len(mix) > 16:
+            raise _bad("extras_mixup", "at most 16 kanji to mix up")
+        out["mixups"] = mix
+        return out
+
+    if type_ == "usage":
+        if not subject or len(subject) > 40:
+            raise _bad("bad_subject", "a usage card is of one reading")
+        if value is None:
+            return None
+        return _usage(value)
 
     if type_ == "bg":
         kind, key = _target(subject)
@@ -654,6 +701,61 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
     return value
 
 
+def _prose(v: Any, n: int) -> str | None:
+    """A sentence or three of text, whitespace tidied; None when empty."""
+    return " ".join(v.split())[:n] or None if isinstance(v, str) else None
+
+
+def _group_extras(char: str, s: dict) -> dict:
+    """A meaning group's extras, cleaned; only those set, so a group without any stays as it always was."""
+    out: dict[str, Any] = {}
+    for k in ("about", "aboutBg"):
+        if t := _prose(s.get(k), 500):
+            out[k] = t
+    ex = s.get("examples") or []
+    if not isinstance(ex, list) or len(ex) > 4 or any(not str(w).isdigit() for w in ex):
+        raise _bad("senses_examples", "a group's best examples are up to 4 of its words")
+    if ex:
+        ids = _word_ids(char)
+        ex = [int(w) for w in dict.fromkeys(ex)]
+        if any(w not in ids for w in ex):
+            raise _bad("senses_examples", "a group's best examples are up to 4 of its words")
+        out["examples"] = ex
+    if s.get("original") is True:
+        out["original"] = True
+    sim = s.get("similar") or []
+    if not isinstance(sim, list) or len(sim) > 16 or any(not isinstance(c, str) or len(c) != 1 or c == char for c in sim):
+        raise _bad("senses_similar", "similar kanji are single kanji, at most 16")
+    if sim:
+        unknown = [c for c in sim if not _known(c)]
+        if unknown:
+            raise _bad("parts_unknown", "not in the graph: {parts}", parts="".join(unknown))
+        out["similar"] = list(dict.fromkeys(sim))
+    return out
+
+
+def _usage(value: Any) -> dict:
+    """A usage card, cleaned: the report's Japanese with its translations."""
+    if not isinstance(value, dict) or not isinstance(value.get("spellings"), list) or not 2 <= len(value["spellings"]) <= 8:
+        raise _bad("usage_invalid", "a usage card has 2 or more spellings")
+    spellings = []
+    for s in value["spellings"]:
+        if not isinstance(s, dict) or not _prose(s.get("kanji"), 40):
+            raise _bad("usage_invalid", "each spelling needs its kanji")
+        exs = []
+        for x in s.get("examples") or []:
+            if not isinstance(x, dict) or not _prose(x.get("ja"), 200):
+                raise _bad("usage_invalid", "each example needs its Japanese")
+            exs.append({k: _prose(x.get(k), 300) for k in ("ja", "kana", "en", "bg")})
+        if len(exs) > 6:
+            raise _bad("usage_invalid", "at most 6 examples per spelling")
+        spellings.append({"kanji": _prose(s["kanji"], 40), "def": _prose(s.get("def"), 300),
+                          "defEn": _prose(s.get("defEn"), 300), "defBg": _prose(s.get("defBg"), 300), "examples": exs})
+    notes = [{k: _prose(n.get(k), 800) for k in ("ja", "en", "bg")} for n in value.get("notes") or [] if isinstance(n, dict)]
+    return {"reading": _prose(value.get("reading"), 40), "no": value.get("no") if isinstance(value.get("no"), int) else None,
+            "spellings": spellings, "notes": notes}
+
+
 def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
     """The overlay's value for the subject, None when nothing overrides the built data."""
     if type_ == "report":
@@ -667,7 +769,7 @@ def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
         return None
     if type_ == "form_link":
         return {k: v for k, v in entry.items() if k != "decision"}
-    if type_ == "part_meaning":
+    if type_ in ("part_meaning", "kanji_extras", "usage"):
         return {k: v for k, v in entry.items() if k != "decision"}
     if type_ == "kanji_senses":
         return entry["senses"]
@@ -739,7 +841,7 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
         return
     if value is None:
         _set_live(data, type_, subject, None)
-    elif type_ in ("form_link", "part_meaning"):
+    elif type_ in ("form_link", "part_meaning", "kanji_extras", "usage"):
         _set_live(data, type_, subject, {**value, "decision": decision})
     elif type_ == "kanji_senses":
         before = _senses(data, subject) or []
@@ -1031,7 +1133,7 @@ FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
            words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
-           notes: dict | None = None) -> dict:
+           notes: dict | None = None, extras: dict | None = None, about_bg: dict | None = None) -> dict:
     """`words`, for a kanji's meanings: word id -> group id (None: in no group),
     as the reviewer left them on the board. Each becomes a decision of its own,
     under this one, and is reverted with it.
@@ -1044,14 +1146,19 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     `skip`: the words the reviewer was not sure of, word id -> where they had
     it so far. They are left undecided and come back together as a follow-up
     item for the same kanji at the end of the queue, groups fixed, only them.
+
+    `extras`, on a kanji's meanings or Bulgarian card: its kanji_extras value
+    as the reviewer left it (origin, link, kanji to mix up; their Bulgarian),
+    decided under this one. `about_bg`, on its Bulgarian card: group id -> the
+    Bulgarian of the group's `about`.
     """
     with _change() as data:
-        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, notes)
+        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, notes, extras, about_bg)
 
 
 def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
             words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
-            notes: dict | None = None) -> dict:
+            notes: dict | None = None, extras: dict | None = None, about_bg: dict | None = None) -> dict:
     """decide() inside a change already open: a character's card decides several items in one."""
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, keep, reject or skip")
@@ -1091,22 +1198,51 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
         if held:
             _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
                       f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
-    if type_ == "bg" and (labels or notes) and subject.startswith("kanji:"):
-        _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], notes or {})
+    if type_ == "bg" and (labels or notes or about_bg) and subject.startswith("kanji:"):
+        _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], notes or {}, about_bg or {})
+    if extras is not None and (type_ == "kanji_senses" or (type_ == "bg" and subject.startswith("kanji:"))):
+        _decide_extras(data, _target(subject)[1] if type_ == "bg" else subject, extras, user_id, d["id"])
     return dict(item)
 
 
-def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str, notes: Any = None) -> None:
-    """Set the Bulgarian labels and notes of a kanji's accepted groups (a decision under `parent`)."""
+def _decide_extras(data: dict, char: str, value: Any, user_id: str, parent: str) -> None:
+    """A kanji's extras as its card left them: its open kanji_extras item accepted
+    or edited, or, with none open, changed directly -- a decision under `parent`."""
+    after = validate("kanji_extras", char, value, data)
+    before = live_value("kanji_extras", char, data)
+    item = next((i for i in data["items"].values() if i["type"] == "kanji_extras" and i["subject"] == char and i["status"] == "open"), None)
+    if item:
+        act = "accept" if item["proposed"] == after else "edit"
+        c = _decision(act, "kanji_extras", char, before, after, user_id, item["id"], None)
+        _close(data, item, "accepted" if act == "accept" else "edited", c)
+    elif before != after:
+        c = _decision("direct", "kanji_extras", char, before, after, user_id, None, None)
+    else:
+        return
+    _apply(data, "kanji_extras", char, after, c["id"])
+    c["parent"] = parent
+    data["decisions"].append(c)
+
+
+def extras_of(char: str, data: dict | None = None) -> dict | None:
+    """A kanji's accepted extras, for the site."""
+    return live_value("kanji_extras", char, data)
+
+
+def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str, notes: Any = None,
+                  about_bg: Any = None) -> None:
+    """Set the Bulgarian labels, notes and abouts of a kanji's accepted groups (a decision under `parent`)."""
     notes = notes or {}
-    if not isinstance(labels, dict) or not isinstance(notes, dict):
+    about_bg = about_bg or {}
+    if not isinstance(labels, dict) or not isinstance(notes, dict) or not isinstance(about_bg, dict):
         raise _bad("bg_invalid", "one Bulgarian gloss per sense")
     before = live_value("kanji_senses", char, data)
     if not before:
         return
     clean = lambda v, n: " ".join(str(v).split())[:n] or None  # noqa: E731
     after = validate("kanji_senses", char, [
-        {**g, "bg": clean(labels.get(g["id"], g.get("bg") or ""), 40), "noteBg": clean(notes.get(g["id"], g.get("noteBg") or ""), 200)}
+        {**g, "bg": clean(labels.get(g["id"], g.get("bg") or ""), 40), "noteBg": clean(notes.get(g["id"], g.get("noteBg") or ""), 200),
+         "aboutBg": clean(about_bg.get(g["id"], g.get("aboutBg") or ""), 500)}
         for g in before
     ], data)
     if after == before:
@@ -1325,6 +1461,7 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     waiting = [
         i for i in data["items"].values()
         if i["status"] == "open"
+        and i["type"] not in RIDERS
         and i["subject"] not in held
         # A word's meaning waits until its kanji's meanings are accepted.
         and (i["type"] != "word_sense" or _char(i["subject"]) in accepted)
@@ -1334,7 +1471,7 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
     ]
     mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
     anchor = _anchors(data)
-    types = {t: 0 for t in TYPES if t not in CHARACTER_TYPES}
+    types = {t: 0 for t in TYPES if t not in CHARACTER_TYPES and t not in RIDERS}
     types[CHARACTER] = len({anchor(i) for i in mine if i["type"] in CHARACTER_TYPES})
     for i in mine:
         if i["type"] not in CHARACTER_TYPES:
@@ -1552,7 +1689,13 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
                 out["board"].append(_board_word(out["word"], _placed(data, subject), _latest_item(data, "word_sense", subject)))
         else:
             out["board"] = board(char, data)
+            out["extras"] = _extras_context(data, char)
         return out
+    if type_ == "usage":
+        # The kanji the card is about, with their meanings, to check the translations against.
+        it = _latest_item(data, "usage", subject)
+        chars = [c for s in ((it or {}).get("proposed") or {}).get("spellings", []) for c in s["kanji"] if _is_kanji(c)]
+        return {"kanji": [{"char": c, **_kanji_info(c)} for c in dict.fromkeys(chars)]}
     if type_ == "form_link":
         a, b = subject.split("|")
         nodes = forms._nodes([a, b])
@@ -1592,8 +1735,29 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
                 g = next((x for x in senses if x["id"] == placed), None)
                 groups.append({"char": c, "group": placed, "en": g["en"] if g else None, "bg": g.get("bg") if g else None})
             return {"word": _fetch_word(wid), "built": _bg_built(subject), "groups": groups}
-        return {"char": key, **_kanji_info(key), "built": _bg_built(subject), "senses": _senses(data, key)}
+        return {"char": key, **_kanji_info(key), "built": _bg_built(subject), "senses": _senses(data, key),
+                "extras": _extras_context(data, key)}
     return {"forms": forms.forms_of(subject)}
+
+
+def _is_kanji(c: str) -> bool:
+    return "\u3400" <= c <= "\u9fff" or "\uf900" <= c <= "\ufaff"
+
+
+def _extras_context(data: dict, char: str) -> dict:
+    """A kanji's extras for its cards: the open item's draft, else what is accepted; and its fixed facts."""
+    item = next((i for i in data["items"].values() if i["type"] == "kanji_extras" and i["subject"] == char and i["status"] == "open"), None)
+    return {"item": item["id"] if item else None, "value": item["proposed"] if item else live_value("kanji_extras", char, data),
+            "kokuji": char in kokuji()}
+
+
+@functools.cache
+def kokuji() -> frozenset[str]:
+    """Kanji made in Japan (data/kokuji.txt, from Kodansha's marks): a fact, shown with the origin."""
+    f = ROOT / "data" / "kokuji.txt"
+    if not f.exists():
+        return frozenset()
+    return frozenset(ln.strip() for ln in f.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#"))
 
 
 _ranked: dict[str, tuple] | None = None
@@ -1847,8 +2011,8 @@ def progress() -> dict:
         if i["type"] in CHARACTER_TYPES and i["status"] != "withdrawn":
             c = anchor(i)
             cards[c] = cards.get(c, True) and i["status"] != "open"
-    for t in CHARACTER_TYPES:
-        del stages[t]
+    for t in (*CHARACTER_TYPES, *RIDERS):
+        del stages[t]  # riders are decided on their kanji's meanings card: not tasks of their own
     stages[CHARACTER] = {"done": sum(cards.values()), "total": len(cards)}
     # The kanji in scope (server/scope.py) that have a meanings task.
     targets = sorted(subjects("kanji_senses", data))
@@ -2010,8 +2174,14 @@ def export() -> dict[str, int]:
     meaning = {
         "senses": {c: v["senses"] for c, v in sorted(data["live"]["kanji_senses"].items())},
         "words": {k: v["sense"] for k, v in sorted(data["live"]["word_sense"].items())},
+        # Origin (from Wiktionary's glyph origin, CC BY-SA), how the groups link, kanji to mix up.
+        "kanji": {c: {k: x for k, x in v.items() if k != "decision"} for c, v in sorted(data["live"]["kanji_extras"].items())},
     }
     EXPORTS["meaning"].write_text(json.dumps(meaning, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    usage = {r: {k: x for k, x in v.items() if k != "decision"} for r, v in sorted(data["live"]["usage"].items())}
+    EXPORTS["usage"].write_text(json.dumps({
+        "source": "文化審議会国語分科会「「異字同訓」の漢字の使い分け例（報告）」2014; translated and edited by Better Kanji Dictionary",
+        "cards": usage}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     parts = dict(sorted(data["live"]["part_meaning"].items()))
     EXPORTS["part_meaning"].write_text(json.dumps(parts, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
@@ -2025,6 +2195,7 @@ def export() -> dict[str, int]:
     EXPORTS["bg"].write_text(json.dumps(bg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return {"decomposition": len(ov), "form_link": len(data["live"]["form_link"]), "part_meaning": len(parts),
             "kanji_senses": len(meaning["senses"]), "word_sense": len(meaning["words"]),
+            "kanji_extras": len(meaning["kanji"]), "usage": len(usage),
             "bg words": len(bg["words"]), "bg kanji": len(bg["kanji"])}
 
 

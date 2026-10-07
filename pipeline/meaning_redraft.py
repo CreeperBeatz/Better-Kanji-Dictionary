@@ -25,8 +25,9 @@ Run A also writes, per group, `about` (what the kanji does in it) and
 `examples` (the 2-3 words that show it best), and per kanji `origin` (how
 the character was built, summarised only from Wiktionary's glyph origin,
 `etymology` in the input), `originSure` and `link` (how its groups
-connect). Dani picked these on 2026-10-07. They go into the groups item's
-evidence (`extras`) for review; nothing shows them yet.
+connect). Dani picked these on 2026-10-07. `load` puts them in the groups
+item's evidence (`extras`); pipeline/meaning_extras.py then moves them onto
+the values reviewers decide, with their Bulgarian and Kodansha's candidates.
 
 `load` puts the new drafts in place of each kanji's open, untouched draft:
 its groups item open, never decided, never skipped, no word of it decided.

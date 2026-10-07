@@ -13,11 +13,13 @@ import {
   dataChanged,
   type ItemDetail,
   type KanjiDictionaries,
+  type KanjiExtras,
   type MeaningGroup,
   type Origin,
   type QueueItem,
   type TaskType,
   type TaskValue,
+  type UsageCard,
 } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
@@ -31,6 +33,7 @@ import { CharacterCard } from './CharacterCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { DictionariesPanel } from './DictionariesPanel'
 import { Evidence } from './Evidence'
+import { candidatesOf, KanjiExtrasEditor } from './Extras'
 import { ReportButton } from './ReportButton'
 import { ResearchOpen } from './ResearchButton'
 import { bgPrompt, meaningsPrompt } from './researchPrompts'
@@ -47,6 +50,8 @@ const S = strings(
     t_part_meaning: 'part meanings',
     t_kanji_senses: 'meanings',
     t_word_sense: 'one word',
+    t_kanji_extras: 'extras',
+    t_usage: 'which kanji',
     t_bg: 'Bulgarian translations',
     t_report: 'reports',
     reported: 'What is wrong, says the report',
@@ -93,6 +98,8 @@ const S = strings(
     t_part_meaning: 'значения на части',
     t_kanji_senses: 'значения',
     t_word_sense: 'една дума',
+    t_kanji_extras: 'допълнения',
+    t_usage: 'кое канджи',
     t_bg: 'преводи на български',
     t_report: 'доклади',
     reported: 'Какво не е наред според доклада',
@@ -134,7 +141,7 @@ const S = strings(
 type Key = Parameters<ReturnType<typeof S>>[0]
 // A character's parts, forms and part meaning are one card (CharacterCard.tsx); a single
 // word's meaning is under meanings, with its kanji's card.
-const TYPES: TaskType[] = ['character', 'kanji_senses', 'word_sense', 'bg', 'report']
+const TYPES: TaskType[] = ['character', 'kanji_senses', 'word_sense', 'usage', 'bg', 'report']
 const STAGES = TYPES.filter((k) => k !== 'word_sense')
 const ORIGINS: Origin[] = ['proposal', 'suggestion']
 const LIVE_ON_PAGE: TaskType[] = ['bg']
@@ -146,6 +153,13 @@ function reportSubject(i: QueueItem): string | null {
   if (i.type === 'word_sense') return `word:${i.subject.split('|')[1]}`
   return `kanji:${i.subject.split('|')[0]}`
 }
+
+/** A usage card's kanji, one per spelling: 早・速. */
+const usageKanji = (i: QueueItem) =>
+  ((i.proposed as UsageCard | null)?.spellings ?? [])
+    .map((s) => [...s.kanji].find((c) => /[㐀-鿿]/.test(c)) ?? '')
+    .filter(Boolean)
+    .join('・')
 
 /** A single word's item: the word's id, from its subject 生|1234567. */
 const wordOf = (i: QueueItem) => Number(i.subject.split('|')[1])
@@ -192,6 +206,11 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [labelsFrom, setLabelsFrom] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [notesFrom, setNotesFrom] = useState<Record<string, string>>({})
+  // A kanji's extras (origin, link, kanji to mix up), on its meanings and Bulgarian cards; and the Bulgarian of each group's about.
+  const [extras, setExtras] = useState<KanjiExtras | null>(null)
+  const [extrasFrom, setExtrasFrom] = useState<KanjiExtras | null>(null)
+  const [aboutBg, setAboutBg] = useState<Record<string, string>>({})
+  const [aboutBgFrom, setAboutBgFrom] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -257,6 +276,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setLabelsFrom({})
     setNotes({})
     setNotesFrom({})
+    setExtras(null)
+    setExtrasFrom(null)
+    setAboutBg({})
+    setAboutBgFrom({})
     setBoardWork(false)
     setDicts(undefined)
     // A character's card loads its own (CharacterCard.tsx).
@@ -275,15 +298,22 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         if (d.type === 'bg' && d.context.senses) {
           const l: Record<string, string> = {}
           const n: Record<string, string> = {}
+          const a: Record<string, string> = {}
           for (const g of d.context.senses) {
             l[g.id] = g.bg ?? ''
             n[g.id] = g.noteBg ?? ''
+            if (g.about) a[g.id] = g.aboutBg ?? ''
           }
           setLabels(kept?.labels ?? l)
           setLabelsFrom(l)
           setNotes(kept?.notes ?? n)
           setNotesFrom(n)
+          setAboutBg(kept?.aboutBg ?? a)
+          setAboutBgFrom(a)
         }
+        const x = d.context.extras?.value ?? null
+        setExtras(kept?.extras ?? x)
+        setExtrasFrom(x)
         if (d.type === 'kanji_senses' && d.context.board) {
           const p = startPlacements(d.context.board, (d.proposed ?? d.current) as MeaningGroup[] | null)
           setPlacements(kept?.placements ?? p)
@@ -320,7 +350,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       try {
         const withLabels = item.type === 'bg' && Object.keys(labels).length ? labels : undefined
         const withNotes = item.type === 'bg' && Object.keys(notes).length ? notes : undefined
-        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withNotes)
+        const withAbout = item.type === 'bg' && Object.keys(aboutBg).length ? aboutBg : undefined
+        // The extras are decided with the card when it decides anything: not on a skip.
+        const withExtras = action !== 'skip' && extras ? extras : undefined
+        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withNotes, withExtras, withAbout)
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         advance(action === 'skip')
@@ -330,7 +363,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setBusy(false)
       }
     },
-    [item, busy, reason, lang, labels, notes, advance],
+    [item, busy, reason, lang, labels, notes, aboutBg, extras, advance],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
@@ -338,8 +371,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const open = item?.proposed === null
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
-  const relabelled = item?.type === 'bg' && (!same(labels, labelsFrom) || !same(notes, notesFrom))
-  const edited = !!item && (moved || relabelled || !same(draft, open ? item.current : item.proposed))
+  const relabelled = item?.type === 'bg' && (!same(labels, labelsFrom) || !same(notes, notesFrom) || !same(aboutBg, aboutBgFrom))
+  const extrasEdited = !same(extras, extrasFrom)
+  const edited = !!item && (moved || relabelled || extrasEdited || !same(draft, open ? item.current : item.proposed))
   // Anything to throw away: the answer, the reason, words moved or left for later, labels, board ticks.
   const changed = !!item && (edited || !!reason.trim() || skipped.size > 0 || boardWork)
   function reset() {
@@ -351,6 +385,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setSkipped(new Set())
     setLabels(labelsFrom)
     setNotes(notesFrom)
+    setAboutBg(aboutBgFrom)
+    setExtras(extrasFrom)
     setBoardWork(false)
     setFresh((n) => n + 1)
   }
@@ -387,8 +423,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       skipped: skipped.size ? [...skipped] : undefined,
       labels: item.type === 'bg' && !same(labels, labelsFrom) ? labels : undefined,
       notes: item.type === 'bg' && !same(notes, notesFrom) ? notes : undefined,
+      aboutBg: item.type === 'bg' && !same(aboutBg, aboutBgFrom) ? aboutBg : undefined,
+      extras: !same(extras, extrasFrom) ? (extras ?? undefined) : undefined,
     })
-  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom, notes, notesFrom])
+  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom, notes, notesFrom, aboutBg, aboutBgFrom, extras, extrasFrom])
 
   const skip = useCallback((ids: number[], on: boolean) => setSkipped((s) => withIds(s, ids, on)), [])
   const isFollowUp = (i: QueueItem) => i.type === 'kanji_senses' && !!(i.evidence as { words?: unknown } | null)?.words
@@ -417,6 +455,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const waitingIn = (k: TaskType) => (types[k] ?? 0) + (k === 'kanji_senses' ? (types.word_sense ?? 0) : 0)
 
   const subjectGlyphs = (i: QueueItem) => {
+    // A usage card is about its kanji (早・速); the reading goes beside them in the list.
+    if (i.type === 'usage') return usageKanji(i) || i.subject
     const [a] = i.subject.split('|')
     const b = i.type === 'bg' || i.type === 'report' ? i.subject.split(':')[1] : i.subject.split('|')[1]
     if (i.type === 'form_link') return `${a} · ${b}`
@@ -505,7 +545,16 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     {subjectGlyphs(i)}
                   </span>
                   <span className="queue-kind">
-                    {t(`t_${i.type}` as Key)} · {isFollowUp(i) ? t('followUp') : i.origin === 'suggestion' ? t('o_suggestion') : i.source}
+                    {t(`t_${i.type}` as Key)} ·{' '}
+                    {i.type === 'usage' ? (
+                      <span lang="ja">{i.subject}</span>
+                    ) : isFollowUp(i) ? (
+                      t('followUp')
+                    ) : i.origin === 'suggestion' ? (
+                      t('o_suggestion')
+                    ) : (
+                      i.source
+                    )}
                   </span>
                 </button>
               </li>
@@ -559,7 +608,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   <ValueView type={item.type} value={item.proposed} />
                 </dd>
               </dl>
-              ) : !board && item.type !== 'bg' && (
+              ) : !board && item.type !== 'bg' && item.type !== 'usage' && (
               <dl className="queue-compare">
                 <dt>{t('now')}</dt>
                 <dd>
@@ -582,7 +631,19 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               <div className="queue-edit">
                 {item.type === 'bg' ? (
                   detail?.id === item.id ? (
-                    <BgCard detail={detail} value={(draft ?? []) as string[]} onChange={setDraft} labels={labels} onLabels={setLabels} notes={notes} onNotes={setNotes} />
+                    <BgCard
+                      detail={detail}
+                      value={(draft ?? []) as string[]}
+                      onChange={setDraft}
+                      labels={labels}
+                      onLabels={setLabels}
+                      notes={notes}
+                      onNotes={setNotes}
+                      aboutBg={aboutBg}
+                      onAboutBg={setAboutBg}
+                      extras={extras}
+                      onExtras={setExtras}
+                    />
                   ) : (
                     <p className="hint">{t('loading')}</p>
                   )
@@ -603,6 +664,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       skipped={skipped}
                       onSkip={skip}
                       followUp={isFollowUp(item)}
+                      candidates={detail.context.extras ? candidatesOf(item.evidence ?? detail.evidence) : undefined}
                     />
                   ) : (
                     <p className="hint">{t('loading')}</p>
@@ -636,6 +698,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       subject={item.subject}
                     />
                   </>
+                )}
+                {board && extras && detail?.id === item.id && !isFollowUp(item) && (
+                  <KanjiExtrasEditor
+                    value={extras}
+                    onChange={setExtras}
+                    candidates={candidatesOf(item.evidence ?? detail.evidence)}
+                    kokuji={!!detail.context.extras?.kokuji}
+                  />
                 )}
                 <label className="review-field">
                   <span>{t('reason')}</span>
