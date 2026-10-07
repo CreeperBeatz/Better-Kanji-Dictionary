@@ -17,7 +17,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 
-BOOKS = ("kanji", "bg-ja")
+BOOKS = ("kanji", "bg-ja", "kodansha", "kangorin")
+
+# The books kept as a PDF (server/dictionaries.py), by PDF page: rendered when first asked for,
+# then kept beside the transcription like the other books' page images.
+PDFS = {"kodansha": ("source/kodansha-kanji.pdf",), "kangorin": ("source/shin-kangorin.pdf",)}
+PDF_ZOOM = {"kodansha": 2.0, "kangorin": 1.6}
 
 
 def books_dir() -> Path:
@@ -26,11 +31,31 @@ def books_dir() -> Path:
 
 
 def page_file(book: str, page: int) -> Path | None:
-    """One printed page's scan, or None when it is not here."""
+    """One page's image (a printed page; for a PDF book, a PDF page), or None when it is not here."""
     if book not in BOOKS or not 1 <= page <= 9999:
         return None
     f = books_dir() / book / "pages" / f"p{page:04d}.png"
-    return f if f.is_file() else None
+    if f.is_file():
+        return f
+    return _render(book, page, f) if book in PDFS else None
+
+
+def _render(book: str, page: int, to: Path) -> Path | None:
+    """A PDF book's page as an image, made once. Needs PyMuPDF, which only a server with the books has."""
+    pdf = next((p for pattern in PDFS[book] for p in sorted(books_dir().glob(pattern))), None)
+    if pdf is None:
+        return None
+    try:
+        import pymupdf
+    except ImportError:
+        return None
+    with pymupdf.open(pdf) as doc:
+        if page > doc.page_count:
+            return None
+        pix = doc[page - 1].get_pixmap(matrix=pymupdf.Matrix(PDF_ZOOM[book], PDF_ZOOM[book]))
+        to.parent.mkdir(parents=True, exist_ok=True)
+        pix.save(str(to))
+    return to
 
 
 _entries: tuple[float, dict[int, dict], dict[str, dict], dict[str, dict]] | None = None

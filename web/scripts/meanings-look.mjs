@@ -24,6 +24,20 @@ if (!it) throw new Error(`no open meanings item for ${char}`)
 await page.goto(`${WEB}/review/queue/${TYPE === 'bg' ? 'bulgarian' : 'meanings'}/${it.id}`, { waitUntil: 'networkidle' })
 await page.waitForTimeout(1500)
 await page.screenshot({ path: `${SHOTS}/${shot}.png`, fullPage: true })
+// OPEN=<n>: unfold the first n dictionaries; PAGE=1: open the first one's page popup.
+if (process.env.OPEN) {
+  const sums = page.locator('.dict-sum')
+  for (let i = 0; i < Number(process.env.OPEN); i++) await sums.nth(i).click({ position: { x: 5, y: 8 } })
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `${SHOTS}/${shot}-open.png` })
+}
+if (process.env.PAGE) {
+  await page.locator('.dict-sum .book-page').first().click()
+  await page.waitForSelector('.book-popup .book-scan img', { timeout: 20000 })
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: `${SHOTS}/${shot}-page.png` })
+  await page.keyboard.press('Escape')
+}
 // AT=<selector>: a second shot with that part of the card scrolled into view.
 if (process.env.AT) {
   await page.locator(process.env.AT).first().scrollIntoViewIfNeeded()

@@ -26,6 +26,9 @@ const S = strings(
   {
     kanji: 'Цалта’s kanji book',
     'bg-ja': 'Иванов’s Bulgarian–Japanese dictionary',
+    kodansha: 'Kodansha Kanji Learner’s Dictionary',
+    kangorin: '新漢語林',
+    pdfPage: 'page {n}',
     fromBook: 'From the book',
     page: 'printed page {n}',
     pageHint: 'The scan of the printed page: for when what is drawn here looks wrong',
@@ -50,6 +53,9 @@ const S = strings(
   {
     kanji: 'Канджи речникът на Цалта',
     'bg-ja': 'Българско-японският речник на Иванов',
+    kodansha: 'Kodansha Kanji Learner’s Dictionary',
+    kangorin: '新漢語林',
+    pdfPage: 'с. {n}',
     fromBook: 'От книгата',
     page: 'отпечатана с. {n}',
     pageHint: 'Сканираната страница: за когато нарисуваното тук изглежда грешно',
@@ -107,7 +113,7 @@ function useFetched<T>(key: string, get: () => Promise<T>, cache: Map<string, Pr
 }
 
 /** The printed page in a popup over the review screen; it has the keyboard while it is open. */
-function PagePopup({ book, page, onClose }: { book: BookRef['book']; page: number; onClose: () => void }) {
+export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page: number; onClose: () => void }) {
   const t = S(useLang())
   const [zoom, setZoom] = useState(false)
   const { value: url, problem } = useFetched(`${book}/${page}`, () => api.reviewBookPage(book, page).then((b) => URL.createObjectURL(b)), scans)
@@ -151,7 +157,7 @@ function noteText(note: string): ReactNode[] {
  * its note. `words`: all of them with the note, none (the head only), or the
  * one a word card is about.
  */
-function KanjiEntry({ src, words }: { src: BookRef; words: 'all' | 'none' | string }) {
+export function KanjiEntry({ src, words }: { src: BookRef; words: 'all' | 'none' | string }) {
   const key = src.no != null ? `no:${src.no}` : `char:${src.char ?? ''}`
   const { value: e, problem } = useFetched(key, () => api.reviewBookEntry(src.no ?? null, src.char ?? null), entries)
   const t = S(useLang())

@@ -572,6 +572,8 @@ export interface KanjiDictionaries {
   kanjipedia: string
   kodansha?: {
     no: number
+    /** The PDF pages the entry is on. */
+    pages: number[]
     core: string[]
     senses: DictSense[]
     kun: { head: string; kana: string | null; text: string | null; senses: DictSense[] }[]
@@ -580,6 +582,9 @@ export interface KanjiDictionaries {
   }
   kangorin?: {
     no: number
+    pages: number[]
+    /** Its old form, printed beside it in 〖〗. */
+    old: string | null
     classes: string[]
     joyo: string[]
     senses: (DictSense & { japan: boolean; examples: string[]; exampleIds: (number | null)[]; subs: { n: string; key: string; examples: string[] }[] })[]
@@ -594,7 +599,8 @@ export interface KanjiDictionaries {
 }
 
 export interface BookRef {
-  book: 'kanji' | 'bg-ja'
+  /** Цалта's kanji book, Иванов's dictionary (printed pages); Kodansha, 新漢語林 (PDF pages). */
+  book: 'kanji' | 'bg-ja' | 'kodansha' | 'kangorin'
   pages: number[]
   no?: number
   char?: string

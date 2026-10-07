@@ -8776,48 +8776,86 @@ button.review-part {
   color: #cfa25a;
 }
 
-.dicts-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  gap: 10px;
+/* One dictionary under another, each folded to the line that cites it. */
+.dicts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 10px;
 }
 
 .dict {
   min-width: 0;
-  max-height: 30rem;
-  overflow: auto;
-  padding: 6px 10px 8px;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: var(--sumi);
-  font-size: 13px;
 }
 
-.dict summary {
+.dict-sum {
+  margin: 0;
+  padding: 3px 0;
   cursor: pointer;
+  list-style: none;
+}
+
+.dict-sum::-webkit-details-marker {
+  display: none;
+}
+
+.dict-sum::before {
+  content: '▸';
+  display: inline-block;
+  width: 1.1em;
   color: var(--paper-dim);
 }
 
-.dict-name {
-  color: var(--paper);
-  font-weight: 500;
+.dict[open] > .dict-sum::before {
+  content: '▾';
 }
 
 .dict-core {
-  margin-left: 6px;
+  margin-left: 8px;
   color: var(--ai);
-  font-size: 12px;
   letter-spacing: 0.04em;
 }
 
-.dict h5 {
-  margin: 8px 0 2px;
-  color: var(--muted);
+.dict-split-n {
+  margin-left: 8px;
+  padding: 0 5px;
+  border: 1px solid #cfa25a;
+  border-radius: 3px;
+  color: #cfa25a;
   font-size: 11px;
-  font-weight: 500;
+}
+
+.dict > .book-entry {
+  max-width: none;
+}
+
+/* The entry itself on the books' paper (as .book-entry): black on paper, in a thin frame. */
+.dict-paper {
+  max-height: 32rem;
+  overflow: auto;
+  margin: 4px 0 6px;
+  padding: 4px 10px 6px;
+  border: 1px solid #111;
+  background: #f7f4ec;
+  color: #111;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.dict-paper h5 {
+  margin: 8px 0 2px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid #111;
+  color: #111;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.dict-paper h5:first-child {
+  margin-top: 2px;
 }
 
 .dict-senses {
@@ -8828,7 +8866,7 @@ button.review-part {
 
 .dict-sense {
   padding: 2px 0;
-  border-bottom: 1px dotted var(--rule);
+  border-bottom: 1px dotted #aaa;
 }
 
 .dict-sense:last-child {
@@ -8839,37 +8877,55 @@ button.review-part {
   display: inline-block;
   min-width: 2.2em;
   margin-right: 4px;
-  color: var(--muted);
+  color: #555;
+  font-size: 12px;
+}
+
+.dict-kana {
+  color: #555;
   font-size: 12px;
 }
 
 .dict-text b {
-  color: var(--paper);
-  font-weight: 600;
+  font-weight: 700;
 }
 
+/* Where a sense's words are on the board: in one group (green), split (amber), none on it (grey). */
 .dict-chip {
   margin-left: 8px;
-  color: #7fb88a;
+  color: #2d6a3e;
+  font-family: var(--gothic);
   font-size: 12px;
   white-space: nowrap;
 }
 
 .dict-chip[data-split] {
-  color: #cfa25a;
+  color: #9a5b00;
+  font-weight: 600;
   white-space: normal;
 }
 
 .dict-chip[data-none] {
-  color: var(--faint);
+  color: #999;
+}
+
+.dict-sub {
+  margin-left: 10px;
+  color: #555;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dict-sub .dict-chip {
+  margin-left: 4px;
 }
 
 .dict-japan {
   margin-right: 6px;
   padding: 0 4px;
-  border: 1px solid var(--shu);
+  border: 1px solid #b8321f;
   border-radius: 2px;
-  color: var(--shu);
+  color: #b8321f;
   font-size: 11px;
 }
 
@@ -8877,20 +8933,21 @@ button.review-part {
   display: block;
   margin: 1px 0 0 calc(2.2em + 4px);
   font-family: var(--mincho);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .dict-word + .dict-word::before {
   content: ' · ';
-  color: var(--faint);
+  color: #aaa;
 }
 
 .dict-word[data-off] {
-  color: var(--muted);
+  color: #888;
 }
 
 .dict-word[data-away] {
-  color: #cfa25a;
+  color: #9a5b00;
+  font-weight: 600;
 }
 
 .dict-kun p {
@@ -8899,22 +8956,19 @@ button.review-part {
 
 .dict-head {
   font-family: var(--mincho);
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .dict-kaiji {
   margin: 6px 0 0;
-  color: var(--paper-dim);
+  padding-top: 4px;
+  border-top: 1px dotted #aaa;
+  color: #333;
   font-size: 12.5px;
 }
 
-.dict-sub {
-  margin-left: 10px;
-  color: var(--muted);
+.dict-note {
+  margin: 4px 0 0;
+  color: #666;
   font-size: 12px;
-  white-space: nowrap;
-}
-
-.dict-sub .dict-chip {
-  margin-left: 4px;
 }

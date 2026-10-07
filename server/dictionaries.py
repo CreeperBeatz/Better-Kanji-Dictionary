@@ -109,6 +109,7 @@ def _kodansha_view(e: dict) -> dict:
 
     return {
         "no": e.get("no"),
+        "pages": e.get("pdf_pages") or [],
         "core": e.get("core_meanings") or [],
         "senses": senses(s.get("compounds") or [], "c:"),
         "kun": kun,
@@ -131,22 +132,25 @@ def _kangorin() -> dict[str, dict]:
     stamp = (len(files), max((f.stat().st_mtime for f in files), default=0))
 
     def build():
-        out: dict[str, dict] = {}
+        out: dict[str, list[dict]] = {}
         cur: dict | None = None
         for f in files:
             page = json.loads(f.read_text(encoding="utf-8"))
             for b in page.get("blocks") or []:
                 t = b.get("type")
                 if t == "kanji":
+                    # The old form in 〖〗 right after the headword (【会】〖會〗) is the same entry.
+                    if b.get("bracket") == "〖〗" and cur is not None and not cur["sections"] and b.get("kanji"):
+                        cur["old"] = b["kanji"]
+                        out.setdefault(b["kanji"], []).append(cur)
+                        continue
                     # A pointer (生部。→ ページ) is not an entry: it only ends the one before.
                     cur = None
                     if b.get("no") and b.get("kanji"):
                         cur = {"kanji": b["kanji"], "no": b["no"], "classes": b.get("classes") or [],
                                "joyo": b.get("joyo") or [], "pages": [page.get("pdf_page")], "sections": {},
                                "compounds": []}
-                        old = out.get(b["kanji"])
-                        if old is None or not old["sections"].get("字義"):
-                            out[b["kanji"]] = cur
+                        out.setdefault(b["kanji"], []).append(cur)
                     continue
                 if cur is None:
                     continue
@@ -155,6 +159,10 @@ def _kangorin() -> dict[str, dict]:
                 if t == "section":
                     label = b.get("label")
                     text = b.get("text") or ""
+                    if label == "字義" and "字義" in cur["sections"]:
+                        # A second 字義: the next entry, its headword missed at a page break. Not this kanji's.
+                        cur = None
+                        continue
                     if label:
                         cur["sections"][label] = cur["sections"].get(label, "") + text
                         cur["last"] = label
@@ -166,12 +174,14 @@ def _kangorin() -> dict[str, dict]:
                         cur["last"] = None
                     elif b.get("cont_prev") and cur.get("last"):
                         cur["sections"][cur["last"]] += b.get("text") or ""
-        return out
+        # A headword met twice (a misread number, a repeated page): the entry with the fullest 字義.
+        return {c: max(es, key=lambda e: len(e["sections"].get("字義") or "")) for c, es in out.items()}
 
     return _cached("kangorin", (str(d), stamp), build)
 
 
-_SENSE_MARK = re.compile(r"(\[[一二三四五国]\])|([❶-❿⓫-⓴])|(国(?=\*\*))")
+# A reading group is [一] or a bare 一 just before its ❶ (一❶した。… 二❶くだ-る。…); [国] holds Japan-only senses.
+_SENSE_MARK = re.compile(r"(\[[一二三四五国]\]|[一二三四五](?=❶))|([❶-❿⓫-⓴])|(国(?=\*\*))")
 
 
 def jigi_senses(text: str) -> list[dict]:
@@ -186,7 +196,7 @@ def jigi_senses(text: str) -> list[dict]:
         cur["text"] += text[pos:m.start()]
         pos = m.end()
         if m.group(1):
-            group = m.group(1)
+            group = m.group(1) if m.group(1).startswith("[") else f"[{m.group(1)}]"
             cur = {"n": group, "text": "", "japan": group == "[国]"}
         else:
             n = m.group(2) or "国"
@@ -197,9 +207,14 @@ def jigi_senses(text: str) -> list[dict]:
             cur = {"n": label, "text": "", "japan": n == "国" or group == "[国]"}
         out.append(cur)
     cur["text"] += text[pos:]
+    seen: set[str] = set()
     for s in out:
         s["text"] = s["text"].strip()
         s["key"] = f"g:{s['n']}"
+        # A number printed (or transcribed) twice (依 ❷ ❷) still needs a key of its own.
+        while s["key"] in seen:
+            s["key"] += "'"
+        seen.add(s["key"])
         s["examples"] = re.findall(r"「([^」]+)」", s["text"])
         # Its sub-senses ㋐ ㋑, each with its own examples: 造作 and 耕作 are both ❶ つくる, but not one meaning.
         parts = re.split(r"([㋐-㋾])", s["text"])
@@ -211,7 +226,7 @@ def jigi_senses(text: str) -> list[dict]:
 def _kangorin_view(e: dict) -> dict:
     sec = e["sections"]
     return {
-        "no": e["no"], "classes": e["classes"], "joyo": e["joyo"],
+        "no": e["no"], "classes": e["classes"], "joyo": e["joyo"], "old": e.get("old"), "pages": e["pages"],
         "senses": jigi_senses(sec.get("字義") or ""),
         "kaiji": sec.get("解字"), "note": sec.get("参考"),
         "compounds": len(e["compounds"]),

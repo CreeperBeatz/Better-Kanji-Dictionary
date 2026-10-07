@@ -10,11 +10,11 @@
  * Reviewers and the admin only; a server without the dictionaries' files
  * shows only what it has.
  */
-import { useMemo, type ReactNode } from 'react'
-import type { BoardWord, DictSense, DictWord, KanjiDictionaries, MeaningGroup } from '../api'
+import { useMemo, useState, type ReactNode } from 'react'
+import type { BoardWord, BookRef, DictSense, DictWord, KanjiDictionaries, MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import type { Placements } from './board'
-import { BookSource } from './BookEvidence'
+import { KanjiEntry, PagePopup } from './BookEvidence'
 import { elsewhere, senseStats, type Bucket, type SenseStat } from './dictMatch'
 import { CATCH_ALL } from './editors'
 
@@ -42,6 +42,13 @@ const S = strings(
     unnamed: '(unnamed)',
     of: '{k} of {n}',
     notOnBoard: 'not on the board',
+    fromBook: 'From the book',
+    from: 'From',
+    tsalta: 'Цалта’s kanji book',
+    page: 'page {n}',
+    printed: 'printed page {n}',
+    pageHint: 'The scan of the page, in a popup',
+    nSplit: '{n} split',
   },
   {
     title: 'Други речници',
@@ -66,6 +73,13 @@ const S = strings(
     unnamed: '(без име)',
     of: '{k} от {n}',
     notOnBoard: 'не е на дъската',
+    fromBook: 'От книгата',
+    from: 'От',
+    tsalta: 'Канджи речникът на Цалта',
+    page: 'с. {n}',
+    printed: 'отпечатана с. {n}',
+    pageHint: 'Сканираната страница, в изскачащ прозорец',
+    nSplit: '{n} разделени',
   },
 )
 
@@ -95,6 +109,7 @@ export function DictionariesPanel({
   const stats = useMemo(() => senseStats(dicts, words, placements, groups), [dicts, words, placements, groups])
   const away = useMemo(() => elsewhere(dicts, words, placements, groups), [dicts, words, placements, groups])
   const onBoard = useMemo(() => new Set(words.map((w) => w.id)), [words])
+  const [page, setPage] = useState<{ book: BookRef['book']; n: number } | null>(null)
 
   const label = (b: Bucket) => {
     if (b === CATCH_ALL) return t('catchAll')
@@ -162,6 +177,38 @@ export function DictionariesPanel({
 
   const k = dicts.kodansha
   const g = dicts.kangorin
+  // How many of a dictionary's senses have their words split between groups: shown while it is folded.
+  const splitIn = (src: string) => [...stats].filter(([key, st]) => key.startsWith(`${src}|`) && st.counts.size > 1).length
+
+  /** A dictionary folded to one line, as the books are cited elsewhere: which book, its entry, its pages. */
+  function head(src: string, name: string, no: number | null | undefined, book: BookRef['book'] | null, pages: number[], extra?: ReactNode) {
+    const n = splitIn(src)
+    return (
+      <summary className="book-head dict-sum">
+        <span className="book-from">{t(book ? 'fromBook' : 'from')}:</span> <span className="book-name">{name}</span>
+        {no != null && <> · №{no}</>}
+        {book &&
+          pages.map((p, i) => (
+            <button
+              key={p}
+              type="button"
+              className="clear book-page"
+              title={t('pageHint')}
+              onClick={(e) => {
+                e.preventDefault() // the page, without folding or unfolding the entry
+                setPage({ book, n: p })
+              }}
+            >
+              {/* An entry over several pages: the first named, the rest just their numbers. */}
+              {i === 0 ? t(book === 'kanji' ? 'printed' : 'page', { n: p }) : p} ↗
+            </button>
+          ))}
+        {extra}
+        {n > 0 && <span className="dict-split-n">{t('nSplit', { n })}</span>}
+      </summary>
+    )
+  }
+
   return (
     <section className="dicts">
       <header className="dicts-head">
@@ -172,92 +219,97 @@ export function DictionariesPanel({
         <p className="hint">{t('hint')}</p>
         {away.size > 0 && <p className="dicts-away">{t('elsewhere', { n: away.size })}</p>}
       </header>
-      <div className="dicts-grid">
+      <div className="dicts-list">
         {k && (
-          <details open className="dict" data-src="kodansha">
-            <summary>
-              <span className="dict-name">{t('kodansha')}</span> <span className="hint">№{k.no}</span>{' '}
-              <span className="dict-core" title={t('core')}>
-                {k.core.join(' · ')}
-              </span>
-            </summary>
-            {k.senses.length > 0 && (
-              <>
-                <h5>{t('onSenses')}</h5>
-                <ol className="dict-senses">{k.senses.map((s) => sense('kodansha', s))}</ol>
-              </>
-            )}
-            {k.kun.length > 0 && (
-              <>
-                <h5>{t('kun')}</h5>
-                {k.kun.map((h, i) => (
-                  <div key={i} className="dict-kun">
-                    <p>
-                      <span className="dict-head" lang="ja">
-                        {h.head}
-                      </span>{' '}
-                      <span className="hint" lang="ja">
-                        {h.kana}
-                      </span>{' '}
-                      {h.text && <span className="dict-text">{rich(h.text)}</span>}
-                    </p>
-                    <ol className="dict-senses">{h.senses.map((s) => sense('kodansha', h.senses.length === 1 && !s.n && !s.words?.length ? { ...s, text: '' } : s))}</ol>
-                  </div>
-                ))}
-              </>
-            )}
-            {k.special.length > 0 && (
-              <>
-                <h5>{t('special')}</h5>
-                {wordList(k.special)}
-              </>
-            )}
+          <details className="dict" data-src="kodansha">
+            {head('kodansha', t('kodansha'), k.no, 'kodansha', k.pages, <span className="dict-core">{k.core.join(' · ')}</span>)}
+            <div className="dict-paper">
+              {k.senses.length > 0 && (
+                <>
+                  <h5>{t('onSenses')}</h5>
+                  <ol className="dict-senses">{k.senses.map((s) => sense('kodansha', s))}</ol>
+                </>
+              )}
+              {k.kun.length > 0 && (
+                <>
+                  <h5>{t('kun')}</h5>
+                  {k.kun.map((h, i) => (
+                    <div key={i} className="dict-kun">
+                      <p>
+                        <span className="dict-head" lang="ja">
+                          {h.head}
+                        </span>{' '}
+                        <span className="dict-kana" lang="ja">
+                          {h.kana}
+                        </span>{' '}
+                        {h.text && <span className="dict-text">{rich(h.text)}</span>}
+                      </p>
+                      <ol className="dict-senses">{h.senses.map((s) => sense('kodansha', h.senses.length === 1 && !s.n && !s.words?.length ? { ...s, text: '' } : s))}</ol>
+                    </div>
+                  ))}
+                </>
+              )}
+              {k.special.length > 0 && (
+                <>
+                  <h5>{t('special')}</h5>
+                  {wordList(k.special)}
+                </>
+              )}
+            </div>
           </details>
         )}
         {g && (
-          <details open className="dict" data-src="kangorin">
-            <summary>
-              <span className="dict-name">{t('kangorin')}</span> <span className="hint">№{g.no}</span>{' '}
-              {g.classes.length > 0 && <span className="hint">{g.classes.join(' ')}</span>}
-            </summary>
-            <ol className="dict-senses">
-              {g.senses.map((s) =>
-                sense('kangorin', s, s.japan ? <span className="dict-japan" title={t('japan')}>国</span> : undefined, s.subs),
-              )}
-            </ol>
-            {g.kaiji && (
-              <p className="dict-kaiji">
-                <span className="dict-n">{t('kaiji')}</span> {rich(g.kaiji)}
-              </p>
+          <details className="dict" data-src="kangorin">
+            {head(
+              'kangorin',
+              t('kangorin'),
+              g.no,
+              'kangorin',
+              g.pages,
+              (g.old || g.classes.length > 0) && (
+                <span className="dict-core" lang="ja">
+                  {g.old && `〖${g.old}〗 `}
+                  {g.classes.join(' ')}
+                </span>
+              ),
             )}
-            {g.compounds > 0 && <p className="hint">{t('compounds', { n: g.compounds })}</p>}
+            <div className="dict-paper">
+              <ol className="dict-senses">
+                {g.senses.map((s) => sense('kangorin', s, s.japan ? <span className="dict-japan" title={t('japan')}>国</span> : undefined, s.subs))}
+              </ol>
+              {g.kaiji && (
+                <p className="dict-kaiji">
+                  <span className="dict-n">{t('kaiji')}</span> {rich(g.kaiji)}
+                </p>
+              )}
+              {g.compounds > 0 && <p className="dict-note">{t('compounds', { n: g.compounds })}</p>}
+            </div>
           </details>
         )}
         {dicts.tsalta && (
-          <details open className="dict" data-src="tsalta">
-            <summary>
-              <span className="dict-name">Цалта</span>
-            </summary>
-            <BookSource src={dicts.tsalta} />
+          <details className="dict" data-src="tsalta">
+            {head('tsalta', t('tsalta'), dicts.tsalta.no, 'kanji', dicts.tsalta.pages)}
+            <KanjiEntry src={dicts.tsalta} words="all" />
           </details>
         )}
         {dicts.wiktionary && dicts.wiktionary.length > 0 && (
-          <details open className="dict" data-src="wiktionary">
-            <summary>
-              <span className="dict-name">{t('wiktionary')}</span>
-            </summary>
-            <ul className="dict-senses">
-              {dicts.wiktionary.map((e, i) => (
-                <li key={i} className="dict-sense">
-                  <span className="dict-n">{e.pos}</span>
-                  {e.readings.length > 0 && <span className="hint">{e.readings.join(', ')}</span>}{' '}
-                  <span className="dict-text">{e.glosses.join('; ')}</span>
-                </li>
-              ))}
-            </ul>
+          <details className="dict" data-src="wiktionary">
+            {head('wiktionary', t('wiktionary'), null, null, [])}
+            <div className="dict-paper">
+              <ul className="dict-senses">
+                {dicts.wiktionary.map((e, i) => (
+                  <li key={i} className="dict-sense">
+                    <span className="dict-n">{e.pos}</span>
+                    {e.readings.length > 0 && <span className="dict-kana">{e.readings.join(', ')}</span>}{' '}
+                    <span className="dict-text">{e.glosses.join('; ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </details>
         )}
       </div>
+      {page && <PagePopup book={page.book} page={page.n} onClose={() => setPage(null)} />}
     </section>
   )
 }
