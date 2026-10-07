@@ -8957,16 +8957,7 @@ button.review-part {
   color: #999;
 }
 
-.dict-sub {
-  margin-left: 10px;
-  color: #555;
-  font-size: 12px;
-  white-space: nowrap;
-}
 
-.dict-sub .dict-chip {
-  margin-left: 4px;
-}
 
 .dict-japan {
   margin-right: 6px;
@@ -8977,49 +8968,13 @@ button.review-part {
   font-size: 11px;
 }
 
-.dict-words {
-  display: block;
-  margin: 1px 0 0 calc(2.2em + 4px);
-  font-family: var(--mincho);
-  font-size: 15px;
-}
 
-.dict-word + .dict-word::before {
-  content: ' · ';
-  color: #aaa;
-}
 
-.dict-word[data-off] {
-  color: #888;
-}
 
-.dict-word[data-away] {
-  color: #9a5b00;
-  font-weight: 600;
-}
 
-.dict-kun p {
-  margin: 6px 0 0;
-}
 
-.dict-head {
-  font-family: var(--mincho);
-  font-size: 16px;
-}
 
-.dict-kaiji {
-  margin: 6px 0 0;
-  padding-top: 4px;
-  border-top: 1px dotted #aaa;
-  color: #333;
-  font-size: 12.5px;
-}
 
-.dict-note {
-  margin: 4px 0 0;
-  color: #666;
-  font-size: 12px;
-}
 
 /* Kodansha's entry as its pages print it (review/DictionariesPanel.tsx kodanshaEntry):
    white page, a light sans for English, a Mincho for the compounds, Gothic kana,

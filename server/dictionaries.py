@@ -6,8 +6,8 @@ and Kanji Alive (review._kanji_info):
 - **Kodansha** (Halpern's Kanji Learner's Dictionary): core meanings, the
   on-reading senses (1a, 1b, 2 ...) with the compounds listed under each, each
   kun word with its own senses, and the special readings (ateji, jukujikun).
-- **新漢語林**: 字義, the senses ❶❷ with their example words in 「」, a
-  Japan-only sense marked 国; and 解字.
+- **新漢語林**: its pages, and its Japan-only senses (国) only: the rest of
+  the transcription is too unsure to show.
 - **Цалта**: drawn by the card from its book entry (books.kanji_ref); its
   example words are matched here like the others'.
 - **Wiktionary** (English, Japanese section): the kanji's own entries, one
@@ -18,7 +18,7 @@ or extracted by pipeline/wiktionary_kanji.py, read from there, and only ever
 shown to reviewers: nothing is copied into the data. A server without the
 files just shows less.
 
-`view` also matches each dictionary's words to the board's (JMdict ids, by
+`view` also matches Kodansha's and Цалта's words to the board's (JMdict ids, by
 written form, the reading deciding between entries that share one: 生物
 せいぶつ is not なまもの), so the board can say, per word, where each
 dictionary puts it.
@@ -227,12 +227,12 @@ def jigi_senses(text: str) -> list[dict]:
 
 
 def _kangorin_view(e: dict) -> dict:
-    sec = e["sections"]
+    """Its pages, and only its Japan-only senses (国): the scan is too faint to trust the rest of
+    the transcription (60% of its 字義 flagged unsure), and its other senses lean classical,
+    while the 国 marks are what no other dictionary here gives (Dani, 2026-10-07)."""
     return {
         "no": e["no"], "classes": e["classes"], "joyo": e["joyo"], "old": e.get("old"), "pages": e["pages"],
-        "senses": jigi_senses(sec.get("字義") or ""),
-        "kaiji": sec.get("解字"), "note": sec.get("参考"),
-        "compounds": len(e["compounds"]),
+        "senses": [s for s in jigi_senses(e["sections"].get("字義") or "") if s["japan"]],
     }
 
 
@@ -347,16 +347,7 @@ def view(char: str, words: list[dict]) -> dict:
 
     g = _kangorin().get(char)
     if g:
-        gv = _kangorin_view(g)
-        for s in gv["senses"]:
-            sub = {x: u for u in s["subs"] for x in u["examples"]}
-            s["exampleIds"] = []
-            for x in s["examples"]:
-                wid = m.find(x.split("(")[0], None)
-                s["exampleIds"].append(wid)
-                u = sub.get(x)
-                tag(wid, "kangorin", u["key"] if u else s["key"], f"{s['n']}{u['n'] if u else ''}" or "–")
-        out["kangorin"] = gv
+        out["kangorin"] = _kangorin_view(g)
 
     t = _tsalta().get(char)
     if t:

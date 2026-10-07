@@ -10,9 +10,6 @@ lexicographer would. They do not replace the rules in meaning_prompt.md.
   that sense. `kun` are the kun words, each with its own senses. `special`
   are words with an irregular reading (ateji, jukujikun): these are often,
   not always, catch-all words.
-- `kangorin`: 新漢語林, a Japanese kanji dictionary. ❶ ❷ are its senses,
-  [一] [二] group them by reading, ㋐ ㋑ are sub-senses, examples are in
-  「」. `japan_only` marks a sense used only in Japan (国訓).
 - `tsalta`: a Bulgarian kanji book: its Bulgarian keyword and second
   meaning, and example words with Bulgarian glosses. Useful for the `bg`
   labels.

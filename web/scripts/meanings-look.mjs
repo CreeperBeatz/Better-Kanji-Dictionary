@@ -27,7 +27,9 @@ await page.screenshot({ path: `${SHOTS}/${shot}.png`, fullPage: true })
 // OPEN=<n>: unfold the first n dictionaries; PAGE=1: open the first one's page popup.
 if (process.env.OPEN) {
   const sums = page.locator('.dict-sum')
-  for (let i = 0; i < Number(process.env.OPEN); i++) await sums.nth(i).click({ position: { x: 5, y: 8 } })
+  // OPEN_SRC=kangorin: unfold that dictionary only.
+  if (process.env.OPEN_SRC) await page.locator(`details.dict[data-src="${process.env.OPEN_SRC}"] > .dict-sum`).click({ position: { x: 5, y: 8 } })
+  else for (let i = 0; i < Number(process.env.OPEN); i++) await sums.nth(i).click({ position: { x: 5, y: 8 } })
   await page.waitForTimeout(500)
   await page.screenshot({ path: `${SHOTS}/${shot}-open.png` })
 }

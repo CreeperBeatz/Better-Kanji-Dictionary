@@ -36,8 +36,7 @@ const S = strings(
     special: 'special readings',
     kangorin: '新漢語林',
     japan: 'Japan-only sense',
-    kaiji: '解字',
-    compounds: '{n} compounds listed',
+    japanOnly: 'Senses used only in Japan (国訓)',
     wiktionary: 'Wiktionary (English)',
     none: 'not on the board',
     split: 'split',
@@ -70,8 +69,7 @@ const S = strings(
     special: 'особени четения',
     kangorin: '新漢語林',
     japan: 'значение само в Япония',
-    kaiji: '解字',
-    compounds: '{n} сложни думи в речника',
+    japanOnly: 'Значения само в Япония (国訓)',
     wiktionary: 'Уикиречник (английски)',
     none: 'не е на дъската',
     split: 'разделено',
@@ -148,45 +146,6 @@ export function DictionariesPanel({
       <span className="dict-chip" data-split title={t('split')}>
         → {ranked.map(([b, n]) => `${label(b)} (${n})`).join(' · ')}
       </span>
-    )
-  }
-
-  function wordList(list: DictWord[] | undefined) {
-    if (!list?.length) return null
-    return (
-      <span className="dict-words" lang="ja">
-        {list.map((w, i) => (
-          <span
-            key={i}
-            className="dict-word"
-            data-off={!(w.id != null && onBoard.has(w.id)) || undefined}
-            data-away={(w.id != null && away.has(w.id)) || undefined}
-            title={`${w.reading ?? ''} ${w.gloss ?? ''}${w.id != null && onBoard.has(w.id) ? '' : ` (${t('notOnBoard')})`}`.trim()}
-          >
-            {w.ja}
-          </span>
-        ))}
-      </span>
-    )
-  }
-
-  function sense(src: string, s: DictSense, extra?: ReactNode, subs?: { n: string; key: string }[]) {
-    // A sense whose words are under its sub-senses (新漢語林's ㋐ ㋑) gets a chip per sub-sense with words.
-    const withWords = (subs ?? []).filter((u) => stats.has(`${src}|${u.key}`))
-    return (
-      <li key={s.key} className="dict-sense">
-        {s.n && <span className="dict-n">{s.n}</span>}
-        {extra}
-        <span className="dict-text">{rich(s.text)}</span>
-        {stats.has(`${src}|${s.key}`) || !withWords.length ? chip(src, s.key) : null}
-        {withWords.map((u) => (
-          <span key={u.key} className="dict-sub">
-            {u.n}
-            {chip(src, u.key)}
-          </span>
-        ))}
-        {wordList(s.words)}
-      </li>
     )
   }
 
@@ -315,6 +274,15 @@ export function DictionariesPanel({
   // How many of a dictionary's senses have their words split between groups: shown while it is folded.
   const splitIn = (src: string) => [...stats].filter(([key, st]) => key.startsWith(`${src}|`) && st.counts.size > 1).length
 
+  // 新漢語林's line: the old form it prints beside the headword, and its class marks (常, 教1 ...).
+  const kangorinMarks = (g: NonNullable<KanjiDictionaries['kangorin']>) =>
+    (g.old || g.classes.length > 0) && (
+      <span className="dict-core" lang="ja" title={t('classes')}>
+        {g.old && `〖${g.old}〗 `}
+        {g.classes.join(' ')}
+      </span>
+    )
+
   /** A dictionary folded to one line, as the books are cited elsewhere: which book, its entry, its pages. */
   function head(src: string, name: string, no: number | null | undefined, book: BookRef['book'] | null, pages: number[], extra?: ReactNode) {
     const n = splitIn(src)
@@ -349,34 +317,30 @@ export function DictionariesPanel({
             {kodanshaEntry(k)}
           </details>
         )}
-        {g && (
-          <details className="dict" data-src="kangorin">
-            {head(
-              'kangorin',
-              t('kangorin'),
-              g.no,
-              'kangorin',
-              g.pages,
-              (g.old || g.classes.length > 0) && (
-                <span className="dict-core" lang="ja" title={t('classes')}>
-                  {g.old && `〖${g.old}〗 `}
-                  {g.classes.join(' ')}
-                </span>
-              ),
-            )}
-            <div className="dict-paper">
-              <ol className="dict-senses">
-                {g.senses.map((s) => sense('kangorin', s, s.japan ? <span className="dict-japan" title={t('japan')}>国</span> : undefined, s.subs))}
-              </ol>
-              {g.kaiji && (
-                <p className="dict-kaiji">
-                  <span className="dict-n">{t('kaiji')}</span> {rich(g.kaiji)}
-                </p>
-              )}
-              {g.compounds > 0 && <p className="dict-note">{t('compounds', { n: g.compounds })}</p>}
-            </div>
-          </details>
-        )}
+        {/* 新漢語林: its pages, and only its Japan-only senses (server/dictionaries.py _kangorin_view). */}
+        {g &&
+          (g.senses.length ? (
+            <details className="dict" data-src="kangorin">
+              {head('kangorin', t('kangorin'), g.no, 'kangorin', g.pages, kangorinMarks(g))}
+              <div className="dict-paper">
+                <h5>{t('japanOnly')}</h5>
+                <ol className="dict-senses">
+                  {g.senses.map((s) => (
+                    <li key={s.key} className="dict-sense">
+                      <span className="dict-japan">国</span>
+                      <span className="dict-text">{rich(s.text)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </details>
+          ) : (
+            <p className="book-head dict-sum dict-link">
+              <span className="book-from">{t('fromBook')}:</span> <span className="book-name">{t('kangorin')}</span> · №{g.no}
+              <OpenBook book="kangorin" pages={g.pages} />
+              {kangorinMarks(g)}
+            </p>
+          ))}
         {/* Read on its own site, never copied: a line with a link, nothing to unfold. */}
         <p className="book-head dict-sum dict-link">
           <span className="book-from">{t('from')}:</span> <span className="book-name">{t('kanjipedia')}</span>

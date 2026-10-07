@@ -82,9 +82,7 @@ def _dicts_for(char: str, words: list[list]) -> tuple[dict, dict[int, str], dict
             "kun": [{"head": h["head"], "senses": senses(h["senses"])} for h in k["kun"]],
             "special": [w["ja"] for w in k["special"]],
         }
-    g = v.get("kangorin")
-    if g:
-        seen["kangorin"] = [{"n": s["n"], "text": _plain(s["text"]), **({"japan_only": True} if s["japan"] else {})} for s in g["senses"]]
+    # 新漢語林 is not given to the agents: too unsure a transcription, and classical senses (Dani, 2026-10-07).
     t = dictionaries._tsalta().get(char)
     if t:
         seen["tsalta"] = {"keyword": t.get("keyword"), "alt": t.get("alt_meaning"),

@@ -59,7 +59,7 @@ export function meaningsPrompt(
       if (k.special.length) lines.push(`  Special readings: ${k.special.map((w) => w.ja).join(', ')}`)
     }
     const g = dicts.kangorin
-    if (g) lines.push(`- 新漢語林 字義: ${g.senses.map((s) => `${s.n} ${cut(plain(s.text), 80)}`).join(' ')}`)
+    if (g?.senses.length) lines.push(`- 新漢語林, senses used only in Japan (国訓): ${g.senses.map((s) => cut(plain(s.text), 80)).join(' ')}`)
     if (dicts.wiktionary?.length)
       lines.push(`- Wiktionary: ${dicts.wiktionary.map((e) => `${e.pos}${e.readings.length ? ` (${e.readings.join(', ')})` : ''}: ${cut(e.glosses.join('; '), 120)}`).join(' | ')}`)
   }

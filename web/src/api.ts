@@ -593,10 +593,8 @@ export interface KanjiDictionaries {
     old: string | null
     classes: string[]
     joyo: string[]
-    senses: (DictSense & { japan: boolean; examples: string[]; exampleIds: (number | null)[]; subs: { n: string; key: string; examples: string[] }[] })[]
-    kaiji: string | null
-    note: string | null
-    compounds: number
+    /** Only its Japan-only senses (国): the rest of the transcription is too unsure to show. */
+    senses: (DictSense & { japan: boolean; examples: string[] })[]
   }
   tsalta?: BookRef | null
   wiktionary?: { pos: string; glosses: string[]; readings: string[] }[]
