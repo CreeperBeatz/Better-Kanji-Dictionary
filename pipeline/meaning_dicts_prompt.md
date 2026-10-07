@@ -68,7 +68,10 @@ childish. In run B, write none of them.
   explanation, give the first and say "Another explanation: ...". Do not
   add anything that is not in the field, not even something you are sure
   of. If the kanji has no `etymology`, or it says nothing about how the
-  character was built, write `null`.
+  character was built, write `null`. Write it as the dictionary's own text
+  for a learner: never "the field says", "Wiktionary says" or "according
+  to"; just say it ("A person 亻 and a dog 犬: lying flat like a dog.").
+  Name a part's role plainly: "the part 谷 gives the sound".
 - `originSure`: `false` when the field itself calls the explanation
   uncertain, disputed or "folk", or when you had to simplify a lot;
   otherwise `true`. Leave it out when `origin` is `null`.
