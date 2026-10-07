@@ -48,8 +48,9 @@ def _plain(s: str) -> str:
     return " ".join(s.replace("**", "").split())
 
 
-def _dicts_for(char: str, words: list[list]) -> tuple[dict, dict[int, str], dict[int, str]]:
-    """What the agents see of the dictionaries, and Kodansha's placements of the board words: (seen, visible, hidden)."""
+def _dicts_for(char: str, words: list[list], holdout: bool = True) -> tuple[dict, dict[int, str], dict[int, str]]:
+    """What the agents see of the dictionaries, and Kodansha's placements of the board words: (seen, visible, hidden).
+    `holdout`: hide half of Kodansha's board words from the agents, to measure the drafts against them."""
     board = [{"id": w[0], "headword": w[1], "reading": w[2]} for w in words]
     v = dictionaries.view(char, board)
     rng = random.Random(f"{char}-holdout")
@@ -63,7 +64,7 @@ def _dicts_for(char: str, words: list[list]) -> tuple[dict, dict[int, str], dict
             for w in s.get("words") or []:
                 wid = w.get("id")
                 if wid is not None and wid not in visible and wid not in hidden:
-                    if rng.random() < 0.5:
+                    if holdout and rng.random() < 0.5:
                         hidden[wid] = s["key"]
                         continue
                     visible[wid] = s["key"]
