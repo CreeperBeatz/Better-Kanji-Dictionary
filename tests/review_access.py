@@ -10,6 +10,7 @@ Uses 青 (parts 龶 月) and 生, which every build has.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import urllib.error
@@ -183,6 +184,19 @@ def main() -> int:
             check(f"{who or 'anonymous'} GET a page is {want}", page_status(srv, "/api/review/book/kanji/61", who) == want)
         check("a page that is not here is 404", page_status(srv, "/api/review/book/kanji/62", "reviewer") == 404)
         check("an unknown book is 404", page_status(srv, "/api/review/book/scans/61", "reviewer") == 404)
+
+        print("other dictionaries on a meanings card: for reviewers and the admin, matched to the board")
+        kod = srv.tmp / "books" / "kodansha"
+        kod.mkdir(parents=True)
+        (kod / "kodansha.jsonl").write_text(json.dumps({"type": "kanji", "kanji": "青", "no": 1, "core_meanings": ["BLUE"], "sections": {"compounds": [
+            {"kind": "sense", "sense": "1", "text": "**blue**"},
+            {"kind": "word", "ja": "青空", "reading": "あおぞら", "gloss": "blue sky", "sense": "1"}]}}, ensure_ascii=False), encoding="utf-8")
+        for who, want in ((None, 401), ("user", 403), ("reviewer", 200), ("admin", 200)):
+            check(f"{who or 'anonymous'} GET a kanji's dictionaries is {want}", call("GET", "/api/review/dictionaries/%E9%9D%92", who)[0] == want)
+        d = call("GET", "/api/review/dictionaries/%E9%9D%92", "reviewer")[1]
+        sky = d["kodansha"]["senses"][0]["words"][0]["id"]
+        check("the book's word is matched to the board's", sky is not None and d["words"].get(str(sky)) == [{"src": "kodansha", "key": "c:1", "label": "1"}], d["words"])
+        check("more than one kanji is 400", call("GET", "/api/review/dictionaries/%E9%9D%92%E7%A9%BA", "reviewer")[0] == 400)
 
         print("a second source goes beside an item, not into it")
         it = review.add_item("decomposition", "語", None, "cost-ranking", reason="check: many parts")

@@ -12,6 +12,7 @@ import {
   api,
   dataChanged,
   type ItemDetail,
+  type KanjiDictionaries,
   type MeaningGroup,
   type Origin,
   type QueueItem,
@@ -28,8 +29,11 @@ import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard } from './BgCard'
 import { CharacterCard } from './CharacterCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
+import { DictionariesPanel } from './DictionariesPanel'
 import { Evidence } from './Evidence'
 import { ReportButton } from './ReportButton'
+import { ResearchOpen } from './ResearchButton'
+import { bgPrompt, meaningsPrompt } from './researchPrompts'
 import { queueRouteInUrl, replaceQueueRoute } from './route'
 
 const S = strings(
@@ -170,6 +174,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [total, setTotal] = useState(0)
   const [at, setAt] = useState(0)
   const [detail, setDetail] = useState<ItemDetail | null>(null)
+  // A meanings card's other dictionaries: undefined while they load, null when there are none.
+  const [dicts, setDicts] = useState<KanjiDictionaries | null | undefined>(undefined)
   const [draft, setDraft] = useState<TaskValue>(null)
   const [reason, setReason] = useState('')
   // A kanji's meanings: where each word on the board is, and where it started.
@@ -189,10 +195,15 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
 
+  // Only the latest load may land: a stage switched quickly, or the effect run
+  // twice in development, would otherwise answer late and take the wanted item.
+  const loads = useRef(0)
   const load = useCallback(() => {
     setItems(null)
+    const seq = ++loads.current
     api.reviewQueueItems(type, origin, showSkipped).then(
       async (d) => {
+        if (seq !== loads.current) return
         // The item the address names, when it is still open: found in the list,
         // or fetched and put first when it sits further down the queue.
         const id = wanted.current
@@ -209,6 +220,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             n = 0
           }
         }
+        if (seq !== loads.current) return
         setItems(list)
         setTotal(Math.max(d.total, list.length))
         setTypes(d.types)
@@ -246,9 +258,15 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setNotes({})
     setNotesFrom({})
     setBoardWork(false)
+    setDicts(undefined)
     // A character's card loads its own (CharacterCard.tsx).
     if (!item || item.type === 'character') return
     let stale = false
+    if (item.type === 'kanji_senses')
+      api.reviewDictionaries(item.subject).then(
+        (d) => !stale && setDicts(d),
+        () => !stale && setDicts(null),
+      )
     api.reviewItem(item.id).then(
       (d) => {
         if (stale) return
@@ -522,6 +540,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     subject={item.subject}
                     label={(detail?.id === item.id ? detail.context?.word?.headword : undefined) ?? item.label}
                   />
+                  {detail?.id === item.id && board && detail.context.board && (
+                    <ResearchOpen
+                      prompt={() =>
+                        meaningsPrompt(item.subject, (draft ?? []) as MeaningGroup[], detail.context.board!, placements, dicts, detail.context.kanjidic ?? [])
+                      }
+                    />
+                  )}
+                  {detail?.id === item.id && item.type === 'bg' && <ResearchOpen prompt={() => bgPrompt(detail, (draft ?? []) as string[])} />}
                 </div>
               </header>
 
@@ -547,6 +573,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               )}
 
               {detail && item.type !== 'bg' && <Evidence detail={detail} onKanji={onKanji} onUse={setDraft} />}
+              {board && dicts && detail?.id === item.id && detail.context.board && (
+                <DictionariesPanel dicts={dicts} words={detail.context.board} placements={placements} groups={(draft ?? []) as MeaningGroup[]} />
+              )}
               </div>
 
               <div className="queue-decide">
@@ -558,8 +587,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     <p className="hint">{t('loading')}</p>
                   )
                 ) : board ? (
-                  detail?.context.board ? (
+                  detail?.context.board && dicts !== undefined ? (
                     <MeaningsBoard
+                      dicts={dicts}
                       key={`${item.id}:${fresh}`}
                       onWork={setBoardWork}
                       onUnconfirmed={setUnconfirmed}

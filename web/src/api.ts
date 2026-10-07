@@ -549,6 +549,50 @@ export interface ItemDetail extends QueueItem {
  * or Иванов's Bulgarian-Japanese dictionary (`bg-ja`). `unsure`: what the
  * transcribing agent was not sure it read right -- the page's scan settles it.
  */
+/** A word a dictionary lists, matched to the board's JMdict entry when it is there (`id`). */
+export interface DictWord {
+  ja: string
+  reading: string | null
+  gloss: string | null
+  id?: number | null
+}
+
+/** One sense of a dictionary's entry; `key` is what a board word's tag points at. */
+export interface DictSense {
+  key: string
+  /** Its number in the book: 1a, ❷, 国 ... */
+  n: string
+  text: string
+  words?: DictWord[]
+}
+
+/** Other dictionaries' view of a kanji (server/dictionaries.py): reviewers and the admin only. */
+export interface KanjiDictionaries {
+  char: string
+  kanjipedia: string
+  kodansha?: {
+    no: number
+    core: string[]
+    senses: DictSense[]
+    kun: { head: string; kana: string | null; text: string | null; senses: DictSense[] }[]
+    independent: { head: string; kana: string | null; text: string | null }[]
+    special: DictWord[]
+  }
+  kangorin?: {
+    no: number
+    classes: string[]
+    joyo: string[]
+    senses: (DictSense & { japan: boolean; examples: string[]; exampleIds: (number | null)[]; subs: { n: string; key: string; examples: string[] }[] })[]
+    kaiji: string | null
+    note: string | null
+    compounds: number
+  }
+  tsalta?: BookRef | null
+  wiktionary?: { pos: string; glosses: string[]; readings: string[] }[]
+  /** Board word id -> where each dictionary puts it. */
+  words: Record<string, { src: 'kodansha' | 'kangorin' | 'tsalta'; key: string; label: string }[]>
+}
+
 export interface BookRef {
   book: 'kanji' | 'bg-ja'
   pages: number[]
@@ -1016,6 +1060,9 @@ export const api = {
   /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
   reviewBookEntry: (no: number | null, char: string | null) =>
     get<KanjiBookEntry>('/api/review/book-entry', no != null ? [['no', String(no)]] : [['char', char ?? '']]),
+
+  /** Other dictionaries' entries for a kanji and where they put its board's words: reviewers and the admin only. */
+  reviewDictionaries: (char: string) => get<KanjiDictionaries>(`/api/review/dictionaries/${encodeURIComponent(char)}`),
 
   /** A scanned page a card cites (server/books.py): reviewers and the admin only. */
   reviewBookPage: async (book: BookRef['book'], page: number) => {

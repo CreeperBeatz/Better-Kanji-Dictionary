@@ -18,11 +18,13 @@ const S = strings(
     open: 'Research in Claude',
     title: 'Open a new conversation on claude.ai with a research prompt about this card (the prompt is also copied)',
     copied: 'Prompt copied: paste it if Claude opens empty. Turn on Research there.',
+    paste: 'The prompt is too long for the link. It is copied: paste it into Claude (Ctrl+V), and turn on Research there.',
   },
   {
     open: 'Проучване в Claude',
     title: 'Отваря нов разговор в claude.ai със заявка за проучване по тази карта (заявката се копира и в клипборда)',
     copied: 'Заявката е копирана: поставете я, ако Claude се отвори празен. Включете Research там.',
+    paste: 'Заявката е твърде дълга за връзката. Копирана е: поставете я в Claude (Ctrl+V) и включете Research там.',
   },
 )
 
@@ -103,16 +105,26 @@ export function researchPrompt(card: CharacterCard, sentence: Sentence): string 
 }
 
 export function ResearchButton({ card }: { card: CharacterCard }) {
-  const t = S(useLang())
   const sentence = useLinkSentence()
-  const [copied, setCopied] = useState(false)
+  return <ResearchOpen prompt={() => researchPrompt(card, sentence)} />
+}
+
+// Longer than this, the address may be refused: Claude opens empty, and the copied prompt is pasted.
+const MAX_URL = 12000
+
+/** The button: a new conversation on claude.ai with `prompt()` (built on click), which is also copied. */
+export function ResearchOpen({ prompt: build }: { prompt: () => string }) {
+  const t = S(useLang())
+  const [copied, setCopied] = useState<'copied' | 'paste' | null>(null)
   function open() {
-    const prompt = researchPrompt(card, sentence)
+    const prompt = build()
+    const url = `https://claude.ai/new?q=${encodeURIComponent(prompt)}`
+    const long = url.length > MAX_URL
     navigator.clipboard?.writeText(prompt).then(
-      () => setCopied(true),
+      () => setCopied(long ? 'paste' : 'copied'),
       () => {},
     )
-    window.open(`https://claude.ai/new?q=${encodeURIComponent(prompt)}`, '_blank', 'noopener')
+    window.open(long ? 'https://claude.ai/new' : url, '_blank', 'noopener')
   }
   return (
     <>
@@ -125,7 +137,7 @@ export function ResearchButton({ card }: { card: CharacterCard }) {
         </svg>
         {t('open')}
       </button>
-      {copied && <span className="hint research-copied">{t('copied')}</span>}
+      {copied && <span className="hint research-copied">{t(copied)}</span>}
     </>
   )
 }

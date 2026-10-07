@@ -8,7 +8,7 @@ everyone's decisions, the auto-accepted ones, and can revert.
 from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import FileResponse
 
-from .. import auth, books, review
+from .. import auth, books, dictionaries, review
 from ..errors import AppError
 from .auth import check_role, require_role, require_user
 
@@ -108,6 +108,14 @@ def book_page(book: str, page: int, _: dict = Depends(reviewer)) -> FileResponse
     if f is None:
         raise AppError(404, "book_page_missing", "that page's scan is not on this server")
     return FileResponse(f, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.get("/dictionaries/{char}")
+def kanji_dictionaries(char: str, _: dict = Depends(reviewer)) -> dict:
+    """Other dictionaries' entries for a kanji, and where each puts its board's words (server/dictionaries.py): reviewers and the admin only."""
+    if len(char) != 1:
+        raise AppError(400, "bad_subject", "one kanji")
+    return dictionaries.view(char, review.board(char))
 
 
 @router.get("/page/kanji/{char}")

@@ -15,12 +15,13 @@
  * word id -> group id.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { type BoardWord, type MeaningGroup } from '../api'
+import { type BoardWord, type KanjiDictionaries, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import { useKey } from '../keys'
 import { newsRank } from '../search/Results'
 import { toggled, withIds } from '../sets'
 import type { Placements } from './board'
+import { elsewhere } from './dictMatch'
 import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
 
@@ -72,6 +73,10 @@ const S = strings(
     jlpt: 'On the JLPT N{n} vocabulary list',
     collapse: 'collapse',
     expand: 'expand',
+    dictKodansha: 'Kodansha puts it under {sense}',
+    dictKangorin: '新漢語林 gives it as an example of {sense}',
+    dictTsalta: 'In Цалта’s kanji book: {gloss}',
+    dictElsewhere: 'Most of this sense’s other words are in another group. It does not start ticked.',
   },
   {
     groups: 'Групи значения',
@@ -120,6 +125,10 @@ const S = strings(
     jlpt: 'В речника за JLPT N{n}',
     collapse: 'свийте',
     expand: 'разгънете',
+    dictKodansha: 'Kodansha я слага под {sense}',
+    dictKangorin: '新漢語林 я дава като пример за {sense}',
+    dictTsalta: 'В книгата на Цалта: {gloss}',
+    dictElsewhere: 'Повечето други думи от това значение са в друга група. Не започва отметната.',
   },
 )
 
@@ -159,6 +168,7 @@ export function MeaningsBoard({
   onUnconfirmed,
   plain = false,
   only,
+  dicts,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -189,6 +199,8 @@ export function MeaningsBoard({
    * others stay in sight for what each group holds.
    */
   only?: number
+  /** Other dictionaries' entries (review/dictMatch.ts): their badges on the words; a word one places elsewhere starts unticked. */
+  dicts?: KanjiDictionaries | null
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -201,14 +213,15 @@ export function MeaningsBoard({
   // Confirmed words move into a "confirmed" part of their box, open unless folded.
   // A word both drafting runs put where it is, both sure, starts ticked: the
   // reviewer looks at the rest, and unticks a ticked one that is wrong.
-  const [preTicked] = useState(
-    () =>
-      new Set(
-        !plain && only === undefined
-          ? words.filter((w) => w.sure && w.group !== null && (w.id in placements ? placements[w.id] : w.group) === w.group).map((w) => w.id)
-          : [],
-      ),
-  )
+  const [preTicked] = useState(() => {
+    if (plain || only !== undefined) return new Set<number>()
+    const off = dicts ? elsewhere(dicts, words, placements, groups) : new Map<number, string[]>()
+    return new Set(
+      words.filter((w) => w.sure && w.group !== null && (w.id in placements ? placements[w.id] : w.group) === w.group && !off.has(w.id)).map((w) => w.id),
+    )
+  })
+  // Where the dictionaries put each word, against where it is now.
+  const away = useMemo(() => (dicts ? elsewhere(dicts, words, placements, groups) : new Map<number, string[]>()), [dicts, words, placements, groups])
   const [okWords, setOkWords] = useState<Set<number>>(() => (kept ? new Set(kept.okWords) : new Set(preTicked)))
   const [shutOk, setShutOk] = useState<Set<string>>(new Set(kept?.shutOk))
   // The right-click menu: where it opens and which words it moves.
@@ -333,6 +346,7 @@ export function MeaningsBoard({
           setMenu({ x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 280), ids, from })
         }}
         data-sure={(ok && preTicked.has(w.id)) || undefined}
+        data-elsewhere={away.has(w.id) || undefined}
         title={unsure ? t('unsure') : ok && preTicked.has(w.id) ? t('sure') : undefined}
       >
         <span className="board-head" lang="ja">
@@ -373,7 +387,33 @@ export function MeaningsBoard({
           </span>
         </span>
         <span className="board-gloss">{gloss(w)}</span>
+        {dicts && dictBadges(w)}
       </li>
+    )
+  }
+
+  // Where each dictionary puts the word: Kodansha's sense, 新漢語林's, Цалта's gloss.
+  function dictBadges(w: BoardWord) {
+    const tags = dicts?.words[String(w.id)]
+    if (!tags?.length) return null
+    const off = away.get(w.id) ?? []
+    return (
+      <span className="board-dicts">
+        {tags.map((tag) => {
+          const wrong = off.includes(`${tag.src}|${tag.key}`)
+          const what =
+            tag.src === 'kodansha'
+              ? t('dictKodansha', { sense: tag.label })
+              : tag.src === 'kangorin'
+                ? t('dictKangorin', { sense: tag.label })
+                : t('dictTsalta', { gloss: tag.label })
+          return (
+            <span key={`${tag.src}|${tag.key}`} className="board-dict" data-src={tag.src} data-off={wrong || undefined} title={wrong ? `${what}. ${t('dictElsewhere')}` : what}>
+              {tag.src === 'kodansha' ? `K ${tag.label}` : tag.src === 'kangorin' ? `漢 ${tag.label}` : 'Ц'}
+            </span>
+          )
+        })}
+      </span>
     )
   }
 
@@ -542,6 +582,7 @@ export function MeaningsBoard({
             </div>
           ) : (
           <div className="board-labels">
+            <span className="board-num">{i + 1}</span>
             <input className="assoc-text board-en" value={g.en} placeholder={t('en')} aria-label={t('en')} maxLength={40} onChange={(e) => setGroup(i, { en: e.target.value })} />
             <input className="assoc-text board-note" value={g.note ?? ''} placeholder={t('note')} aria-label={t('note')} maxLength={200} onChange={(e) => setGroup(i, { note: e.target.value || null })} />
             <button className="clear" onClick={() => removeGroup(i)}>

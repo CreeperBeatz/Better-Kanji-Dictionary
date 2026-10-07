@@ -8701,3 +8701,220 @@ button.review-part {
 .card-old-form span[lang] {
   font-size: 18px;
 }
+
+/* Other dictionaries on a meanings card (review/DictionariesPanel.tsx): each
+   source a box, each sense one line with the group its words are in now; on
+   the board, each word's badges, amber where a dictionary puts it elsewhere. */
+.board-num {
+  align-self: center;
+  min-width: 1.6em;
+  padding: 0 4px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  color: var(--paper-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+.board-dicts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.board-dict {
+  padding: 0 5px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.board-dict[data-off] {
+  border-color: #cfa25a;
+  color: #cfa25a;
+}
+
+.board-word[data-elsewhere] {
+  box-shadow: inset 0 -2px 0 #cfa25a;
+}
+
+.board-word[data-elsewhere][data-unsure] {
+  box-shadow: inset 3px 0 0 var(--shu), inset 0 -2px 0 #cfa25a;
+}
+
+.dicts {
+  margin: 14px 0 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--sumi-sunk);
+}
+
+.dicts-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+}
+
+.dicts-head h4 {
+  margin: 0;
+}
+
+.dicts-head p {
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+}
+
+.dicts-away {
+  color: #cfa25a;
+}
+
+.dicts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dict {
+  min-width: 0;
+  max-height: 30rem;
+  overflow: auto;
+  padding: 6px 10px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--sumi);
+  font-size: 13px;
+}
+
+.dict summary {
+  cursor: pointer;
+  color: var(--paper-dim);
+}
+
+.dict-name {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.dict-core {
+  margin-left: 6px;
+  color: var(--ai);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.dict h5 {
+  margin: 8px 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dict-senses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dict-sense {
+  padding: 2px 0;
+  border-bottom: 1px dotted var(--rule);
+}
+
+.dict-sense:last-child {
+  border-bottom: 0;
+}
+
+.dict-n {
+  display: inline-block;
+  min-width: 2.2em;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dict-text b {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.dict-chip {
+  margin-left: 8px;
+  color: #7fb88a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dict-chip[data-split] {
+  color: #cfa25a;
+  white-space: normal;
+}
+
+.dict-chip[data-none] {
+  color: var(--faint);
+}
+
+.dict-japan {
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--shu);
+  border-radius: 2px;
+  color: var(--shu);
+  font-size: 11px;
+}
+
+.dict-words {
+  display: block;
+  margin: 1px 0 0 calc(2.2em + 4px);
+  font-family: var(--mincho);
+  font-size: 14px;
+}
+
+.dict-word + .dict-word::before {
+  content: ' · ';
+  color: var(--faint);
+}
+
+.dict-word[data-off] {
+  color: var(--muted);
+}
+
+.dict-word[data-away] {
+  color: #cfa25a;
+}
+
+.dict-kun p {
+  margin: 6px 0 0;
+}
+
+.dict-head {
+  font-family: var(--mincho);
+  font-size: 15px;
+}
+
+.dict-kaiji {
+  margin: 6px 0 0;
+  color: var(--paper-dim);
+  font-size: 12.5px;
+}
+
+.dict-sub {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dict-sub .dict-chip {
+  margin-left: 4px;
+}
