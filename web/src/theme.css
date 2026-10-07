@@ -8879,8 +8879,6 @@ button.review-part {
 
 /* The entry itself on the books' paper (as .book-entry): black on paper, in a thin frame. */
 .dict-paper {
-  max-height: 32rem;
-  overflow: auto;
   margin: 4px 0 6px;
   padding: 4px 10px 6px;
   border: 1px solid #111;
@@ -8980,8 +8978,6 @@ button.review-part {
    white page, a light sans for English, a Mincho for the compounds, Gothic kana,
    boxed section labels, black-circled sense numbers and letters. */
 .kd-entry {
-  max-height: 36rem;
-  overflow: auto;
   margin: 4px 0 6px;
   padding: 8px 14px 10px;
   border: 1px solid #111;
