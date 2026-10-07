@@ -69,9 +69,14 @@ const S = strings(
   },
 )
 
-/** **bold** as the transcriptions mark it; the pictures of old glyphs ([img:金文]) are not here. */
+/** **bold** and *italic* (Kodansha's field labels: *phys*) as the transcriptions mark them; the pictures of old glyphs ([img:金文]) are not here. */
 function rich(text: string): ReactNode[] {
-  return text.replace(/\[img:[^\]]*\]/g, '').split(/(\*\*[^*]+\*\*)/).map((p, i) => (p.startsWith('**') && p.endsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : p))
+  return text
+    .replace(/\[img:[^\]]*\]/g, '')
+    .split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/)
+    .map((p, i) =>
+      p.startsWith('**') && p.endsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : p.length > 2 && p.startsWith('*') && p.endsWith('*') ? <i key={i}>{p.slice(1, -1)}</i> : p,
+    )
 }
 
 export function DictionariesPanel({

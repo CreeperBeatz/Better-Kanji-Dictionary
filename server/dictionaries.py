@@ -171,11 +171,11 @@ def _kangorin() -> dict[str, dict]:
     return _cached("kangorin", (str(d), stamp), build)
 
 
-_SENSE_MARK = re.compile(r"(\[[一二三四五]\])|([❶-❿⓫-⓴])|(国(?=\*\*))")
+_SENSE_MARK = re.compile(r"(\[[一二三四五国]\])|([❶-❿⓫-⓴])|(国(?=\*\*))")
 
 
 def jigi_senses(text: str) -> list[dict]:
-    """字義 cut into its senses: ❶ ❷ (under [一] [二] when the readings split them), 国 = a Japan-only sense.
+    """字義 cut into its senses: ❶ ❷ (under [一] [二] when the readings split them), 国 or [国] = Japan-only senses.
     Text under a reading group with no numbers of its own ([二]つくる。なす。) is that group's one sense."""
     out: list[dict] = []
     group = ""
@@ -187,14 +187,14 @@ def jigi_senses(text: str) -> list[dict]:
         pos = m.end()
         if m.group(1):
             group = m.group(1)
-            cur = {"n": group, "text": "", "japan": False}
+            cur = {"n": group, "text": "", "japan": group == "[国]"}
         else:
             n = m.group(2) or "国"
             # The group's first number: the group's own sense becomes it.
             label = f"{group}{n}"
             if cur["n"] == group and group and not cur["text"].strip():
                 out.pop()
-            cur = {"n": label, "text": "", "japan": n == "国"}
+            cur = {"n": label, "text": "", "japan": n == "国" or group == "[国]"}
         out.append(cur)
     cur["text"] += text[pos:]
     for s in out:

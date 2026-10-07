@@ -202,6 +202,11 @@ def compare(review_dir: Path | None) -> None:
     old = _old(set(new), review_dir)
     both = sorted(set(new) & set(old))
     print(f"\n{len(both)} kanji drafted both ways")
+    # Only words both drafts place: the old load left out words filed under a kanji for a rare spelling.
+    for c in both:
+        common = set(old[c]["words"]) & set(new[c]["words"])
+        for d in (old, new):
+            d[c] = {**d[c], "words": {w: p for w, p in d[c]["words"].items() if w in common}}
     old, new = {c: old[c] for c in both}, {c: new[c] for c in both}
     hold = {c: holdout[c] for c in both}
     for name, d in (("current drafts", old), ("with dictionaries", new)):
@@ -224,6 +229,44 @@ def compare(review_dir: Path | None) -> None:
     print(f"\nper kanji: {(md.DRAFTS / 'compare.txt').relative_to(proposals.ROOT)}")
 
 
+def load(review_dir: Path) -> None:
+    """The pilot's drafts in place of the current ones, in a sandbox's queue, to judge them on the cards.
+    Only kanji no one has touched: the groups item open and undecided, no word decided."""
+    md.DRAFTS, md.IN, md.OUT = proposals.folders(DRAFTS)
+    a, b = md.check()
+    with md._db() as db:
+        nf = {r["id"]: r["nf"] for r in db.execute(f"SELECT w.id, w.nf FROM word w WHERE {scope.WORDS}")}
+        head = {r["id"]: r["headword"] for r in db.execute(f"SELECT w.id, w.headword FROM word w WHERE {scope.WORDS}")}
+    # As meaning_drafts.load: a word filed under the kanji only for a rare spelling (２月 under 二) is not queued.
+    for c, v in a.items():
+        v["words"] = {w: p for w, p in v["words"].items() if c in head.get(w, "")}
+    proposals.use_review_dir(review_dir)
+    done = words = 0
+    with review._change() as data:
+        decided = {d["subject"].split("|")[0] for d in data["decisions"] if d["type"] in ("kanji_senses", "word_sense")}
+        items = list(data["items"].values())
+        for c, v in a.items():
+            g = next((i for i in items if i["type"] == "kanji_senses" and i["subject"] == c and i["status"] == "open"), None)
+            if g is None or c in decided or g.get("skipped_by"):
+                continue
+            review._update(data, g, proposed=review.validate("kanji_senses", c, v["senses"], data, pending_ok=True, machine=True),
+                           reason="pilot: drafted with the other dictionaries")
+            open_words = {int(i["subject"].split("|")[1]): i for i in items
+                          if i["type"] == "word_sense" and i["status"] == "open" and i["subject"].startswith(f"{c}|")}
+            second = b.get(c, {}).get("words", {})
+            for wid, pick in v["words"].items():
+                row = md._word_row(c, wid, pick, second.get(wid), nf)
+                it = open_words.get(wid)
+                if it is None:
+                    review._new_item(data, row["type"], row["subject"], row["proposed"], row["source"], "proposal",
+                                     None, row["evidence"], "system", row["priority"])
+                else:
+                    review._update(data, it, proposed=row["proposed"], evidence=row["evidence"])
+                words += 1
+            done += 1
+    print(f"replaced the drafts of {done} kanji ({words} words) in {review_dir}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -232,9 +275,15 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=1)
     c = sub.add_parser("compare")
     c.add_argument("--review-dir", type=Path, help="the review data the current drafts are read from (default: data/review)")
+    ld = sub.add_parser("load", help="the pilot's drafts in place of the current ones, in a sandbox")
+    ld.add_argument("--review-dir", type=Path, required=True, help="a sandbox's review folder (never data/review)")
     args = ap.parse_args()
     if args.cmd == "prepare":
         prepare(args.n, args.seed)
+    elif args.cmd == "load":
+        if args.review_dir.resolve() == (proposals.ROOT / "data" / "review").resolve():
+            raise SystemExit("the pilot goes into a sandbox, not data/review")
+        load(args.review_dir)
     else:
         compare(args.review_dir)
     return 0
