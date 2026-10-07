@@ -6,7 +6,8 @@
  * when the drawn entry looks wrong: a button opens it in a popup, and only
  * reviewers and the admin can fetch it.
  */
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   api,
   type BookGloss,
@@ -33,8 +34,16 @@ const S = strings(
     page: 'printed page {n}',
     pageHint: 'The scan of the printed page: for when what is drawn here looks wrong',
     pageTitle: '{book}, page {n}',
+    openBook: 'open in dictionary',
+    prev: 'Previous page (←)',
+    next: 'Next page (→)',
+    zoomIn: 'Zoom in (+)',
+    zoomOut: 'Zoom out (−)',
+    fit: 'The whole page (0)',
+    whole: 'whole page',
+    noPage: 'There is no page here.',
     loading: 'loading…',
-    zoom: 'Click to zoom in or out',
+    zoom: 'Double-click to zoom; Ctrl+wheel or + − for more. Drag to move around the page.',
     unsure: 'The transcription may be wrong here',
     shared: 'This spelling fits more than one word: the book may mean another of them.',
     ourParts: 'In our parts',
@@ -60,8 +69,16 @@ const S = strings(
     page: 'отпечатана с. {n}',
     pageHint: 'Сканираната страница: за когато нарисуваното тук изглежда грешно',
     pageTitle: '{book}, страница {n}',
+    openBook: 'отвори в речника',
+    prev: 'Предишна страница (←)',
+    next: 'Следваща страница (→)',
+    zoomIn: 'Увеличи (+)',
+    zoomOut: 'Намали (−)',
+    fit: 'Цялата страница (0)',
+    whole: 'цялата страница',
+    noPage: 'Тук няма страница.',
     loading: 'зарежда се…',
-    zoom: 'Щракнете, за да увеличите или намалите',
+    zoom: 'Щракнете двукратно за увеличение; Ctrl+колелце или + − за повече. Плъзнете, за да се движите по страницата.',
     unsure: 'Преписът тук може да е грешен',
     shared: 'Този запис пасва на повече от една дума: книгата може да има предвид друга от тях.',
     ourParts: 'В нашите части',
@@ -112,37 +129,142 @@ function useFetched<T>(key: string, get: () => Promise<T>, cache: Map<string, Pr
   return state.key === key ? state : { value: null, problem: null }
 }
 
-/** The printed page in a popup over the review screen; it has the keyboard while it is open. */
+const ZOOM_MAX = 6 // times the page's width when it fits
+const ZOOM_STEP = 1.25
+
+/**
+ * A book's page in a popup over the review screen, from the entry's first
+ * page: ← → (or the arrow keys) turn the pages; − + (Ctrl+wheel, the - + 0
+ * keys) zoom from the whole page up to six times its width, and the page is
+ * dragged to move around it. It has the keyboard while it is open.
+ */
 export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page: number; onClose: () => void }) {
   const t = S(useLang())
-  const [zoom, setZoom] = useState(false)
-  const { value: url, problem } = useFetched(`${book}/${page}`, () => api.reviewBookPage(book, page).then((b) => URL.createObjectURL(b)), scans)
+  const [n, setN] = useState(page)
+  // 1: the whole page in view; more: that many times the width it has then.
+  const [zoom, setZoom] = useState(1)
+  const [fitW, setFitW] = useState<number | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  const { value: url, problem } = useFetched(`${book}/${n}`, () => api.reviewBookPage(book, n).then((b) => URL.createObjectURL(b)), scans)
+  const zoomTo = (z: number) => setZoom(Math.min(ZOOM_MAX, Math.max(1, Math.round(z * 100) / 100)))
+  const turn = (d: number) => setN((p) => Math.max(1, p + d))
   // Heard before the review screen's own keys: Escape closes the page, not review mode, and
   // a card's shortcuts (a accepts) do nothing behind it.
   useKey(
     (e) => {
       e.stopPropagation()
-      if (e.key === 'Escape') {
+      const keys: Record<string, () => void> = {
+        Escape: onClose,
+        ArrowLeft: () => turn(-1),
+        ArrowRight: () => turn(1),
+        '+': () => zoomTo(zoom * ZOOM_STEP),
+        '=': () => zoomTo(zoom * ZOOM_STEP),
+        '-': () => zoomTo(zoom / ZOOM_STEP),
+        '0': () => zoomTo(1),
+      }
+      const run = keys[e.key]
+      if (run) {
         e.preventDefault()
-        onClose()
+        run()
       }
     },
     { capture: true },
   )
-  const title = t('pageTitle', { book: t(book), n: page })
+  // Ctrl+wheel zooms (the browser's own page zoom stays off while the popup is open).
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const wheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      setZoom((z) => Math.min(ZOOM_MAX, Math.max(1, z * (e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP))))
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    return () => el.removeEventListener('wheel', wheel)
+  }, [url])
+
+  const name = t(book)
+  const title = t('pageTitle', { book: name, n })
   return (
     <Overlay className="book-popup" panel="book-popup-panel" label={title} onClose={onClose} escape={false} closeTitle="Esc">
-      <p className="book-popup-title">{title}</p>
+      <div className="book-popup-bar">
+        <button type="button" className="book-turn" onClick={() => turn(-1)} disabled={n <= 1} title={t('prev')} aria-label={t('prev')}>
+          ←
+        </button>
+        <span className="book-popup-title">{title}</span>
+        <button type="button" className="book-turn" onClick={() => turn(1)} title={t('next')} aria-label={t('next')}>
+          →
+        </button>
+        <span className="book-zoom">
+          <button type="button" onClick={() => zoomTo(zoom / ZOOM_STEP)} disabled={zoom <= 1} title={t('zoomOut')} aria-label={t('zoomOut')}>
+            −
+          </button>
+          <button type="button" className="book-zoom-n" onClick={() => zoomTo(1)} title={t('fit')}>
+            {zoom === 1 ? t('whole') : `${Math.round(zoom * 100)}%`}
+          </button>
+          <button type="button" onClick={() => zoomTo(zoom * ZOOM_STEP)} disabled={zoom >= ZOOM_MAX} title={t('zoomIn')} aria-label={t('zoomIn')}>
+            +
+          </button>
+        </span>
+      </div>
       {problem ? (
-        <p className="hint">{problem}</p>
+        <p className="hint">{n !== page ? t('noPage') : problem}</p>
       ) : !url ? (
         <p className="hint">{t('loading')}</p>
       ) : (
-        <div className="book-scan" data-zoom={zoom || undefined}>
-          <img src={url} alt={title} title={t('zoom')} onClick={() => setZoom((z) => !z)} />
+        <div
+          ref={box}
+          className="book-scan"
+          data-zoom={zoom > 1 || undefined}
+          title={t('zoom')}
+          onPointerDown={(e) => {
+            if (zoom === 1 || !box.current) return
+            drag.current = { x: e.clientX, y: e.clientY, left: box.current.scrollLeft, top: box.current.scrollTop }
+            e.currentTarget.setPointerCapture(e.pointerId)
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current
+            if (!d || !box.current) return
+            box.current.scrollLeft = d.left - (e.clientX - d.x)
+            box.current.scrollTop = d.top - (e.clientY - d.y)
+          }}
+          onPointerUp={() => (drag.current = null)}
+        >
+          <img
+            src={url}
+            alt={title}
+            draggable={false}
+            style={zoom > 1 && fitW ? { width: fitW * zoom } : undefined}
+            onLoad={(e) => zoom === 1 && setFitW(e.currentTarget.clientWidth)}
+            onDoubleClick={() => zoomTo(zoom === 1 ? 2 : 1)}
+          />
         </div>
       )}
     </Overlay>
+  )
+}
+
+/** One button for a book: its page in the popup, from the first page the entry is on. */
+export function OpenBook({ book, pages, label }: { book: BookRef['book']; pages: number[]; label?: string }) {
+  const t = S(useLang())
+  const [open, setOpen] = useState(false)
+  if (!pages.length) return null
+  return (
+    <>
+      <button
+        type="button"
+        className="clear book-page"
+        title={t('pageHint')}
+        onClick={(e) => {
+          e.preventDefault() // inside a folded entry's line: the page, without unfolding it
+          setOpen(true)
+        }}
+      >
+        {label ?? t('openBook')} ↗
+      </button>
+      {open && createPortal(<PagePopup book={book} page={pages[0]} onClose={() => setOpen(false)} />, document.body)}
+    </>
   )
 }
 
@@ -243,17 +365,12 @@ export function KanjiEntry({ src, words }: { src: BookRef; words: 'all' | 'none'
  */
 export function BookSource({ src, entry = 'all', children }: { src: BookRef; entry?: 'all' | 'none' | string; children?: ReactNode }) {
   const t = S(useLang())
-  const [page, setPage] = useState<number | null>(null)
   return (
     <div className="book-src">
       <p className="book-head">
         <span className="book-from">{t('fromBook')}:</span> <span className="book-name">{t(src.book)}</span>
         {src.no != null && <> · №{src.no}</>}
-        {src.pages.map((p) => (
-          <button key={p} type="button" className="clear book-page" title={t('pageHint')} onClick={() => setPage(p)}>
-            {t('page', { n: p })} ↗
-          </button>
-        ))}
+        <OpenBook book={src.book} pages={src.pages} />
       </p>
       {src.book === 'kanji' && (src.no != null || src.char) && <KanjiEntry src={src} words={entry} />}
       {children}
@@ -262,7 +379,6 @@ export function BookSource({ src, entry = 'all', children }: { src: BookRef; ent
           {t('unsure')}: {src.unsure.join('; ')}
         </p>
       )}
-      {page !== null && <PagePopup book={src.book} page={page} onClose={() => setPage(null)} />}
     </div>
   )
 }

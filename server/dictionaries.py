@@ -111,6 +111,9 @@ def _kodansha_view(e: dict) -> dict:
         "no": e.get("no"),
         "pages": e.get("pdf_pages") or [],
         "core": e.get("core_meanings") or [],
+        # The entry's top block, as the book prints it beside the headword.
+        "on": e.get("on") or [], "kunReadings": e.get("kun") or [], "grade": e.get("grade"),
+        "strokes": e.get("strokes"), "skip": e.get("skip"), "unicode": e.get("unicode"),
         "senses": senses(s.get("compounds") or [], "c:"),
         "kun": kun,
         "independent": [{"head": x.get("kanji") or x.get("kana"), "kana": x.get("kana"), "text": x.get("text")}

@@ -10,11 +10,11 @@
  * Reviewers and the admin only; a server without the dictionaries' files
  * shows only what it has.
  */
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import type { BoardWord, BookRef, DictSense, DictWord, KanjiDictionaries, MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import type { Placements } from './board'
-import { KanjiEntry, PagePopup } from './BookEvidence'
+import { KanjiEntry, OpenBook } from './BookEvidence'
 import { elsewhere, senseStats, type Bucket, type SenseStat } from './dictMatch'
 import { CATCH_ALL } from './editors'
 
@@ -45,9 +45,6 @@ const S = strings(
     fromBook: 'From the book',
     from: 'From',
     tsalta: 'Цалта’s kanji book',
-    page: 'page {n}',
-    printed: 'printed page {n}',
-    pageHint: 'The scan of the page, in a popup',
     nSplit: '{n} split',
   },
   {
@@ -76,9 +73,6 @@ const S = strings(
     fromBook: 'От книгата',
     from: 'От',
     tsalta: 'Канджи речникът на Цалта',
-    page: 'с. {n}',
-    printed: 'отпечатана с. {n}',
-    pageHint: 'Сканираната страница, в изскачащ прозорец',
     nSplit: '{n} разделени',
   },
 )
@@ -92,6 +86,16 @@ function rich(text: string): ReactNode[] {
       p.startsWith('**') && p.endsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : p.length > 2 && p.startsWith('*') && p.endsWith('*') ? <i key={i}>{p.slice(1, -1)}</i> : p,
     )
 }
+
+/** A sense number as Kodansha prints it: ❶ … ⓴ black, or ① … ⑳ outlined. */
+const circled = (n: number, outlined = false) =>
+  n < 1 || n > 20
+    ? `(${n})`
+    : outlined
+      ? String.fromCharCode(0x245f + n)
+      : n <= 10
+        ? String.fromCharCode(0x2775 + n)
+        : String.fromCharCode(0x24ea + n - 10)
 
 export function DictionariesPanel({
   dicts,
@@ -109,7 +113,6 @@ export function DictionariesPanel({
   const stats = useMemo(() => senseStats(dicts, words, placements, groups), [dicts, words, placements, groups])
   const away = useMemo(() => elsewhere(dicts, words, placements, groups), [dicts, words, placements, groups])
   const onBoard = useMemo(() => new Set(words.map((w) => w.id)), [words])
-  const [page, setPage] = useState<{ book: BookRef['book']; n: number } | null>(null)
 
   const label = (b: Bucket) => {
     if (b === CATCH_ALL) return t('catchAll')
@@ -175,6 +178,126 @@ export function DictionariesPanel({
     )
   }
 
+  /**
+   * Kodansha's entry laid out as the book prints it: the headword with its
+   * number and ▶CORE meaning and readings; boxed section labels; each sense
+   * number ❶ with its letters ⓐ ⓑ, then the compounds of each letter, the
+   * letter in italics before the first. Each sense also says which group its
+   * words are in now.
+   */
+  function kodanshaEntry(k: NonNullable<KanjiDictionaries['kodansha']>) {
+    const blocks = (senses: DictSense[]) => {
+      const out: { num: number | null; senses: DictSense[] }[] = []
+      for (const s of senses) {
+        const num = /^\d+/.exec(s.n)?.[0]
+        const last = out[out.length - 1]
+        if (last && num && last.num === Number(num)) last.senses.push(s)
+        else out.push({ num: num ? Number(num) : null, senses: [s] })
+      }
+      return out
+    }
+    const letter = (n: string) => /[a-z]$/.exec(n)?.[0] ?? null
+    const word = (w: DictWord, mark: string | null, key: string) => (
+      <div
+        key={key}
+        className="kd-w"
+        data-off={!(w.id != null && onBoard.has(w.id)) || undefined}
+        data-away={(w.id != null && away.has(w.id)) || undefined}
+        title={w.id != null && onBoard.has(w.id) ? undefined : t('notOnBoard')}
+      >
+        <i className="kd-wl">{mark}</i>
+        <span className="kd-ja" lang="ja">
+          {w.ja}
+        </span>{' '}
+        <span className="kd-kana" lang="ja">
+          {w.reading}
+        </span>{' '}
+        {w.gloss}
+      </div>
+    )
+    // Compounds' senses are in black circles (❶ ⓐ), a kun word's in outlined ones (① ⓐ), as the book does.
+    const senseBlocks = (senses: DictSense[], outlined = false) =>
+      blocks(senses).map((b, bi) => {
+        const lettered = b.senses.filter((s) => letter(s.n) && s.words?.length).length > 1
+        return (
+          <div key={bi} className="kd-block" data-outlined={outlined || undefined}>
+            {b.senses.map((s, i) => (
+              <p key={s.key} className="kd-sense" data-first={i === 0 || undefined}>
+                <span className="kd-marks">
+                  {i === 0 && b.num != null && <span className="kd-num">{circled(b.num, outlined)}</span>}
+                  {letter(s.n) && <span className="kd-let">{letter(s.n)}</span>}
+                </span>
+                <span className="kd-text">{rich(s.text)}</span>
+                {(s.words?.length || stats.has(`kodansha|${s.key}`)) && chip('kodansha', s.key)}
+              </p>
+            ))}
+            {b.senses.flatMap((s) => (s.words ?? []).map((w, i) => word(w, lettered && i === 0 ? letter(s.n) : null, `${s.key}:${i}`)))}
+          </div>
+        )
+      })
+    return (
+      <div className="kd-entry">
+        <div className="kd-top">
+          <div className="kd-left">
+            <div className="kd-glyph" lang="ja">
+              {dicts.char}
+            </div>
+            <div className="kd-no">{k.no}</div>
+            {k.skip && <div className="kd-skip">■{k.skip}</div>}
+          </div>
+          <div className="kd-right">
+            <div className="kd-core">▶{k.core.join(' ')}</div>
+            <div className="kd-read" lang="ja">
+              {[...k.on, ...k.kunReadings].join('  ')}
+            </div>
+            <div className="kd-facts">{[k.grade, k.strokes && `${k.strokes} strokes`, k.unicode].filter(Boolean).join(' · ')}</div>
+          </div>
+        </div>
+        {k.senses.length > 0 && (
+          <>
+            <span className="kd-box">COMPOUNDS</span>
+            {senseBlocks(k.senses)}
+          </>
+        )}
+        {k.independent.length > 0 && (
+          <>
+            <span className="kd-box">INDEPENDENT</span>
+            {k.independent.map((h, i) => (
+              <p key={i} className="kd-sense" data-first>
+                <b className="kd-hw" lang="ja">
+                  【{h.kana} {h.head}】
+                </b>{' '}
+                {h.text && <span className="kd-text">{rich(h.text)}</span>}
+              </p>
+            ))}
+          </>
+        )}
+        {k.kun.length > 0 && (
+          <>
+            <span className="kd-box">KUN</span>
+            {k.kun.map((h, i) => (
+              <div key={i} className="kd-kunh">
+                <p className="kd-sense" data-first>
+                  <b className="kd-hw" lang="ja">
+                    【{h.kana} {h.head}】
+                  </b>{' '}
+                  {h.text && <span className="kd-text">{rich(h.text)}</span>}
+                </p>
+                {senseBlocks(h.senses.length === 1 && !h.senses[0].n ? [{ ...h.senses[0], text: '' }] : h.senses, true)}
+              </div>
+            ))}
+          </>
+        )}
+        {k.special.length > 0 && (
+          <>
+            <span className="kd-box">SPECIAL READINGS</span>
+            <div className="kd-block">{k.special.map((w, i) => word(w, null, String(i)))}</div>
+          </>
+        )}
+      </div>
+    )
+  }
+
   const k = dicts.kodansha
   const g = dicts.kangorin
   // How many of a dictionary's senses have their words split between groups: shown while it is folded.
@@ -187,22 +310,7 @@ export function DictionariesPanel({
       <summary className="book-head dict-sum">
         <span className="book-from">{t(book ? 'fromBook' : 'from')}:</span> <span className="book-name">{name}</span>
         {no != null && <> · №{no}</>}
-        {book &&
-          pages.map((p, i) => (
-            <button
-              key={p}
-              type="button"
-              className="clear book-page"
-              title={t('pageHint')}
-              onClick={(e) => {
-                e.preventDefault() // the page, without folding or unfolding the entry
-                setPage({ book, n: p })
-              }}
-            >
-              {/* An entry over several pages: the first named, the rest just their numbers. */}
-              {i === 0 ? t(book === 'kanji' ? 'printed' : 'page', { n: p }) : p} ↗
-            </button>
-          ))}
+        {book && <OpenBook book={book} pages={pages} />}
         {extra}
         {n > 0 && <span className="dict-split-n">{t('nSplit', { n })}</span>}
       </summary>
@@ -223,39 +331,7 @@ export function DictionariesPanel({
         {k && (
           <details className="dict" data-src="kodansha">
             {head('kodansha', t('kodansha'), k.no, 'kodansha', k.pages, <span className="dict-core">{k.core.join(' · ')}</span>)}
-            <div className="dict-paper">
-              {k.senses.length > 0 && (
-                <>
-                  <h5>{t('onSenses')}</h5>
-                  <ol className="dict-senses">{k.senses.map((s) => sense('kodansha', s))}</ol>
-                </>
-              )}
-              {k.kun.length > 0 && (
-                <>
-                  <h5>{t('kun')}</h5>
-                  {k.kun.map((h, i) => (
-                    <div key={i} className="dict-kun">
-                      <p>
-                        <span className="dict-head" lang="ja">
-                          {h.head}
-                        </span>{' '}
-                        <span className="dict-kana" lang="ja">
-                          {h.kana}
-                        </span>{' '}
-                        {h.text && <span className="dict-text">{rich(h.text)}</span>}
-                      </p>
-                      <ol className="dict-senses">{h.senses.map((s) => sense('kodansha', h.senses.length === 1 && !s.n && !s.words?.length ? { ...s, text: '' } : s))}</ol>
-                    </div>
-                  ))}
-                </>
-              )}
-              {k.special.length > 0 && (
-                <>
-                  <h5>{t('special')}</h5>
-                  {wordList(k.special)}
-                </>
-              )}
-            </div>
+            {kodanshaEntry(k)}
           </details>
         )}
         {g && (
@@ -309,7 +385,6 @@ export function DictionariesPanel({
           </details>
         )}
       </div>
-      {page && <PagePopup book={page.book} page={page.n} onClose={() => setPage(null)} />}
     </section>
   )
 }

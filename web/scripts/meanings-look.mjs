@@ -32,11 +32,19 @@ if (process.env.OPEN) {
   await page.screenshot({ path: `${SHOTS}/${shot}-open.png` })
 }
 if (process.env.PAGE) {
+  // The first dictionary's page: then the next page (→) and zoomed in (+ + +).
   await page.locator('.dict-sum .book-page').first().click()
   await page.waitForSelector('.book-popup .book-scan img', { timeout: 20000 })
   await page.waitForTimeout(400)
   await page.screenshot({ path: `${SHOTS}/${shot}-page.png` })
+  await page.keyboard.press('ArrowRight')
+  await page.waitForTimeout(1500)
+  for (let i = 0; i < 4; i++) await page.keyboard.press('+')
+  await page.waitForTimeout(500)
+  await page.screenshot({ path: `${SHOTS}/${shot}-page-next-zoom.png` })
+  console.log('popup title:', await page.locator('.book-popup-title').textContent(), '| zoom:', await page.locator('.book-zoom-n').textContent())
   await page.keyboard.press('Escape')
+  console.log('details still folded after the popup:', await page.locator('details.dict[open]').count())
 }
 // AT=<selector>: a second shot with that part of the card scrolled into view.
 if (process.env.AT) {

@@ -575,6 +575,12 @@ export interface KanjiDictionaries {
     /** The PDF pages the entry is on. */
     pages: number[]
     core: string[]
+    on: string[]
+    kunReadings: string[]
+    grade: string | null
+    strokes: number | null
+    skip: string | null
+    unicode: string | null
     senses: DictSense[]
     kun: { head: string; kana: string | null; text: string | null; senses: DictSense[] }[]
     independent: { head: string; kana: string | null; text: string | null }[]

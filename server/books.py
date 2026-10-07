@@ -20,9 +20,10 @@ ROOT = Path(__file__).parent.parent
 BOOKS = ("kanji", "bg-ja", "kodansha", "kangorin")
 
 # The books kept as a PDF (server/dictionaries.py), by PDF page: rendered when first asked for,
-# then kept beside the transcription like the other books' page images.
+# then kept beside the transcription, in <book>/pages-render/.
 PDFS = {"kodansha": ("source/kodansha-kanji.pdf",), "kangorin": ("source/shin-kangorin.pdf",)}
-PDF_ZOOM = {"kodansha": 2.0, "kangorin": 1.6}
+# Sharp when zoomed in: Kodansha is vector (4x its 414-point page), 新漢語林 is scanned (5x is the scan's own size).
+PDF_ZOOM = {"kodansha": 4.0, "kangorin": 5.0}
 
 
 def books_dir() -> Path:
@@ -34,10 +35,11 @@ def page_file(book: str, page: int) -> Path | None:
     """One page's image (a printed page; for a PDF book, a PDF page), or None when it is not here."""
     if book not in BOOKS or not 1 <= page <= 9999:
         return None
+    if book in PDFS:
+        f = books_dir() / book / "pages-render" / f"p{page:04d}.png"
+        return f if f.is_file() else _render(book, page, f)
     f = books_dir() / book / "pages" / f"p{page:04d}.png"
-    if f.is_file():
-        return f
-    return _render(book, page, f) if book in PDFS else None
+    return f if f.is_file() else None
 
 
 def _render(book: str, page: int, to: Path) -> Path | None:

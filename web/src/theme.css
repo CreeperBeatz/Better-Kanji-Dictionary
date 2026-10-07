@@ -7867,22 +7867,59 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 /* The printed page, over everything: fits the screen; a click shows it at full size to scroll. */
 .book-popup-panel {
-  width: min(96vw, 900px);
-  max-height: 94vh;
+  width: min(96vw, 1100px);
+  max-height: 96vh;
   display: flex;
   flex-direction: column;
 }
 
-.book-popup-title {
+/* The page's bar: ← title → on the left, the zoom on the right. */
+.book-popup-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 8px;
+}
+
+.book-popup-title {
   color: var(--muted);
   font-size: 13px;
+}
+
+.book-turn,
+.book-zoom button {
+  min-width: 30px;
+  padding: 2px 8px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
+  background: var(--sumi-lift);
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+
+.book-turn:disabled,
+.book-zoom button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.book-zoom {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.book-zoom .book-zoom-n {
+  min-width: 96px;
+  font-size: 12px;
 }
 
 .book-scan {
   overflow: auto;
   background: #fff;
   border: 1px solid var(--rule);
+  touch-action: none;
 }
 
 .book-scan img {
@@ -7891,12 +7928,21 @@ html[data-nav]::view-transition-old(tabs):only-child {
   max-height: 84vh;
   margin: 0 auto;
   cursor: zoom-in;
+  user-select: none;
+}
+
+.book-scan[data-zoom] {
+  cursor: grab;
+}
+
+.book-scan[data-zoom]:active {
+  cursor: grabbing;
 }
 
 .book-scan[data-zoom] img {
   max-width: none;
   max-height: none;
-  cursor: zoom-out;
+  cursor: inherit;
 }
 
 .queue-notes {
@@ -8971,4 +9017,171 @@ button.review-part {
   margin: 4px 0 0;
   color: #666;
   font-size: 12px;
+}
+
+/* Kodansha's entry as its pages print it (review/DictionariesPanel.tsx kodanshaEntry):
+   white page, a light sans for English, a Mincho for the compounds, Gothic kana,
+   boxed section labels, black-circled sense numbers and letters. */
+.kd-entry {
+  max-height: 36rem;
+  overflow: auto;
+  margin: 4px 0 6px;
+  padding: 8px 14px 10px;
+  border: 1px solid #111;
+  background: #fff;
+  color: #111;
+  font-family: 'Myriad Pro', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.kd-top {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 6px;
+}
+
+.kd-left {
+  text-align: center;
+}
+
+.kd-glyph {
+  font-family: 'Kozuka Mincho Pr6N', 'Yu Mincho', var(--mincho);
+  font-size: 64px;
+  line-height: 1;
+}
+
+.kd-no {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.kd-skip {
+  font-size: 13px;
+}
+
+.kd-core {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.kd-read {
+  margin-top: 2px;
+  font-family: 'Kozuka Gothic Pr6N', 'Yu Gothic', var(--gothic);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.kd-facts {
+  margin-top: 4px;
+  color: #444;
+  font-size: 12px;
+}
+
+.kd-box {
+  display: inline-block;
+  margin: 8px 0 3px;
+  padding: 0 3px;
+  border: 1px solid #111;
+  font-size: 11.5px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+.kd-block + .kd-block {
+  margin-top: 2px;
+}
+
+.kd-sense {
+  margin: 1px 0;
+  padding-left: 2.6em;
+  text-indent: -2.6em;
+}
+
+.kd-marks {
+  display: inline-block;
+  min-width: 2.6em;
+  text-indent: 0;
+}
+
+.kd-sense:not([data-first]) .kd-marks {
+  padding-left: 1.15em;
+}
+
+.kd-num {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ⓐ as Kodansha prints it: a white italic letter in a black circle. */
+.kd-let {
+  display: inline-block;
+  width: 1.05em;
+  height: 1.05em;
+  margin-left: 1px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1.05em;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+.kd-text b {
+  font-weight: 700;
+}
+
+.kd-entry .dict-chip {
+  font-size: 11.5px;
+}
+
+.kd-w {
+  padding-left: 4.4em;
+  text-indent: -2.2em;
+}
+
+.kd-wl {
+  display: inline-block;
+  width: 1.6em;
+  color: #333;
+  text-indent: 0;
+}
+
+.kd-ja {
+  font-family: 'Kozuka Mincho Pr6N', 'Yu Mincho', var(--mincho);
+  font-size: 16px;
+}
+
+.kd-kana {
+  font-family: 'Kozuka Gothic Pr6N', 'Yu Gothic', var(--gothic);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Not on the board: lighter. On it, but in another group than its sense mates: marked. */
+.kd-w[data-off] {
+  color: #888;
+}
+
+.kd-w[data-away] {
+  background: #fbe7c4;
+}
+
+.kd-hw {
+  font-family: 'Kozuka Gothic Pr6N', 'Yu Gothic', var(--gothic);
+}
+
+.kd-kunh {
+  margin-bottom: 3px;
+}
+
+.kd-block[data-outlined] .kd-let {
+  border: 1px solid #111;
+  background: transparent;
+  color: #111;
+  font-weight: 400;
 }
