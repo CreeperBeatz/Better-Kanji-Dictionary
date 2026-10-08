@@ -6373,32 +6373,78 @@ html[data-nav]::view-transition-old(tabs):only-child {
 /* The meanings card's steps after the board (review/Extras.tsx): 2, the
    same-meaning kanji, by Kodansha's sense, each put in a group or in none;
    3, the kanji easy to mix up, by the reading they share. */
-.board-step {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
+/* A card's step (review/Stage.tsx): framed apart, a big numbered title that folds it, "Done" at its foot. */
+.review-step {
+  margin: 10px 0 18px;
+  padding: 12px 16px 10px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 8px;
+  background: var(--sumi-lift);
 }
 
-/* The card's numbered steps stand out from the hints under them (over .queue-edit h4). */
-.queue-edit .board-top h4,
-.queue-edit .board-step h4,
-.board-top h4,
-.board-step h4 {
+.review-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.review-step-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--paper);
+  font: inherit;
+  cursor: pointer;
+}
+
+.review-step-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ai-deep);
   color: var(--paper);
   font-size: 15px;
   font-weight: 600;
 }
 
-/* Step 3, about the kanji, follows the board outside its grid. */
-.board ~ .board-step {
-  margin: 12px 0;
+.review-step-title {
+  font-size: 19px;
+  font-weight: 600;
 }
 
-.board-step h4,
-.board-step p,
+.review-step-caret {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.review-step-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.review-step-done {
+  display: block;
+  margin: 12px auto 2px;
+  font-size: 12.5px;
+}
+
+
+/* The board's heading outside a card's steps (the page's Edit dialog). */
+.board-top h4 {
+  color: var(--paper);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.review-step-body > p,
 .step-sense h5 {
   margin: 0;
 }
@@ -8131,6 +8177,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .dv-recent {
+  align-items: center;
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -9486,4 +9533,81 @@ button.review-part {
 .kd-more .kd-all {
   color: #6b6b6b;
   font-size: 11px;
+}
+
+/* The books' entries in night colours (Dani, 2026-10-08): on a meanings card always, in the
+   dictionary tab when it is dark. A double rule frames each, so it still reads as an entry
+   from the book and not as the app's own text. */
+.dict-night .kd-entry,
+.dict-night .book-entry,
+.dict-night .dict-paper {
+  --night-bg: #1e1a16;
+  background: var(--night-bg);
+  color: var(--paper);
+  border: 1px solid var(--rule-bright);
+  box-shadow: inset 0 0 0 3px var(--night-bg), inset 0 0 0 4px var(--rule);
+}
+
+.dict-night .be-head,
+.dict-night .dict-paper h5 {
+  border-bottom-color: var(--paper-dim);
+  color: var(--paper);
+}
+
+.dict-night .kd-box {
+  border-color: var(--paper-dim);
+}
+
+.dict-night .be-info {
+  border-bottom-color: var(--muted);
+}
+
+.dict-night .dict-sense {
+  border-bottom-color: var(--rule-bright);
+}
+
+.dict-night .dict-n,
+.dict-night .dict-kana,
+.dict-night .kd-facts,
+.dict-night .kd-wl {
+  color: var(--paper-dim);
+}
+
+.dict-night .kd-let {
+  background: var(--paper);
+  color: var(--night-bg, #1e1a16);
+}
+
+.dict-night .kd-block[data-outlined] .kd-let {
+  border-color: var(--paper);
+  background: transparent;
+  color: var(--paper);
+}
+
+.dict-night .kd-w[data-off],
+.dict-night .dict-chip[data-none],
+.dict-night .kd-more .kd-all {
+  color: var(--muted);
+}
+
+.dict-night .kd-w[data-away] {
+  background: rgba(224, 162, 74, 0.18);
+}
+
+.dict-night .dict-chip {
+  color: #7fb88a;
+}
+
+.dict-night .dict-chip[data-split] {
+  color: #e0a24a;
+}
+
+.dict-night .dict-japan {
+  border-color: #e0705a;
+  color: #e0705a;
+}
+
+.dv-theme {
+  display: inline-flex;
+  gap: 4px;
 }

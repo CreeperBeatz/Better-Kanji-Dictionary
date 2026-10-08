@@ -28,8 +28,8 @@ const check = (name, ok, got = '') => {
 
 // 1. The meanings card: 会's pairs with 合 and 遭 (あう) are Bunkacho's, explained, not asked.
 await page.goto(`${WEB}/review/queue/meanings/${idOf('kanji_senses', '会')}`, { waitUntil: 'networkidle' })
-await page.waitForSelector('.board-step')
-const step3 = page.locator('.board-step').nth(1)
+await page.waitForSelector('.review-step[data-n="3"]')
+const step3 = page.locator('.review-step[data-n="3"]')
 const row = (c) => step3.locator('.step-row', { has: page.locator('.step-char', { hasText: c }) }).first()
 for (const c of ['合', '遭']) {
   check(`会 · ${c}: explained by the あう usage card, no choice`, (await row(c).locator('.step-explained').count()) === 1 && (await row(c).locator('.step-picks').count()) === 0)

@@ -43,6 +43,9 @@ check('the card has Kodansha and Цалта, both folded', JSON.stringify(await 
   === JSON.stringify([['kodansha', false], ['tsalta', false]]))
 check('no hint, no line to the tab', (await page.locator('.dicts-head .hint').count()) === 0 && (await page.locator('.dicts-more').count()) === 0)
 await page.locator('details.dict[data-src="kodansha"] > summary').click({ position: { x: 5, y: 8 } })
+const bgOf = (loc) => loc.evaluate((el) => getComputedStyle(el).backgroundColor)
+const dark = (rgb) => rgb.match(/\d+/g).slice(0, 3).reduce((a, n) => a + Number(n), 0) < 200
+check('the card shows Kodansha in night colours', dark(await bgOf(page.locator('.dicts .kd-entry'))), await bgOf(page.locator('.dicts .kd-entry')))
 const blocks = page.locator('details.dict[data-src="kodansha"] .kd-block')
 let most = 0
 for (let i = 0; i < (await blocks.count()); i++) {
@@ -74,7 +77,7 @@ check('→ turns the page', (await tab.locator('.book-popup-title').textContent(
 
 // From step 3: 産 (うまれる). The same tab shows it, still in Цалта's book.
 const before = ctx.pages().length
-await page.locator('.board-step').nth(1).locator('.step-row', { has: page.locator('.step-char', { hasText: '産' }) }).locator('.dict-tab').click()
+await page.locator('.review-step[data-n="3"]').locator('.step-row', { has: page.locator('.step-char', { hasText: '産' }) }).locator('.dict-tab').click()
 await tab.waitForURL(/char=%E7%94%A3|char=産/, { timeout: 15000 })
 await tab.waitForLoadState('networkidle')
 check('a row’s link reuses the same tab', ctx.pages().length === before, ctx.pages().length)
@@ -97,7 +100,12 @@ const cardWords = await page.locator('details.dict[data-src="kodansha"] .kd-w').
 const allWords = await tab.locator('.dv-digital .kd-w').count()
 check('"see all" opens Kodansha digital, every word', (await tab.locator('.dv-char').textContent()) === '生' && allWords > cardWords, `${cardWords} on the card, ${allWords} in the tab`)
 check('the digital view folds nothing', (await tab.locator('.dv-digital details').count()) === 0)
+check('the digital entry in the tab is dark at first', dark(await bgOf(tab.locator('.dv-digital .kd-entry'))))
 await tab.screenshot({ path: `${SHOTS}/dictionary-tab-digital.png` })
+await tab.getByRole('button', { name: 'light' }).click()
+check('and white on "light"', !dark(await bgOf(tab.locator('.dv-digital .kd-entry'))))
+await tab.screenshot({ path: `${SHOTS}/dictionary-tab-light.png` })
+await tab.getByRole('button', { name: 'dark' }).click()
 await tab.getByRole('button', { name: 'scanned' }).click()
 check('the switch shows the scan', await scanIn(tab))
 await tab.getByRole('button', { name: /Wiktionary/ }).click()

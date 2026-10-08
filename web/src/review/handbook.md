@@ -104,6 +104,9 @@ dictionary.
   - Every link opens the *same* tab. Put it on your second screen: the next
     kanji you open shows there, as you left the tab.
   - A dictionary that does not have the kanji is greyed (*not in it*).
+  - *light* / *dark* sets the digital entries' colours; the scans stay as
+    printed. On a card, the entries are always dark, framed like a book's.
+  - *recent*: the kanji opened in the tab before, one click away.
   - *Open on the site ↗*, at the top of a card, is different: it opens the
     kanji's page here.
 
@@ -337,6 +340,12 @@ A part is one of three things, and only two of them are decided here:
   always exists and is not one of the 1–6.
 
 ### The board
+
+The card has three steps, each in a frame of its own: 1 the board, 2 kanji
+with the same meaning, 3 kanji easy to mix up. Click a step's title to
+collapse or open it; *Done: collapse this step*, at its bottom, collapses it
+and brings the next one up. A collapsed step shows a line of what it holds.
+Collapsing only hides it: nothing is decided until you accept.
 
 Each group is a box with its words under it (reading and gloss). The kanji's
 common words come placed where the AI drafted them; words with a **red edge**

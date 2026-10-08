@@ -144,7 +144,7 @@ export function DictionariesPanel({
   }
 
   return (
-    <section className="dicts">
+    <section className="dicts dict-night">
       <header className="dicts-head">
         <h4>
           {t('title')} <DictionaryLink char={dicts.char} />

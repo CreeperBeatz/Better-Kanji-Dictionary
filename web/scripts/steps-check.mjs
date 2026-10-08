@@ -18,21 +18,22 @@ await page.goto(res.devLink.replace(/^https?:\/\/[^/]+/, WEB), { waitUntil: 'net
 const db = new DatabaseSync(`${SANDBOX}/review/review.db`, { readOnly: true })
 const it = db.prepare("SELECT id FROM item WHERE type = 'kanji_senses' AND subject = '国' AND status = 'open'").get()
 await page.goto(`${WEB}/review/queue/meanings/${it.id}`, { waitUntil: 'networkidle' })
-await page.waitForSelector('.board-step')
+await page.waitForSelector('.review-step[data-n="2"]')
 
 let failed = 0
 const check = (name, ok, got = '') => {
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${ok ? '' : `  (got ${got})`}`)
   if (!ok) failed++
 }
-const step2 = page.locator('.board-step').nth(0)
-const step3 = page.locator('.board-step').nth(1)
+const step2 = page.locator('.review-step[data-n="2"]')
+const step3 = page.locator('.review-step[data-n="3"]')
 // 邦's first row: Kodansha lists it under two senses, so two rows share one state.
 const hou = step2.locator('.step-row', { has: page.locator('.step-char', { hasText: '邦' }) })
 const pressed = async (row) => row.first().locator('button[aria-pressed="true"]').allTextContents()
 
-check('2 and 3 are numbered steps', (await step2.locator('h4').textContent()).startsWith('2.') && (await step3.locator('h4').textContent()).startsWith('3. Kanji easy to mix up'))
-check('the overall box is in step 1, above the groups', await page.locator('.board > .board-overall + .board-group, .board > .board-overall ~ .board-group').count() > 0
+check('three numbered steps, each framed apart', JSON.stringify(await page.locator('.review-step .review-step-n').allTextContents()) === '["1","2","3"]'
+  && (await step3.locator('.review-step-title').textContent()).startsWith('Kanji easy to mix up'))
+check('the overall box is in step 1, above the groups', await page.locator('.review-step[data-n="1"] .review-step-body > .board-overall ~ .board-group').count() > 0
   && (await page.locator('.board-overall textarea').inputValue()).length > 0)
 check('国 has no mix-ups: step 3 says so', (await step3.textContent()).includes('Nothing to check'))
 check('no step asks about etymology', !(await page.locator('.queue-edit').textContent()).match(/How it was built|Original meaning/i))
@@ -56,7 +57,7 @@ const two = await pressed(hou)
 check('邦 can be in two groups at once', two.length === 2 && two[0].startsWith('1.') && two[1].startsWith('4.'), two)
 check('its other row shows the same', JSON.stringify(await hou.nth(1).locator('button[aria-pressed="true"]').allTextContents()) === JSON.stringify(two))
 await page.keyboard.press('Enter') // on the focused pick: presses it (out of group 4), never accepts the card
-check('Enter on a pick presses the pick, not accept', (await page.locator('.board-step').count()) === 2 && (await pressed(hou)).length === 1, await pressed(hou))
+check('Enter on a pick presses the pick, not accept', (await page.locator('.review-step').count()) === 3 && (await pressed(hou)).length === 1, await pressed(hou))
 
 const hanRow = step2.locator('.step-row', { has: page.locator('.step-char', { hasText: '藩' }) }).first()
 await hanRow.getByRole('button', { name: /^2\./ }).click()
@@ -65,6 +66,12 @@ check('藩 goes into a group', (await pressed(hanRow))[0]?.startsWith('2.'), awa
 
 await step2.scrollIntoViewIfNeeded()
 await page.screenshot({ path: `${SHOTS}/steps-check.png` })
+
+// "Done" folds a step to one line of what it holds; its title opens it again.
+await step2.locator('.review-step-done').click()
+check('"Done" folds step 2 to a summary', (await step2.locator('.review-step-body').count()) === 0 && /kanji in a group/.test(await step2.locator('.review-step-summary').textContent()))
+await step2.locator('.review-step-toggle').click()
+check('its title opens it again', (await step2.locator('.review-step-body').count()) === 1)
 
 // The board: a group has no note and does not fold as a whole; its parts (confirmed, common, uncommon) do.
 const first = page.locator('.board-group[data-kind="group"]').first()
@@ -87,8 +94,8 @@ await page.screenshot({ path: `${SHOTS}/steps-board.png` })
 // 生: いきる is 生きる or 活きる. 活 starts kept; "not worth showing" drops it.
 const sei = db.prepare("SELECT id FROM item WHERE type = 'kanji_senses' AND subject = '生' AND status = 'open'").get()
 await page.goto(`${WEB}/review/queue/meanings/${sei.id}`, { waitUntil: 'networkidle' })
-await page.waitForSelector('.board-step')
-const mix = page.locator('.board-step').nth(1)
+await page.waitForSelector('.review-step[data-n="2"]')
+const mix = page.locator('.review-step[data-n="3"]')
 const ikiru = mix.locator('.step-sense', { hasText: 'いきる' })
 check('生\'s mix-ups are listed by the shared reading', (await ikiru.locator('h5').textContent()).includes('生 · 活'), await ikiru.locator('h5').textContent())
 const katsu = ikiru.locator('.step-row', { has: page.locator('.step-char', { hasText: '活' }) })

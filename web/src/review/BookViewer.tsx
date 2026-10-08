@@ -32,13 +32,17 @@ const S = strings(
     heading: 'Dictionaries',
     kanji: '1. Kanji',
     kanjiHint: 'type or paste a kanji',
-    recent: 'opened here before',
+    recent: 'recent',
     book: '2. Dictionary',
     kodansha: 'Kodansha',
     kangorin: '新漢語林',
     kanji_book: 'Цалта’s kanji book',
     wiktionary: 'Wiktionary',
     notIn: 'not in it',
+    theme: 'Colours',
+    themeHint: 'The digital entries on white paper, or in night colours; the scans stay as printed.',
+    light: 'light',
+    dark: 'dark',
     kanjipediaTitle: 'The 漢検漢字辞典 on kanjipedia.jp, in a new tab: its numbered meanings, each with example words. Read there, never copied.',
     digital: 'digital',
     scan: 'scanned',
@@ -53,13 +57,17 @@ const S = strings(
     heading: 'Речници',
     kanji: '1. Канджи',
     kanjiHint: 'напишете или поставете канджи',
-    recent: 'отваряни тук',
+    recent: 'скорошни',
     book: '2. Речник',
     kodansha: 'Kodansha',
     kangorin: '新漢語林',
     kanji_book: 'Канджи речникът на Цалта',
     wiktionary: 'Уикиречник',
     notIn: 'няма го',
+    theme: 'Цветове',
+    themeHint: 'Дигиталните статии на бяла хартия или в нощни цветове; сканираните страници остават както са отпечатани.',
+    light: 'светло',
+    dark: 'тъмно',
     kanjipediaTitle: '漢検漢字辞典 на kanjipedia.jp, в нов раздел: номерираните значения, всяко с примерни думи. Чете се там, никога не се копира.',
     digital: 'дигитален',
     scan: 'сканиран',
@@ -77,6 +85,8 @@ const VIEWS: DictView[] = ['digital', 'scan']
 const LAST_BOOK = 'betterrtk:dictionary-book'
 const LAST_VIEW = 'betterrtk:dictionary-view'
 const RECENT = 'betterrtk:dictionary-recent'
+// The digital entries on paper (light) or in night colours (dark, as on a card); the scans are as printed.
+const THEME = 'betterrtk:dictionary-theme'
 const isKanji = (c: string) => /^[㐀-鿿豈-﫿]$/.test(c)
 const isBook = (b: string | null): b is DictBook => !!b && (BOOKS as string[]).includes(b)
 const isView = (v: string | null): v is DictView => !!v && (VIEWS as string[]).includes(v)
@@ -115,6 +125,7 @@ export default function BookViewer() {
     const last = sessionStorage.getItem(LAST_VIEW)
     return isView(v) ? v : isView(last) ? last : 'scan'
   })
+  const [dark, setDark] = useState(() => localStorage.getItem(THEME) !== 'light')
   const [draft, setDraft] = useState('')
   const [recent, setRecent] = useState(readRecent)
   const [found, setFound] = useState<{ char: string; dicts: KanjiDictionaries | null; problem: string | null } | null>(null)
@@ -179,7 +190,7 @@ export default function BookViewer() {
     body = <PageScan key={`${char}:${book}`} book={book as 'kodansha' | 'kangorin' | 'kanji'} page={has.pages[0]} extra={where && <span className="hint dv-entry">{where}</span>} />
   else
     body = (
-      <div className="dv-digital">
+      <div className={`dv-digital${dark ? ' dict-night' : ''}`}>
         {where && <p className="hint dv-entry">{where}</p>}
         {book === 'kodansha' && d.kodansha && <KodanshaEntry char={char} k={d.kodansha} />}
         {book === 'kangorin' && d.kangorin && (
@@ -211,7 +222,8 @@ export default function BookViewer() {
             onCompositionEnd={(e) => take(e.currentTarget.value)}
           />
           {recent.length > 1 && (
-            <span className="dv-recent" aria-label={t('recent')} title={t('recent')}>
+            <span className="dv-recent" aria-label={t('recent')}>
+              <span className="hint">{t('recent')}:</span>
               {recent
                 .filter((c) => c !== char)
                 .map((c) => (
@@ -262,6 +274,24 @@ export default function BookViewer() {
             )}
           </div>
         </div>
+        <span className="dv-theme" role="group" aria-label={t('theme')}>
+          {[false, true].map((d) => (
+            <button
+              key={String(d)}
+              type="button"
+              className="search-filter"
+              data-on={dark === d || undefined}
+              aria-pressed={dark === d}
+              title={t('themeHint')}
+              onClick={() => {
+                setDark(d)
+                localStorage.setItem(THEME, d ? 'dark' : 'light')
+              }}
+            >
+              {t(d ? 'dark' : 'light')}
+            </button>
+          ))}
+        </span>
         <LangSwitch />
       </header>
       <main className="dv-page">{body}</main>

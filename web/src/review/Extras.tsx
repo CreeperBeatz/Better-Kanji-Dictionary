@@ -24,13 +24,15 @@ import { useEffect, useMemo, useState } from 'react'
 import type { KanjiDictionaries, KanjiExtras, LinkCandidate, MeaningGroup, UsageCard } from '../api'
 import { strings, useLang } from '../i18n'
 import { DictionaryLink } from './dictLink'
+import { Stage } from './Stage'
 
 const S = strings(
   {
     kokuji: 'Made in Japan (kokuji): Chinese has no such character.',
     overall: 'The meanings together',
     overallHint: 'One sentence on how the groups connect, in their order. Empty when they do not.',
-    mixups: '3. Kanji easy to mix up with {char}',
+    mixups: 'Kanji easy to mix up with {char}',
+    mixupsSum: '{n} kept',
     mixupsHint: 'These share a kun reading with {char}. Keep the ones learners really mix up.',
     explained: 'Bunkacho explains this pair:',
     explainedTitle: 'Its usage card (which kanji to write), in a new tab',
@@ -40,7 +42,8 @@ const S = strings(
     none: 'none',
     about: 'What the kanji does in these words',
     examples: 'Learners see these words first',
-    synonyms: '2. Kanji with the same meaning',
+    synonyms: 'Kanji with the same meaning',
+    synonymsSum: '{n} kanji in a group',
     synonymsHint: 'Put each kanji in the group where it means the same as {char}. A meaning with no group? Add the group in step 1.',
     synonymsNone: 'Kodansha lists no synonyms for this kanji. You can add one below.',
     kodanshaSense: 'Kodansha {sense}',
@@ -65,7 +68,8 @@ const S = strings(
     kokuji: 'Създадено в Япония (кокуджи): в китайския няма такъв знак.',
     overall: 'Значенията заедно',
     overallHint: 'Едно изречение за това как се свързват групите, по техния ред. Празно, когато не се свързват.',
-    mixups: '3. Канджи, които лесно се бъркат с {char}',
+    mixups: 'Канджи, които лесно се бъркат с {char}',
+    mixupsSum: 'оставени: {n}',
     mixupsHint: 'Тези имат общо четене кун с {char}. Оставете тези, които учещите наистина бъркат.',
     explained: 'Бункачо обяснява тази двойка:',
     explainedTitle: 'Картата ѝ за употреба (кое канджи да се пише), в нов раздел',
@@ -75,7 +79,8 @@ const S = strings(
     none: 'няма',
     about: 'Какво прави канджито в тези думи',
     examples: 'Учещите виждат първо тези думи',
-    synonyms: '2. Канджи със същото значение',
+    synonyms: 'Канджи със същото значение',
+    synonymsSum: 'канджи в група: {n}',
     synonymsHint: 'Сложете всяко канджи в групата, в която значи същото като {char}. Значение без група? Добавете групата в стъпка 1.',
     synonymsNone: 'Kodansha не дава синоними за това канджи. Можете да добавите по-долу.',
     kodanshaSense: 'Kodansha {sense}',
@@ -308,8 +313,7 @@ export function SynonymsStep({
   )
 
   return (
-    <section className="board-step">
-      <h4>{t('synonyms')}</h4>
+    <Stage n={2} title={t('synonyms')} summary={t('synonymsSum', { n: new Set(groups.flatMap((g) => g.similar ?? [])).size })}>
       <p className="hint">{pool.size ? t('synonymsHint', { char }) : t('synonymsNone')}</p>
       {bySense.map(([n, list]) => {
         const text = n ? senseText(n) : ''
@@ -333,7 +337,7 @@ export function SynonymsStep({
         <span className="hint">{t('addSynonym')}</span>{' '}
         <AddKanji onAdd={(c) => c !== char && !pool.has(c) && !added.includes(c) && setAdded((a) => [...a, c])} />
       </p>
-    </section>
+    </Stage>
   )
 }
 
@@ -412,8 +416,7 @@ export function MixupsStep({
     onChange({ ...value, mixups: on ? [...value.mixups.filter((m) => m.char !== r.char), { char: r.char, reading: r.reading }] : value.mixups.filter((m) => m.char !== r.char) })
 
   return (
-    <section className="board-step">
-      <h4>{t('mixups', { char })}</h4>
+    <Stage n={3} title={t('mixups', { char })} summary={rows.length ? t('mixupsSum', { n: value.mixups.length }) : t('mixupsNone', { char })}>
       <p className="hint">{rows.length ? t('mixupsHint', { char }) : t('mixupsNone', { char })}</p>
       {[...byReading].map(([reading, list]) => (
         <div key={reading} className="step-sense">
@@ -455,7 +458,7 @@ export function MixupsStep({
           </ul>
         </div>
       ))}
-    </section>
+    </Stage>
   )
 }
 

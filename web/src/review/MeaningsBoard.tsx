@@ -25,11 +25,14 @@ import { elsewhere } from './dictMatch'
 import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
 import { GroupExtras, SynonymsStep, type Candidates } from './Extras'
+import { Stage } from './Stage'
 
 const S = strings(
   {
     groups: 'Meaning groups',
-    groupsStep: '1. Meanings',
+    groupsTitle: 'Meanings',
+    stepOneLeft: '{g} groups · {n} words to confirm',
+    stepOneDone: '{g} groups · every word confirmed',
     allConfirmed: 'every word confirmed',
     en: 'English label',
     remove: 'remove group',
@@ -74,7 +77,9 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
-    groupsStep: '1. Значения',
+    groupsTitle: 'Значения',
+    stepOneLeft: 'групи: {g} · думи за потвърждаване: {n}',
+    stepOneDone: 'групи: {g} · всички думи са потвърдени',
     allConfirmed: 'всички думи са потвърдени',
     en: 'Английски етикет',
     remove: 'махнете групата',
@@ -568,10 +573,11 @@ export function MeaningsBoard({
     )
   }
 
-  return (
-    <div className="board" ref={boardRef} data-only={only !== undefined || undefined}>
+  // The board itself: on a meanings card, step 1 of 3.
+  const stepOne = (
+    <>
       <div className="board-top">
-        <h4>{t(extras ? 'groupsStep' : 'groups')}</h4>
+        {!extras && <h4>{t('groups')}</h4>}
         {/* Always laid out, only hidden, so picking a word never moves the page. */}
         <span className="board-picked" data-none={picked.size === 0 || undefined} aria-hidden={picked.size === 0 || undefined}>
           {t('picked', { n: Math.max(picked.size, 1) })}{' '}
@@ -623,6 +629,22 @@ export function MeaningsBoard({
             <b>{t('none')}</b>
           </div>,
         )}
+    </>
+  )
+
+  return (
+    <div className="board" ref={boardRef} data-only={only !== undefined || undefined}>
+      {extras ? (
+        <Stage
+          n={1}
+          title={t('groupsTitle')}
+          summary={unconfirmed ? t('stepOneLeft', { g: groups.length, n: unconfirmed }) : t('stepOneDone', { g: groups.length })}
+        >
+          {stepOne}
+        </Stage>
+      ) : (
+        stepOne
+      )}
       {extras && <SynonymsStep char={char} groups={groups} onGroups={onGroups} candidates={candidates!} dicts={dicts} />}
       {menu && (
         <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
