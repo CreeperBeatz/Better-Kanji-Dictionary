@@ -50,6 +50,9 @@ they are right, then accepted, or skipped.
 **Keys:** `a` or `Enter` accepts (or saves), `r` rejects, `s` skips, `j` / `k`
 move to the next or previous card.
 
+**A reason** is optional: *+ add a reason*, under the card, opens the field.
+History shows it with your decision.
+
 **Something else is wrong?** Every card has it under its title. A mistake
 the card can't fix (a word's English, a kanji's readings or levels, its
 similar kanji, a part on another card) goes to *reports* for a reviewer to
@@ -363,8 +366,9 @@ are the ones it was unsure of, so look at those first.
   queue (*left for later*), each where you had it, with the groups fixed.
 - **Add or remove groups** with *add a group* / *remove group*. A removed
   group's words drop to *Not in a group*.
-- **Not in a group** holds the in-scope words no group claims. Drag one into
-  a group if it belongs there.
+- **Not in a group** holds the in-scope words no group claims, and shows
+  only when it holds some. Drag one into a group if it belongs there; to put
+  a word there, right-click it, *Not in a group*.
 - **Accept** (or *save my answer*) decides the groups and every word on the
   board together, as you left them. History shows it as one decision
   ("+ N words placed").

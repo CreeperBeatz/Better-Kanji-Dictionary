@@ -30,16 +30,12 @@ const S = strings(
   {
     groups: 'Meaning groups',
     groupsStep: '1. Meanings',
-    groupsHint: '1 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group.',
-    tickHint: 'Tick each word as you check it: the card can be accepted once every word in the groups is ticked.',
     allConfirmed: 'every word confirmed',
     en: 'English label',
     remove: 'remove group',
     addGroup: 'add a group',
     catchAll: 'The kanji brings no meaning to the word',
-    catchAllHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
     none: 'Not in a group',
-    noneHint: 'common or ranked words no group claims; rarer words are not labelled here',
     clearPick: 'clear selection',
     picked: '{n} selected',
     empty: 'no words',
@@ -63,12 +59,9 @@ const S = strings(
     oneWord: 'One word to place: move {word} to the group it belongs in. The groups are decided; the other words show what each holds.',
     unsure: 'the drafting model was unsure here',
     sure: 'ticked from the start: two drafting runs put it here, both sure. Untick it if it is wrong.',
-    nSure: '{n} words start ticked: two drafting runs agreed on them, both sure. Glance over them; untick any that is wrong.',
     words: '{n} words',
     common: 'common',
     uncommon: 'uncommon',
-    commonTitle: 'JMdict marks it as common',
-    uncommonTitle: 'JMdict does not mark it as common',
     news: 'top {n}',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
     jlpt: 'On the JLPT N{n} vocabulary list',
@@ -82,16 +75,12 @@ const S = strings(
   {
     groups: 'Групи значения',
     groupsStep: '1. Значения',
-    groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група.',
-    tickHint: 'Отмятайте всяка дума, щом я проверите: картата може да се приеме, когато всички думи в групите са отметнати.',
     allConfirmed: 'всички думи са потвърдени',
     en: 'Английски етикет',
     remove: 'махнете групата',
     addGroup: 'добавете група',
     catchAll: 'Канджито не внася значение в думата',
-    catchAllHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните канджи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
     none: 'Извън групите',
-    noneHint: 'чести или класирани думи, които никоя група не взима; редките думи не се разпределят тук',
     clearPick: 'изчистете избора',
     picked: 'избрани: {n}',
     empty: 'няма думи',
@@ -115,12 +104,9 @@ const S = strings(
     oneWord: 'Една дума за подреждане: преместете {word} в групата, към която принадлежи. Групите са решени; другите думи показват какво съдържа всяка.',
     unsure: 'моделът не беше сигурен тук',
     sure: 'отметната от начало: две чернови я сложиха тук, и двете сигурни. Махнете отметката, ако е грешно.',
-    nSure: '{n} думи започват отметнати: две чернови са съгласни за тях, и двете сигурни. Прегледайте ги; махнете отметката на грешните.',
     words: '{n} думи',
     common: 'чести',
     uncommon: 'редки',
-    commonTitle: 'JMdict я отбелязва като честа',
-    uncommonTitle: 'JMdict не я отбелязва като честа',
     news: 'топ {n}',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
     jlpt: 'В речника за JLPT N{n}',
@@ -420,9 +406,6 @@ export function MeaningsBoard({
               {t('skippedTag')}
             </span>
           )}
-          <span className="word-common" data-common={w.common || undefined} title={t(w.common ? 'commonTitle' : 'uncommonTitle')}>
-            {t(w.common ? 'common' : 'uncommon')}
-          </span>
         </span>
         <span className="board-gloss">{gloss(w)}</span>
         {dicts && dictBadges(w)}
@@ -589,10 +572,6 @@ export function MeaningsBoard({
     <div className="board" ref={boardRef} data-only={only !== undefined || undefined}>
       <div className="board-top">
         <h4>{t(extras ? 'groupsStep' : 'groups')}</h4>
-        <span className="hint">
-          {t('groupsHint')}
-          {checks && ` ${t('tickHint')}`}
-        </span>
         {/* Always laid out, only hidden, so picking a word never moves the page. */}
         <span className="board-picked" data-none={picked.size === 0 || undefined} aria-hidden={picked.size === 0 || undefined}>
           {t('picked', { n: Math.max(picked.size, 1) })}{' '}
@@ -604,7 +583,6 @@ export function MeaningsBoard({
       {followUp && <p className="board-followup">{t('followUp')}</p>}
       {onlyWord && <p className="board-followup">{t('oneWord', { word: onlyWord.headword })}</p>}
       {skipped.size > 0 && <p className="board-skipnote">{t('skippedNote', { n: skipped.size })}</p>}
-      {preTicked.size > 0 && <p className="hint board-surenote">{t('nSure', { n: preTicked.size })}</p>}
       {overall}
       {groups.map((g, i) =>
         bucket(
@@ -635,15 +613,16 @@ export function MeaningsBoard({
       {bucket(
         CATCH_ALL,
         <div className="board-fixed">
-          <b>{t('catchAll')}</b> <span className="hint">{t('catchAllHint')}</span>
+          <b>{t('catchAll')}</b>
         </div>,
       )}
-      {bucket(
-        null,
-        <div className="board-fixed">
-          <b>{t('none')}</b> <span className="hint">{t('noneHint')}</span>
-        </div>,
-      )}
+      {(byBucket.get(null)?.length ?? 0) > 0 &&
+        bucket(
+          null,
+          <div className="board-fixed">
+            <b>{t('none')}</b>
+          </div>,
+        )}
       {extras && <SynonymsStep char={char} groups={groups} onGroups={onGroups} candidates={candidates!} dicts={dicts} />}
       {menu && (
         <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>

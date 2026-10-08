@@ -36,6 +36,13 @@ check('the overall box is in step 1, above the groups', await page.locator('.boa
   && (await page.locator('.board-overall textarea').inputValue()).length > 0)
 check('国 has no mix-ups: step 3 says so', (await step3.textContent()).includes('Nothing to check'))
 check('no step asks about etymology', !(await page.locator('.queue-edit').textContent()).match(/How it was built|Original meaning/i))
+// What a reviewer does not need every time is off the card (Dani, 2026-10-08).
+const shown = await page.locator('.queue-item').textContent()
+check('no source line, no drafting note, no facts block', (await page.locator('.queue-head .queue-meta').count()) === 0 && !shown.includes('drafted with') && !shown.includes('KANJIDIC'))
+check('no board tutorial, no pre-ticked note', (await page.locator('.board-top .hint').count()) === 0 && (await page.locator('.board-surenote').count()) === 0)
+check('no common tag on the words, no empty "Not in a group"', (await page.locator('.board-word .word-common').count()) === 0 && (await page.locator('.board-group[data-kind="none"]').count()) === 0)
+check('the reason is behind a link', (await page.locator('.queue-add-reason').count()) === 1 && (await page.locator('.queue-edit .review-field input').count()) === 0)
+check('no keys line', (await page.locator('.queue-actions .queue-keys').count()) === 0)
 check('邦 is listed under each of its Kodansha senses', (await hou.count()) === 2, await hou.count())
 check('the sense lines carry no ** marks', !(await step2.locator('h5').allTextContents()).some((x) => x.includes('**')))
 check('the province sense lists 藩', (await step2.locator('.step-sense', { hasText: 'province' }).locator('.step-char').allTextContents()).includes('藩'))

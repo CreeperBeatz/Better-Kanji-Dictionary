@@ -8282,6 +8282,12 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 11px;
 }
 
+/* The reason field, behind "add a reason". */
+.queue-add-reason {
+  justify-self: start;
+  font-size: 12px;
+}
+
 /* Why accept is greyed on a meanings card: words left to confirm. */
 .queue-blocked {
   font-size: 12px;
@@ -8891,15 +8897,6 @@ button.review-part {
 
 .report-sent {
   margin: 4px 0;
-}
-
-/* The meanings board: words two drafting runs agreed on start ticked. */
-.board-surenote {
-  margin: 0;
-  padding: 6px 10px;
-  border-left: 3px solid var(--ai);
-  background: var(--sumi);
-  font-size: 12.5px;
 }
 
 /* Where a split comes from (detail/PartsSource.tsx): a label per source. */

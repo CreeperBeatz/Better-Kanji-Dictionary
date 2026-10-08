@@ -1547,6 +1547,8 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         "items": [i if i["type"] == CHARACTER else _view(i, names, data) for i in rows[:limit]],
         "types": types,
         "skipped": len(_by_character([i for i in waiting if user_id in i["skipped_by"] and wanted(i)], anchor)),
+        # People's suggestions waiting, any stage: the queue offers its proposals/suggestions filter only then.
+        "suggestions": sum(1 for i in data["items"].values() if i["status"] == "open" and i["origin"] == "suggestion" and i["type"] not in RIDERS),
     }
 
 

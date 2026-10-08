@@ -64,7 +64,6 @@ const S = strings(
     backToQueue: 'back to the queue',
     o_proposal: 'proposals',
     o_suggestion: 'suggestions',
-    proposalFrom: 'proposal · {source}',
     followUp: 'left for later',
     suggestionBy: 'suggestion by {who}',
     nothing: 'Nothing waiting here.',
@@ -73,6 +72,7 @@ const S = strings(
     proposed: 'Proposed',
     yourValue: 'Your answer',
     reason: 'Reason (optional)',
+    addReason: 'add a reason',
     accept: 'accept',
     saveEdit: 'save my answer',
     keep: 'looks right, keep it',
@@ -82,9 +82,6 @@ const S = strings(
     resetTitle: 'Throw away what you changed on this card and start again from the proposal',
     confirmReset: 'Throw away what you changed on this card?',
     skip: 'skip',
-    keys: 'a accept · r reject · s skip · j/k next/previous',
-    keysNoReject: 'a accept · s skip · j/k next/previous',
-    keysWord: '1–9 pick and decide · r reject · s skip · j/k next/previous',
     left: '{n} waiting',
     confidence: 'model confidence {n}',
     confirmFirst: 'Confirm every word in the groups first: {n} left',
@@ -112,7 +109,6 @@ const S = strings(
     backToQueue: 'обратно към опашката',
     o_proposal: 'предложения от данни',
     o_suggestion: 'предложения от хора',
-    proposalFrom: 'от данни · {source}',
     followUp: 'оставени за по-късно',
     suggestionBy: 'предложено от {who}',
     nothing: 'Тук нищо не чака.',
@@ -121,6 +117,7 @@ const S = strings(
     proposed: 'Предложено',
     yourValue: 'Вашият отговор',
     reason: 'Причина (по желание)',
+    addReason: 'добавете причина',
     accept: 'приемете',
     saveEdit: 'запазете моя отговор',
     keep: 'вярно е, оставете го',
@@ -130,9 +127,6 @@ const S = strings(
     resetTitle: 'Изхвърлете промените по тази карта и започнете отначало от предложението',
     confirmReset: 'Да се изхвърлят ли промените по тази карта?',
     skip: 'пропуснете',
-    keys: 'a приемане · r отхвърляне · s пропускане · j/k следващо/предишно',
-    keysNoReject: 'a приемане · s пропускане · j/k следващо/предишно',
-    keysWord: '1–9 избор и решение · r отхвърляне · s пропускане · j/k следващо/предишно',
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
     confirmFirst: 'Първо потвърдете всяка дума в групите: остават {n}',
@@ -212,6 +206,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [aboutBgFrom, setAboutBgFrom] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  // People's suggestions waiting: the proposals/suggestions filter shows only then.
+  const [suggestionsN, setSuggestionsN] = useState(0)
+  // The reason field, opened by "add a reason" (or when the item kept one).
+  const [reasonOpen, setReasonOpen] = useState(false)
 
   // Only the latest load may land: a stage switched quickly, or the effect run
   // twice in development, would otherwise answer late and take the wanted item.
@@ -243,6 +241,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setTotal(Math.max(d.total, list.length))
         setTypes(d.types)
         setSkippedN(d.skipped)
+        setSuggestionsN(d.suggestions)
         setAt(Math.max(0, n))
       },
       (e) => setProblem(errorText(e, lang)),
@@ -373,6 +372,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     clearDraft(item.id)
     setDraft(item.proposed ?? item.current)
     setReason('')
+    setReasonOpen(false)
     setPlacements(placedFrom)
     setSkipped(new Set())
     setLabels(labelsFrom)
@@ -499,14 +499,18 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       </nav>
       {/* Where the items came from: a filter over whichever is chosen above. */}
       <div className="queue-origins" role="group" aria-label={t('originLabel')}>
-        <button className="search-filter" data-on={!origin || undefined} aria-pressed={!origin} onClick={() => setOrigin(undefined)}>
-          {t('all')}
-        </button>
-        {ORIGINS.map((o) => (
-          <button key={o} className="search-filter" data-on={origin === o || undefined} aria-pressed={origin === o} onClick={() => setOrigin(o)}>
-            {t(`o_${o}` as Key)}
-          </button>
-        ))}
+        {(suggestionsN > 0 || origin) && (
+          <>
+            <button className="search-filter" data-on={!origin || undefined} aria-pressed={!origin} onClick={() => setOrigin(undefined)}>
+              {t('all')}
+            </button>
+            {ORIGINS.map((o) => (
+              <button key={o} className="search-filter" data-on={origin === o || undefined} aria-pressed={origin === o} onClick={() => setOrigin(o)}>
+                {t(`o_${o}` as Key)}
+              </button>
+            ))}
+          </>
+        )}
         <span className="tally queue-left">{items && t('left', { n: total })}</span>
       </div>
 
@@ -537,15 +541,16 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     {subjectGlyphs(i)}
                   </span>
                   <span className="queue-kind">
-                    {t(`t_${i.type}` as Key)} ·{' '}
+                    {t(`t_${i.type}` as Key)}
                     {i.type === 'usage' ? (
-                      <span lang="ja">{i.subject}</span>
+                      <>
+                        {' · '}
+                        <span lang="ja">{i.subject}</span>
+                      </>
                     ) : isFollowUp(i) ? (
-                      t('followUp')
-                    ) : i.origin === 'suggestion' ? (
-                      t('o_suggestion')
+                      ` · ${t('followUp')}`
                     ) : (
-                      i.source
+                      i.origin === 'suggestion' && ` · ${t('o_suggestion')}`
                     )}
                   </span>
                 </button>
@@ -563,16 +568,17 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   {subjectGlyphs(item)}
                 </span>
                 <div>
-                  <p className="queue-meta">
-                    {t(`t_${item.type}` as Key)} ·{' '}
-                    {item.origin === 'suggestion'
-                      ? t('suggestionBy', { who: item.createdBy ? `@${item.createdBy.username}` : '?' })
-                      : t('proposalFrom', { source: item.source })}
-                    {typeof item.evidence?.confidence === 'number' && (
-                      <span className="hint"> · {t('confidence', { n: Math.round(Number(item.evidence.confidence) * 100) / 100 })}</span>
-                    )}
-                  </p>
-                  {item.reason && <p className="queue-reason">{item.reason}</p>}
+                  {item.origin === 'suggestion' && (
+                    <>
+                      <p className="queue-meta">
+                        {t(`t_${item.type}` as Key)} · {t('suggestionBy', { who: item.createdBy ? `@${item.createdBy.username}` : '?' })}
+                      </p>
+                      {item.reason && <p className="queue-reason">{item.reason}</p>}
+                    </>
+                  )}
+                  {item.origin !== 'suggestion' && typeof item.evidence?.confidence === 'number' && (
+                    <p className="queue-meta hint">{t('confidence', { n: Math.round(Number(item.evidence.confidence) * 100) / 100 })}</p>
+                  )}
                   {reportSubject(item) && <ReportButton key={item.id} subject={reportSubject(item)!} from={item.id} />}
                 </div>
                 <div className="queue-dict">
@@ -613,7 +619,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               </dl>
               )}
 
-              {detail && item.type !== 'bg' && <Evidence detail={detail} onKanji={onKanji} onUse={setDraft} />}
+              {detail && item.type !== 'bg' && item.type !== 'kanji_senses' && item.type !== 'usage' && <Evidence detail={detail} onKanji={onKanji} onUse={setDraft} />}
               {board && dicts && detail?.id === item.id && detail.context.board && (
                 <DictionariesPanel dicts={dicts} words={detail.context.board} placements={placements} groups={(draft ?? []) as MeaningGroup[]} />
               )}
@@ -687,7 +693,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   />
                 ) : (
                   <>
-                    {item.type !== 'word_sense' && <h4>{t('yourValue')}</h4>}
+                    {item.type !== 'word_sense' && item.type !== 'usage' && <h4>{t('yourValue')}</h4>}
                     <ValueEditor
                       type={item.type}
                       value={draft}
@@ -706,10 +712,16 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     explained={detail.context.usagePairs}
                   />
                 )}
-                <label className="review-field">
-                  <span>{t('reason')}</span>
-                  <input className="assoc-text" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
-                </label>
+                {reasonOpen || reason ? (
+                  <label className="review-field">
+                    <span>{t('reason')}</span>
+                    <input className="assoc-text" value={reason} maxLength={500} autoFocus={reasonOpen && !reason} onChange={(e) => setReason(e.target.value)} />
+                  </label>
+                ) : (
+                  <button type="button" className="clear queue-add-reason" onClick={() => setReasonOpen(true)}>
+                    + {t('addReason')}
+                  </button>
+                )}
               </div>
 
               {problem && <p className="account-problem">{problem}</p>}
@@ -734,9 +746,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   {t('reset')}
                 </button>
                 {blocked && <span className="hint queue-blocked">{t('confirmFirst', { n: unconfirmed })}</span>}
-                <span className="hint queue-keys">
-                  {t(item.type === 'word_sense' ? 'keysWord' : canReject(item) ? 'keys' : 'keysNoReject')}
-                </span>
               </div>
               </div>
             </article>

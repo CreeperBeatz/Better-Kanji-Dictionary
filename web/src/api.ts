@@ -1123,7 +1123,7 @@ export const api = {
    * `skipped`: how many you skipped. With `skipped` true, only those.
    */
   reviewQueueItems: (type?: TaskType, origin?: Origin, skipped = false, limit = 60) =>
-    get<{ total: number; items: QueueItem[]; types: Record<TaskType, number>; skipped: number }>('/api/review/queue', [
+    get<{ total: number; items: QueueItem[]; types: Record<TaskType, number>; skipped: number; suggestions: number }>('/api/review/queue', [
       ...(type ? [['type', type] as [string, string]] : []),
       ...(origin ? [['origin', origin] as [string, string]] : []),
       ...(skipped ? [['skipped', 'true'] as [string, string]] : []),

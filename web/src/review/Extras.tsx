@@ -29,22 +29,19 @@ const S = strings(
   {
     kokuji: 'Made in Japan (kokuji): Chinese has no such character.',
     overall: 'The meanings together',
-    overallHint: 'One sentence on how the groups connect, in their order. Learners read it above the groups. Leave it empty when they do not connect.',
+    overallHint: 'One sentence on how the groups connect, in their order. Empty when they do not.',
     mixups: '3. Kanji easy to mix up with {char}',
-    mixupsHint: 'Each of these kanji shares a kun reading with {char}, so a learner can write the wrong one. Keep a kanji if learners really mix the two up: it is shown on the {char} page with the reading they share. A pair Bunkacho’s usage report explains is kept, and its usage card says how to tell them apart. Pairs in our own data start as kept.',
+    mixupsHint: 'These share a kun reading with {char}. Keep the ones learners really mix up.',
     explained: 'Bunkacho explains this pair:',
     explainedTitle: 'Its usage card (which kanji to write), in a new tab',
     mixupsNone: 'Kodansha lists no kanji that shares a kun reading with {char}. Nothing to check here.',
-    mixupsShared: 'read this way by {chars}',
     mixYes: 'easy to mix up: show it',
     mixNo: 'not worth showing',
     none: 'none',
     about: 'What the kanji does in these words',
     examples: 'Learners see these words first',
-    examplesHint: 'To change them, tap ☆ on a word below. Pick 2–3 common, clear words.',
     synonyms: '2. Kanji with the same meaning',
-    synonymsHint: 'Put each kanji in the group where it means the same as {char}. Learners see the kanji you put in a group. If a kanji fits no group, leave it in “not the same meaning”.',
-    synonymsMissing: 'A Kodansha meaning with no group to go in? Go back to step 1 and add the group.',
+    synonymsHint: 'Put each kanji in the group where it means the same as {char}. A meaning with no group? Add the group in step 1.',
     synonymsNone: 'Kodansha lists no synonyms for this kanji. You can add one below.',
     kodanshaSense: 'Kodansha {sense}',
     kodanshaNoSense: 'Kodansha',
@@ -56,7 +53,7 @@ const S = strings(
     unnamed: '(unnamed group)',
     bgAbout: 'In Bulgarian: what the kanji does in each group',
     bgLink: 'How its meanings connect, in Bulgarian',
-    usageHint: 'Bunkacho’s report says which kanji to write for this reading. Check each English translation against the Japanese; keep the examples that show the difference best. The Bulgarian is checked on its own Bulgarian card, once this one is accepted.',
+    usageHint: 'Check each English line against the Japanese. Keep the examples that show the difference best.',
     kana: 'reading',
     kanaEdit: 'Correct the reading (it was made by machine)',
     def: 'Definition',
@@ -67,22 +64,19 @@ const S = strings(
   {
     kokuji: 'Създадено в Япония (кокуджи): в китайския няма такъв знак.',
     overall: 'Значенията заедно',
-    overallHint: 'Едно изречение за това как се свързват групите, по техния ред. Учещите го четат над групите. Оставете го празно, когато не се свързват.',
+    overallHint: 'Едно изречение за това как се свързват групите, по техния ред. Празно, когато не се свързват.',
     mixups: '3. Канджи, които лесно се бъркат с {char}',
-    mixupsHint: 'Всяко от тези канджи има общо четене кун с {char}, затова учещият може да напише грешното. Оставете канджи, ако учещите наистина бъркат двете: показва се на страницата на {char} с общото четене. Двойка, която докладът на Бункачо обяснява, остава, и картата ѝ за употреба казва как да се различат. Двойките от нашите данни започват като оставени.',
+    mixupsHint: 'Тези имат общо четене кун с {char}. Оставете тези, които учещите наистина бъркат.',
     explained: 'Бункачо обяснява тази двойка:',
     explainedTitle: 'Картата ѝ за употреба (кое канджи да се пише), в нов раздел',
     mixupsNone: 'Kodansha не дава канджи с общо четене кун с {char}. Тук няма какво да се проверява.',
-    mixupsShared: 'така се четат {chars}',
     mixYes: 'лесно се бъркат: покажете го',
     mixNo: 'не си струва да се показва',
     none: 'няма',
     about: 'Какво прави канджито в тези думи',
     examples: 'Учещите виждат първо тези думи',
-    examplesHint: 'За да ги смените, натиснете ☆ на дума по-долу. Изберете 2–3 чести, ясни думи.',
     synonyms: '2. Канджи със същото значение',
-    synonymsHint: 'Сложете всяко канджи в групата, в която значи същото като {char}. Учещите виждат канджите, които сложите в група. Ако едно канджи не пасва на никоя група, оставете го в „не е същото значение“.',
-    synonymsMissing: 'Значение от Kodansha, за което няма група? Върнете се на стъпка 1 и добавете групата.',
+    synonymsHint: 'Сложете всяко канджи в групата, в която значи същото като {char}. Значение без група? Добавете групата в стъпка 1.',
     synonymsNone: 'Kodansha не дава синоними за това канджи. Можете да добавите по-долу.',
     kodanshaSense: 'Kodansha {sense}',
     kodanshaNoSense: 'Kodansha',
@@ -94,7 +88,7 @@ const S = strings(
     unnamed: '(група без име)',
     bgAbout: 'На български: какво прави канджито във всяка група',
     bgLink: 'Как се свързват значенията, на български',
-    usageHint: 'Докладът на Бункачо казва кое канджи да се пише за това четене. Сверете всеки английски превод с японския; оставете примерите, които показват разликата най-добре. Българският се проверява на своя българска карта, щом тази се приеме.',
+    usageHint: 'Сверете всеки английски ред с японския. Оставете примерите, които показват разликата най-добре.',
     kana: 'четене',
     kanaEdit: 'Поправете четенето (направено е машинно)',
     def: 'Определение',
@@ -166,7 +160,6 @@ export function GroupExtras({
       <p className="board-extras-row">
         <span className="hint">{t('examples')}:</span>{' '}
         {examples.length ? <span lang="ja">{examples.map((w) => headwords.get(w) ?? w).join('、')}</span> : <span className="hint">{t('none')}</span>}
-        <span className="hint"> — {t('examplesHint')}</span>
       </p>
     </div>
   )
@@ -187,6 +180,15 @@ const covers = (n: string, sense: string) => sense === n || (sense.startsWith(n)
 const quiet = (s: string) => (/[a-z]/.test(s) ? s : s.toLowerCase())
 
 const ORIGINAL = /\[original meaning[^\]]*\]?/i
+
+/** Whether our main meaning tells more than Kodansha's word for the shared sense ("Quick" beside "quick" does not). */
+const differs = (en: string | null | undefined, gloss: string | null | undefined): boolean => {
+  if (!en) return false
+  if (!gloss) return true
+  const a = en.toLowerCase().replace(/[^a-z ]/g, '').trim()
+  const b = gloss.toLowerCase().replace(/[^a-z ]/g, '').trim()
+  return !(a && b && (a.includes(b) || b.includes(a)))
+}
 
 /** A Kodansha sense's text as a line: no original-meaning mark, no bold marks. */
 const senseLine = (text: string) => text.replace(ORIGINAL, '').replace(/\*\*/g, '').trim()
@@ -294,12 +296,12 @@ export function SynonymsStep({
 
   const row = (s: Synonym) => (
     <li key={s.char} className="step-row">
-      <span className="step-char" lang="ja">
+      <span className="step-char" lang="ja" title={s.en ? t('mainMeaning', { en: s.en }) : undefined}>
         {s.char}
       </span>
       <span className="step-gloss">
         {s.gloss}
-        {s.en && <span className="hint"> · {t('mainMeaning', { en: s.en })}</span>} <DictionaryLink char={s.char} />
+        {differs(s.en, s.gloss) && <span className="hint"> · {t('mainMeaning', { en: s.en! })}</span>} <DictionaryLink char={s.char} />
       </span>
       <Picks groups={groups} on={(id) => inGroup(s.char, id)} onPick={(to) => put(s.char, to)} none={t('notSame')} label={s.char} />
     </li>
@@ -308,8 +310,7 @@ export function SynonymsStep({
   return (
     <section className="board-step">
       <h4>{t('synonyms')}</h4>
-      <p className="hint">{t('synonymsHint', { char })}</p>
-      <p className="hint">{pool.size ? t('synonymsMissing') : t('synonymsNone')}</p>
+      <p className="hint">{pool.size ? t('synonymsHint', { char }) : t('synonymsNone')}</p>
       {bySense.map(([n, list]) => {
         const text = n ? senseText(n) : ''
         return (
@@ -343,8 +344,14 @@ export function OverallMeaning({ value, onChange, kokuji }: { value: KanjiExtras
     <section className="board-overall">
       <label className="board-extras-field">
         <b>{t('overall')}</b>
-        <span className="hint">{t('overallHint')}</span>
-        <textarea className="assoc-text" rows={2} maxLength={600} value={value.link ?? ''} onChange={(e) => onChange({ ...value, link: e.target.value || null })} />
+        <textarea
+          className="assoc-text"
+          rows={2}
+          maxLength={600}
+          placeholder={t('overallHint')}
+          value={value.link ?? ''}
+          onChange={(e) => onChange({ ...value, link: e.target.value || null })}
+        />
       </label>
       {kokuji && <p className="extras-kokuji">{t('kokuji')}</p>}
     </section>
@@ -412,17 +419,19 @@ export function MixupsStep({
         <div key={reading} className="step-sense">
           <h5>
             <span lang="ja">{reading}</span>
-            <span className="hint"> — {t('mixupsShared', { chars: [char, ...list.map((r) => r.char)].join(' · ') })}</span>
+            <span className="hint" lang="ja">
+              : {[char, ...list.map((r) => r.char)].join(' · ')}
+            </span>
           </h5>
           <ul className="step-list">
             {list.map((r) => (
               <li key={r.char} className="step-row">
-                <span className="step-char" lang="ja">
+                <span className="step-char" lang="ja" title={r.en ? t('mainMeaning', { en: r.en }) : undefined}>
                   {r.char}
                 </span>
                 <span className="step-gloss">
                   {r.gloss}
-                  {r.en && <span className="hint"> · {t('mainMeaning', { en: r.en })}</span>} <DictionaryLink char={r.char} />
+                  {differs(r.en, r.gloss) && <span className="hint"> · {t('mainMeaning', { en: r.en! })}</span>} <DictionaryLink char={r.char} />
                 </span>
                 {explained[r.char] ? (
                   <span className="step-explained hint">
@@ -520,10 +529,7 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
           <p lang="ja" className="usage-def">
             {s.def}
           </p>
-          <label className="review-field">
-            <span>{t('def')}</span>
-            <input className="assoc-text" value={s.defEn ?? ''} maxLength={300} onChange={(e) => setSpelling(i, { defEn: e.target.value || null })} />
-          </label>
+          <input className="assoc-text usage-def-en" value={s.defEn ?? ''} maxLength={300} aria-label={t('def')} onChange={(e) => setSpelling(i, { defEn: e.target.value || null })} />
           <span className="hint">{t('examplesUsage')}</span>
           <ul className="usage-examples">
             {s.examples.map((x, k) => {
