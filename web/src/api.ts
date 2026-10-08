@@ -350,6 +350,8 @@ export type TaskType =
   | 'bg'
   | 'report'
   | 'character'
+  /** How a character kept whole looks (土 as 十 + 一): never parts; decided on its character card. */
+  | 'visual_split'
 /** What a report is about: a word's or a kanji's (server/review.py REPORT_ABOUT). */
 export type ReportAbout = 'english' | 'reading' | 'meanings' | 'readings' | 'levels' | 'parts' | 'forms' | 'similar' | 'strokes' | 'other'
 /** Something wrong that no card or edit can fix, in the reporter's words; never live. */
@@ -450,7 +452,11 @@ export interface UsageBg {
  * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings --
  * or a usage card's lines.
  */
-export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | KanjiExtras | UsageCard | UsageBg | string | null
+/** How a character kept whole looks (土 as 十 + 一): never its parts. */
+export interface VisualSplit {
+  parts: string[]
+}
+export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | KanjiExtras | UsageCard | UsageBg | VisualSplit | string | null
 
 /** A change waiting in the labeling queue (server/review.py). */
 export interface QueueItem {
@@ -577,6 +583,8 @@ export interface CharacterCard {
     book?: BookRef | null
     /** The parts of each character step 1 could make its root: a form shows them as inherited. */
     rootParts?: Record<string, string[]>
+    /** The character's visual split, if it has one: how it looks, not what it is made from. */
+    visual?: VisualSplit | null
   }
 }
 
@@ -1148,8 +1156,14 @@ export const api = {
   reviewCharacter: (char: string) => get<CharacterCard>(`/api/review/characters/${encodeURIComponent(char)}`),
 
   /** Every item on a character's card decided at once; all "skip" leaves the card for later. */
-  decideCharacter: (char: string, decisions: CardDecision[], reason?: string, staleOk?: boolean) =>
-    send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', { decisions, reason, staleOk }),
+  /** `visual`: the character's visual split as the card leaves it (null takes it away; undefined leaves it). */
+  decideCharacter: (char: string, decisions: CardDecision[], reason?: string, staleOk?: boolean, visual?: string[] | null) =>
+    send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', {
+      decisions,
+      reason,
+      staleOk,
+      ...(visual !== undefined ? { visual } : {}),
+    }),
 
   /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
   reviewBookEntry: (no: number | null, char: string | null) =>

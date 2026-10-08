@@ -294,6 +294,20 @@ What each part *does* (meaning, sound) is not judged here for now.
   does. The old form only chooses between splits that are visible today. It
   never adds a part that is no longer visible.
 
+#### A visual split
+
+Some base kanji are learned whole but read as pieces a learner knows: 土
+looks like 十 over 一. That is not what 土 is made from (it is a clod of
+earth on the ground). So give it no parts, and keep the look as a visual
+split: pick or type the pieces, then tick **Only how it looks**. The
+character stays whole for the graph and the study order; the split is kept
+apart from its parts.
+
+- **Only pieces a learner already knows, covering the whole shape.** 土 =
+  十 + 一 passes. 日 = 口 does not: the inner stroke is lost. 木 = 八 + 十
+  does not: that is a stroke split, not a way to read it.
+- **Two pieces or more.** One lookalike is a *looks like* link in step 1.
+
 #### A form has no parts here
 
 When step 1 says the character is a form of another kanji, this question is

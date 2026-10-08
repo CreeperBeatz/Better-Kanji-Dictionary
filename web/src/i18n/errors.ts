@@ -114,6 +114,11 @@ const ERRORS: Record<string, [string, string]> = {
   item_not_found: ['no such item', 'няма такава задача'],
   item_closed: ['this item was already decided', 'по тази задача вече е решено'],
   decision_not_found: ['no such decision', 'няма такова решение'],
+  visual_invalid: ['a visual split is two or more characters', 'визуалното деление е от два или повече знака'],
+  visual_with_parts: [
+    'a visual split is for a character kept whole: give it no parts',
+    'визуалното деление е за знак, оставен цял: не му давайте части',
+  ],
   form_has_parts: [
     "a form of another kanji has no parts of its own: it uses its root's",
     'формата на друго канджи няма свои части: ползва тези на корена си',

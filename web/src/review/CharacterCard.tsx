@@ -73,6 +73,9 @@ const S = strings(
     s_parts_keep: 'keep {char}’s parts as they are',
     s_parts: 'give {char} the parts {parts}',
     s_atomic: 'make {char} a single piece, with no parts',
+    visualSplit: 'Only how it looks: {char} is not made from these parts (a visual split)',
+    s_visual: 'keep {char} whole, and record that it looks like {parts}',
+    s_visual_drop: 'take away the visual split of {char}',
     s_form_parts: 'give {char} no parts of its own: it is a form of {root}',
     s_meaning_root: 'let {char} take the meaning of {root}',
     s_link: 'set: {sentence}',
@@ -128,6 +131,9 @@ const S = strings(
     s_parts_keep: 'запази частите на {char} както са',
     s_parts: 'даде на {char} частите {parts}',
     s_atomic: 'направи {char} едно цяло, без части',
+    visualSplit: 'Само как изглежда: {char} не е съставен от тези части (визуално деление)',
+    s_visual: 'остави {char} цяло и запише, че изглежда като {parts}',
+    s_visual_drop: 'махне визуалното деление на {char}',
     s_form_parts: 'не даде на {char} свои части: то е форма на {root}',
     s_meaning_root: 'остави {char} да заема значението на {root}',
     s_link: 'зададе: {sentence}',
@@ -149,7 +155,8 @@ const S = strings(
 type Key = Parameters<ReturnType<typeof S>>[0]
 
 interface Work {
-  parts?: { pick: string; custom: string[] }
+  /** `visual`: the parts picked are only how it looks; the character stays whole (a visual split). */
+  parts?: { pick: string; custom: string[]; visual?: boolean }
   /** '' = nothing picked yet: an unsure draft, or a link check with nothing proposed. */
   forms: Record<string, { pick: '' | 'proposed' | 'now' | 'other'; value: FormLink }>
   meaning?: { pick: 'proposed' | 'other' | 'form' | 'none'; value: PartMeaning }
@@ -172,7 +179,9 @@ function startWork(card: Card): Work {
   const options = partsOptions(parts, card.context.parts, draft)
   const work: Work = { forms: {}, reason: '' }
   if (parts.length)
-    work.parts = { pick: draft ? (draft.confidence < UNSURE ? '' : 'draft') : options[0].key, custom: draft?.parts ?? card.context.parts }
+    work.parts = card.context.visual
+      ? { pick: 'other', custom: card.context.visual.parts, visual: true }
+      : { pick: draft ? (draft.confidence < UNSURE ? '' : 'draft') : options[0].key, custom: draft?.parts ?? card.context.parts }
   for (const f of forms)
     work.forms[f.id] = { pick: f.proposed ? 'proposed' : '', value: (f.proposed as FormLink) ?? (f.current as FormLink | null) ?? { kind: 'none', note: null } }
   if (meaning) work.meaning = { pick: 'proposed', value: meaning.proposed as PartMeaning }
@@ -277,17 +286,20 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         : work.parts.pick === 'other'
           ? work.parts.custom
           : (options.find((o) => o.key === work.parts!.pick)?.parts ?? now)
+  // A visual split: the parts picked are how it looks, and the character stays whole.
+  const visualParts = !isForm && work?.parts?.visual && chosen && chosen.length >= 2 ? chosen : null
+  const parts: string[] | null = visualParts ? [] : chosen
   // A question with nothing picked yet: saving waits for it.
   const unpicked = !!work && ((!isForm && work.parts?.pick === '') || Object.values(work.forms).some((f) => f.pick === ''))
-  const partsChange = chosen !== null && !same(chosen, now)
+  const partsChange = parts !== null && !same(parts, now)
 
   // What the chosen parts would change upstream.
-  const chosenKey = chosen?.join('') ?? ''
+  const chosenKey = parts?.join('') ?? ''
   useEffect(() => {
     setImpact(null)
-    if (!partsChange || !chosen || isForm) return
+    if (!partsChange || !parts || isForm) return
     let stale = false
-    api.reviewImpact(char, chosen).then(
+    api.reviewImpact(char, parts).then(
       (i) => !stale && setImpact(i),
       () => {},
     )
@@ -307,17 +319,17 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const decisions = useCallback((): CardDecision[] | null => {
     if (!card || !work) return null
     const out: CardDecision[] = []
-    if (work.parts && chosen) {
+    if (work.parts && parts) {
       const pick = work.parts.pick
       if (!partsChange) partsItems.forEach((i) => out.push({ item: i.id, action: 'keep' }))
       else {
         // One item carries the answer: the proposal picked, else the first; the rest were not chosen.
         // The item whose proposal it is carries the answer (an accept); else the first, as an edit.
-        const carrier = pick.startsWith('p:') ? pick.slice(2) : (partsItems.find((i) => i.proposed && setOf(i.proposed as string[]) === setOf(chosen))?.id ?? partsItems[0].id)
+        const carrier = !visualParts && pick.startsWith('p:') ? pick.slice(2) : (partsItems.find((i) => i.proposed && setOf(i.proposed as string[]) === setOf(parts))?.id ?? partsItems[0].id)
         for (const i of partsItems) {
           if (i.id !== carrier) out.push({ item: i.id, action: 'reject' })
-          else if (same(i.proposed, chosen)) out.push({ item: i.id, action: 'accept' })
-          else out.push({ item: i.id, action: 'edit', value: chosen })
+          else if (same(i.proposed, parts)) out.push({ item: i.id, action: 'accept' })
+          else out.push({ item: i.id, action: 'edit', value: parts })
         }
       }
     }
@@ -336,19 +348,21 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
       else out.push({ item: meaningItem.id, action: 'edit', value: meaningValue })
     }
     return out
-  }, [card, work, chosen, partsChange, partsItems, formItems, meaningItem, meaningValue, isForm])
+  }, [card, work, parts, visualParts, partsChange, partsItems, formItems, meaningItem, meaningValue, isForm])
 
   async function send(skip: boolean) {
     if (!card || !work || busy) return
     const list = skip ? card.items.map((i) => ({ item: i.id, action: 'skip' as const })) : decisions()
     if (!list) return
     if (!skip && unpicked) return
-    if (!skip && partsChange && !strokesOk(chosen, lang)) return
+    if (!skip && partsChange && !strokesOk(parts, lang)) return
     setBusy(true)
     setProblem(null)
     try {
       const why = skip ? undefined : work.reason.trim() || undefined
-      await askIfStale((staleOk) => api.decideCharacter(char, list, why, staleOk), lang)
+      // The visual split as the card leaves it: sent when there is one, or when one is taken away.
+      const visual = skip ? undefined : (visualParts ?? (card.context.visual ? null : undefined))
+      await askIfStale((staleOk) => api.decideCharacter(char, list, why, staleOk, visual), lang)
       if (!skip) {
         clearDraft(id)
         if (list.some((d) => d.action === 'accept' || d.action === 'edit')) dataChanged()
@@ -419,10 +433,19 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
 
   // What saving would do, in a sentence each.
   const summary: string[] = []
-  if (work.parts && chosen)
+  if (work.parts && parts)
     summary.push(
-      isForm ? t('s_form_parts', { char, root }) : !partsChange ? t('s_parts_keep', { char }) : chosen.length ? t('s_parts', { char, parts: chosen.join(' ') }) : t('s_atomic', { char }),
+      isForm
+        ? t('s_form_parts', { char, root })
+        : visualParts
+          ? t('s_visual', { char, parts: visualParts.join(' + ') })
+          : !partsChange
+            ? t('s_parts_keep', { char })
+            : parts.length
+              ? t('s_parts', { char, parts: parts.join(' ') })
+              : t('s_atomic', { char }),
     )
+  if (!visualParts && card.context.visual) summary.push(t('s_visual_drop', { char }))
   for (const f of formItems) {
     const v = formValue(f)
     summary.push(v && !same(v, f.current) ? t('s_link', { sentence: sentence(v.kind, f.subject, v.reverse) }) : t('s_link_keep', { pair: f.subject.replace('|', ' · ') }))
@@ -597,6 +620,15 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                 </>
               )}
             </div>
+            <label className="card-visual">
+              <input
+                type="checkbox"
+                checked={!!work.parts.visual}
+                disabled={(chosen?.length ?? 0) < 2}
+                onChange={(e) => setParts({ visual: e.target.checked })}
+              />
+              {t('visualSplit', { char })}
+            </label>
             {!!draft?.flags?.length && (
               <p className="hint card-flags">
                 {t('flagged')}: {draft.flags.join('; ')}

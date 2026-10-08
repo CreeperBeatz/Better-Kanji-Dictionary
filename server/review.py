@@ -89,11 +89,14 @@ EXPORTS = {
     "part_meaning": ROOT / "data" / "part_meanings.json",
     # Which kanji to write for a shared kun reading: Bunkacho's report, translated and reviewed.
     "usage": ROOT / "data" / "usage_cards.json",
+    # How characters kept whole look (土 as 十 + 一): never parts, drawn dashed in the expanded graph.
+    "visual": ROOT / "data" / "visual_splits.json",
     # Read by pipeline/build_db.py (stage bg) and by jmdict-kanjidic-bg's scripts/build.py.
     "bg": ROOT / "data" / "bg_reviewed.json",
 }
 
-TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "kanji_extras", "usage", "bg", "report")
+TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sense", "kanji_extras", "usage", "bg", "report",
+         "visual_split")
 # Decided on another type's card, never listed in the queue on their own: a
 # kanji's extras ride on its meanings card.
 RIDERS = ("kanji_extras",)
@@ -168,7 +171,7 @@ def _empty() -> dict:
         "items": {},
         "decisions": [],
         "live": {"form_link": {}, "part_meaning": {}, "kanji_senses": {}, "word_sense": {}, "kanji_extras": {},
-                 "usage": {}, "bg": {}},
+                 "usage": {}, "bg": {}, "visual_split": {}},
         "pack_key": None,
     }
 
@@ -579,6 +582,21 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             raise _bad("parts_cycle", "{parts} already contains this character", parts="".join(loops))
         return parts
 
+    if type_ == "visual_split":
+        if len(subject) != 1 or not _known(subject):
+            raise _bad("bad_subject", "a visual split is of one character")
+        if value is None:
+            return None
+        parts = value.get("parts") if isinstance(value, dict) else None
+        if not isinstance(parts, list) or len(parts) < 2 or any(not isinstance(c, str) or len(c) != 1 for c in parts):
+            raise _bad("visual_invalid", "a visual split is two or more characters")
+        if subject in parts:
+            raise _bad("parts_self", "a character cannot contain itself")
+        unknown = [c for c in parts if not _known(c)]
+        if unknown:
+            raise _bad("parts_unknown", "not in the graph: {parts}", parts="".join(unknown))
+        return {"parts": parts}
+
     if type_ == "form_link":
         a, b = _split(subject)
         if len(a) != 1 or len(b) != 1 or a == b:
@@ -840,7 +858,7 @@ def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
         return None
     if type_ == "form_link":
         return {k: v for k, v in entry.items() if k != "decision"}
-    if type_ in ("part_meaning", "kanji_extras", "usage"):
+    if type_ in ("part_meaning", "kanji_extras", "usage", "visual_split"):
         return {k: v for k, v in entry.items() if k != "decision"}
     if type_ == "kanji_senses":
         return entry["senses"]
@@ -930,7 +948,7 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, word
         return
     if value is None:
         _set_live(data, type_, subject, None)
-    elif type_ in ("form_link", "part_meaning", "kanji_extras", "usage"):
+    elif type_ in ("form_link", "part_meaning", "kanji_extras", "usage", "visual_split"):
         _set_live(data, type_, subject, {**value, "decision": decision})
         if type_ == "usage":
             # Its Bulgarian card, still open, starts from the card as decided: the same lines, in the same places.
@@ -1757,6 +1775,7 @@ def character_card(char: str) -> dict:
         "items": [item(i) for i in ids],
         "context": {"char": char, **_kanji_info(char), "forms": built, "users": users,
                     "rootParts": {c: _children(c) for c in sorted(roots)},
+                    "visual": live_value("visual_split", char, data),
                     "old": _old_forms(users[:40]), "parts": _children(char),
                     # Each source's split, so every answer can say who gives it.
                     "splits": decomp_sources.splits(char),
@@ -1765,8 +1784,11 @@ def character_card(char: str) -> dict:
     }
 
 
+_UNSET = object()
+
+
 def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | None = None,
-                stale_ok: bool = False) -> list[dict]:
+                stale_ok: bool = False, visual: Any = _UNSET) -> list[dict]:
     """A character's card, decided as one: every item on it, in one change.
 
     `decisions`: [{"item", "action", "value"}], one per open item on the card;
@@ -1800,7 +1822,32 @@ def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | No
                 if x == char:
                     raise _bad("shape_and_form_of", "a shape and a form of can't both be right: pick one")
         _form_rule(data, char, decisions)
-        return [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason, stale_ok=stale_ok) for d in decisions]
+        out = [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason, stale_ok=stale_ok) for d in decisions]
+        if visual is not _UNSET:
+            parent = next((i["decision"] for i in out if i["type"] == "decomposition" and i.get("decision")), None)
+            _decide_visual(data, char, visual, user_id, parent)
+        return out
+
+
+def _decide_visual(data: dict, char: str, parts: list[str] | None, user_id: str, parent: str | None) -> None:
+    """The card's visual split: how a character kept whole looks (土 as 十 + 一), not what it
+    is made from. A direct decision under `parent`, reverted with it; None takes it away."""
+    after = validate("visual_split", char, None if parts is None else {"parts": parts}, data)
+    if after is not None and current("decomposition", char, data):
+        raise _bad("visual_with_parts", "a visual split is for a character kept whole: give it no parts")
+    before = live_value("visual_split", char, data)
+    if before == after:
+        return
+    c = _decision("direct", "visual_split", char, before, after, user_id, None, None)
+    if parent:
+        c["parent"] = parent
+    _apply(data, "visual_split", char, after, c["id"])
+    data["decisions"].append(c)
+
+
+def visual_splits(data: dict | None = None) -> dict[str, list[str]]:
+    """Every character's visual split, for the graph's expanded view."""
+    return {c: v["parts"] for c, v in (data or _read())["live"]["visual_split"].items()}
 
 
 def _form_rule(data: dict, char: str, decisions: list[dict]) -> None:
@@ -2455,6 +2502,8 @@ def export() -> dict[str, int]:
         "cards": usage}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     parts = dict(sorted(data["live"]["part_meaning"].items()))
     EXPORTS["part_meaning"].write_text(json.dumps(parts, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    visual = dict(sorted(visual_splits(data).items()))
+    EXPORTS["visual"].write_text(json.dumps(visual, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
     # The reviewed Bulgarian: a word's glosses, one "; "-joined string per sense
     # ("" keeps the machine translation), and a kanji's meanings.
@@ -2467,7 +2516,7 @@ def export() -> dict[str, int]:
     EXPORTS["bg"].write_text(json.dumps(bg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return {"decomposition": len(ov), "form_link": len(data["live"]["form_link"]), "part_meaning": len(parts),
             "kanji_senses": len(meaning["senses"]), "word_sense": len(meaning["words"]),
-            "kanji_extras": len(meaning["kanji"]), "usage": len(usage),
+            "kanji_extras": len(meaning["kanji"]), "usage": len(usage), "visual_split": len(visual),
             "bg words": len(bg["words"]), "bg kanji": len(bg["kanji"])}
 
 

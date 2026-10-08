@@ -177,6 +177,19 @@ def main() -> int:
     check("the root itself keeps its parts question", code(lambda: review.decide_card("手", [
         {"item": root["id"], "action": "edit", "value": []}, {"item": hand["id"], "action": "keep"}], "u-test")) is None)
 
+    print("a visual split")
+    soil = review.add_item("decomposition", "土", None, "check:test")
+    review.decide_card("土", [{"item": soil["id"], "action": "edit", "value": []}], "u-test", visual=["十", "一"])
+    check("土 stays whole", review.current("decomposition", "土") == [])
+    check("and looks like 十 + 一", review.live_value("visual_split", "土") == {"parts": ["十", "一"]})
+    scholar = review.add_item("decomposition", "士", None, "check:test")
+    check("a visual split beside parts is refused", code(lambda: review.decide_card(
+        "士", [{"item": scholar["id"], "action": "keep"}], "u-test", visual=["十", "一"])) == "visual_with_parts")
+    check("one piece is not a split", code(lambda: review.validate("visual_split", "土", {"parts": ["十"]})) == "visual_invalid")
+    parent = next(d for d in review._read()["decisions"] if d["subject"] == "土" and d["type"] == "decomposition")
+    review.revert(parent["id"], "u-test")
+    check("reverting the card takes the visual split back", review.live_value("visual_split", "土") is None)
+
     print("backup")
     item = review.add_item("decomposition", "森", ["林", "木"], "ai:test")
     review.decide(item["id"], "accept", "u-test")

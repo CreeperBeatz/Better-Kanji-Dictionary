@@ -54,8 +54,10 @@ def character(char: str, _: dict = Depends(reviewer)) -> dict:
 
 @router.post("/characters/{char}/decide")
 def decide_character(char: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
+    # "visual" only when the card sends it: absent leaves the character's visual split as it is.
+    extra = {"visual": payload["visual"]} if "visual" in payload else {}
     return {"items": review.decide_card(char, payload.get("decisions"), me["id"], payload.get("reason"),
-                                        bool(payload.get("staleOk")))}
+                                        bool(payload.get("staleOk")), **extra)}
 
 
 @router.get("/progress")

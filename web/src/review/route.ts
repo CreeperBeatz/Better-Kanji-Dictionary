@@ -27,6 +27,8 @@ const SLUGS: Record<TaskType, string> = {
   usage: 'usage',
   bg: 'bulgarian',
   report: 'reports',
+  // Never a stage of its own: decided on the character's card.
+  visual_split: 'visual-splits',
 }
 // Parts, forms and part meanings are one stage now, a card per character: an old address lands there.
 const MERGED: TaskType[] = ['decomposition', 'form_link', 'part_meaning']

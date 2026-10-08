@@ -21,6 +21,7 @@ import {
   type TaskType,
   type TaskValue,
   type UsageCard,
+  type VisualSplit,
 } from '../api'
 import { UsageEditor } from './Extras'
 import { strings, useLang } from '../i18n'
@@ -240,6 +241,7 @@ export function ValueView({ type, value, groups, subject }: { type: TaskType; va
     )
   }
   if (type === 'part_meaning') return <PartMeaningView value={value as PartMeaning} />
+  if (type === 'visual_split') return <PartTiles chars={(value as VisualSplit).parts} />
   if (type === 'usage') {
     const u = value as UsageCard
     return (
