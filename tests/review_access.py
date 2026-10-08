@@ -234,10 +234,12 @@ def main() -> int:
         bad = review.add_items([{"type": "kanji_senses", "subject": "水", "proposed": [{**groups[0], "similar": ["水"]}], "source": "ai:test"}])
         check("a kanji similar to itself is refused", bad == (0, 1), bad)
         g = review.add_item("kanji_senses", "水", groups, "ai:test")
-        check("the group's extras are kept, cleaned", g["proposed"][0] == {"id": "水.water", "en": "water", "bg": None, "note": None, "noteBg": None,
+        check("the group's extras are kept, cleaned", g["proposed"][0] == {"id": "水.water", "en": "water", "bg": None,
                                                                          "about": "The liquid.", "examples": ex, "original": True, "similar": ["氷"]}, g["proposed"])
         plain = review.validate("kanji_senses", "水", [{"id": "water", "en": "water"}])
-        check("a group without extras is as it always was", plain == [{"id": "水.water", "en": "water", "bg": None, "note": None, "noteBg": None}], plain)
+        noted = review.validate("kanji_senses", "水", [{"id": "water", "en": "water", "note": "old", "noteBg": "стара"}])
+        check("a group's note is no longer kept (its about line says it)", noted == [{"id": "水.water", "en": "water", "bg": None}], noted)
+        check("a group without extras is as it always was", plain == [{"id": "水.water", "en": "water", "bg": None}], plain)
         note = {"origin": "A stream.", "originSure": True, "link": None, "mixups": [{"char": "氷", "reading": "こおり"}]}
         x = review.add_item("kanji_extras", "水", note, "ai:test")
         check("extras are not listed in the queue on their own", all(i["id"] != x["id"] for i in call("GET", "/api/review/queue", "reviewer")[1]["items"]))

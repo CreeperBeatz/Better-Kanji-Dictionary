@@ -679,7 +679,7 @@ def words_with(
             if wid in placed:
                 in_group.setdefault(placed[wid], []).append(wid)
         fetched = _fetch_words([w for ws in in_group.values() for w in ws])
-        for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None, "note": None}]:
+        for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
             words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
             if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})

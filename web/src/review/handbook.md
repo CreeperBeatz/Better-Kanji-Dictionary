@@ -303,7 +303,8 @@ A part is one of three things, and only two of them are decided here:
 - Group by what the kanji does in words, not by English senses (青: blue or
   green, young or unripe).
 - Each group should cover at least two common words; merge the rest.
-- Labels: 1–4 words in English, the same in Bulgarian. Keep the note short.
+- Labels: 1–4 words in English, the same in Bulgarian. What the group means
+  in more words goes in its line, *what the kanji does in these words*.
 - Use the words under each group to test the split: if a group's words don't
   share a meaning, the group is wrong.
 - Words the kanji brings no meaning to go in their own box (see below). It
@@ -321,7 +322,8 @@ are the ones it was unsure of, so look at those first.
 - **Confirm every word.** Tick each word you have checked (hover a card for
   its checkbox), or right-click *Confirm* on one word or a selection.
   Confirmed words move into a *confirmed* part at the top of their box, open
-  so you can still see them (fold it with its arrow). Moving a word clears
+  so you can still see them. Each part of a box (*confirmed*, *common*,
+  *uncommon*) folds with its arrow; the box itself always shows. Moving a word clears
   its tick. Groups need no ticking: fix or remove a wrong one, and what you
   accept is what you meant.
 - **Accept waits for the ticks.** Until every word in the groups and in the

@@ -184,7 +184,7 @@ export function WordsWith({
               g.words.length,
               g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang),
               <>
-                {((lang === 'bg' && g.noteBg) || g.note) && <span className="hint">{(lang === 'bg' && g.noteBg) || g.note}</span>}
+                {((lang === 'bg' && g.aboutBg) || g.about) && <span className="hint">{(lang === 'bg' && g.aboutBg) || g.about}</span>}
                 {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
               </>,
             )}

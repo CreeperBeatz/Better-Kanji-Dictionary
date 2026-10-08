@@ -65,7 +65,7 @@ const S = strings(
     formHint: 'Add or change how {char} relates to one other character.',
     other: 'The other character',
     english: 'English',
-    bgLabels: 'Group labels and notes',
+    bgLabels: 'Group labels',
     wordBgHint: 'One Bulgarian gloss per sense, beside the English.',
     noKanji: 'This word has no kanji.',
     noGroupsFor: '{char} has no accepted meaning groups yet.',
@@ -114,7 +114,7 @@ const S = strings(
     formHint: 'Добавете или променете как {char} се свързва с един друг знак.',
     other: 'Другият знак',
     english: 'Английски',
-    bgLabels: 'Етикети и бележки на групите',
+    bgLabels: 'Етикети на групите',
     wordBgHint: 'По една българска глоса за всяко значение, до английската.',
     noKanji: 'Тази дума няма канджи.',
     noGroupsFor: '{char} още няма приети групи значения.',
@@ -380,9 +380,8 @@ function EditShell({
   )
 }
 
-// A kanji's groups' Bulgarian labels and notes as stored, by group id.
+// A kanji's groups' Bulgarian labels as stored, by group id.
 const labelsOf = (gs: MeaningGroup[] | null) => Object.fromEntries((gs ?? []).map((s) => [s.id, s.bg ?? '']))
-const notesOf = (gs: MeaningGroup[] | null) => Object.fromEntries((gs ?? []).map((s) => [s.id, s.noteBg ?? '']))
 const NO_FORM = { other: '', kind: 'looks_like' as FormKind, note: null as string | null, reverse: false }
 
 interface KanjiNow {
@@ -407,7 +406,6 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   const [groups, setGroups] = useState<MeaningGroup[]>([])
   const [placements, setPlacements] = useState<Placements>({})
   const [labels, setLabels] = useState<Record<string, string>>({})
-  const [notesBg, setNotesBg] = useState<Record<string, string>>({})
   const [parts, setParts] = useState<string[]>([])
   const [form, setForm] = useState(NO_FORM)
   // What the part is, once edited; until then the dialog shows what the page has.
@@ -437,7 +435,6 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
         setGroups(accepted ?? [])
         setPlacements(n.start)
         setLabels(labelsOf(accepted))
-        setNotesBg(notesOf(accepted))
         setParts(n.parts)
         setBg(n.bg)
       },
@@ -462,7 +459,6 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
     if (section === 'bg') {
       setBg(now.bg)
       setLabels(labelsOf(now.accepted))
-      setNotesBg(notesOf(now.accepted))
     }
   }
 
@@ -471,19 +467,14 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
   const accepted = now?.accepted ?? null
   if (now) {
     if (accepted) {
-      // Bulgarian labels and notes over the board's groups; a note only once it changed, so an untouched group stays as stored.
-      const withLabels = groups.map((g) => {
-        let out = g.id in labels ? { ...g, bg: labels[g.id].trim() || null } : g
-        const note = notesBg[g.id]?.trim()
-        if (note !== undefined && note !== (g.noteBg ?? '')) out = { ...out, noteBg: note || null }
-        return out
-      })
+      // Bulgarian labels over the board's groups.
+      const withLabels = groups.map((g) => (g.id in labels ? { ...g, bg: labels[g.id].trim() || null } : g))
       const fin = finalizeBoard(char, withLabels, placements)
       const moved: Placements = {}
       for (const [id, g] of Object.entries(fin.words)) if (now.start[Number(id)] !== g) moved[Number(id)] = g
       if (!same(fin.groups, accepted) || Object.keys(moved).length) {
         // Labels alone are the Bulgarian section's; anything else is the board's.
-        const plain = (gs: MeaningGroup[]) => gs.map((g) => ({ ...g, bg: null, noteBg: null }))
+        const plain = (gs: MeaningGroup[]) => gs.map((g) => ({ ...g, bg: null }))
         const boardChanged = Object.keys(moved).length > 0 || !same(plain(fin.groups), plain(accepted))
         changes.push({
           key: 'senses',
@@ -604,13 +595,11 @@ function KanjiEditDialog({ char, onClose, onSignIn }: { char: string; onClose: (
                   <>
                     <BgMeanings value={bg} onChange={setBg} name={t('s_bg')} add={t('add')} />
                     {accepted && groups.length > 0 && (
-                      // A label or note not typed yet shows the group's own.
+                      // A label not typed yet shows the group's own.
                       <BgLabels
                         groups={groups}
                         labels={Object.fromEntries(groups.map((g) => [g.id, labels[g.id] ?? g.bg ?? '']))}
                         onLabels={setLabels}
-                        notes={Object.fromEntries(groups.map((g) => [g.id, notesBg[g.id] ?? g.noteBg ?? '']))}
-                        onNotes={setNotesBg}
                         title={t('bgLabels')}
                       />
                     )}

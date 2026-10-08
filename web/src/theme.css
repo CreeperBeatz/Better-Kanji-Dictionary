@@ -2042,13 +2042,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 5px 8px;
 }
 
-.bg-labels li[data-changed] .assoc-text:not(.bg-note-input),
-.bg-labels .bg-note-input[data-changed] {
+.bg-labels li[data-changed] .assoc-text {
   border-color: var(--ai);
-}
-
-.bg-label-note {
-  font-size: 12px;
 }
 
 .bg-group-char {
@@ -6321,10 +6316,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-weight: 500;
 }
 
-.board-labels .board-note {
-  flex: 2 1 220px;
-}
-
 /* A group's extras on the meanings card (review/Extras.tsx): what the kanji
    does in it, and its best examples. */
 .board-extras {
@@ -6585,29 +6576,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   color: var(--ai);
 }
 
-.board-caret {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: var(--sumi-lift);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  color: var(--paper);
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.board-caret:hover {
-  border-color: var(--rule-bright);
-  color: var(--paper);
-}
-
-.board-group-head:has(.board-caret[aria-expanded='false']) {
-  margin-bottom: 0;
-}
-
 .board-part + .board-part {
   margin-top: 10px;
 }
@@ -6695,12 +6663,14 @@ html[data-nav]::view-transition-old(tabs):only-child {
   cursor: default;
 }
 
-.board-done-toggle {
+/* A part of a group's box (confirmed, common, uncommon), folded on its own; the box itself always shows. */
+.board-part-toggle {
+  display: block;
   padding: 2px 0;
   margin-bottom: 4px;
   background: none;
   border: 0;
-  color: #7fb88a;
+  color: var(--muted);
   font: inherit;
   font-size: 11px;
   font-weight: 500;
@@ -6709,13 +6679,13 @@ html[data-nav]::view-transition-old(tabs):only-child {
   cursor: pointer;
 }
 
-.board-part h5 {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
+.board-part-toggle:hover {
+  color: var(--paper-dim);
+}
+
+.board-done-toggle,
+.board-done-toggle:hover {
+  color: #7fb88a;
 }
 
 .board-words {
@@ -8294,22 +8264,6 @@ button.review-part {
 .review-groups {
   margin: 0;
   padding-left: 18px;
-}
-
-.review-senses {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.review-senses th {
-  text-align: left;
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.review-senses input {
-  width: 100%;
 }
 
 .review-pick {

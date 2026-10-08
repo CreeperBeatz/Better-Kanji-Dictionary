@@ -392,9 +392,6 @@ export interface MeaningGroup {
   id: string
   en: string
   bg: string | null
-  note: string | null
-  /** The note in Bulgarian, set on the Bulgarian card. */
-  noteBg?: string | null
   /** What the kanji does in this group's words, a sentence or two; its Bulgarian is set on the Bulgarian card. */
   about?: string
   aboutBg?: string
@@ -1166,8 +1163,6 @@ export const api = {
     skip?: Record<number, string | null>,
     /** A kanji's Bulgarian card: group id -> the group's Bulgarian label. */
     labels?: Record<string, string>,
-    /** Likewise, group id -> the group's Bulgarian note. */
-    notes?: Record<string, string>,
     /** A kanji's meanings or Bulgarian card: its extras as left on the card. */
     extras?: KanjiExtras,
     /** A kanji's Bulgarian card: group id -> the Bulgarian of the group's `about`. */
@@ -1180,7 +1175,6 @@ export const api = {
       words,
       skip,
       labels,
-      notes,
       extras,
       aboutBg,
     }),

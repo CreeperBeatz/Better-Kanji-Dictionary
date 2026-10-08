@@ -58,6 +58,23 @@ check('only one group holds the original meaning', orig.length === 1 && orig[0].
 
 await step2.scrollIntoViewIfNeeded()
 await page.screenshot({ path: `${SHOTS}/steps-check.png` })
+
+// The board: a group has no note and does not fold as a whole; its parts (confirmed, common, uncommon) do.
+const first = page.locator('.board-group[data-kind="group"]').first()
+check('no group has a note field', (await page.locator('.board-note').count()) === 0)
+check('a group has no fold control of its own', (await page.locator('.board-caret').count()) === 0)
+const toggles = first.locator('.board-part-toggle')
+const names = (await toggles.allTextContents()).map((x) => x.replace(/[▸▾\d\s]+/g, ' ').trim().toLowerCase())
+check('its parts each fold', names.length >= 2 && names.some((x) => x.startsWith('confirmed')) && names.some((x) => x.startsWith('common')), names)
+const common = first.locator('.board-part', { has: page.locator('.board-part-toggle', { hasText: /^[▸▾] common/i }) })
+const before = await common.locator('.board-word').count()
+await common.locator('.board-part-toggle').click()
+check('common words fold away', before > 0 && (await common.locator('.board-word').count()) === 0, before)
+check('the confirmed words stay', (await first.locator('.board-done .board-word').count()) > 0)
+await common.locator('.board-part-toggle').click()
+check('and come back', (await common.locator('.board-word').count()) === before)
+await first.scrollIntoViewIfNeeded()
+await page.screenshot({ path: `${SHOTS}/steps-board.png` })
 check('no page errors', errors.length === 0, errors.join(' | '))
 console.log(failed ? `${failed} failed` : 'all good')
 await browser.close()

@@ -204,8 +204,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
   const [labelsFrom, setLabelsFrom] = useState<Record<string, string>>({})
-  const [notes, setNotes] = useState<Record<string, string>>({})
-  const [notesFrom, setNotesFrom] = useState<Record<string, string>>({})
   // A kanji's extras (origin, link, kanji to mix up), on its meanings and Bulgarian cards; and the Bulgarian of each group's about.
   const [extras, setExtras] = useState<KanjiExtras | null>(null)
   const [extrasFrom, setExtrasFrom] = useState<KanjiExtras | null>(null)
@@ -274,8 +272,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setPlacedFrom({})
     setLabels({})
     setLabelsFrom({})
-    setNotes({})
-    setNotesFrom({})
     setExtras(null)
     setExtrasFrom(null)
     setAboutBg({})
@@ -297,17 +293,13 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         const kept = readDraft(d.id)
         if (d.type === 'bg' && d.context.senses) {
           const l: Record<string, string> = {}
-          const n: Record<string, string> = {}
           const a: Record<string, string> = {}
           for (const g of d.context.senses) {
             l[g.id] = g.bg ?? ''
-            n[g.id] = g.noteBg ?? ''
             if (g.about) a[g.id] = g.aboutBg ?? ''
           }
           setLabels(kept?.labels ?? l)
           setLabelsFrom(l)
-          setNotes(kept?.notes ?? n)
-          setNotesFrom(n)
           setAboutBg(kept?.aboutBg ?? a)
           setAboutBgFrom(a)
         }
@@ -349,11 +341,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       setProblem(null)
       try {
         const withLabels = item.type === 'bg' && Object.keys(labels).length ? labels : undefined
-        const withNotes = item.type === 'bg' && Object.keys(notes).length ? notes : undefined
         const withAbout = item.type === 'bg' && Object.keys(aboutBg).length ? aboutBg : undefined
         // The extras are decided with the card when it decides anything: not on a skip.
         const withExtras = action !== 'skip' && extras ? extras : undefined
-        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withNotes, withExtras, withAbout)
+        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withExtras, withAbout)
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         advance(action === 'skip')
@@ -363,7 +354,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         setBusy(false)
       }
     },
-    [item, busy, reason, lang, labels, notes, aboutBg, extras, advance],
+    [item, busy, reason, lang, labels, aboutBg, extras, advance],
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
@@ -371,7 +362,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const open = item?.proposed === null
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
-  const relabelled = item?.type === 'bg' && (!same(labels, labelsFrom) || !same(notes, notesFrom) || !same(aboutBg, aboutBgFrom))
+  const relabelled = item?.type === 'bg' && (!same(labels, labelsFrom) || !same(aboutBg, aboutBgFrom))
   const extrasEdited = !same(extras, extrasFrom)
   const edited = !!item && (moved || relabelled || extrasEdited || !same(draft, open ? item.current : item.proposed))
   // Anything to throw away: the answer, the reason, words moved or left for later, labels, board ticks.
@@ -384,7 +375,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setPlacements(placedFrom)
     setSkipped(new Set())
     setLabels(labelsFrom)
-    setNotes(notesFrom)
     setAboutBg(aboutBgFrom)
     setExtras(extrasFrom)
     setBoardWork(false)
@@ -422,11 +412,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
       placements: board && !same(placements, placedFrom) ? placements : undefined,
       skipped: skipped.size ? [...skipped] : undefined,
       labels: item.type === 'bg' && !same(labels, labelsFrom) ? labels : undefined,
-      notes: item.type === 'bg' && !same(notes, notesFrom) ? notes : undefined,
       aboutBg: item.type === 'bg' && !same(aboutBg, aboutBgFrom) ? aboutBg : undefined,
       extras: !same(extras, extrasFrom) ? (extras ?? undefined) : undefined,
     })
-  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom, notes, notesFrom, aboutBg, aboutBgFrom, extras, extrasFrom])
+  }, [item, detail, draft, reason, placements, placedFrom, board, skipped, labels, labelsFrom, aboutBg, aboutBgFrom, extras, extrasFrom])
 
   const skip = useCallback((ids: number[], on: boolean) => setSkipped((s) => withIds(s, ids, on)), [])
   const isFollowUp = (i: QueueItem) => i.type === 'kanji_senses' && !!(i.evidence as { words?: unknown } | null)?.words
@@ -639,8 +628,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       onChange={setDraft}
                       labels={labels}
                       onLabels={setLabels}
-                      notes={notes}
-                      onNotes={setNotes}
                       aboutBg={aboutBg}
                       onAboutBg={setAboutBg}
                       extras={extras}
@@ -696,7 +683,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       value={draft}
                       onChange={setDraft}
                       groups={groups}
-                      char={item.subject.split('|')[0]}
                       subject={item.subject}
                     />
                   </>

@@ -34,7 +34,6 @@ const S = strings(
     tickHint: 'Tick each word as you check it: the card can be accepted once every word in the groups is ticked.',
     allConfirmed: 'every word confirmed',
     en: 'English label',
-    note: 'Note',
     remove: 'remove group',
     addGroup: 'add a group',
     catchAll: 'The kanji brings no meaning to the word',
@@ -73,8 +72,6 @@ const S = strings(
     news: 'top {n}',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
     jlpt: 'On the JLPT N{n} vocabulary list',
-    collapse: 'collapse',
-    expand: 'expand',
     dictKodansha: 'Kodansha puts it under {sense}',
     dictKangorin: '新漢語林 gives it as an example of {sense}',
     dictTsalta: 'In Цалта’s kanji book: {gloss}',
@@ -89,7 +86,6 @@ const S = strings(
     tickHint: 'Отмятайте всяка дума, щом я проверите: картата може да се приеме, когато всички думи в групите са отметнати.',
     allConfirmed: 'всички думи са потвърдени',
     en: 'Английски етикет',
-    note: 'Бележка',
     remove: 'махнете групата',
     addGroup: 'добавете група',
     catchAll: 'Канджито не внася значение в думата',
@@ -128,8 +124,6 @@ const S = strings(
     news: 'топ {n}',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
     jlpt: 'В речника за JLPT N{n}',
-    collapse: 'свийте',
-    expand: 'разгънете',
     dictKodansha: 'Kodansha я слага под {sense}',
     dictKangorin: '新漢語林 я дава като пример за {sense}',
     dictTsalta: 'В книгата на Цалта: {gloss}',
@@ -222,7 +216,7 @@ export function MeaningsBoard({
   const [kept] = useState(() => readDraft(cacheKey)?.board)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [over, setOver] = useState<string | undefined>()
-  // Collapsed boxes, by bucket id.
+  // Folded parts of a box, by bucket id and part: 生.life|common, 生.life|uncommon (the confirmed part: shutOk).
   const [shut, setShut] = useState<Set<string>>(new Set(kept?.shut))
   // Confirmation, a reviewer's checklist while working: the words checked.
   // Confirmed words move into a "confirmed" part of their box, open unless folded.
@@ -328,7 +322,7 @@ export function MeaningsBoard({
   function addGroup() {
     let n = 1
     while (groups.some((g) => g.id === `${char}.new${n}`)) n++
-    onGroups([...groups, { id: `${char}.new${n}`, en: '', bg: null, note: null }])
+    onGroups([...groups, { id: `${char}.new${n}`, en: '', bg: null }])
   }
 
   const gloss = (w: BoardWord) => (lang === 'bg' && w.glossBg) || w.gloss
@@ -554,41 +548,35 @@ export function MeaningsBoard({
         }}
       >
         <header className="board-group-head">
-          <button className="board-caret" onClick={() => setShut((s) => toggled(s, id))} aria-expanded={!shut.has(id)} title={t(shut.has(id) ? 'expand' : 'collapse')}>
-            {shut.has(id) ? '▸' : '▾'}
-          </button>
           {head}
           <span className="hint board-count">
             {t('words', { n: all.length.toLocaleString(lang) })}
             {complete ? ` · ✓ ${t('allConfirmed')}` : done.length > 0 && ` · ${t('nConfirmed', { n: done.length })}`}
           </span>
         </header>
-        {!shut.has(id) && (
-          <>
-            {all.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
-            {done.length > 0 && (
-              <div className="board-part board-done">
-                <button className="board-done-toggle" onClick={() => setShutOk((s) => toggled(s, id))} aria-expanded={!shutOk.has(id)}>
-                  {shutOk.has(id) ? '▸' : '▾'} {t('confirmed')} <span className="hint">{done.length}</span>
-                </button>
-                {!shutOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
-              </div>
-            )}
-            {[true, false].map((common) => {
-              const part = list.filter((w) => w.common === common)
-              if (!part.length) return null
-              return (
-                <div key={String(common)} className="board-part">
-                  <h5>
-                    {t(common ? 'common' : 'uncommon')} <span className="hint">{part.length}</span>
-                  </h5>
-                  <ul className="board-words">{part.map((w) => card(w, key))}</ul>
-                </div>
-              )
-            })}
-          </>
+        {all.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
+        {done.length > 0 && (
+          <div className="board-part board-done">
+            <button className="board-part-toggle board-done-toggle" onClick={() => setShutOk((s) => toggled(s, id))} aria-expanded={!shutOk.has(id)}>
+              {shutOk.has(id) ? '▸' : '▾'} {t('confirmed')} <span className="hint">{done.length}</span>
+            </button>
+            {!shutOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
+          </div>
         )}
-        {!shut.has(id) && extra}
+        {[true, false].map((common) => {
+          const part = list.filter((w) => w.common === common)
+          if (!part.length) return null
+          const pk = `${id}|${common ? 'common' : 'uncommon'}`
+          return (
+            <div key={String(common)} className="board-part">
+              <button className="board-part-toggle" onClick={() => setShut((s) => toggled(s, pk))} aria-expanded={!shut.has(pk)}>
+                {shut.has(pk) ? '▸' : '▾'} {t(common ? 'common' : 'uncommon')} <span className="hint">{part.length}</span>
+              </button>
+              {!shut.has(pk) && <ul className="board-words">{part.map((w) => card(w, key))}</ul>}
+            </div>
+          )
+        })}
+        {extra}
       </section>
     )
   }
@@ -624,7 +612,6 @@ export function MeaningsBoard({
           <div className="board-labels">
             <span className="board-num">{i + 1}</span>
             <input className="assoc-text board-en" value={g.en} placeholder={t('en')} aria-label={t('en')} maxLength={40} onChange={(e) => setGroup(i, { en: e.target.value })} />
-            <input className="assoc-text board-note" value={g.note ?? ''} placeholder={t('note')} aria-label={t('note')} maxLength={200} onChange={(e) => setGroup(i, { note: e.target.value || null })} />
             <button className="clear" onClick={() => removeGroup(i)}>
               {t('remove')}
             </button>

@@ -21,9 +21,7 @@ const S = strings(
     remove: 'remove',
     hint: 'Check each Bulgarian gloss against the English beside it. Fix what is wrong or unnatural; leave what is right.',
     groups: 'Its meaning groups: give each its Bulgarian label',
-    groupsHint: 'Short, natural Bulgarian for what the group stands for, and its note in Bulgarian. The meanings above can start from them.',
-    noteBg: 'the note in Bulgarian',
-    noNote: 'no English note',
+    groupsHint: 'Short, natural Bulgarian for what the group stands for. The meanings above can start from them.',
     fromGroups: 'fill from the group labels below',
     inGroups: 'What its kanji bring here',
     noMeaning: 'brings no meaning to this word',
@@ -39,9 +37,7 @@ const S = strings(
     remove: 'махнете',
     hint: 'Сверете всеки български превод с английския до него. Поправете грешното или неестественото; оставете вярното.',
     groups: 'Групите му значения: дайте на всяка български етикет',
-    groupsHint: 'Кратко, естествено на български, какво обхваща групата, и бележката ѝ на български. Значенията по-горе могат да тръгнат от тях.',
-    noteBg: 'бележката на български',
-    noNote: 'няма английска бележка',
+    groupsHint: 'Кратко, естествено на български, какво обхваща групата. Значенията по-горе могат да тръгнат от тях.',
     fromGroups: 'попълнете от етикетите на групите по-долу',
     inGroups: 'Какво внасят канджитата му тук',
     noMeaning: 'не внася значение в тази дума',
@@ -56,8 +52,6 @@ export function BgCard({
   onChange,
   labels,
   onLabels,
-  notes,
-  onNotes,
   aboutBg = {},
   onAboutBg = () => {},
   extras = null,
@@ -69,9 +63,6 @@ export function BgCard({
   /** A kanji card: its groups' Bulgarian labels, by group id. */
   labels: Record<string, string>
   onLabels: (l: Record<string, string>) => void
-  /** And their Bulgarian notes, beside the English ones. */
-  notes: Record<string, string>
-  onNotes: (n: Record<string, string>) => void
   /** A kanji card: the Bulgarian of each group's about, by group id. */
   aboutBg?: Record<string, string>
   onAboutBg?: (v: Record<string, string>) => void
@@ -155,8 +146,6 @@ export function BgCard({
           groups={c.senses}
           labels={labels}
           onLabels={onLabels}
-          notes={notes}
-          onNotes={onNotes}
           title={t('groups')}
           hint={t('groupsHint')}
           marks
@@ -276,13 +265,11 @@ export function BgMeanings({
   )
 }
 
-/** A kanji's groups, each with its Bulgarian label and note beside the English; `marks` outlines one that differs from the group's. */
+/** A kanji's groups, each with its Bulgarian label beside the English; `marks` outlines one that differs from the group's. */
 export function BgLabels({
   groups,
   labels,
   onLabels,
-  notes,
-  onNotes,
   title,
   hint,
   marks = false,
@@ -290,13 +277,10 @@ export function BgLabels({
   groups: MeaningGroup[]
   labels: Record<string, string>
   onLabels: (l: Record<string, string>) => void
-  notes: Record<string, string>
-  onNotes: (n: Record<string, string>) => void
   title: string
   hint?: string
   marks?: boolean
 }) {
-  const t = S(useLang())
   return (
     <div className="bg-groups">
       <span>{title}</span>
@@ -315,18 +299,7 @@ export function BgLabels({
               aria-label={g.en}
               onChange={(e) => onLabels({ ...labels, [g.id]: e.target.value })}
             />
-            <span className="bg-label-note hint">{g.note ?? t('noNote')}</span>
-            <input
-              className="assoc-text bg-note-input"
-              lang="bg"
-              maxLength={200}
-              value={notes[g.id] ?? ''}
-              placeholder={t('noteBg')}
-              aria-label={`${g.en}: ${t('noteBg')}`}
-              data-changed={(marks && (notes[g.id] ?? '') !== (g.noteBg ?? '')) || undefined}
-              onChange={(e) => onNotes({ ...notes, [g.id]: e.target.value })}
-            />
-            <LatinWarn text={`${labels[g.id] ?? ''} ${notes[g.id] ?? ''}`} />
+            <LatinWarn text={labels[g.id] ?? ''} />
           </li>
         ))}
       </ul>

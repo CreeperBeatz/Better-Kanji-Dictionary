@@ -45,7 +45,7 @@ export function meaningsPrompt(
     '',
     'The draft groups and the words in each (reading, English). (!) = another dictionary lists the word with words that are in another group: check these first.',
   ]
-  groups.forEach((g, i) => lines.push(`${i + 1}. "${g.en}"${g.note ? ` (note: ${g.note})` : ''}: ${list(inBucket(g.id))}`))
+  groups.forEach((g, i) => lines.push(`${i + 1}. "${g.en}"${g.about ? ` (what the kanji does: ${g.about})` : ''}: ${list(inBucket(g.id))}`))
   lines.push(`No meaning: ${list(inBucket(CATCH_ALL))}`)
   const none = inBucket(null)
   if (none.length) lines.push(`Not in a group yet: ${list(none)}`)

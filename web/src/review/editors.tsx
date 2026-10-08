@@ -54,13 +54,8 @@ const S = strings(
     partNoteBg: 'Note in Bulgarian',
     shapeNamed: 'a shape: “{name}”',
     noOwnMeaning: 'no meaning of its own',
-    groups: 'Meaning groups',
-    groupsHint: '1 to 6, by what the kanji does in words. Words the kanji brings no meaning to have their own box, which always exists.',
-    id: 'id',
     en: 'English',
     bg: 'Bulgarian',
-    addGroup: 'add a group',
-    remove: 'remove',
     catchAll: 'the kanji brings no meaning to the word',
     noGroups: 'This kanji has no accepted meaning groups yet.',
     kanjidic: 'KANJIDIC',
@@ -103,13 +98,8 @@ const S = strings(
     partNoteBg: 'Бележка на български',
     shapeNamed: 'форма: „{name}“',
     noOwnMeaning: 'няма свое значение',
-    groups: 'Групи значения',
-    groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Думите, на които канджито не внася значение, имат своя кутия, която винаги съществува.',
-    id: 'код',
     en: 'английски',
     bg: 'български',
-    addGroup: 'добавете група',
-    remove: 'махнете',
     catchAll: 'канджито не внася значение в думата',
     noGroups: 'Това канджи още няма приети групи значения.',
     kanjidic: 'KANJIDIC',
@@ -283,7 +273,6 @@ export function ValueView({ type, value, groups, subject }: { type: TaskType; va
         {(value as MeaningGroup[]).map((g) => (
           <li key={g.id}>
             <b>{lang === 'bg' && g.bg ? g.bg : g.en}</b> <span className="hint">{g.id}</span>
-            {g.note && <span className="hint"> — {g.note}</span>}
           </li>
         ))}
       </ol>
@@ -298,16 +287,12 @@ interface EditorProps {
   onChange: (v: TaskValue) => void
   /** word_sense: the kanji's groups to pick from. */
   groups?: MeaningGroup[] | null
-  /** kanji_senses: the kanji, to prefix new ids. */
-  char?: string
   autoFocus?: boolean
-  /** kanji_senses: a column for each group's Bulgarian label too. */
-  withBg?: boolean
   /** form_link: X|Y, so each choice reads as a sentence and a one-way one can be turned round. */
   subject?: string
 }
 
-export function ValueEditor({ type, value, onChange, groups, char, autoFocus, withBg, subject }: EditorProps) {
+export function ValueEditor({ type, value, onChange, groups, autoFocus, subject }: EditorProps) {
   const lang = useLang()
   const t = S(lang)
 
@@ -318,59 +303,6 @@ export function ValueEditor({ type, value, onChange, groups, char, autoFocus, wi
   if (type === 'form_link') return <FormLinkEditor value={value} onChange={onChange} autoFocus={autoFocus} subject={subject} />
   if (type === 'part_meaning') return <PartMeaningEditor value={value} onChange={onChange} autoFocus={autoFocus} />
   if (type === 'usage') return value ? <UsageEditor value={value as UsageCard} onChange={onChange} /> : null
-
-  if (type === 'kanji_senses') {
-    const list = (value as MeaningGroup[] | null) ?? []
-    const set = (i: number, patch: Partial<MeaningGroup>) => onChange(list.map((g, j) => (j === i ? { ...g, ...patch } : g)))
-    const short = (id: string) => (char && id.startsWith(`${char}.`) ? id.slice(char.length + 1) : id)
-    return (
-      <div className="review-field">
-        <span>{t('groups')}</span>
-        <span className="hint">{t('groupsHint')}</span>
-        <table className="review-senses">
-          <thead>
-            <tr>
-              <th>{t('id')}</th>
-              <th>{t('en')}</th>
-              {withBg && <th>{t('bg')}</th>}
-              <th>{t('note')}</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((g, i) => (
-              <tr key={i}>
-                <td>
-                  <input className="assoc-text" value={short(g.id)} onChange={(e) => set(i, { id: e.target.value })} size={8} />
-                </td>
-                <td>
-                  <input className="assoc-text" value={g.en} autoFocus={autoFocus && i === 0} onChange={(e) => set(i, { en: e.target.value })} />
-                </td>
-                {withBg && (
-                  <td>
-                    <input className="assoc-text" lang="bg" maxLength={40} value={g.bg ?? ''} onChange={(e) => set(i, { bg: e.target.value || null })} />
-                  </td>
-                )}
-                <td>
-                  <input className="assoc-text" value={g.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} />
-                </td>
-                <td>
-                  <button type="button" className="clear" onClick={() => onChange(list.filter((_, j) => j !== i))}>
-                    {t('remove')}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {list.length < 6 && (
-          <button type="button" className="clear" onClick={() => onChange([...list, { id: `g${list.length + 1}`, en: '', bg: null, note: null }])}>
-            {t('addGroup')}
-          </button>
-        )}
-      </div>
-    )
-  }
 
   // word_sense
   if (!groups?.length) return <p className="hint">{t('noGroups')}</p>

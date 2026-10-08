@@ -5,7 +5,7 @@ The task types (TASK-forms-review.md §5, and more since):
     decomposition  subject 青            value: its direct parts, ["龶", "月"]; [] = atomic
     form_link      subject 龶|王          value: {"kind": looks_like, "note": ..., "reverse": true?}; kind "none" = no link
     part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
-    kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот", "note",
+    kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот",
                                                   "about", "aboutBg", "examples": [word ids], "original", "similar": ["命"]}]
     kanji_extras   subject 生            value: {"origin", "originBg", "originSure", "link", "linkBg",
                                                  "mixups": [{"char": "産", "reading": "うまれる"}]}
@@ -604,8 +604,6 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
                 "id": f"{subject}.{sid}",
                 "en": en,
                 "bg": (s.get("bg") or "").strip()[:40] or None,
-                "note": (s.get("note") or "").strip()[:200] or None,
-                "noteBg": (s.get("noteBg") or "").strip()[:200] or None,
                 **_group_extras(subject, s),
             })
         if sum(1 for s in out if s.get("original")) > 1:
@@ -1135,13 +1133,12 @@ FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
            words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
-           notes: dict | None = None, extras: dict | None = None, about_bg: dict | None = None) -> dict:
+           extras: dict | None = None, about_bg: dict | None = None) -> dict:
     """`words`, for a kanji's meanings: word id -> group id (None: in no group),
     as the reviewer left them on the board. Each becomes a decision of its own,
     under this one, and is reverted with it.
 
-    `labels`, for a kanji's Bulgarian card: group id -> its Bulgarian label;
-    `notes` likewise, its Bulgarian note.
+    `labels`, for a kanji's Bulgarian card: group id -> its Bulgarian label.
     Bulgarian is labelled in the Bulgarian stage, not on the meanings board,
     so the groups' labels are set here, as a decision under this one.
 
@@ -1155,12 +1152,12 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     Bulgarian of the group's `about`.
     """
     with _change() as data:
-        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, notes, extras, about_bg)
+        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, extras, about_bg)
 
 
 def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
             words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
-            notes: dict | None = None, extras: dict | None = None, about_bg: dict | None = None) -> dict:
+            extras: dict | None = None, about_bg: dict | None = None) -> dict:
     """decide() inside a change already open: a character's card decides several items in one."""
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, keep, reject or skip")
@@ -1200,8 +1197,8 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
         if held:
             _new_item(data, "kanji_senses", subject, after, f"skipped:{d['id']}", "proposal",
                       f"{len(held)} words left for later", {"words": held}, user_id, FOLLOW_UP_PRIORITY)
-    if type_ == "bg" and (labels or notes or about_bg) and subject.startswith("kanji:"):
-        _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], notes or {}, about_bg or {})
+    if type_ == "bg" and (labels or about_bg) and subject.startswith("kanji:"):
+        _label_groups(data, _target(subject)[1], labels or {}, user_id, d["id"], about_bg or {})
     if extras is not None and (type_ == "kanji_senses" or (type_ == "bg" and subject.startswith("kanji:"))):
         _decide_extras(data, _target(subject)[1] if type_ == "bg" else subject, extras, user_id, d["id"])
     return dict(item)
@@ -1231,19 +1228,17 @@ def extras_of(char: str, data: dict | None = None) -> dict | None:
     return live_value("kanji_extras", char, data)
 
 
-def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str, notes: Any = None,
-                  about_bg: Any = None) -> None:
-    """Set the Bulgarian labels, notes and abouts of a kanji's accepted groups (a decision under `parent`)."""
-    notes = notes or {}
+def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str, about_bg: Any = None) -> None:
+    """Set the Bulgarian labels and abouts of a kanji's accepted groups (a decision under `parent`)."""
     about_bg = about_bg or {}
-    if not isinstance(labels, dict) or not isinstance(notes, dict) or not isinstance(about_bg, dict):
+    if not isinstance(labels, dict) or not isinstance(about_bg, dict):
         raise _bad("bg_invalid", "one Bulgarian gloss per sense")
     before = live_value("kanji_senses", char, data)
     if not before:
         return
     clean = lambda v, n: " ".join(str(v).split())[:n] or None  # noqa: E731
     after = validate("kanji_senses", char, [
-        {**g, "bg": clean(labels.get(g["id"], g.get("bg") or ""), 40), "noteBg": clean(notes.get(g["id"], g.get("noteBg") or ""), 200),
+        {**g, "bg": clean(labels.get(g["id"], g.get("bg") or ""), 40),
          "aboutBg": clean(about_bg.get(g["id"], g.get("aboutBg") or ""), 500)}
         for g in before
     ], data)
