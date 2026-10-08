@@ -1794,7 +1794,43 @@ def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | No
                 x = it["subject"].split("|")[1 if v.get("reverse") else 0]
                 if x == char:
                     raise _bad("shape_and_form_of", "a shape and a form of can't both be right: pick one")
+        _form_rule(data, char, decisions)
         return [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason, stale_ok=stale_ok) for d in decisions]
+
+
+def _form_rule(data: dict, char: str, decisions: list[dict]) -> None:
+    """A form of another kanji has no parts and no meaning of its own: it uses its root's
+    (the handbook's root rule). Refuses a card that would leave `char` both."""
+    def after(d: dict) -> Any:
+        it = data["items"][d["item"]]
+        if d["action"] == "accept":
+            return it["proposed"]
+        if d["action"] == "edit":
+            return d.get("value")
+        return current(it["type"], it["subject"], data)
+
+    roots = {f["char"] for f in forms.forms_of(char)["formOf"]}
+    parts = _children(char)
+    for d in decisions:
+        it = data["items"][d["item"]]
+        if d["action"] == "skip":
+            continue
+        if it["type"] == "form_link":
+            pair = it["subject"].split("|")
+            if char not in pair:
+                continue
+            other = pair[1] if pair[0] == char else pair[0]
+            v = after(d) or {}
+            if v.get("kind") == "form_of" and pair[1 if v.get("reverse") else 0] == char:
+                roots.add(other)
+            else:
+                roots.discard(other)
+        elif it["type"] == "decomposition" and d["action"] in ("accept", "edit"):
+            parts = after(d) or []
+        elif it["type"] == "part_meaning" and d["action"] in ("accept", "edit") and roots:
+            raise _bad("form_has_meaning", "a form of another kanji takes its root's meaning, not one of its own")
+    if roots and parts:
+        raise _bad("form_has_parts", "a form of another kanji has no parts of its own: it uses its root's")
 
 
 def _by_kanji(rows: list[dict]) -> list[dict]:

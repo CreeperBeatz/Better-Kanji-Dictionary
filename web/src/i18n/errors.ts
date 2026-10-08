@@ -114,6 +114,14 @@ const ERRORS: Record<string, [string, string]> = {
   item_not_found: ['no such item', 'няма такава задача'],
   item_closed: ['this item was already decided', 'по тази задача вече е решено'],
   decision_not_found: ['no such decision', 'няма такова решение'],
+  form_has_parts: [
+    "a form of another kanji has no parts of its own: it uses its root's",
+    'формата на друго канджи няма свои части: ползва тези на корена си',
+  ],
+  form_has_meaning: [
+    "a form of another kanji takes its root's meaning, not one of its own",
+    'формата на друго канджи заема значението на корена си, а не свое',
+  ],
   changed_since_draft: [
     'this was changed on {at}, after its proposal was made. Look at the card again',
     'това е променено на {at}, след като предложението е направено. Погледнете картата отново',

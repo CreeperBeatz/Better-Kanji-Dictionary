@@ -56,6 +56,11 @@ def _links() -> list[dict]:
     return list(keyed.values())
 
 
+def roots() -> dict[str, str]:
+    """Each form and the kanji it is a form of, its root: 氵 → 水, ⺮ → 竹 (every "form of", built and reviewed)."""
+    return {r["char"]: r["other"] for r in _links() if r["kind"] == "form_of"}
+
+
 def links_of(char: str) -> list[dict]:
     if overlay is None:
         return [

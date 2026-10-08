@@ -138,11 +138,13 @@ dictionary.
 ## Characters
 
 > **One card per character.** Up to three questions, each with its own
-> number on every card: **1** what is it built from, **2** how is it
-> related to other characters, and **3**, for a part with no meaning in
-> the dictionary, what is it? Only the questions that have something
-> waiting are asked, so a card can go from 1 straight to 3: the number
-> tells you what is expected, and the chapter of the same number below.
+> number on every card: **1** how is it related to other characters (and,
+> where one is a form of the other, which is the root), **2** what is it
+> built from, and **3**, for a part with no meaning in the dictionary, what
+> is it? A form of another kanji has no parts or meaning of its own, so 2
+> and 3 are asked only of a root. Only the questions that have something
+> waiting are asked: the number tells you what is expected, and the
+> chapter of the same number below.
 
 ### How the card works
 
@@ -173,7 +175,84 @@ dictionary.
 - **Something else is wrong?** under the character files a report for
   what the card can't fix (its readings, its English, its levels).
 
-### 1 · Built from
+### 1 · Related characters
+
+> **Question:** how does X relate to Y?
+
+| Link | Use it when | Example |
+|---|---|---|
+| *how it is written in another position* | one is only ever the other, written for a certain position, often with fewer or different strokes; position decides which you see | 人·亻, 水·氵, 衣·衤 |
+| *its old form* | Y is the pre-reform shape of X | 青·靑, 会·會 |
+| *is a form of* | X is Y, written differently for the place it sits, and lends Y's meaning. Needs history behind it (the old form, a reference). One per bound form. | 龰·止 |
+| *looks like* | a mnemonic lookalike only, always shown as such | 龶 looks like 王 |
+| *a separate character for the same thing* | X and Y are characters in their own right, with their own readings, that mean the same thing; either can sit in the same place (雅 has 隹 where 鳴 has 鳥) | 隹·鳥 |
+| *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant, or a character built from the other | 业·業, 林·木 |
+
+- **A check with nothing proposed** is a link the dictionary was built
+  with that no person has looked at. Keep it as it is when it is right;
+  otherwise say what it is instead.
+- **Old forms are not a question.** "會 is the old form of 会" comes from an
+  official list (Unihan, which follows the Jōyō Kanji Table), so the card
+  shows it as information, with its source. If you think one is wrong,
+  use *Something else is wrong?*.
+- **Read the sentence.** On a card each choice reads with its two
+  characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
+  a form of and a looks like go one way.
+- **Mark the root.** Under *is a form of*, the card asks which of the two
+  is the root. If the proposal has it the wrong way round, pick the other
+  one. (Under *Something else*, **⇄ swap** does the same.)
+- **One choice for a bound form.** *Is a form of* covers both "it is that
+  kanji written for its place" and "it lends that kanji's meaning". *How it
+  is written in another position* is only offered where a link already is one.
+- **Position, or two characters?** Looks do not decide it: 氵 has three
+  strokes and 水 four, yet 氵 is only ever 水 written on the left, and it
+  never stands alone. 隹 and 鳥 are both characters with their own readings
+  (スイ, チョウ), and either can sit in the same place. The first is *how it
+  is written in another position*; the second, *a separate character for
+  the same thing*.
+- **Built from it is not a form of it.** A character made of two or more
+  of another (林 is two 木, 炎 two 火, 𢆶 two 幺) contains it, and that is
+  its parts: 林's parts are 木. It is a character with a meaning of its own
+  (林 is a grove, not a tree), so it lends nothing and borrows nothing.
+  Choose *no relation*, or *keep it as it is* when nothing links them yet. If the
+  doubled character has no meaning in the dictionary (𢆶), it gets one
+  under *Part meanings*.
+- Don't take a *looks like* that points at a kanji with the wrong meaning
+  that the learner will also meet.
+
+#### The root
+
+A form of another kanji is that kanji written for its place: 龰 is 止 at the
+bottom of 足, ⺮ is 竹 on top, 氵 is 水 on the left, 忄 is 心. It is not
+built from its root, so it has **no parts of its own**, and it takes its
+root's meaning. When step 1 makes the character a form, steps 2 and 3 are
+not asked, and saving gives it no parts.
+
+The graph shows the relation without a parts line. Its *simple* view draws
+each form as its root (海 as 水 + 毎); its *expanded* view draws the form as
+written, with its root small beside it.
+
+#### Judge it by the kanji
+
+Each card shows both characters in every font we have (the old 1978/1983
+shapes too, where a font draws them differently), and under each one every
+kanji with a rating (common, jōyō or JLPT) that contains it, most frequent
+first. Read the two lists side by side:
+
+- **An *is a form of* must hold in nearly all of X's kanji.** Its meaning
+  is lent to every one of them. If X is Y in 来 but something else in 前,
+  米 and 首, it is not a form of Y: it is a shape (see *Part meanings*),
+  and the link is left as it is.
+- **A *how it is written in another position* should fill the same role** in both
+  lists: 氵 in 海 does what 水 does in 泉.
+
+#### What each link changes on the site
+
+The same table is behind the (i) next to *Relation* on every forms card.
+
+<!-- kinds:form -->
+
+### 2 · Built from
 
 > **Question:** which parts is this character built from, as written today?
 
@@ -219,23 +298,11 @@ What each part *does* (meaning, sound) is not judged here for now.
   does. The old form only chooses between splits that are visible today. It
   never adds a part that is no longer visible.
 
-#### Kanji written differently as a part
+#### A form has no parts here
 
-A bound form is handled by how much it still looks like its source:
-
-| The bound shape… | Parts | Form link |
-|---|---|---|
-| still looks like the kanji (⺤ 爪, ⺮ 竹, ⺌ 小) | that kanji | *is a form of* that kanji |
-| no longer looks like it (亻 人, 氵 水, 忄 心, 罒 网) | none (atomic) | *is a form of* that kanji |
-
-Either way the form link is what carries the meaning across. If it is
-missing, add it with *Edit* at the bottom of the character's page, in its
-Forms section.
-
-So a form that still looks like its kanji gets **both**: the kanji as its
-part in step 1 (it sets the study order), and *is a form of* in step 2 (it
-lends the meaning). 龰 is 止 at the bottom of 足: part 止, and a form of 止.
-When step 2 has *is a form of*, step 1 says so above the answers.
+When step 1 says the character is a form of another kanji, this question is
+not asked: a form is not built from its root, it *is* its root, written for
+its place. Saving gives it no parts (see *The root*, in chapter 1).
 
 #### Read the impact
 
@@ -248,70 +315,6 @@ change, even if it is technically accurate.
 
 - **Can't type a part?** Under *Something else*, press *Draw* next to the
   parts field and draw it; picking a candidate adds it to the parts.
-
-### 2 · Related characters
-
-> **Question:** how does X relate to Y?
-
-| Link | Use it when | Example |
-|---|---|---|
-| *how it is written in another position* | one is only ever the other, written for a certain position, often with fewer or different strokes; position decides which you see | 人·亻, 水·氵, 衣·衤 |
-| *its old form* | Y is the pre-reform shape of X | 青·靑, 会·會 |
-| *is a form of* | X is Y, written differently for the place it sits, and lends Y's meaning. Needs history behind it (the old form, a reference). One per bound form. | 龰·止 |
-| *looks like* | a mnemonic lookalike only, always shown as such | 龶 looks like 王 |
-| *a separate character for the same thing* | X and Y are characters in their own right, with their own readings, that mean the same thing; either can sit in the same place (雅 has 隹 where 鳴 has 鳥) | 隹·鳥 |
-| *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant, or a character built from the other | 业·業, 林·木 |
-
-- **A check with nothing proposed** is a link the dictionary was built
-  with that no person has looked at. Keep it as it is when it is right;
-  otherwise say what it is instead.
-- **Old forms are not a question.** "會 is the old form of 会" comes from an
-  official list (Unihan, which follows the Jōyō Kanji Table), so the card
-  shows it as information, with its source. If you think one is wrong,
-  use *Something else is wrong?*.
-- **Read the sentence.** On a card each choice reads with its two
-  characters: "寳 is the old form of 宝", "龰 is a form of 止". An old form,
-  a form of and a looks like go one way; if a proposal has them the wrong
-  way round, pick *Something else*, press **⇄ swap**, and save.
-- **One choice for a bound form.** *Is a form of* covers both "it is that
-  kanji written for its place" and "it lends that kanji's meaning". *How it
-  is written in another position* is only offered where a link already is one.
-- **Position, or two characters?** Looks do not decide it: 氵 has three
-  strokes and 水 four, yet 氵 is only ever 水 written on the left, and it
-  never stands alone. 隹 and 鳥 are both characters with their own readings
-  (スイ, チョウ), and either can sit in the same place. The first is *how it
-  is written in another position*; the second, *a separate character for
-  the same thing*.
-- **Built from it is not a form of it.** A character made of two or more
-  of another (林 is two 木, 炎 two 火, 𢆶 two 幺) contains it, and that is
-  its parts: 林's parts are 木. It is a character with a meaning of its own
-  (林 is a grove, not a tree), so it lends nothing and borrows nothing.
-  Choose *no relation*, or *keep it as it is* when nothing links them yet. If the
-  doubled character has no meaning in the dictionary (𢆶), it gets one
-  under *Part meanings*.
-- Don't take a *looks like* that points at a kanji with the wrong meaning
-  that the learner will also meet.
-- A form link never changes parts.
-
-#### Judge it by the kanji
-
-Each card shows both characters in every font we have (the old 1978/1983
-shapes too, where a font draws them differently), and under each one every
-kanji with a rating (common, jōyō or JLPT) that contains it, most frequent
-first. Read the two lists side by side:
-
-- **An *is a form of* must hold in nearly all of X's kanji.** Its meaning
-  is lent to every one of them. If X is Y in 来 but something else in 前,
-  米 and 首, it is not a form of Y: it is a shape (see *Part meanings*),
-  and the link is left as it is.
-- **A *how it is written in another position* should fill the same role** in both
-  lists: 氵 in 海 does what 水 does in 泉.
-
-#### What each link changes on the site
-
-The same table is behind the (i) next to *Relation* on every forms card.
-
-<!-- kinds:form -->
 
 ### 3 · A part with no meaning
 
@@ -623,28 +626,25 @@ reason field and tell the admin, so it can be added here.
 > **Lesson:** before accepting a form of for a bound part, read the list of
 > its kanji on the card. If Y is only right in a few, it is a shape.
 
-### 龰: a stroke split against a variant of the same part
+### 龰: a form of 止, not built from it
 
-*Seen 2026-10-04.* 龰 (the bottom of 足 走 定) has the part 止. IDS proposed
-人 + 卜 (`⿺人⺊`).
+*Seen 2026-10-04, decided again 2026-10-08.* 龰 (the bottom of 足 走 定) had
+the part 止. IDS proposed 人 + 卜 (`⿺人⺊`), and a draft proposed the link
+*龰 is a form of 止*.
 
-- **The proposal is a stroke split.** Neither 人 nor 卜 means anything in 龰,
-  and all 157 kanji using 龰 would gain 人 as a prerequisite and lose 止. A
-  learner would be told 足 contains "person".
-- **The current part is fine even though 龰 is "only a version of" 止.** 龰
-  is 止 written at the bottom with its last strokes bent; both are a foot.
-  It still looks like 止, so by the bound-form table the part stays 止.
-- **What was actually missing** was the form link: 龰 had none, so its page
-  could not borrow 止's meaning.
+- **The proposal is a stroke split.** Neither 人 nor 卜 means anything in 龰.
+  A learner would be told 足 contains "person".
+- **The part 止 was wrong too.** 龰 is 止 written at the bottom with its
+  last strokes bent. It is not built from 止; it *is* 止. Giving it the part
+  止 put a variant into the graph as if it were a piece of the character.
+- **The link says it.** *Is a form of*, with 止 as the root, carries both
+  the meaning and the relation.
 
-> **Decision:** *keep it as it is* (止), with a reason ("IDS splits
-> strokes; 龰 is 止 at the bottom"). Then on 龰's page add 止 as *is a form
-> of*.
+> **Decision:** step 1, *is a form of*, the root is 止. Step 2 is not
+> asked: 龰 has no parts of its own.
 
-> **Lesson:** when a proposal replaces a recognisable part with stroke
-> fragments, don't use it. When the current part is a real kanji written
-> differently for its position, keep it if it still looks like it, and make
-> sure the form link exists.
+> **Lesson:** a form of another kanji is not built from it. Mark the root
+> in step 1, and the parts follow.
 
 ### 午: a lookalike inside an atom
 

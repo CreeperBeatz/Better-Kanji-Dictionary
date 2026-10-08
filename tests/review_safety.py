@@ -10,6 +10,7 @@
 - A backup carries store.json.
 - A meanings card kept, rejected or withdrawn takes its extras with it.
 - A reloaded source does not ask again what was already answered.
+- A form of another kanji has no parts or meaning of its own.
 
 The review state lives in a temporary directory; the real database is read.
 """
@@ -157,6 +158,24 @@ def main() -> int:
     review.decide(item["id"], "edit", "u-test", ["木", "十"])
     again = review.add_items([check_row])
     check("once the site changed, the check is asked again", again == (1, 0), (again, review.current("decomposition", "林")))
+
+    print("a form has no parts or meaning of its own")
+    parts = review.add_item("decomposition", "⺮", None, "check:test")
+    link = review.add_item("form_link", "⺮|竹", None, "check:test")
+    card = lambda *ds: code(lambda: review.decide_card("⺮", list(ds), "u-test"))  # noqa: E731
+    check("a form of 竹 that keeps 竹 as its part is refused",
+          card({"item": parts["id"], "action": "keep"}, {"item": link["id"], "action": "keep"}) == "form_has_parts")
+    fl = review.add_item("form_link", "龰|止", {"kind": "form_of", "note": "止 at the bottom of 足"}, "ai:test")
+    pm = review.add_item("part_meaning", "龰", {"kind": "meaning", "en": "foot"}, "ai:test")
+    check("... and so is one with a meaning of its own", code(lambda: review._form_rule(
+        review._read(), "龰", [{"item": fl["id"], "action": "accept"}, {"item": pm["id"], "action": "accept"}])) == "form_has_meaning")
+    check("with no parts it goes through",
+          card({"item": parts["id"], "action": "edit", "value": []}, {"item": link["id"], "action": "keep"}) is None)
+    check("⺮ has no parts now", review.current("decomposition", "⺮") == [])
+    root = review.add_item("decomposition", "手", None, "check:test")
+    hand = review.add_item("form_link", "扌|手", None, "check:test")
+    check("the root itself keeps its parts question", code(lambda: review.decide_card("手", [
+        {"item": root["id"], "action": "edit", "value": []}, {"item": hand["id"], "action": "keep"}], "u-test")) is None)
 
     print("backup")
     item = review.add_item("decomposition", "森", ["林", "木"], "ai:test")

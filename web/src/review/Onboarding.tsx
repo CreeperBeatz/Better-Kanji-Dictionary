@@ -62,7 +62,7 @@ const J = ({ children }: { children: ReactNode }) => <span lang="ja">{children}<
 
 /** The four stages, on the overview card: each opens its own card. */
 const STAGES: { name: string; q: string; card: number }[] = [
-  { name: 'Characters', q: 'What is it built from, how is it related, and what is a part with no meaning?', card: 3 },
+  { name: 'Characters', q: 'How is it related, what is it built from, and what is a part with no meaning?', card: 3 },
   { name: 'Meanings', q: 'What are the 1–6 things this kanji does in words?', card: 4 },
   { name: 'Bulgarian', q: 'Is the machine translation right?', card: 5 },
   { name: 'Reports', q: 'Is what someone reported really wrong?', card: 6 },
@@ -142,8 +142,8 @@ function cards(go: (i: number) => void): Card[] {
       glyph: '午',
       lead: (
         <>
-          One card per character, up to three questions: what is it built from today, how is it related to other
-          characters, and, for a part with no meaning in the dictionary, what is it? Every answer says what it does.
+          One card per character, up to three questions: how is it related to other characters, what is it built from
+          today, and, for a part with no meaning in the dictionary, what is it? Every answer says what it does.
         </>
       ),
       more: 'Characters',
@@ -155,7 +155,11 @@ function cards(go: (i: number) => void): Card[] {
             </li>
             <li>
               Pick an answer: <i>use the proposal</i>, <i>keep it as it is</i>, <i>no parts</i>, or <i>something else</i>.
-              Each part must do a job in the character: meaning, sound, or a kanji written for its position.
+              Take the split the sources give. A base kanji stays whole.
+            </li>
+            <li>
+              <b>A form of another kanji</b> (<J>龰</J> is <J>止</J>, <J>氵</J> is <J>水</J>): mark the root in step 1.
+              A form has no parts of its own, so step 2 is not asked.
             </li>
             <li>
               No such pieces? It has <b>no parts</b>. That is fine: <J>日</J> and <J>午</J> are learned as one piece.

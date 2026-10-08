@@ -37,9 +37,10 @@ const S = strings(
   {
     loading: 'loading…',
     q_parts: 'What is {char} built from, as written today?',
-    formOfHint: '{char} is a form of {root} (step 2). If it still looks like {root}, its part is {root}, as ⺮ is 竹. If it no longer looks like it, pick no parts, as for 氵 and 水.',
     q_forms: 'How is {char} related to these characters?',
-    q_forms_hint: 'A form link never changes parts. “A form of” lends its meaning to every kanji with the part: check the lists.',
+    q_forms_hint: 'Where one is a form of the other, mark which is the root. A form has no parts of its own, and lends the root’s meaning to every kanji with it: check the lists.',
+    root: 'The root:',
+    formNoParts: '{char} is a form of {root}. A form has no parts of its own: it uses those of {root}.',
     q_meaning: '{char} has no meaning in the dictionary. What is it?',
     q_meaning_hint: 'A real character with its own meaning, a shape several old parts merged into (a name, not a meaning), or a form of a kanji (step above).',
     useProposal: 'Use the proposal',
@@ -65,12 +66,12 @@ const S = strings(
     v_reject: 'it is wrong',
     m_proposed: 'Use the proposal',
     m_other: 'Something else',
-    m_form: 'It is a form of a kanji (the link above lends its meaning)',
     m_none: 'Leave it with no meaning for now',
-    conflict: 'A shape and “a form of” can’t both be right: the shape would win and the form of would lend nothing. Leave the form link as it is, or say it is a form of a kanji below.',
     s_parts_keep: 'keep {char}’s parts as they are',
     s_parts: 'give {char} the parts {parts}',
     s_atomic: 'make {char} a single piece, with no parts',
+    s_form_parts: 'give {char} no parts of its own: it is a form of {root}',
+    s_meaning_root: 'let {char} take the meaning of {root}',
     s_link: 'set: {sentence}',
     s_link_keep: 'keep {pair} as it is',
     s_meaning: 'show on {char}’s page: {what}',
@@ -88,9 +89,10 @@ const S = strings(
   {
     loading: 'зарежда се…',
     q_parts: 'От какво е построен {char}, както се пише днес?',
-    formOfHint: '{char} е форма на {root} (стъпка 2). Ако още прилича на {root}, частта му е {root}, както при ⺮ и 竹. Ако вече не прилича, изберете „без части“, както при 氵 и 水.',
     q_forms: 'Как е свързан {char} с тези знаци?',
-    q_forms_hint: 'Връзка между форми никога не променя частите. „Форма на“ заема значението си на всяко канджи с частта: проверете списъците.',
+    q_forms_hint: 'Където едното е форма на другото, отбележете кое е коренът. Формата няма свои части и заема значението на корена за всяко канджи с нея: проверете списъците.',
+    root: 'Коренът:',
+    formNoParts: '{char} е форма на {root}. Формата няма свои части: ползва тези на {root}.',
     q_meaning: '{char} няма значение в речника. Какво е?',
     q_meaning_hint: 'Истински знак със свое значение, форма, в която са се слели няколко стари части (име, не значение), или форма на канджи (стъпката по-горе).',
     useProposal: 'Използвайте предложението',
@@ -116,12 +118,12 @@ const S = strings(
     v_reject: 'грешно е',
     m_proposed: 'Използвайте предложението',
     m_other: 'Нещо друго',
-    m_form: 'Форма е на канджи (връзката по-горе заема значението му)',
     m_none: 'Оставете го без значение засега',
-    conflict: 'Форма без значение и „форма на“ не могат да са верни заедно: формата печели и „форма на“ не заема нищо. Оставете връзката както е или кажете по-долу, че е форма на канджи.',
     s_parts_keep: 'запази частите на {char} както са',
     s_parts: 'даде на {char} частите {parts}',
     s_atomic: 'направи {char} едно цяло, без части',
+    s_form_parts: 'не даде на {char} свои части: то е форма на {root}',
+    s_meaning_root: 'остави {char} да заема значението на {root}',
     s_link: 'зададе: {sentence}',
     s_link_keep: 'оставете {pair} както е',
     s_meaning: 'покаже на страницата на {char}: {what}',
@@ -239,14 +241,38 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const draft = draftOf(partsItems)
   const options = useMemo(() => (card ? partsOptions(partsItems, card.context.parts, draft) : []), [card, partsItems, draft])
 
-  // The parts the chosen answer gives.
-  const chosen: string[] | null = !work?.parts || work.parts.pick === ''
+  // Each form link resolved to what it would be: the answer picked, else as it is.
+  const formValue = (f: ItemDetail): FormLink | null => {
+    const w = work?.forms[f.id]
+    if (!w || w.pick === 'now' || w.pick === '') return null
+    return w.pick === 'proposed' ? (f.proposed as FormLink) : w.value
+  }
+  const effective = (f: ItemDetail): FormLink | null => formValue(f) ?? (f.current as FormLink | null)
+  // The kanji this character is a form of, as step 1 has it now: the built links, with the card's answers over them.
+  // A form has no parts of its own and takes its root's meaning, so steps 2 and 3 are not asked (the handbook's root rule).
+  const roots = new Set((card?.context.forms?.formOf ?? []).map((f) => f.char))
+  for (const f of formItems) {
+    const other = f.subject.split('|').find((c) => c !== char)
+    if (!other) continue
+    const v = effective(f)
+    if (v?.kind === 'form_of' && linkSubjectChar(f.subject, v) === char) roots.add(other)
+    else roots.delete(other)
+  }
+  const root = [...roots].join(' ')
+  const isForm = roots.size > 0
+
+  // The parts the chosen answer gives; a form's are none.
+  const chosen: string[] | null = !work?.parts
     ? null
-    : work.parts.pick === 'other'
-      ? work.parts.custom
-      : (options.find((o) => o.key === work.parts!.pick)?.parts ?? now)
+    : isForm
+      ? []
+      : work.parts.pick === ''
+        ? null
+        : work.parts.pick === 'other'
+          ? work.parts.custom
+          : (options.find((o) => o.key === work.parts!.pick)?.parts ?? now)
   // A question with nothing picked yet: saving waits for it.
-  const unpicked = !!work && (work.parts?.pick === '' || Object.values(work.forms).some((f) => f.pick === ''))
+  const unpicked = !!work && ((!isForm && work.parts?.pick === '') || Object.values(work.forms).some((f) => f.pick === ''))
   const partsChange = chosen !== null && !same(chosen, now)
 
   // What the chosen parts would change upstream.
@@ -264,36 +290,13 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
     }
   }, [char, chosenKey, partsChange])
 
-  // Each form link and the part's meaning, resolved to what they would be.
-  const formValue = (f: ItemDetail): FormLink | null => {
-    const w = work?.forms[f.id]
-    if (!w || w.pick === 'now' || w.pick === '') return null
-    return w.pick === 'proposed' ? (f.proposed as FormLink) : w.value
-  }
+  // The part's meaning, resolved to what it would be; a form takes its root's.
   const meaningValue: PartMeaning | null =
-    work?.meaning && (work.meaning.pick === 'proposed' || work.meaning.pick === 'other')
+    !isForm && work?.meaning && (work.meaning.pick === 'proposed' || work.meaning.pick === 'other')
       ? work.meaning.pick === 'proposed'
         ? (meaningItem?.proposed as PartMeaning)
         : work.meaning.value
       : null
-  const conflict =
-    meaningValue?.kind === 'shape' &&
-    formItems.some((f) => {
-      const v = formValue(f)
-      return v?.kind === 'form_of' && linkSubjectChar(f.subject, v) === char
-    })
-
-  // The kanji this character is a form of, as step 2 has it now: the built links, with the card's answers over them.
-  // Step 1 then says that kanji is the part while the form still looks like it (the handbook's bound-form table).
-  const roots = new Set((card?.context.forms?.formOf ?? []).map((f) => f.char))
-  for (const f of formItems) {
-    const other = f.subject.split('|').find((c) => c !== char)
-    if (!other) continue
-    const pick = work?.forms[f.id]?.pick
-    const v = pick === 'proposed' || pick === 'other' ? formValue(f) : (f.current as FormLink | null)
-    if (v?.kind === 'form_of' && linkSubjectChar(f.subject, v) === char) roots.add(other)
-    else roots.delete(other)
-  }
 
   const decisions = useCallback((): CardDecision[] | null => {
     if (!card || !work) return null
@@ -320,13 +323,14 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
     }
     if (meaningItem && work.meaning) {
       const p = work.meaning.pick
-      if (p === 'form') out.push({ item: meaningItem.id, action: 'reject' })
+      // A form takes its root's meaning: the proposed one is not used ('form': work kept from before this rule).
+      if (isForm || p === 'form') out.push({ item: meaningItem.id, action: 'reject' })
       else if (p === 'none') out.push({ item: meaningItem.id, action: 'keep' })
       else if (same(meaningValue, meaningItem.proposed)) out.push({ item: meaningItem.id, action: 'accept' })
       else out.push({ item: meaningItem.id, action: 'edit', value: meaningValue })
     }
     return out
-  }, [card, work, chosen, partsChange, partsItems, formItems, meaningItem, meaningValue])
+  }, [card, work, chosen, partsChange, partsItems, formItems, meaningItem, meaningValue, isForm])
 
   async function send(skip: boolean) {
     if (!card || !work || busy) return
@@ -368,11 +372,39 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   if (!card || !work) return <p className="hint">{problem ?? t('loading')}</p>
   // The item whose evidence carries the kanji book's split, for "use this split".
   const bookParts = partsItems.find((i) => i.evidence?.book != null)
-  // Each kind of question has its own number on every card -- 1 parts, 2 relations, 3 a part's
+  // Each kind of question has its own number on every card -- 1 relations, 2 parts, 3 a part's
   // meaning -- so the number says what is asked, as the handbook's chapters do, whichever a card has.
+  // Relations come first: a form of another kanji has no parts or meaning of its own to ask about.
   const tiles = (p: string[]) => (p.length ? <PartTiles chars={p} onKanji={onKanji} /> : <span className="hint">{t('noParts')}</span>)
   const setParts = (patch: Partial<NonNullable<Work['parts']>>) => setWork({ ...work, parts: { ...work.parts!, ...patch } })
   const setForm = (fid: string, patch: Partial<Work['forms'][string]>) => setWork({ ...work, forms: { ...work.forms, [fid]: { ...work.forms[fid], ...patch } } })
+  // "The root is X": the link's direction, as an answer -- the proposal or today's when either says so, else something else.
+  // Which of the two is the root, where the link says one is a form of the other.
+  const rootPick = (f: ItemDetail) => {
+    const v = effective(f)
+    if (v?.kind !== 'form_of') return null
+    const [a, b] = f.subject.split('|')
+    const rootChar = linkSubjectChar(f.subject, v) === a ? b : a
+    return (
+      <div className="card-root" role="radiogroup" aria-label={t('root')}>
+        <span className="hint">{t('root')}</span>
+        {[a, b].map((c) => (
+          <label key={c} className="card-option card-root-pick" data-on={c === rootChar || undefined}>
+            <input type="radio" name={`root-${f.id}`} checked={c === rootChar} onChange={() => setRoot(f, c)} />
+            <span lang="ja">{c}</span>
+          </label>
+        ))}
+      </div>
+    )
+  }
+  function setRoot(f: ItemDetail, rootChar: string) {
+    const [a] = f.subject.split('|')
+    const next: FormLink = { ...effective(f)!, kind: 'form_of' }
+    if (rootChar === a) next.reverse = true
+    else delete next.reverse
+    const fits = (v: unknown) => !!v && same({ ...(v as FormLink), reverse: (v as FormLink).reverse || undefined }, { ...next, reverse: next.reverse || undefined })
+    setForm(f.id, fits(f.proposed) ? { pick: 'proposed' } : fits(f.current) ? { pick: 'now' } : { pick: 'other', value: next })
+  }
   const setMeaning = (patch: Partial<NonNullable<Work['meaning']>>) => setWork({ ...work, meaning: { ...work.meaning!, ...patch } })
   const verdicts = (meaningItem?.evidence?.formLinks ?? {}) as Record<string, 'keep' | 'reject'>
   // Which sources give a split: KanjiVG, IDS, the kanji book, cjk-decomp …
@@ -382,7 +414,9 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   // What saving would do, in a sentence each.
   const summary: string[] = []
   if (work.parts && chosen)
-    summary.push(!partsChange ? t('s_parts_keep', { char }) : chosen.length ? t('s_parts', { char, parts: chosen.join(' ') }) : t('s_atomic', { char }))
+    summary.push(
+      isForm ? t('s_form_parts', { char, root }) : !partsChange ? t('s_parts_keep', { char }) : chosen.length ? t('s_parts', { char, parts: chosen.join(' ') }) : t('s_atomic', { char }),
+    )
   for (const f of formItems) {
     const v = formValue(f)
     summary.push(v && !same(v, f.current) ? t('s_link', { sentence: sentence(v.kind, f.subject, v.reverse) }) : t('s_link_keep', { pair: f.subject.replace('|', ' · ') }))
@@ -390,7 +424,13 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   if (meaningItem && work.meaning) {
     const p = work.meaning.pick
     summary.push(
-      p === 'none' ? t('s_meaning_keep', { char }) : p === 'form' ? t('s_meaning_form', { char }) : t('s_meaning', { char, what: meaningValue?.en ?? '' }),
+      isForm
+        ? t('s_meaning_root', { char, root })
+        : p === 'none'
+          ? t('s_meaning_keep', { char })
+          : p === 'form'
+            ? t('s_meaning_form', { char })
+            : t('s_meaning', { char, what: meaningValue?.en ?? '' }),
     )
   }
 
@@ -432,13 +472,65 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         {meaningItem && <PartEvidence detail={meaningItem} onKanji={onKanji} />}
       </div>
 
-        {work.parts && (
-          <Stage n={1} title={t('q_parts', { char })}>
-            {[...roots].map((root) => (
-              <p key={root} className="hint card-root-hint">
-                {t('formOfHint', { char, root })}
-              </p>
-            ))}
+        {formItems.length > 0 && (
+          <Stage n={1} title={t('q_forms', { char })} extra={<KindsInfoButton open={formsInfo} onToggle={toggleFormsInfo} />}>
+            {formsInfo && <KindsTable of="form" />}
+            <p className="hint">{t('q_forms_hint')}</p>
+            {formItems.map((f) => {
+              const w = work.forms[f.id]
+              const proposed = f.proposed as FormLink | null
+              const current = f.current as FormLink | null
+              return (
+                <div key={f.id} className="card-link">
+                  <div className="card-options" role="radiogroup">
+                    {proposed && (
+                      <label className="card-option" data-on={w.pick === 'proposed' || undefined}>
+                        <input type="radio" name={`f-${f.id}`} checked={w.pick === 'proposed'} onChange={() => setForm(f.id, { pick: 'proposed' })} />
+                        <span className="card-option-label">
+                          {t('linkProposed')}: <b lang="ja">{sentence(proposed.kind, f.subject, proposed.reverse)}</b>
+                          <span className="hint"> · {f.source}</span>
+                          {proposed.note && <span className="hint card-option-why">{proposed.note}</span>}
+                          {verdicts[f.subject] && <span className="queue-verdict" data-verdict={verdicts[f.subject]}> {t('draftVerdict', { v: t(`v_${verdicts[f.subject]}` as Key) })}</span>}
+                        </span>
+                      </label>
+                    )}
+                    <label className="card-option" data-on={w.pick === 'now' || undefined}>
+                      <input type="radio" name={`f-${f.id}`} checked={w.pick === 'now'} onChange={() => setForm(f.id, { pick: 'now' })} />
+                      <span className="card-option-label">
+                        {t('linkNow')}:{' '}
+                        <span lang="ja">{current && current.kind !== 'none' ? sentence(current.kind, f.subject, current.reverse) : `${f.subject.replace('|', ' · ')}: ${t('noLink')}`}</span>
+                      </span>
+                    </label>
+                    <label className="card-option" data-on={w.pick === 'other' || undefined}>
+                      <input type="radio" name={`f-${f.id}`} checked={w.pick === 'other'} onChange={() => setForm(f.id, { pick: 'other' })} />
+                      <span className="card-option-label">{t('linkOther')}</span>
+                    </label>
+                    {w.pick === 'other' && (
+                      <ValueEditor type="form_link" value={w.value} onChange={(v) => setForm(f.id, { value: v as FormLink })} subject={f.subject} />
+                    )}
+                  </div>
+                  {rootPick(f)}
+                  <FormEvidence detail={f} onKanji={onKanji} />
+                </div>
+              )
+            })}
+          </Stage>
+        )}
+
+        {work.parts && isForm && (
+          <Stage n={2} title={t('q_parts', { char })}>
+            <p className="hint">{t('formNoParts', { char, root })}</p>
+            {partsChange && (
+              <div className="card-changes">
+                <h5>{t('changes')}</h5>
+                {impact ? <ImpactView imp={impact} onKanji={onKanji} /> : <p className="hint">{t('loading')}</p>}
+              </div>
+            )}
+          </Stage>
+        )}
+
+        {work.parts && !isForm && (
+          <Stage n={2} title={t('q_parts', { char })}>
             <div className="card-options" role="radiogroup">
               {options.map((o) => {
                 const isDraft = o.key === 'draft'
@@ -511,51 +603,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           </Stage>
         )}
 
-        {formItems.length > 0 && (
-          <Stage n={2} title={t('q_forms', { char })} extra={<KindsInfoButton open={formsInfo} onToggle={toggleFormsInfo} />}>
-            {formsInfo && <KindsTable of="form" />}
-            <p className="hint">{t('q_forms_hint')}</p>
-            {formItems.map((f) => {
-              const w = work.forms[f.id]
-              const proposed = f.proposed as FormLink | null
-              const current = f.current as FormLink | null
-              return (
-                <div key={f.id} className="card-link">
-                  <div className="card-options" role="radiogroup">
-                    {proposed && (
-                      <label className="card-option" data-on={w.pick === 'proposed' || undefined}>
-                        <input type="radio" name={`f-${f.id}`} checked={w.pick === 'proposed'} onChange={() => setForm(f.id, { pick: 'proposed' })} />
-                        <span className="card-option-label">
-                          {t('linkProposed')}: <b lang="ja">{sentence(proposed.kind, f.subject, proposed.reverse)}</b>
-                          <span className="hint"> · {f.source}</span>
-                          {proposed.note && <span className="hint card-option-why">{proposed.note}</span>}
-                          {verdicts[f.subject] && <span className="queue-verdict" data-verdict={verdicts[f.subject]}> {t('draftVerdict', { v: t(`v_${verdicts[f.subject]}` as Key) })}</span>}
-                        </span>
-                      </label>
-                    )}
-                    <label className="card-option" data-on={w.pick === 'now' || undefined}>
-                      <input type="radio" name={`f-${f.id}`} checked={w.pick === 'now'} onChange={() => setForm(f.id, { pick: 'now' })} />
-                      <span className="card-option-label">
-                        {t('linkNow')}:{' '}
-                        <span lang="ja">{current && current.kind !== 'none' ? sentence(current.kind, f.subject, current.reverse) : `${f.subject.replace('|', ' · ')}: ${t('noLink')}`}</span>
-                      </span>
-                    </label>
-                    <label className="card-option" data-on={w.pick === 'other' || undefined}>
-                      <input type="radio" name={`f-${f.id}`} checked={w.pick === 'other'} onChange={() => setForm(f.id, { pick: 'other' })} />
-                      <span className="card-option-label">{t('linkOther')}</span>
-                    </label>
-                    {w.pick === 'other' && (
-                      <ValueEditor type="form_link" value={w.value} onChange={(v) => setForm(f.id, { value: v as FormLink })} subject={f.subject} />
-                    )}
-                  </div>
-                  <FormEvidence detail={f} onKanji={onKanji} />
-                </div>
-              )
-            })}
-          </Stage>
-        )}
-
-        {meaningItem && work.meaning && (
+        {meaningItem && work.meaning && !isForm && (
           <Stage n={3} title={t('q_meaning', { char })} extra={<KindsInfoButton open={partInfo} onToggle={togglePartInfo} />}>
             {partInfo && <KindsTable of="part" />}
             <p className="hint">{t('q_meaning_hint')}</p>
@@ -573,10 +621,6 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               {work.meaning.pick === 'other' && (
                 <ValueEditor type="part_meaning" value={work.meaning.value} onChange={(v) => setMeaning({ value: v as PartMeaning })} />
               )}
-              <label className="card-option" data-on={work.meaning.pick === 'form' || undefined}>
-                <input type="radio" name={`m-${id}`} checked={work.meaning.pick === 'form'} onChange={() => setMeaning({ pick: 'form' })} />
-                <span className="card-option-label">{t('m_form')}</span>
-              </label>
               <label className="card-option" data-on={work.meaning.pick === 'none' || undefined}>
                 <input type="radio" name={`m-${id}`} checked={work.meaning.pick === 'none'} onChange={() => setMeaning({ pick: 'none' })} />
                 <span className="card-option-label">{t('m_none')}</span>
@@ -584,8 +628,6 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
             </div>
           </Stage>
         )}
-
-        {conflict && <p className="queue-warn">{t('conflict')}</p>}
 
         <CardFooter
           key={id}
@@ -596,7 +638,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           before={unpicked && <p className="hint card-pick-first">{t('pickFirst')}</p>}
           actions={
             <>
-              <button className="account-submit" disabled={busy || conflict || unpicked} title={unpicked ? t('pickFirst') : undefined} onClick={() => send(false)}>
+              <button className="account-submit" disabled={busy || unpicked} title={unpicked ? t('pickFirst') : undefined} onClick={() => send(false)}>
                 {t('save')}
               </button>
               <button className="clear" disabled={busy} onClick={() => send(true)}>

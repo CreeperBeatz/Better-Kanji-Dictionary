@@ -57,12 +57,24 @@ export function researchPrompt(card: CharacterCard, sentence: Sentence): string 
   const answers = (opts: string[]) => opts.forEach((o, i) => lines.push(`   ${LETTERS[i]}. ${o}`))
   let n = 0
 
+  for (const f of forms) {
+    const [a, b] = f.subject.split('|')
+    const p = f.proposed as FormLink | null
+    const now = f.current as FormLink | null
+    lines.push(`${++n}. Relation between ${a} and ${b}.`)
+    answers([
+      ...(p ? [`Use the proposal: “${sentence(p.kind, f.subject, p.reverse)}”${p.note ? `. Its evidence: ${p.note}` : ''}`] : []),
+      `Leave it as it is: ${now && now.kind !== 'none' ? `“${sentence(now.kind, f.subject, now.reverse)}”` : 'no link between them'}`,
+      `Something else, one of: “${a} is a form of ${b}” (the same character written for its position, giving its meaning; say which is the root); “one is the old form of the other”; “${a} only looks like ${b}” (a memory aid); “separate characters with the same meaning”; “not related”`,
+    ])
+  }
+
   if (parts.length) {
     const splits = card.context.splits ?? []
     const by = (p: string[]) => splits.filter((s) => setOf(s.parts) === setOf(p)).map((s) => NAMES[s.source] ?? s.source)
     const from = (who: string[]) => (who.length ? ` (given by ${who.join(', ')})` : '')
     const draft = draftOf(parts)
-    lines.push(`${++n}. Parts. Which components is ${c} built from, as it is written in Japan today?`)
+    lines.push(`${++n}. Parts. Which components is ${c} built from, as it is written in Japan today? Skip this if ${c} is a form of another kanji: a form has no parts of its own.`)
     lines.push('   Rules: a basic pictograph stays one piece. Otherwise prefer the split the standard sources give for today’s shape. Use the old form only when the sources do not decide. A shape that only looks like a part is not a part. Every part must be a real character or component, and together they must cover the whole shape.')
     const opts = partsOptions(parts, card.context.parts, draft).map((o) => {
       if (o.key === 'now') return `Keep it as it is: ${list(o.parts)}${from(by(o.parts))}`
@@ -72,18 +84,6 @@ export function researchPrompt(card: CharacterCard, sentence: Sentence): string 
       return `Use the proposal: ${list(o.parts)}${from(by(o.parts).length ? by(o.parts) : [o.item?.source ?? 'a source'])}`
     })
     answers([...opts, 'Something else: a split of your own'])
-  }
-
-  for (const f of forms) {
-    const [a, b] = f.subject.split('|')
-    const p = f.proposed as FormLink | null
-    const now = f.current as FormLink | null
-    lines.push(`${++n}. Relation between ${a} and ${b}.`)
-    answers([
-      ...(p ? [`Use the proposal: “${sentence(p.kind, f.subject, p.reverse)}”${p.note ? `. Its evidence: ${p.note}` : ''}`] : []),
-      `Leave it as it is: ${now && now.kind !== 'none' ? `“${sentence(now.kind, f.subject, now.reverse)}”` : 'no link between them'}`,
-      `Something else, one of: “${a} is a form of ${b}” (the same character written for its position, giving its meaning); “one is the old form of the other”; “${a} only looks like ${b}” (a memory aid); “separate characters with the same meaning”; “not related”`,
-    ])
   }
 
   if (meaning) {

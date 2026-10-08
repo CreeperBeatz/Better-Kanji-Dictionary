@@ -524,6 +524,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   fill: var(--muted);
 }
 
+/* The expanded graph: a form's root kanji, small at its upper right (氵 with 水). */
+.node .node-root {
+  fill: var(--paper-dim);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
 .node[data-kind='focus'] .glyph {
   font-weight: 600;
 }
@@ -8882,11 +8890,16 @@ button.review-part {
   padding: 0 4px;
 }
 
-/* Step 1's reminder: a form of a kanji that still looks like it has that kanji as its part (CharacterCard.tsx). */
-.card-root-hint {
-  color: var(--paper);
-  border-left: 3px solid var(--ai);
-  padding-left: 8px;
+/* A form link's "the root is": two small answers in a row, under the link's answers (CharacterCard.tsx). */
+.card-root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+.card-root .card-root-pick {
+  padding: 2px 10px;
+  font-size: 18px;
 }
 
 .card-option-wrap > .review-field {
