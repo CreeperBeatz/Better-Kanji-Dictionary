@@ -3,6 +3,7 @@
  * dictionary tab (review/BookViewer.tsx). Every link targets the same named
  * tab: the first opens it, the next ones show their kanji in it, so a
  * reviewer can keep it on a second screen while labelling on the first.
+ * Ctrl-, Shift- or ⌘-click opens a tab of its own instead.
  */
 import { strings, useLang } from '../i18n'
 
@@ -72,9 +73,11 @@ export function DictionaryLink({
       title={book && bookName ? t('titleBook', { char, book: bookName }) : t('title', { char })}
       aria-label={label ? undefined : book && bookName ? t('titleBook', { char, book: bookName }) : t('title', { char })}
       onClick={(e) => {
+        e.stopPropagation()
+        // Ctrl / Shift / ⌘-click: a tab of its own, as a link does. A plain click: the one dictionary tab.
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return
         // Inside a <summary>, a plain click would also fold or unfold it.
         e.preventDefault()
-        e.stopPropagation()
         window.open(href, DICTIONARY_TAB)
       }}
     >

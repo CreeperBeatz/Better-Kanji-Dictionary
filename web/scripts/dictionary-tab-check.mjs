@@ -64,6 +64,7 @@ check('the panel opens the dictionary tab on 生', new URL(tab.url()).pathname =
 const views = () => tab.locator('.dv-views')
 const headerHeight = () => tab.locator('.dv-bar').evaluate((el) => el.getBoundingClientRect().height)
 check('Kodansha has both: the switch shows under the dictionaries', (await views().locator('button').count()) === 2 && (await views().getAttribute('data-none')) === null)
+check('the tab is in English, with no language switch', (await tab.locator('html').getAttribute('lang')) === 'en' && (await tab.getByText('БГ').count()) === 0)
 check('Kodansha first', (await tab.locator('.dv-books > button[aria-pressed="true"]').textContent()).startsWith('Kodansha'))
 await tab.waitForSelector('.dv-digital .kd-entry')
 check('digital first', (await tab.locator('.dv-digital .kd-entry').count()) === 1)

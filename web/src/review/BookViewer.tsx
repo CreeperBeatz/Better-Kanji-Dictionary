@@ -24,7 +24,6 @@ import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiDictionaries, type WordsWithResponse } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { errorText } from '../i18n/errors'
-import { LangSwitch } from '../i18n/LangSwitch'
 import { typing, useKey } from '../keys'
 import { KanjiEntry, PageScan } from './BookEvidence'
 import { KangorinMarks, KangorinSenses, KodanshaEntry, WiktionaryList } from './DictEntries'
@@ -457,7 +456,6 @@ export default function BookViewer() {
             </button>
           ))}
         </span>
-        <LangSwitch />
       </header>
       <main className="dv-page">{body}</main>
     </div>

@@ -2,11 +2,14 @@ import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import './theme.css'
 import { App } from './App'
+import { pinLang } from './i18n'
 import { startOffline } from './local/local'
 
 // The dictionary tab (review/BookViewer.tsx), reviewers' second screen: a page of its own, not the app.
 const DictionaryTab = lazy(() => import('./review/BookViewer'))
 const dictionaryTab = window.location.pathname === '/review/dictionary'
+// Its dictionaries are English (Kodansha, Wiktionary) or Japanese: the tab is in English, whatever the app's language.
+if (dictionaryTab) pinLang('en')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

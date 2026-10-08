@@ -55,6 +55,13 @@ export function setLang(lang: Lang): void {
   for (const l of listeners) l()
 }
 
+/** This page only, and not remembered: the dictionary tab is in English, as its dictionaries are (main.tsx). */
+export function pinLang(lang: Lang): void {
+  current = lang
+  document.documentElement.lang = lang
+  for (const l of listeners) l()
+}
+
 export function useLang(): Lang {
   return useSyncExternalStore(
     (l) => {
