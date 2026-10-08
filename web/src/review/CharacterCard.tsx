@@ -73,7 +73,8 @@ const S = strings(
     s_parts_keep: 'keep {char}’s parts as they are',
     s_parts: 'give {char} the parts {parts}',
     s_atomic: 'make {char} a single piece, with no parts',
-    visualSplit: 'Only how it looks: {char} is not made from these parts (a visual split)',
+    visualSplit: 'Visual split',
+    visualInfo: 'Only how {char} looks, not what it is made from: {char} stays whole, and these pieces are kept apart from its parts. Two pieces or more, together the whole shape: 土 looks like 十 + 一.',
     s_visual: 'keep {char} whole, and record that it looks like {parts}',
     s_visual_drop: 'take away the visual split of {char}',
     s_form_parts: 'give {char} no parts of its own: it is a form of {root}',
@@ -131,7 +132,8 @@ const S = strings(
     s_parts_keep: 'запази частите на {char} както са',
     s_parts: 'даде на {char} частите {parts}',
     s_atomic: 'направи {char} едно цяло, без части',
-    visualSplit: 'Само как изглежда: {char} не е съставен от тези части (визуално деление)',
+    visualSplit: 'Визуално деление',
+    visualInfo: 'Само как изглежда {char}, а не от какво е съставен: {char} остава цял, а тези части се пазят отделно от частите му. Две или повече части, заедно цялата форма: 土 изглежда като 十 + 一.',
     s_visual: 'остави {char} цяло и запише, че изглежда като {parts}',
     s_visual_drop: 'махне визуалното деление на {char}',
     s_form_parts: 'не даде на {char} свои части: то е форма на {root}',
@@ -206,6 +208,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   // The (i) beside the forms and the meaning questions: what each choice means and changes.
   const [formsInfo, toggleFormsInfo] = useKindsInfo()
   const [partInfo, togglePartInfo] = useKindsInfo()
+  const [visualInfo, toggleVisualInfo] = useKindsInfo()
   const [problem, setProblem] = useState<string | null>(null)
 
   useEffect(() => {
@@ -289,8 +292,10 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   // A visual split: the parts picked are how it looks, and the character stays whole.
   const visualParts = !isForm && work?.parts?.visual && chosen && chosen.length >= 2 ? chosen : null
   const parts: string[] | null = visualParts ? [] : chosen
-  // A question with nothing picked yet: saving waits for it.
-  const unpicked = !!work && ((!isForm && work.parts?.pick === '') || Object.values(work.forms).some((f) => f.pick === ''))
+  // A question with nothing picked yet, or a visual split still short of two pieces: saving waits for it.
+  const unpicked =
+    !!work &&
+    ((!isForm && (work.parts?.pick === '' || (!!work.parts?.visual && !visualParts))) || Object.values(work.forms).some((f) => f.pick === ''))
   const partsChange = parts !== null && !same(parts, now)
 
   // What the chosen parts would change upstream.
@@ -624,11 +629,15 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               <input
                 type="checkbox"
                 checked={!!work.parts.visual}
-                disabled={(chosen?.length ?? 0) < 2}
-                onChange={(e) => setParts({ visual: e.target.checked })}
+                // Ticked before the pieces are in: the parts field opens to take them.
+                onChange={(e) =>
+                  setParts(e.target.checked && (chosen?.length ?? 0) < 2 ? { visual: true, pick: 'other', custom: chosen ?? [] } : { visual: e.target.checked })
+                }
               />
-              {t('visualSplit', { char })}
+              {t('visualSplit')}
+              <KindsInfoButton open={visualInfo} onToggle={toggleVisualInfo} />
             </label>
+            {visualInfo && <p className="hint">{t('visualInfo', { char })}</p>}
             {!!draft?.flags?.length && (
               <p className="hint card-flags">
                 {t('flagged')}: {draft.flags.join('; ')}
