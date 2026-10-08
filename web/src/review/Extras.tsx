@@ -2,10 +2,10 @@
  * What a kanji's cards carry beyond its groups (server/review.py, Dani 2026-10-07):
  *
  * - per group: what the kanji does in it (`about`) and its best examples;
- * - the card's steps after the board (Dani, 2026-10-08): 2, the kanji that
- *   mean the same, sorted into the groups step 1 left; 3, about the kanji:
- *   how its groups link, and the kanji it is easy to mix up with (they share
- *   a kun reading).
+ * - the card's steps (Dani, 2026-10-08): 1, the board, with an overall box
+ *   above the groups saying how they connect; 2, the kanji that mean the
+ *   same, sorted into the groups step 1 left; 3, the kanji easy to mix up
+ *   with it (they share a kun reading).
  *
  * Etymology (how the kanji was built, its original meaning) is not asked
  * here (Dani, 2026-10-08): it is "interesting stuff about the kanji", for a
@@ -21,18 +21,20 @@
  * Bunkacho's report, with its translations to check.
  */
 import { useMemo, useState } from 'react'
-import type { KanjiDictionaries, KanjiExtras, LinkCandidate, MeaningGroup, Mixup, UsageCard } from '../api'
+import type { KanjiDictionaries, KanjiExtras, LinkCandidate, MeaningGroup, UsageCard } from '../api'
 import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    extras: '3. About the kanji',
-    extrasHint: 'Drafted with the groups; check them like the groups. Shown to learners once accepted.',
-    link: 'How its meanings connect',
-    linkHint: 'One sentence, in the groups’ order. Empty when they do not connect.',
     kokuji: 'Made in Japan (kokuji): Chinese has no such character.',
-    mixups: 'Easy to mix up',
-    mixupsHint: 'Kanji that share a kun reading with this one, as Kodansha lists them. Ticked ones are shown to learners. Those Bunkacho or our own lists also have start ticked.',
+    overall: 'The meanings together',
+    overallHint: 'One sentence on how the groups connect, in their order. Learners read it above the groups. Leave it empty when they do not connect.',
+    mixups: '3. Kanji easy to mix up with {char}',
+    mixupsHint: 'Each of these kanji shares a kun reading with {char}, so a learner can write the wrong one. Keep a kanji if learners really mix the two up: it is shown on the {char} page with the reading they share. Pairs in Bunkacho’s usage report or in our own data start as kept.',
+    mixupsNone: 'Kodansha lists no kanji that shares a kun reading with {char}. Nothing to check here.',
+    mixupsShared: 'read this way by {chars}',
+    mixYes: 'easy to mix up: show it',
+    mixNo: 'not worth showing',
     none: 'none',
     about: 'What the kanji does in these words',
     examples: 'Learners see these words first',
@@ -48,7 +50,6 @@ const S = strings(
     notSame: 'not the same meaning',
     addKanji: '+ kanji',
     addSynonym: 'Add a kanji Kodansha does not list:',
-    kodansha: 'Kodansha: {gloss}',
     unnamed: '(unnamed group)',
     bgAbout: 'In Bulgarian: what the kanji does in each group',
     bgLink: 'How its meanings connect, in Bulgarian',
@@ -59,13 +60,15 @@ const S = strings(
     removeExample: 'remove this example',
   },
   {
-    extras: '3. За канджито',
-    extrasHint: 'Написани заедно с групите; проверете ги като групите. Показват се на учещите, щом се приемат.',
-    link: 'Как се свързват значенията',
-    linkHint: 'Едно изречение, по реда на групите. Празно, когато не се свързват.',
     kokuji: 'Създадено в Япония (кокуджи): в китайския няма такъв знак.',
-    mixups: 'Лесно се бъркат',
-    mixupsHint: 'Канджи с общо четене кун с това, както ги дава Kodansha. Отметнатите се показват на учещите. Започват отметнати тези, които са и в списъка на Бункачо или в нашите.',
+    overall: 'Значенията заедно',
+    overallHint: 'Едно изречение за това как се свързват групите, по техния ред. Учещите го четат над групите. Оставете го празно, когато не се свързват.',
+    mixups: '3. Канджи, които лесно се бъркат с {char}',
+    mixupsHint: 'Всяко от тези канджи има общо четене кун с {char}, затова учещият може да напише грешното. Оставете канджи, ако учещите наистина бъркат двете: показва се на страницата на {char} с общото четене. Двойките от доклада на Бункачо или от нашите данни започват като оставени.',
+    mixupsNone: 'Kodansha не дава канджи с общо четене кун с {char}. Тук няма какво да се проверява.',
+    mixupsShared: 'така се четат {chars}',
+    mixYes: 'лесно се бъркат: покажете го',
+    mixNo: 'не си струва да се показва',
     none: 'няма',
     about: 'Какво прави канджито в тези думи',
     examples: 'Учещите виждат първо тези думи',
@@ -81,7 +84,6 @@ const S = strings(
     notSame: 'не е същото значение',
     addKanji: '+ канджи',
     addSynonym: 'Добавете канджи, което Kodansha не дава:',
-    kodansha: 'Kodansha: {gloss}',
     unnamed: '(група без име)',
     bgAbout: 'На български: какво прави канджито във всяка група',
     bgLink: 'Как се свързват значенията, на български',
@@ -103,16 +105,6 @@ export interface Candidates {
 export const candidatesOf = (evidence: unknown): Candidates => ((evidence as { candidates?: Candidates } | null)?.candidates ?? {})
 
 const isKanji = (c: string) => /^[㐀-鿿豈-﫿]$/.test(c)
-
-/** A ticked or unticked kanji: its glyph and our keyword, Kodansha's word in the tooltip. */
-function LinkChip({ c, on, onToggle, title }: { c: { char: string; en?: string | null }; on: boolean; onToggle: () => void; title?: string }) {
-  return (
-    <button type="button" className="search-filter link-chip" data-on={on || undefined} aria-pressed={on} title={title} onClick={onToggle}>
-      <span lang="ja">{c.char}</span>
-      {c.en && <span className="link-chip-en">{c.en}</span>}
-    </button>
-  )
-}
 
 /** A small field that takes one kanji and adds it. */
 function AddKanji({ onAdd }: { onAdd: (c: string) => void }) {
@@ -335,59 +327,92 @@ export function SynonymsStep({
   )
 }
 
-/** Step 3 of a meanings card, about the kanji: how its groups link, kokuji, and the kanji easy to mix up with it. */
-export function KanjiExtrasEditor({
+/** Step 1's overall box, above the groups: how the kanji's meanings connect, and whether it was made in Japan. */
+export function OverallMeaning({ value, onChange, kokuji }: { value: KanjiExtras; onChange: (v: KanjiExtras) => void; kokuji: boolean }) {
+  const t = S(useLang())
+  return (
+    <section className="board-overall">
+      <label className="board-extras-field">
+        <b>{t('overall')}</b>
+        <span className="hint">{t('overallHint')}</span>
+        <textarea className="assoc-text" rows={2} maxLength={600} value={value.link ?? ''} onChange={(e) => onChange({ ...value, link: e.target.value || null })} />
+      </label>
+      {kokuji && <p className="extras-kokuji">{t('kokuji')}</p>}
+    </section>
+  )
+}
+
+/** A kanji that shares a kun reading with the card's: Kodansha's word for it, and our main meaning. */
+interface MixupRow {
+  char: string
+  reading: string
+  gloss: string | null
+  en: string | null
+}
+
+/**
+ * Step 3 of a meanings card: the kanji easy to mix up with this one. Each
+ * shares a kun reading with it (生 and 活, いきる), so a learner can write the
+ * wrong one. Listed by the shared reading; for each, keep it (shown to
+ * learners) or not.
+ */
+export function MixupsStep({
+  char,
   value,
   onChange,
   candidates,
-  kokuji,
 }: {
+  char: string
   value: KanjiExtras
   onChange: (v: KanjiExtras) => void
   candidates: Candidates
-  kokuji: boolean
 }) {
   const t = S(useLang())
-  const set = (patch: Partial<KanjiExtras>) => onChange({ ...value, ...patch })
   const offered = candidates.mixups ?? []
-  const on = (c: string) => value.mixups.some((m) => m.char === c)
-  const toggle = (m: Mixup) => set({ mixups: on(m.char) ? value.mixups.filter((x) => x.char !== m.char) : [...value.mixups, m] })
-  const extra = value.mixups.filter((m) => !offered.some((o) => o.char === m.char))
+  const kept = (c: string) => value.mixups.some((m) => m.char === c)
+  const rows: MixupRow[] = [
+    ...offered.map((c) => ({ char: c.char, reading: c.reading ?? '', gloss: c.gloss ? quiet(c.gloss) : null, en: c.en })),
+    // Kept by someone, though Kodansha does not list it.
+    ...value.mixups.filter((m) => !offered.some((o) => o.char === m.char)).map((m) => ({ ...m, gloss: null, en: null })),
+  ]
+  const byReading = new Map<string, MixupRow[]>()
+  for (const r of rows) byReading.set(r.reading, [...(byReading.get(r.reading) ?? []), r])
+  const put = (r: MixupRow, on: boolean) =>
+    onChange({ ...value, mixups: on ? [...value.mixups.filter((m) => m.char !== r.char), { char: r.char, reading: r.reading }] : value.mixups.filter((m) => m.char !== r.char) })
+
   return (
     <section className="board-step">
-      <h4>{t('extras')}</h4>
-      <p className="hint">{t('extrasHint')}</p>
-      {kokuji && <p className="extras-kokuji">{t('kokuji')}</p>}
-      <label className="review-field">
-        <span>
-          {t('link')} <span className="hint">{t('linkHint')}</span>
-        </span>
-        <textarea className="assoc-text" rows={2} maxLength={600} value={value.link ?? ''} onChange={(e) => set({ link: e.target.value || null })} />
-      </label>
-      <div className="review-field">
-        <span>
-          {t('mixups')} <span className="hint">{t('mixupsHint')}</span>
-        </span>
-        <div className="link-row">
-          {offered.length === 0 && extra.length === 0 && <span className="hint">{t('none')}</span>}
-          {offered.map((c) => (
-            <span key={c.char} className="link-mixup">
-              <span className="hint" lang="ja">
-                {c.reading}
-              </span>
-              <LinkChip c={c} on={on(c.char)} onToggle={() => toggle({ char: c.char, reading: c.reading ?? '' })} title={t('kodansha', { gloss: c.gloss })} />
-            </span>
-          ))}
-          {extra.map((m) => (
-            <span key={m.char} className="link-mixup">
-              <span className="hint" lang="ja">
-                {m.reading}
-              </span>
-              <LinkChip c={m} on onToggle={() => toggle(m)} />
-            </span>
-          ))}
+      <h4>{t('mixups', { char })}</h4>
+      <p className="hint">{rows.length ? t('mixupsHint', { char }) : t('mixupsNone', { char })}</p>
+      {[...byReading].map(([reading, list]) => (
+        <div key={reading} className="step-sense">
+          <h5>
+            <span lang="ja">{reading}</span>
+            <span className="hint"> — {t('mixupsShared', { chars: [char, ...list.map((r) => r.char)].join(' · ') })}</span>
+          </h5>
+          <ul className="step-list">
+            {list.map((r) => (
+              <li key={r.char} className="step-row">
+                <span className="step-char" lang="ja">
+                  {r.char}
+                </span>
+                <span className="step-gloss">
+                  {r.gloss}
+                  {r.en && <span className="hint"> · {t('mainMeaning', { en: r.en })}</span>}
+                </span>
+                <span className="step-picks" role="group" aria-label={r.char}>
+                  <button type="button" className="search-filter" data-on={kept(r.char) || undefined} aria-pressed={kept(r.char)} onClick={() => put(r, true)}>
+                    {t('mixYes')}
+                  </button>
+                  <button type="button" className="search-filter step-none" data-on={!kept(r.char) || undefined} aria-pressed={!kept(r.char)} onClick={() => put(r, false)}>
+                    {t('mixNo')}
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-      </div>
+      ))}
     </section>
   )
 }

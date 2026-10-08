@@ -379,6 +379,10 @@ Three kinds of word go there:
 The card also carries what learners will read beside the groups. It was
 drafted with them; check it like the groups, and fix or empty what is wrong.
 
+- **The meanings together**, the box above the groups in step 1: one
+  sentence on how the groups connect, in their order. Learners read it
+  above the groups. Empty it when they don't connect. *Made in Japan
+  (kokuji)* shows there for the kanji that are; nothing to check.
 - **Per group:**
   - a line on what the kanji does in its words;
   - its **best examples**: the starred words (☆ on a word card). Learners
@@ -398,11 +402,16 @@ drafted with them; check it like the groups, and fix or empty what is wrong.
     group for Kodansha's *province, feudal domain* (藩 領 封 荘). Look for
     words like 国司 and 武蔵国 to decide.
   - None in a group is a good answer. A wrong group is not.
-- **Step 3, about the kanji:**
-  - **How its meanings connect**: one sentence, empty when they don't.
-  - **Easy to mix up**: kanji that share a kun reading with it (生 いきる 活).
-    Keep the pairs a learner really confuses.
-  - *Made in Japan (kokuji)* shows for the kanji that are; nothing to check.
+- **Step 3, kanji easy to mix up.** Each kanji listed shares a kun reading
+  with this one, so a learner can write the wrong one: いきる is 生きる or
+  活きる. They are listed by the reading they share.
+  - For each, pick *easy to mix up: show it* or *not worth showing*. A kept
+    kanji is shown on this kanji's page, with the reading they share.
+  - Keep the pairs a learner really confuses (会う / 合う / 遭う). Drop the
+    ones only a dictionary would list (生 / 埋 いける).
+  - Pairs in Bunkacho's usage report or in our own data start as kept.
+  - Kodansha lists none for most kanji: then the step says so, and there is
+    nothing to do.
 
 Accepting the card decides all of it with the groups. The Bulgarian of the
 lines is on the kanji's Bulgarian card.

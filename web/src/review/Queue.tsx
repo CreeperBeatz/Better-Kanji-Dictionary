@@ -33,7 +33,7 @@ import { CharacterCard } from './CharacterCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { DictionariesPanel } from './DictionariesPanel'
 import { Evidence } from './Evidence'
-import { candidatesOf, KanjiExtrasEditor } from './Extras'
+import { candidatesOf, MixupsStep, OverallMeaning } from './Extras'
 import { ReportButton } from './ReportButton'
 import { ResearchOpen } from './ResearchButton'
 import { bgPrompt, meaningsPrompt } from './researchPrompts'
@@ -654,6 +654,11 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       onSkip={skip}
                       followUp={isFollowUp(item)}
                       candidates={detail.context.extras ? candidatesOf(item.evidence ?? detail.evidence) : undefined}
+                      overall={
+                        extras && !isFollowUp(item) ? (
+                          <OverallMeaning value={extras} onChange={setExtras} kokuji={!!detail.context.extras?.kokuji} />
+                        ) : undefined
+                      }
                     />
                   ) : (
                     <p className="hint">{t('loading')}</p>
@@ -688,12 +693,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   </>
                 )}
                 {board && extras && detail?.id === item.id && !isFollowUp(item) && (
-                  <KanjiExtrasEditor
-                    value={extras}
-                    onChange={setExtras}
-                    candidates={candidatesOf(item.evidence ?? detail.evidence)}
-                    kokuji={!!detail.context.extras?.kokuji}
-                  />
+                  <MixupsStep char={item.subject} value={extras} onChange={setExtras} candidates={candidatesOf(item.evidence ?? detail.evidence)} />
                 )}
                 <label className="review-field">
                   <span>{t('reason')}</span>

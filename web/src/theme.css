@@ -6342,8 +6342,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin: 0;
 }
 
-.board-extras-row,
-.link-row {
+.board-extras-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -6351,32 +6350,19 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 0.9em;
 }
 
-.link-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 2px 8px;
+/* Step 1's overall box, above the groups: how the meanings connect. */
+.board-overall {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
 }
 
-.link-chip:not([data-on]) {
-  opacity: 0.6;
-  text-decoration: line-through;
-  text-decoration-color: var(--muted);
-}
-
-.link-chip [lang='ja'] {
-  font-size: 1.15em;
-}
-
-.link-chip-en {
-  font-size: 0.85em;
-  color: var(--paper-dim);
-}
-
-.link-mixup {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+.board-overall textarea {
+  width: 100%;
+  resize: vertical;
 }
 
 .link-add {
@@ -6386,7 +6372,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 /* The meanings card's steps after the board (review/Extras.tsx): 2, the
    same-meaning kanji, by Kodansha's sense, each put in a group or in none;
-   3, the group holding the original meaning. */
+   3, the kanji easy to mix up, by the reading they share. */
 .board-step {
   display: flex;
   flex-direction: column;

@@ -171,6 +171,7 @@ export function MeaningsBoard({
   only,
   dicts,
   candidates,
+  overall,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -210,6 +211,8 @@ export function MeaningsBoard({
    * kanji sorted into the groups (3, about the kanji, follows the board).
    */
   candidates?: Candidates
+  /** Step 1's overall box (how the groups connect), above the groups. */
+  overall?: React.ReactNode
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -601,6 +604,7 @@ export function MeaningsBoard({
       {onlyWord && <p className="board-followup">{t('oneWord', { word: onlyWord.headword })}</p>}
       {skipped.size > 0 && <p className="board-skipnote">{t('skippedNote', { n: skipped.size })}</p>}
       {preTicked.size > 0 && <p className="hint board-surenote">{t('nSure', { n: preTicked.size })}</p>}
+      {overall}
       {groups.map((g, i) =>
         bucket(
           g.id,
