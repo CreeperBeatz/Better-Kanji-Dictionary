@@ -569,6 +569,8 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if not isinstance(value, list) or any(not isinstance(c, str) or len(c) != 1 for c in value):
             raise _bad("parts_invalid", "parts must be single characters")
         parts = list(dict.fromkeys(value))  # 品 is 口 once: repeats collapse by design
+        if machine:
+            parts = side_forms(subject, parts)
         if subject in parts:
             raise _bad("parts_self", "a character cannot contain itself")
         strokes = [c for c in parts if c in STROKES]
@@ -913,6 +915,15 @@ def _bg_shown(subject: str) -> list[str] | None:
         built = _bg_built(subject) or []
         return [bg_overlay.gloss(wid, i, g) or "" for i, g in enumerate(built)]
     return bg_overlay.kanji(key, None) or _bg_built(subject)
+
+
+def side_forms(char: str, parts: list[str]) -> list[str]:
+    """A source's or a model's parts, each root kanji the graph builds `char` with in a side
+    form written as that form: 織 is 糹 + 戠 in the graph, so a proposal's 糸 becomes 糹
+    (竹 → ⺮, 人 → 亻, 止 → 龰 …). Only that way round: a proposal's form is never turned
+    into its root, which is often the more literal of the two (裏's 𧘇, 養's 𦍌)."""
+    now, roots = _children(char), forms.roots()
+    return [p if p in now else next((q for q in now if roots.get(q) == p and q not in parts), p) for p in parts]
 
 
 def _store_decomposition(char: str, parts: list[str] | None) -> None:

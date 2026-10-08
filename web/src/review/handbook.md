@@ -262,8 +262,12 @@ Take them in this order:
 1. **Base kanji stay whole.** 日 木 土 田 大 王 白 are learned as pictures.
    A split into lookalikes or strokes (日 = 口, 木 = 八 + 十) is neither a
    source's analysis nor a help: pick *no parts*.
-2. **The split the sources give.** KanjiVG first (it is drawn for Japanese),
-   then IDS and Цалта's book. 春 is 𡗗 + 日, as they all say, not 三 + 人 + 日.
+2. **The split the sources give, if it matches today's shape.** KanjiVG
+   first (it is drawn for Japanese), then IDS and Цалта's book. 春 is 𡗗 +
+   日, as they all say, not 三 + 人 + 日. When a source splits by history,
+   into pieces that no longer look like what is written (段's left half 𠩵,
+   岡's 网), don't take it: keep the character whole, with a visual split of
+   what you can see. History gets its own pass, once the base is done.
 3. **History, when no source helps.** The old form decides between two
    groupings visible today (従, below). It never adds a part that is gone.
 4. **Your own split** only when none of the above gives one a learner can
@@ -277,8 +281,7 @@ What each part *does* (meaning, sound) is not judged here for now.
 
 - **Bare strokes are not parts.** Data sources chop real parts into strokes
   (口 → 丨一); those splits are refused outright. A stroke can still be a
-  part after a confirmation, where it plainly is one (主 is 丶 + 王, the flame
-  on a lampstand).
+  part after a confirmation, where it plainly is one.
 - **A lookalike is not a part.** 午 visibly contains 干, but no source
   splits it so. Lookalikes go in *Similar → looks*, where a learner sees
   them side by side.
@@ -304,8 +307,9 @@ character stays whole for the graph and the study order; the split is kept
 apart from its parts.
 
 - **Only pieces a learner already knows and can see in it.** 土 = 十 + 一.
-  A piece may cover only part of the shape: 為 ends in 灬, so its visual
-  split is 灬 alone.
+  主 looks like 丶 + 王, though it is a lamp with its flame: whole, with that
+  visual split. A piece may cover only part of the shape: 為 ends in 灬, so
+  its visual split is 灬 alone.
 - **Not a stroke split.** 木 = 八 + 十 cuts strokes apart; it is not a way
   to read 木.
 

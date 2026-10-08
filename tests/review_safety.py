@@ -191,6 +191,12 @@ def main() -> int:
     review.revert(parent["id"], "u-test")
     check("reverting the card takes the visual split back", review.live_value("visual_split", "土") is None)
 
+    print("side forms")
+    check("a proposal's 糸 is written as the graph's 糹", review.side_forms("織", ["糸", "戠"]) == ["糹", "戠"])
+    check("a form is never turned into its root", review.side_forms("裏", ["亠", "里", "𧘇"]) == ["亠", "里", "𧘇"])
+    green = review.add_item("decomposition", "緑", ["糸", "彔"], "ids-diff")
+    check("a loaded proposal comes in with the side form", review._read()["items"][green["id"]]["proposed"] == ["糹", "彔"])
+
     print("backup")
     item = review.add_item("decomposition", "森", ["林", "木"], "ai:test")
     review.decide(item["id"], "accept", "u-test")
