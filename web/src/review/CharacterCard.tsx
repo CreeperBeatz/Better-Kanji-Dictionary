@@ -344,9 +344,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
 
   useKey((e) => {
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey) return
-    if (e.key === 'a' || e.key === 'Enter') {
-      if (!conflict && !unpicked) send(false)
-    } else if (e.key === 's') send(true)
+    if (e.key === 's') send(true)
     else return
     e.preventDefault()
   })

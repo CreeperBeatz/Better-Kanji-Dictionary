@@ -206,7 +206,7 @@ function cards(go: (i: number) => void): Card[] {
               Unsure of a word? <i>Not sure: leave for later</i>. It comes back at the end of the queue.
             </li>
             <li>
-              Single words arrive here too, after their kanji’s card. Keys <kbd>1</kbd>–<kbd>9</kbd> pick a group.
+              Single words arrive here too, after their kanji’s card. Keys <kbd>1</kbd>–<kbd>9</kbd> pick a group. Then click accept.
             </li>
           </List>
           <List label="Look out" tone="watch">
@@ -286,16 +286,14 @@ function cards(go: (i: number) => void): Card[] {
       kicker: 'Your tools',
       title: 'What you can do',
       glyph: '手',
-      lead: <>Every card has the same few buttons, and each has a key.</>,
+      lead: <>Every card has the same few buttons. Most have a key.</>,
       body: (
         <>
           <dl className="onb-keys">
-            <dt>
-              <kbd>a</kbd> accept
-            </dt>
+            <dt>accept</dt>
             <dd>
-              Take the card as shown. Once you change something it becomes <i>save my answer</i>. On a character’s card,{' '}
-              <kbd>a</kbd> saves the answers picked.
+              Take the card as shown. Once you change something it becomes <i>save my answer</i>. On a character’s card,
+              <i> save</i> saves the answers picked. No key does this: click the button.
             </dd>
             <dt>
               <kbd>s</kbd> skip

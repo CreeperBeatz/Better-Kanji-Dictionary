@@ -151,7 +151,7 @@ export function PageScan({ book, page, onEscape, extra }: { book: BookRef['book'
   const zoomTo = (z: number) => setZoom(Math.min(ZOOM_MAX, Math.max(1, Math.round(z * 100) / 100)))
   const turn = (d: number) => setN((p) => Math.max(1, p + d))
   // Heard before the review screen's own keys: Escape closes the page, not review mode, and
-  // a card's shortcuts (a accepts) do nothing behind it.
+  // a card's shortcuts (s skips) do nothing behind it.
   useKey(
     (e) => {
       if (typing(e.target)) return

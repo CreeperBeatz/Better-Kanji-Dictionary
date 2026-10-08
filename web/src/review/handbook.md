@@ -63,8 +63,8 @@ A character's card has no *reject*: each of its answers says what it does
 (*keep it as it is*, *no parts* …). Meanings and Bulgarian are shaped until
 they are right, then accepted, or skipped.
 
-**Keys:** `a` or `Enter` accepts (or saves), `r` rejects, `s` skips, `j` / `k`
-move to the next or previous card.
+**Keys:** `r` rejects, `s` skips, `j` / `k` move to the next or previous card.
+No key accepts or saves. Click the button, so that every accept is a choice.
 
 **A reason** is optional: *+ add a reason*, under the card, opens the field.
 History shows it with your decision.

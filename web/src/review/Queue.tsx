@@ -3,8 +3,8 @@
  * reviewer needs to judge each -- the glyphs, what would change upstream,
  * the old form, the word and its glosses.
  *
- * Keyboard: a or Enter accepts (or saves the edit), r rejects, s skips,
- * j / k move, and for a word's meaning 1-9 picks a group and decides at once.
+ * Keyboard: r rejects, s skips, j / k move, and for a word's meaning 1-9 picks
+ * a group. No key accepts: accepting is always a click on the button.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DictLinks } from './DictLinks'
@@ -428,21 +428,16 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
 
   useKey((e) => {
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey || !item) return
-    // A character's card takes a, Enter and s itself; j and k still move.
+    // A character's card takes s itself; j and k still move.
     if (item.type === 'character' && !['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
-    // Enter on a button (a group picked in step 2, skip …) presses that button, not accept.
-    if (e.key === 'Enter' && e.target instanceof HTMLElement && e.target.closest('button, a')) return
-    if (e.key === 'a' || e.key === 'Enter') {
-      if (!blocked) decideDraft()
-    }
-    else if (e.key === 'r' && canReject(item)) decide('reject')
+    if (e.key === 'r' && canReject(item)) decide('reject')
     else if (e.key === 's') decide('skip')
     else if (e.key === 'j' || e.key === 'ArrowDown') setAt((i) => Math.min(i + 1, (items?.length ?? 1) - 1))
     else if (e.key === 'k' || e.key === 'ArrowUp') setAt((i) => Math.max(i - 1, 0))
     else if (item.type === 'word_sense' && /^[1-9]$/.test(e.key) && groups) {
       const ids = [...groups.map((g) => g.id), CATCH_ALL]
       const pick = ids[Number(e.key) - 1]
-      if (pick) decideDraft(pick)
+      if (pick) setDraft(pick)
     } else return
     e.preventDefault()
   })
