@@ -5,17 +5,12 @@
  * does (server/decomp_sources.py). A label opens a note on every source and
  * how each splits the character.
  */
-import { useState } from 'react'
-import type { PartsFrom, PartsSource, SourceSplit } from '../api'
+import type { PartsSource, SourceSplit } from '../api'
 import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    splitBy: 'Split as',
-    by: 'by',
     whole: 'one piece',
-    details: 'Where this comes from',
-    hide: 'hide',
     agrees: 'splits it like this',
     differs: 'splits it',
     n_kanjivg: 'KanjiVG',
@@ -34,11 +29,7 @@ const S = strings(
     d_bkd: 'Better Kanji Dictionary’s own: no source splits it this way. Set by hand, or decided by a reviewer.',
   },
   {
-    splitBy: 'Разделен като',
-    by: 'според',
     whole: 'едно цяло',
-    details: 'Откъде идва това',
-    hide: 'скрийте',
     agrees: 'го разделя така',
     differs: 'го разделя',
     n_kanjivg: 'KanjiVG',
@@ -107,23 +98,5 @@ export function SourceNotes({ splits, now }: { splits: SourceSplit[]; now: strin
         )
       })}
     </dl>
-  )
-}
-
-/** The kanji page's line: "Split as 日 + 青 by KanjiVG · IDS", the notes behind it. */
-export function PartsSourceLine({ from, parts }: { from: PartsFrom; parts: string[] }) {
-  const t = S(useLang())
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="parts-from">
-      <p>
-        {t('splitBy')} <span lang="ja">{parts.length ? parts.join(' + ') : t('whole')}</span> {t('by')}{' '}
-        <SourceChips by={from.by} onOpen={() => setOpen((o) => !o)} />{' '}
-        <button type="button" className="clear parts-from-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          {open ? t('hide') : t('details')}
-        </button>
-      </p>
-      {open && <SourceNotes splits={from.splits} now={parts} />}
-    </div>
   )
 }

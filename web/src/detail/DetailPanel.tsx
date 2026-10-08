@@ -6,7 +6,6 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
 import { realMeanings } from './meanings'
 import { KanjiEditButton } from '../review/PageEdit'
-import { PartsSourceLine } from './PartsSource'
 import { FontStrip } from './FontStrip'
 import { Forms, useForms } from './Forms'
 import { StrokeOrder } from './StrokeOrder'
@@ -43,10 +42,6 @@ const S = strings(
     shapeNone: 'no meaning of its own',
     openEntry: 'Open this entry',
     openReading: 'Open {word}, read {reading}',
-    builtFrom_one: 'Built from {b} part',
-    builtFrom_other: 'Built from {b} parts',
-    acrossLevels: ' across {n} levels',
-    containedBy: 'Contained by {all}, of which {joyo} are jōyō.',
   },
   {
     grade: 'учи се в {n} клас',
@@ -74,24 +69,15 @@ const S = strings(
     shapeNone: 'няма свое значение',
     openEntry: 'Отворете тази статия',
     openReading: 'Отворете {word}, четено {reading}',
-    builtFrom_one: 'Изграден от {b} част',
-    builtFrom_other: 'Изграден от {b} части',
-    acrossLevels: ' на {n} нива',
-    containedBy: 'Съдържа се в {all}, от които {joyo} са джойо.',
   },
 )
 
 /**
- * What the panel needs of a character. The counts come with the graph, from
- * the server; the rest the device can answer by itself from the offline pack,
- * so the panel fills in before the graph arrives, and without a connection.
+ * What the panel needs of a character: the device can answer it by itself
+ * from the offline pack, so the panel fills in before the graph arrives, and
+ * without a connection.
  */
-export type DetailData = Pick<GraphResponse, 'focus' | 'strokes'> & {
-  counts?: GraphResponse['counts']
-  /** From the server only: the parts, and which sources split it so. */
-  components?: GraphResponse['components']
-  partsFrom?: GraphResponse['partsFrom']
-}
+export type DetailData = Pick<GraphResponse, 'focus' | 'strokes'>
 
 interface Props {
   data: DetailData
@@ -284,7 +270,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   }
 
   const level = levelOf(n, lang)
-  const counts = data.counts
 
   return (
     <section className="rail-section">
@@ -376,29 +361,12 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
 
       {!isPreview && forms && <Forms data={forms} onKanji={onKanji} />}
 
-      {!isPreview && counts && (
-        <p className="fanout-line">
-          {t.node(plural(t, 'builtFrom', counts.components), { b: <b>{counts.components}</b> })}
-          {counts.maxDepth > 1 && t('acrossLevels', { n: counts.maxDepth })}.
-          {counts.containers > 0 && (
-            <>
-              {' '}
-              {t.node('containedBy', { all: <b>{counts.containers}</b>, joyo: <b>{counts.containersJoyo}</b> })}
-            </>
-          )}
-        </p>
-      )}
-
-      {!isPreview && data.partsFrom && data.components && (
-        <PartsSourceLine from={data.partsFrom} parts={data.components.nodes.filter((x) => x.depth === 1).map((x) => x.char)} />
-      )}
-
       {!isPreview && <KanjiEditButton char={data.focus.char} onSignIn={onSignIn} />}
     </section>
   )
 }
 
 /** The plural form's key for `n`, so a sentence with markup in it can go through t.node. */
-function plural(t: ReturnType<typeof S>, key: 'appearsInside' | 'builtFrom', n: number) {
+function plural(t: ReturnType<typeof S>, key: 'appearsInside', n: number) {
   return `${key}_${new Intl.PluralRules(t.lang).select(n) === 'one' ? 'one' : 'other'}` as const
 }

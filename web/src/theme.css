@@ -8995,19 +8995,6 @@ button.review-part {
   color: var(--paper);
 }
 
-.parts-from {
-  font-size: 13px;
-  color: var(--paper-dim);
-}
-
-.parts-from p {
-  margin: 6px 0;
-}
-
-.parts-from-toggle {
-  font-size: 12px;
-}
-
 .source-notes {
   margin: 6px 0 10px;
   font-size: 12.5px;
