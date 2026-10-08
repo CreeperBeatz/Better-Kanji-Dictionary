@@ -431,9 +431,13 @@ drafted with them; check it like the groups, and fix or empty what is wrong.
   活きる. They are listed by the reading they share.
   - For each, pick *easy to mix up: show it* or *not worth showing*. A kept
     kanji is shown on this kanji's page, with the reading they share.
-  - Keep the pairs a learner really confuses (会う / 合う / 遭う). Drop the
-    ones only a dictionary would list (生 / 埋 いける).
-  - Pairs in Bunkacho's usage report or in our own data start as kept.
+  - Keep the pairs a learner really confuses (遇う / 逢う). Drop the ones
+    only a dictionary would list (生 / 埋 いける).
+  - **A pair Bunkacho explains is not asked.** 会 / 合 / 遭 (あう) are in
+    Bunkacho's usage report: the row says *Bunkacho explains this pair*, with
+    a link to its card under *which kanji*. The pair is kept, and that card
+    says how to tell the kanji apart.
+  - Pairs in our own data start as kept.
   - Kodansha lists none for most kanji: then the step says so, and there is
     nothing to do.
 
@@ -466,8 +470,8 @@ and the other words show what each group holds. Move the word, then accept.
 > **Question:** is the machine-translated Bulgarian right?
 
 Every Bulgarian gloss and kanji meaning was machine-translated. There is one
-card per word (the kanji's common or ranked words) and one per jōyō or JLPT
-kanji, most frequent first.
+card per word (the kanji's common or ranked words), one per jōyō or JLPT
+kanji, most frequent first, and one per *which kanji* card (あう, はやい).
 
 ### Meanings come first
 
@@ -481,6 +485,9 @@ don't hold anything up). Then the card shows them:
 
 That tells you which sense the translation must carry; the word's own
 English is still what you translate.
+
+A *which kanji* card's Bulgarian waits the same way, until its English card
+is accepted. Then it has the same lines as that card, in the same places.
 
 ### Checking a card
 
@@ -500,6 +507,9 @@ English is still what you translate.
 - **A kanji card's lines.** Under the groups, check the Bulgarian of each
   group's line and of *how its meanings connect*, against the English beside
   them.
+- **A which-kanji card.** Every line of the usage card: each spelling's
+  definition, its examples, the notes. Each shows the Japanese and the
+  accepted English; check the Bulgarian under them against both.
 
 ## Which kanji to write
 
@@ -507,13 +517,17 @@ English is still what you translate.
 
 One card per kun reading that several kanji share (はやい: 早い for time,
 速い for speed). The Japanese is Bunkacho's report on 異字同訓 (2014) and
-stays as it is; the English and the Bulgarian are machine translations.
+stays as it is; the English is a machine translation. These cards explain
+the pairs that a meanings card's step 3 does not ask about.
 
-- **Definitions.** Each spelling's definition in English and in Bulgarian:
-  faithful, and short. The difference between the spellings is the point.
-- **Examples.** 2–4 per spelling, picked from the report's. Check the kana
-  and both translations; remove (✕) one that does not show the difference.
+- **Definitions.** Each spelling's definition in English: faithful, and
+  short. The difference between the spellings is the point.
+- **Examples.** 2–4 per spelling, picked from the report's. Check the
+  English; remove (✕) one that does not show the difference. The reading
+  under each example was made by machine: ✎ corrects it when it is wrong.
 - **Notes.** The report's notes on borderline cases, translated.
+- **The Bulgarian is not here.** Once this card is accepted, its Bulgarian
+  waits under *Bulgarian*, line for line as you left this card.
 
 ## Reports
 

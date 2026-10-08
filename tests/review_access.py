@@ -270,8 +270,22 @@ def main() -> int:
         check("a usage card is queued", any(i["id"] == u["id"] for i in call("GET", "/api/review/queue?type=usage", "reviewer")[1]["items"]))
         status, d = call("GET", f"/api/review/items/{u['id']}", "reviewer")
         check("its context names its kanji", status == 200 and [k["char"] for k in d["context"]["kanji"]] == ["早", "速"], d.get("context"))
-        status, _ = call("POST", f"/api/review/items/{u['id']}/decide", "reviewer", {"action": "accept"})
-        check("and accepted", status == 200 and review.live_value("usage", "はやい")["spellings"][1]["defEn"] == "fast")
+        check("it explains the pair 早 速, for the meanings card", review._usage_pairs(review._read(), "早") == {"速": {"reading": "はやい", "item": u["id"]}})
+        ub = review.add_item("bg", "usage:はやい", review._usage_bg(card), "mt:test")
+        in_bg = lambda: any(i["id"] == ub["id"] for i in call("GET", "/api/review/queue?type=bg", "reviewer")[1]["items"])  # noqa: E731
+        check("its Bulgarian card waits for the English", ub["status"] == "open" and not in_bg())
+        edited = {**card, "spellings": [{**card["spellings"][0], "examples": []}, card["spellings"][1]]}
+        status, _ = call("POST", f"/api/review/items/{u['id']}/decide", "reviewer", {"action": "edit", "value": edited})
+        check("the English is decided (an example dropped)", status == 200 and review.live_value("usage", "はやい")["spellings"][1]["defEn"] == "fast")
+        check("now the Bulgarian card is in the queue", in_bg())
+        ub = review._read()["items"][ub["id"]]
+        check("redrafted line for line as decided", ub["proposed"] == {"spellings": [{"def": "рано", "examples": []}, {"def": "бързо", "examples": []}], "notes": []}, ub["proposed"])
+        bad = call("POST", f"/api/review/items/{ub['id']}/decide", "reviewer", {"action": "edit", "value": {"spellings": [{"def": "x", "examples": ["y"]}, {"def": "z", "examples": []}], "notes": []}})
+        check("a Bulgarian line the English lacks is refused", bad[0] == 400, bad)
+        status, _ = call("POST", f"/api/review/items/{ub['id']}/decide", "reviewer", {"action": "edit", "value": {"spellings": [{"def": "рано, отрано", "examples": []}, {"def": "бързо", "examples": []}], "notes": []}})
+        check("the Bulgarian is decided", status == 200 and review.live_value("bg", "usage:はやい")["spellings"][0]["def"] == "рано, отрано")
+        merged = review._usage_with_bg(review.live_value("usage", "はやい"), review.live_value("bg", "usage:はやい"))
+        check("and goes into the usage card where it is shown", merged["spellings"][0]["defBg"] == "рано, отрано" and merged["spellings"][1]["defEn"] == "fast", merged)
         check("one spelling is not a card", review.add_items([{"type": "usage", "subject": "x", "proposed": {"spellings": card["spellings"][:1]}, "source": "t"}]) == (0, 1))
 
         print("admin-only lists")

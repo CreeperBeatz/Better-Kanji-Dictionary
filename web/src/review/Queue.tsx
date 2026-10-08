@@ -19,6 +19,7 @@ import {
   type QueueItem,
   type TaskType,
   type TaskValue,
+  type UsageBg,
   type UsageCard,
 } from '../api'
 import { strings, useLang } from '../i18n'
@@ -28,7 +29,7 @@ import { withIds } from '../sets'
 import { CATCH_ALL, strokesOk, ValueEditor, ValueView } from './editors'
 import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements } from './board'
 import { MeaningsBoard } from './MeaningsBoard'
-import { BgCard } from './BgCard'
+import { BgCard, BgUsage } from './BgCard'
 import { CharacterCard } from './CharacterCard'
 import { clearDraft, readDraft, writeDraft } from './drafts'
 import { DictionariesPanel } from './DictionariesPanel'
@@ -148,8 +149,8 @@ const LIVE_ON_PAGE: TaskType[] = ['bg']
 
 /** What a card is about, for "Something else is wrong?": its word, or its kanji. */
 function reportSubject(i: QueueItem): string | null {
-  if (i.type === 'report') return null
-  if (i.type === 'bg') return i.subject
+  if (i.type === 'report' || i.type === 'usage') return null
+  if (i.type === 'bg') return i.subject.startsWith('usage:') ? null : i.subject
   if (i.type === 'word_sense') return `word:${i.subject.split('|')[1]}`
   return `kanji:${i.subject.split('|')[0]}`
 }
@@ -587,7 +588,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       }
                     />
                   )}
-                  {detail?.id === item.id && item.type === 'bg' && <ResearchOpen prompt={() => bgPrompt(detail, (draft ?? []) as string[])} />}
+                  {detail?.id === item.id && item.type === 'bg' && !item.subject.startsWith('usage:') && <ResearchOpen prompt={() => bgPrompt(detail, (draft ?? []) as string[])} />}
                 </div>
               </header>
 
@@ -622,6 +623,9 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               <div className="queue-edit">
                 {item.type === 'bg' ? (
                   detail?.id === item.id ? (
+                    item.subject.startsWith('usage:') ? (
+                      <BgUsage detail={detail} value={draft as UsageBg | null} onChange={setDraft} />
+                    ) : (
                     <BgCard
                       detail={detail}
                       value={(draft ?? []) as string[]}
@@ -633,6 +637,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       extras={extras}
                       onExtras={setExtras}
                     />
+                    )
                   ) : (
                     <p className="hint">{t('loading')}</p>
                   )
@@ -693,7 +698,13 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                   </>
                 )}
                 {board && extras && detail?.id === item.id && !isFollowUp(item) && (
-                  <MixupsStep char={item.subject} value={extras} onChange={setExtras} candidates={candidatesOf(item.evidence ?? detail.evidence)} />
+                  <MixupsStep
+                    char={item.subject}
+                    value={extras}
+                    onChange={setExtras}
+                    candidates={candidatesOf(item.evidence ?? detail.evidence)}
+                    explained={detail.context.usagePairs}
+                  />
                 )}
                 <label className="review-field">
                   <span>{t('reason')}</span>

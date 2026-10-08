@@ -31,6 +31,8 @@ const word = (id: string, headword?: string): Target => ({ href: `/word/${id}`, 
 
 /** The dictionary pages an item is about, the main one first. */
 function dictTargets(type: TaskType, subject: string, label?: string): Target[] {
+  // A usage card is about a reading (あう), not one kanji: no page of its own.
+  if (type === 'usage' || subject.startsWith('usage:')) return []
   if (type === 'bg' || type === 'report') {
     const [kind, rest] = subject.split(':')
     if (!rest) return []

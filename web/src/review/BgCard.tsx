@@ -1,11 +1,12 @@
 /**
  * A Bulgarian card: the machine translation of one word (a gloss per sense,
- * beside the English) or one kanji (its meanings), to confirm or correct.
+ * beside the English), one kanji (its meanings) or one usage card (each of
+ * its lines, beside its Japanese and English), to confirm or correct.
  * The answer is the list itself; the queue accepts it unchanged or saves the
  * edit, and what is saved shows on the site at once (server/bg_overlay.py).
  */
 import type { ReactNode } from 'react'
-import type { BookGloss, BookKeyword, ItemDetail, KanjiExtras, MeaningGroup, Sense } from '../api'
+import type { BookGloss, BookKeyword, ItemDetail, KanjiExtras, MeaningGroup, Sense, UsageBg } from '../api'
 import { BookGlossPanel, BookKeywordPanel } from './BookEvidence'
 import { BgExtras } from './Extras'
 import { strings, useLang } from '../i18n'
@@ -27,6 +28,9 @@ const S = strings(
     noMeaning: 'brings no meaning to this word',
     notPlaced: 'not placed in a group',
     latin: 'Has Latin letters. Correct for a name or an abbreviation (NHK). In a Bulgarian word (граничa), search does not find it.',
+    usageHint: 'Check each Bulgarian line against the English and the Japanese beside it. Fix what is wrong or unnatural; leave what is right.',
+    usageWaits: 'This usage card’s English is not accepted yet.',
+    usageNotes: 'Notes on borderline cases',
   },
   {
     bulgarian: 'Български',
@@ -43,6 +47,9 @@ const S = strings(
     noMeaning: 'не внася значение в тази дума',
     notPlaced: 'не е разпределена в група',
     latin: 'Има латински букви. Вярно е за име или съкращение (NHK). В българска дума (граничa) търсенето не я намира.',
+    usageHint: 'Сверете всеки български ред с английския и японския до него. Поправете грешното или неестественото; оставете вярното.',
+    usageWaits: 'Английският на тази карта за употреба още не е приет.',
+    usageNotes: 'Бележки за граничните случаи',
   },
 )
 
@@ -73,7 +80,7 @@ export function BgCard({
   const lang = useLang()
   const t = S(lang)
   const c = detail.context
-  const built = c.built ?? []
+  const built = Array.isArray(c.built) ? c.built : []
   // What Dani's print dictionaries give (pipeline/book_sources.py): a kanji's keyword, a word's glosses.
   const book = detail.evidence?.book
 
@@ -153,6 +160,96 @@ export function BgCard({
       )}
       {c.senses && (c.senses.some((g) => g.about) || extras?.link) && (
         <BgExtras groups={c.senses} aboutBg={aboutBg} onAboutBg={onAboutBg} extras={extras} onExtras={onExtras} />
+      )}
+    </div>
+  )
+}
+
+/** One line of a usage card: its Japanese and English, and the Bulgarian to check; outlined when it differs from the machine's. */
+function UsageLine({
+  ja,
+  en,
+  value,
+  built,
+  long = false,
+  onChange,
+}: {
+  ja: string | null
+  en: string | null
+  value: string | null | undefined
+  built: string | null | undefined
+  long?: boolean
+  onChange: (v: string | null) => void
+}) {
+  const t = S(useLang())
+  const props = {
+    className: 'assoc-text bg-input',
+    lang: 'bg',
+    value: value ?? '',
+    'aria-label': `${t('bulgarian')}: ${en ?? ja ?? ''}`,
+    onChange: (e: { target: { value: string } }) => onChange(e.target.value || null),
+  }
+  return (
+    <div className="bg-usage-line" data-changed={(value ?? '') !== (built ?? '') || undefined}>
+      <span className="usage-ja" lang="ja">
+        {ja}
+      </span>
+      <span className="bg-en">{en}</span>
+      {long ? <textarea rows={2} maxLength={800} {...props} /> : <input maxLength={300} {...props} />}
+      <LatinWarn text={value ?? ''} />
+    </div>
+  )
+}
+
+/**
+ * A usage card's Bulgarian (usage:はやい): every line of the card as its English
+ * was accepted -- each spelling's definition, its examples, the notes -- with
+ * the Japanese and the English beside the Bulgarian to check.
+ */
+export function BgUsage({ detail, value, onChange }: { detail: ItemDetail; value: UsageBg | null; onChange: (v: UsageBg) => void }) {
+  const t = S(useLang())
+  const card = detail.context.usage
+  const built = Array.isArray(detail.context.built) ? null : (detail.context.built ?? null)
+  if (!card || !value) return <p className="hint">{t('usageWaits')}</p>
+  const setSpelling = (i: number, patch: Partial<UsageBg['spellings'][number]>) =>
+    onChange({ ...value, spellings: value.spellings.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
+  return (
+    <div className="bg-card bg-usage">
+      <p className="bg-head" lang="ja">
+        {card.reading}
+      </p>
+      <p className="hint">{t('usageHint')}</p>
+      {card.spellings.map((s, i) => (
+        <section key={i} className="usage-spelling">
+          <h4 lang="ja">{s.kanji}</h4>
+          <UsageLine ja={s.def} en={s.defEn} value={value.spellings[i]?.def} built={built?.spellings[i]?.def} onChange={(v) => setSpelling(i, { def: v })} />
+          {s.examples.map((x, k) => (
+            <UsageLine
+              key={k}
+              ja={x.ja}
+              en={x.en}
+              value={value.spellings[i]?.examples[k]}
+              built={built?.spellings[i]?.examples[k]}
+              onChange={(v) => setSpelling(i, { examples: value.spellings[i].examples.map((y, m) => (m === k ? v : y)) })}
+            />
+          ))}
+        </section>
+      ))}
+      {card.notes.length > 0 && (
+        <section className="usage-notes">
+          <h4>{t('usageNotes')}</h4>
+          {card.notes.map((n, i) => (
+            <UsageLine
+              key={i}
+              ja={n.ja}
+              en={n.en}
+              long
+              value={value.notes[i]}
+              built={built?.notes[i]}
+              onChange={(v) => onChange({ ...value, notes: value.notes.map((x, j) => (j === i ? v : x)) })}
+            />
+          ))}
+        </section>
       )}
     </div>
   )

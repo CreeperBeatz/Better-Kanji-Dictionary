@@ -20,7 +20,7 @@
  * Also the usage card: which kanji to write for a shared kun reading, from
  * Bunkacho's report, with its translations to check.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { KanjiDictionaries, KanjiExtras, LinkCandidate, MeaningGroup, UsageCard } from '../api'
 import { strings, useLang } from '../i18n'
 import { DictionaryLink } from './dictLink'
@@ -31,7 +31,9 @@ const S = strings(
     overall: 'The meanings together',
     overallHint: 'One sentence on how the groups connect, in their order. Learners read it above the groups. Leave it empty when they do not connect.',
     mixups: '3. Kanji easy to mix up with {char}',
-    mixupsHint: 'Each of these kanji shares a kun reading with {char}, so a learner can write the wrong one. Keep a kanji if learners really mix the two up: it is shown on the {char} page with the reading they share. Pairs in Bunkacho’s usage report or in our own data start as kept.',
+    mixupsHint: 'Each of these kanji shares a kun reading with {char}, so a learner can write the wrong one. Keep a kanji if learners really mix the two up: it is shown on the {char} page with the reading they share. A pair Bunkacho’s usage report explains is kept, and its usage card says how to tell them apart. Pairs in our own data start as kept.',
+    explained: 'Bunkacho explains this pair:',
+    explainedTitle: 'Its usage card (which kanji to write), in a new tab',
     mixupsNone: 'Kodansha lists no kanji that shares a kun reading with {char}. Nothing to check here.',
     mixupsShared: 'read this way by {chars}',
     mixYes: 'easy to mix up: show it',
@@ -54,7 +56,9 @@ const S = strings(
     unnamed: '(unnamed group)',
     bgAbout: 'In Bulgarian: what the kanji does in each group',
     bgLink: 'How its meanings connect, in Bulgarian',
-    usageHint: 'Bunkacho’s report says which kanji to write for this reading. Check each translation against the Japanese; keep the examples that show the difference best.',
+    usageHint: 'Bunkacho’s report says which kanji to write for this reading. Check each English translation against the Japanese; keep the examples that show the difference best. The Bulgarian is checked on its own Bulgarian card, once this one is accepted.',
+    kana: 'reading',
+    kanaEdit: 'Correct the reading (it was made by machine)',
     def: 'Definition',
     examplesUsage: 'Examples',
     notes: 'Notes on borderline cases',
@@ -65,7 +69,9 @@ const S = strings(
     overall: 'Значенията заедно',
     overallHint: 'Едно изречение за това как се свързват групите, по техния ред. Учещите го четат над групите. Оставете го празно, когато не се свързват.',
     mixups: '3. Канджи, които лесно се бъркат с {char}',
-    mixupsHint: 'Всяко от тези канджи има общо четене кун с {char}, затова учещият може да напише грешното. Оставете канджи, ако учещите наистина бъркат двете: показва се на страницата на {char} с общото четене. Двойките от доклада на Бункачо или от нашите данни започват като оставени.',
+    mixupsHint: 'Всяко от тези канджи има общо четене кун с {char}, затова учещият може да напише грешното. Оставете канджи, ако учещите наистина бъркат двете: показва се на страницата на {char} с общото четене. Двойка, която докладът на Бункачо обяснява, остава, и картата ѝ за употреба казва как да се различат. Двойките от нашите данни започват като оставени.',
+    explained: 'Бункачо обяснява тази двойка:',
+    explainedTitle: 'Картата ѝ за употреба (кое канджи да се пише), в нов раздел',
     mixupsNone: 'Kodansha не дава канджи с общо четене кун с {char}. Тук няма какво да се проверява.',
     mixupsShared: 'така се четат {chars}',
     mixYes: 'лесно се бъркат: покажете го',
@@ -88,7 +94,9 @@ const S = strings(
     unnamed: '(група без име)',
     bgAbout: 'На български: какво прави канджито във всяка група',
     bgLink: 'Как се свързват значенията, на български',
-    usageHint: 'Докладът на Бункачо казва кое канджи да се пише за това четене. Сверете всеки превод с японския; оставете примерите, които показват разликата най-добре.',
+    usageHint: 'Докладът на Бункачо казва кое канджи да се пише за това четене. Сверете всеки английски превод с японския; оставете примерите, които показват разликата най-добре. Българският се проверява на своя българска карта, щом тази се приеме.',
+    kana: 'четене',
+    kanaEdit: 'Поправете четенето (направено е машинно)',
     def: 'Определение',
     examplesUsage: 'Примери',
     notes: 'Бележки за граничните случаи',
@@ -355,18 +363,23 @@ interface MixupRow {
  * Step 3 of a meanings card: the kanji easy to mix up with this one. Each
  * shares a kun reading with it (生 and 活, いきる), so a learner can write the
  * wrong one. Listed by the shared reading; for each, keep it (shown to
- * learners) or not.
+ * learners) or not. A pair a usage card explains (Bunkacho's 異字同訓: 会 and
+ * 合, あう) is kept and not asked: the usage card says how to tell them apart
+ * (Dani, 2026-10-08).
  */
 export function MixupsStep({
   char,
   value,
   onChange,
   candidates,
+  explained = {},
 }: {
   char: string
   value: KanjiExtras
   onChange: (v: KanjiExtras) => void
   candidates: Candidates
+  /** The kanji a usage card writes for the same reading: its reading and item (server/review.py _usage_pairs). */
+  explained?: Record<string, { reading: string; item: string }>
 }) {
   const t = S(useLang())
   const offered = candidates.mixups ?? []
@@ -376,6 +389,16 @@ export function MixupsStep({
     // Kept by someone, though Kodansha does not list it.
     ...value.mixups.filter((m) => !offered.some((o) => o.char === m.char)).map((m) => ({ ...m, gloss: null, en: null })),
   ]
+  // A pair only Bunkacho has (更 and 老, ふける).
+  for (const [c, e] of Object.entries(explained))
+    if (!rows.some((r) => r.char === c)) rows.push({ char: c, reading: e.reading, gloss: null, en: null })
+  // Bunkacho's pairs are kept: put in the value any that is not (a draft from before this rule).
+  const missing = rows.filter((r) => explained[r.char] && !kept(r.char))
+  useEffect(() => {
+    if (missing.length) onChange({ ...value, mixups: [...value.mixups, ...missing.map((r) => ({ char: r.char, reading: r.reading }))] })
+    // only when what is missing changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missing.map((r) => r.char).join('')])
   const byReading = new Map<string, MixupRow[]>()
   for (const r of rows) byReading.set(r.reading, [...(byReading.get(r.reading) ?? []), r])
   const put = (r: MixupRow, on: boolean) =>
@@ -401,14 +424,23 @@ export function MixupsStep({
                   {r.gloss}
                   {r.en && <span className="hint"> · {t('mainMeaning', { en: r.en })}</span>} <DictionaryLink char={r.char} />
                 </span>
-                <span className="step-picks" role="group" aria-label={r.char}>
-                  <button type="button" className="search-filter" data-on={kept(r.char) || undefined} aria-pressed={kept(r.char)} onClick={() => put(r, true)}>
-                    {t('mixYes')}
-                  </button>
-                  <button type="button" className="search-filter step-none" data-on={!kept(r.char) || undefined} aria-pressed={!kept(r.char)} onClick={() => put(r, false)}>
-                    {t('mixNo')}
-                  </button>
-                </span>
+                {explained[r.char] ? (
+                  <span className="step-explained hint">
+                    {t('explained')}{' '}
+                    <a href={`/review/queue/usage/${encodeURIComponent(explained[r.char].item)}`} target="_blank" rel="noopener" lang="ja" title={t('explainedTitle')}>
+                      {explained[r.char].reading} ↗
+                    </a>
+                  </span>
+                ) : (
+                  <span className="step-picks" role="group" aria-label={r.char}>
+                    <button type="button" className="search-filter" data-on={kept(r.char) || undefined} aria-pressed={kept(r.char)} onClick={() => put(r, true)}>
+                      {t('mixYes')}
+                    </button>
+                    <button type="button" className="search-filter step-none" data-on={!kept(r.char) || undefined} aria-pressed={!kept(r.char)} onClick={() => put(r, false)}>
+                      {t('mixNo')}
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -475,6 +507,8 @@ export function BgExtras({
 /** A usage card: each spelling's definition and examples, the report's Japanese beside the translations. */
 export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (v: UsageCard) => void }) {
   const t = S(useLang())
+  // The kana being corrected, by spelling and example ("0:2"): shown as text until then.
+  const [kanaOpen, setKanaOpen] = useState<Set<string>>(new Set())
   const setSpelling = (i: number, patch: Partial<UsageCard['spellings'][number]>) =>
     onChange({ ...value, spellings: value.spellings.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
   return (
@@ -487,25 +521,38 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
             {s.def}
           </p>
           <label className="review-field">
-            <span>{t('def')} · EN</span>
+            <span>{t('def')}</span>
             <input className="assoc-text" value={s.defEn ?? ''} maxLength={300} onChange={(e) => setSpelling(i, { defEn: e.target.value || null })} />
-          </label>
-          <label className="review-field">
-            <span>{t('def')} · BG</span>
-            <input className="assoc-text" lang="bg" value={s.defBg ?? ''} maxLength={300} onChange={(e) => setSpelling(i, { defBg: e.target.value || null })} />
           </label>
           <span className="hint">{t('examplesUsage')}</span>
           <ul className="usage-examples">
             {s.examples.map((x, k) => {
               const setEx = (patch: Partial<typeof x>) => setSpelling(i, { examples: s.examples.map((y, m) => (m === k ? { ...y, ...patch } : y)) })
+              const key = `${i}:${k}`
               return (
                 <li key={k}>
-                  <span lang="ja" className="usage-ja">
-                    {x.ja}
+                  <span className="usage-ja">
+                    <span lang="ja">{x.ja}</span>
+                    {kanaOpen.has(key) ? (
+                      <input
+                        className="assoc-text usage-kana-input"
+                        lang="ja"
+                        value={x.kana ?? ''}
+                        maxLength={300}
+                        aria-label={t('kana')}
+                        autoFocus
+                        onChange={(e) => setEx({ kana: e.target.value || null })}
+                      />
+                    ) : (
+                      <span className="usage-kana" lang="ja">
+                        {x.kana}{' '}
+                        <button type="button" className="clear usage-kana-edit" title={t('kanaEdit')} aria-label={t('kanaEdit')} onClick={() => setKanaOpen((o) => new Set(o).add(key))}>
+                          ✎
+                        </button>
+                      </span>
+                    )}
                   </span>
-                  <input className="assoc-text" lang="ja" value={x.kana ?? ''} maxLength={300} aria-label="kana" onChange={(e) => setEx({ kana: e.target.value || null })} />
-                  <input className="assoc-text" value={x.en ?? ''} maxLength={300} aria-label="EN" onChange={(e) => setEx({ en: e.target.value || null })} />
-                  <input className="assoc-text" lang="bg" value={x.bg ?? ''} maxLength={300} aria-label="BG" onChange={(e) => setEx({ bg: e.target.value || null })} />
+                  <input className="assoc-text" value={x.en ?? ''} maxLength={300} aria-label={t('examplesUsage')} onChange={(e) => setEx({ en: e.target.value || null })} />
                   <button type="button" className="clear" title={t('removeExample')} onClick={() => setSpelling(i, { examples: s.examples.filter((_, m) => m !== k) })}>
                     ✕
                   </button>
@@ -518,18 +565,21 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
       {value.notes.length > 0 && (
         <section className="usage-notes">
           <h4>{t('notes')}</h4>
-          {value.notes.map((n, i) => {
-            const setNote = (patch: Partial<typeof n>) => onChange({ ...value, notes: value.notes.map((x, j) => (j === i ? { ...x, ...patch } : x)) })
-            return (
-              <div key={i} className="usage-note">
-                <p lang="ja" className="hint">
-                  {n.ja}
-                </p>
-                <textarea className="assoc-text" rows={2} maxLength={800} value={n.en ?? ''} aria-label="EN" onChange={(e) => setNote({ en: e.target.value || null })} />
-                <textarea className="assoc-text" lang="bg" rows={2} maxLength={800} value={n.bg ?? ''} aria-label="BG" onChange={(e) => setNote({ bg: e.target.value || null })} />
-              </div>
-            )
-          })}
+          {value.notes.map((n, i) => (
+            <div key={i} className="usage-note">
+              <p lang="ja" className="hint">
+                {n.ja}
+              </p>
+              <textarea
+                className="assoc-text"
+                rows={2}
+                maxLength={800}
+                value={n.en ?? ''}
+                aria-label={t('notes')}
+                onChange={(e) => onChange({ ...value, notes: value.notes.map((x, j) => (j === i ? { ...x, en: e.target.value || null } : x)) })}
+              />
+            </div>
+          ))}
         </section>
       )}
     </div>

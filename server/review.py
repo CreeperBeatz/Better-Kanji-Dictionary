@@ -13,6 +13,8 @@ The task types (TASK-forms-review.md §5, and more since):
                                                  "examples": [{"ja", "kana", "en", "bg"}]}], "notes": [{"ja", "en", "bg"}]}
     word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"
     bg             subject word:123 | kanji:生   value: the Bulgarian, per sense / per meaning
+                   | usage:はやい・…    value: {"spellings": [{"def", "examples": [...]}], "notes": [...]}, the
+                                        Bulgarian of the accepted usage card, field for field
     report         subject word:123 | kanji:生   value: {"about": english | ..., "text": ...}; never live
 
 Parts, forms and part meanings are decided together, on one card per
@@ -23,7 +25,8 @@ for the same character at once, so the three answers can't contradict.
 A kanji's extras (its origin, how its groups link, the kanji it is easy to
 mix up with) are decided on its meanings card with its groups, as one
 (`decide(..., extras=...)`); their Bulgarian on its Bulgarian card. A usage
-card (which kanji to write for はやい) is a card of its own.
+card (which kanji to write for はやい) is a card of its own; its Bulgarian is
+a Bulgarian card (usage:はやい), queued once the English is accepted.
 
 An **item** is a change waiting for a person: a `proposal` (newly marked data
 loaded into the queue: an IDS diff, an AI draft) or a `suggestion` (a user
@@ -662,6 +665,16 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             if not 1 <= len(out) <= 12:
                 raise _bad("bg_meanings", "a kanji has 1 to 12 Bulgarian meanings")
             return out
+        if kind == "usage" and key:
+            english = live_value("usage", key, data)
+            if english is None and pending_ok:  # queued now, shaped like the English as drafted
+                english = next((i["proposed"] for i in (data or _read())["items"].values()
+                                if i["type"] == "usage" and i["subject"] == key and i["status"] != "withdrawn"), None)
+            if english is None:
+                raise _bad("bg_waits", "the usage card's English is not accepted yet")
+            if value is None:
+                return None
+            return _usage_bg_clean(value, english)
         raise _bad("bad_subject", "that is not a subject of this type")
 
     if type_ == "report":
@@ -752,6 +765,40 @@ def _usage(value: Any) -> dict:
             "spellings": spellings, "notes": notes}
 
 
+def _usage_bg(card: dict | None) -> dict | None:
+    """A usage card's Bulgarian, field for field: each spelling's definition and examples, the notes."""
+    if not card:
+        return None
+    return {"spellings": [{"def": s.get("defBg"), "examples": [x.get("bg") for x in s.get("examples") or []]} for s in card["spellings"]],
+            "notes": [n.get("bg") for n in card.get("notes") or []]}
+
+
+def _usage_bg_clean(value: Any, english: dict) -> dict:
+    """A usage card's Bulgarian, cleaned, shaped like its accepted English."""
+    want = _usage_bg(english)
+    bad = _bad("bg_invalid", "one Bulgarian line per line of the usage card")
+    if not isinstance(value, dict) or not isinstance(value.get("spellings"), list) or not isinstance(value.get("notes") or [], list):
+        raise bad
+    if len(value["spellings"]) != len(want["spellings"]) or len(value.get("notes") or []) != len(want["notes"]):
+        raise bad
+    spellings = []
+    for got, w in zip(value["spellings"], want["spellings"]):
+        if not isinstance(got, dict) or not isinstance(got.get("examples") or [], list) or len(got.get("examples") or []) != len(w["examples"]):
+            raise bad
+        spellings.append({"def": _prose(got.get("def"), 300), "examples": [_prose(x, 300) for x in got.get("examples") or []]})
+    return {"spellings": spellings, "notes": [_prose(n, 800) for n in value.get("notes") or []]}
+
+
+def _usage_with_bg(card: dict, bg: dict | None) -> dict:
+    """A usage card with its reviewed Bulgarian put in: what the site and the export show."""
+    if not bg:
+        return card
+    return {**card, "spellings": [
+        {**s, "defBg": b["def"], "examples": [{**x, "bg": xb} for x, xb in zip(s["examples"], b["examples"])]}
+        for s, b in zip(card["spellings"], bg["spellings"])
+    ], "notes": [{**n, "bg": nb} for n, nb in zip(card.get("notes") or [], bg["notes"])]}
+
+
 def live_value(type_: str, subject: str, data: dict | None = None) -> Any:
     """The overlay's value for the subject, None when nothing overrides the built data."""
     if type_ == "report":
@@ -797,6 +844,11 @@ def current(type_: str, subject: str, data: dict | None = None) -> Any:
 def _bg_built(subject: str) -> list[str] | None:
     """The machine-translated Bulgarian a card starts from, as built."""
     kind, key = _target(subject)
+    if kind == "usage":
+        data = _read()
+        card = live_value("usage", key, data) or next(
+            (i["proposed"] for i in data["items"].values() if i["type"] == "usage" and i["subject"] == key and i["status"] != "withdrawn"), None)
+        return _usage_bg(card)
     if kind == "word":
         rows = query("SELECT s.ord, b.gloss FROM sense s LEFT JOIN sense_bg b ON b.word_id = s.word_id AND b.ord = s.ord "
                      "WHERE s.word_id = ? ORDER BY s.ord", (int(key),))
@@ -808,6 +860,8 @@ def _bg_built(subject: str) -> list[str] | None:
 def _bg_shown(subject: str) -> list[str] | None:
     """What the site shows now: reviewed, else built."""
     kind, key = _target(subject)
+    if kind == "usage":
+        return live_value("bg", subject) or _bg_built(subject)
     if kind == "word":
         wid = int(key)
         built = _bg_built(subject) or []
@@ -839,6 +893,11 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
         _set_live(data, type_, subject, None)
     elif type_ in ("form_link", "part_meaning", "kanji_extras", "usage"):
         _set_live(data, type_, subject, {**value, "decision": decision})
+        if type_ == "usage":
+            # Its Bulgarian card, still open, starts from the card as decided: the same lines, in the same places.
+            b = next((i for i in data["items"].values() if i["type"] == "bg" and i["subject"] == f"usage:{subject}" and i["status"] == "open"), None)
+            if b:
+                _update(data, b, proposed=_usage_bg(value))
     elif type_ == "kanji_senses":
         before = _senses(data, subject) or []
         _set_live(data, type_, subject, {"senses": value, "decision": decision})
@@ -852,6 +911,8 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
 def _bg_live(subject: str, value: list[str] | None) -> None:
     """Show reviewed Bulgarian at once, everywhere it is read (server/bg_overlay.py)."""
     kind, key = _target(subject)
+    if kind == "usage":
+        return  # read with its usage card (_usage_with_bg), not from the overlay
     if kind == "word":
         bg_overlay.set_word(int(key), value)
         return
@@ -870,7 +931,7 @@ def load_bg_overlay() -> None:
         kind, key = _target(subject)
         if kind == "word":
             words[int(key)] = entry["value"]
-        else:
+        elif kind == "kanji":
             kanji[key] = entry["value"]
     bg_overlay.load(words, kanji)
 
@@ -1427,6 +1488,8 @@ def _view(item: dict, names: dict, data: dict) -> dict:
     kind, key = _target(item["subject"])
     if item["type"] in ("bg", "report") and kind == "word":
         out["label"] = _label(int(key)) or item["subject"]
+    elif item["type"] == "bg" and kind == "usage":
+        out["label"] = key
     elif item["type"] == "word_sense":
         out["label"] = _label(_word_of(item["subject"]))
     out["createdBy"] = names.get(item["created_by"])
@@ -1459,7 +1522,7 @@ def queue(user_id: str, type_: str | None = None, origin: str | None = None, lim
         # A word's meaning waits until its kanji's meanings are accepted.
         and (i["type"] != "word_sense" or _char(i["subject"]) in accepted)
         # Bulgarian waits for the meanings too: the groups are its context.
-        and (i["type"] != "bg" or not _bg_waits(i["subject"], pending))
+        and (i["type"] != "bg" or not _bg_waits(i["subject"], pending, data))
         and (origin is None or i["origin"] == origin)
     ]
     mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
@@ -1623,9 +1686,12 @@ def _headword(word_id: int) -> str:
     return _headwords.get(word_id, "")
 
 
-def _bg_waits(subject: str, pending: set[str]) -> bool:
-    """A Bulgarian card waits while its kanji's groups, or any of its word's kanji's, are still to be made."""
+def _bg_waits(subject: str, pending: set[str], data: dict) -> bool:
+    """A Bulgarian card waits while its kanji's groups, or any of its word's kanji's, are still to be made;
+    a usage card's, while its English is."""
     kind, key = _target(subject)
+    if kind == "usage":
+        return key not in data["live"]["usage"]
     if kind == "kanji":
         return key in pending
     return any(c in pending for c in _headword(int(key)))
@@ -1683,6 +1749,7 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
         else:
             out["board"] = board(char, data)
             out["extras"] = _extras_context(data, char)
+            out["usagePairs"] = _usage_pairs(data, char)
         return out
     if type_ == "usage":
         # The kanji the card is about, with their meanings, to check the translations against.
@@ -1716,6 +1783,8 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
             return {"word": _fetch_word(int(key))}
         return {"char": key, **_kanji_info(key), "forms": forms.forms_of(key)}
     if type_ == "bg":
+        if kind == "usage":
+            return {"usage": live_value("usage", key, data), "built": _bg_built(subject)}
         if kind == "word":
             wid = int(key)
             # For each of the word's kanji with accepted groups: the group it is in here.
@@ -1731,6 +1800,26 @@ def context(type_: str, subject: str, data: dict | None = None) -> dict:
         return {"char": key, **_kanji_info(key), "built": _bg_built(subject), "senses": _senses(data, key),
                 "extras": _extras_context(data, key)}
     return {"forms": forms.forms_of(subject)}
+
+
+def _usage_pairs(data: dict, char: str) -> dict[str, dict]:
+    """The kanji a usage card writes for the same kun reading as `char` (Bunkacho's 異字同訓; 会 -> 合, 遭
+    for あう): other kanji -> the card's reading and item. The usage card explains the pair, so the
+    meanings card does not ask whether to show it (Dani, 2026-10-08). A kanji of `char`'s own spelling
+    (出 in 出会う against 出合う) is no pair."""
+    out: dict[str, dict] = {}
+    for i in data["items"].values():
+        if i["type"] != "usage" or i["status"] == "withdrawn":
+            continue
+        card = live_value("usage", i["subject"], data) or i["proposed"]
+        sets = [{c for c in s["kanji"] if _is_kanji(c)} for s in (card or {}).get("spellings", [])]
+        mine = set().union(*[s for s in sets if char in s])
+        if not mine:
+            continue
+        for s in sets:
+            for c in s - mine:
+                out.setdefault(c, {"reading": card.get("reading") or i["subject"], "item": i["id"]})
+    return out
 
 
 def _is_kanji(c: str) -> bool:
@@ -2171,7 +2260,8 @@ def export() -> dict[str, int]:
         "kanji": {c: {k: x for k, x in v.items() if k != "decision"} for c, v in sorted(data["live"]["kanji_extras"].items())},
     }
     EXPORTS["meaning"].write_text(json.dumps(meaning, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    usage = {r: {k: x for k, x in v.items() if k != "decision"} for r, v in sorted(data["live"]["usage"].items())}
+    usage = {r: _usage_with_bg({k: x for k, x in v.items() if k != "decision"}, (data["live"]["bg"].get(f"usage:{r}") or {}).get("value"))
+             for r, v in sorted(data["live"]["usage"].items())}
     EXPORTS["usage"].write_text(json.dumps({
         "source": "文化審議会国語分科会「「異字同訓」の漢字の使い分け例（報告）」2014; translated and edited by Better Kanji Dictionary",
         "cards": usage}, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
@@ -2183,7 +2273,8 @@ def export() -> dict[str, int]:
     bg: dict[str, dict] = {"words": {}, "kanji": {}}
     for subject, v in data["live"]["bg"].items():
         kind, key = _target(subject)
-        bg["words" if kind == "word" else "kanji"][key] = v["value"]
+        if kind in ("word", "kanji"):  # a usage card's is in its usage card, above
+            bg["words" if kind == "word" else "kanji"][key] = v["value"]
     bg = {"words": dict(sorted(bg["words"].items(), key=lambda kv: int(kv[0]))), "kanji": dict(sorted(bg["kanji"].items()))}
     EXPORTS["bg"].write_text(json.dumps(bg, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return {"decomposition": len(ov), "form_link": len(data["live"]["form_link"]), "part_meaning": len(parts),
@@ -2195,8 +2286,9 @@ def export() -> dict[str, int]:
 def load_bg(dry_run: bool = False) -> dict[str, int]:
     """Queue the machine-translated Bulgarian for checking: one card per word and
     per kanji in scope (server/scope.py), most frequent first, kanji before
-    words, all after the other stages in the "all" list. A subject that has a
-    card already, open or decided, is not queued again."""
+    words, all after the other stages in the "all" list; and one per usage
+    card, which waits for its English. A subject that has a card already, open
+    or decided, is not queued again."""
     known = subjects("bg")
     rows = []
     for r in query(f"SELECT k.char, k.freq FROM kanji k JOIN kanji_bg b ON b.char = k.char WHERE {scope.KANJI}"):
@@ -2209,8 +2301,13 @@ def load_bg(dry_run: bool = False) -> dict[str, int]:
         pri = 0.8 - r["nf"] / 100 if r["nf"] else (0.3 - (6 - r["jlpt"]) / 100 if r["jlpt"] else 0.2)
         rows.append({"type": "bg", "subject": subject, "proposed": _bg_built(subject), "source": "mt:claude-sonnet-5",
                      "priority": round(pri, 5)})
+    # A usage card's Bulgarian: queued now, waiting until its English is accepted.
+    for i in [i for i in _read()["items"].values() if i["type"] == "usage" and i["status"] != "withdrawn"]:
+        card = live_value("usage", i["subject"]) or i["proposed"]
+        rows.append({"type": "bg", "subject": f"usage:{i['subject']}", "proposed": _usage_bg(card),
+                     "source": "mt:claude-sonnet (usage)", "priority": 0.5})
     rows = [r for r in rows if r["subject"] not in known]
-    counts = {"kanji": sum(1 for r in rows if r["subject"].startswith("kanji:")), "words": sum(1 for r in rows if r["subject"].startswith("word:"))}
+    counts = {k: sum(1 for r in rows if r["subject"].startswith(f"{k}:")) for k in ("kanji", "word", "usage")}
     if dry_run:
         return counts
     added, refused = add_items(rows)

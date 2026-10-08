@@ -6503,11 +6503,58 @@ html[data-nav]::view-transition-old(tabs):only-child {
   gap: 4px;
 }
 
+/* An example: its Japanese with the reading under it (✎ corrects it), the English, remove. */
 .usage-examples li {
   display: grid;
-  grid-template-columns: minmax(8em, 1fr) minmax(8em, 1fr) minmax(8em, 1.2fr) minmax(8em, 1.2fr) auto;
+  grid-template-columns: minmax(10em, 1fr) minmax(10em, 1.3fr) auto;
   gap: 6px;
   align-items: center;
+}
+
+.usage-ja {
+  display: flex;
+  flex-direction: column;
+}
+
+.usage-kana {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+.usage-kana-edit {
+  padding: 0 2px;
+  font-size: 0.9em;
+  opacity: 0.6;
+}
+
+.usage-kana-edit:hover,
+.usage-kana-edit:focus-visible {
+  opacity: 1;
+}
+
+/* A usage card's Bulgarian card: each line's Japanese, its English, the Bulgarian under them. */
+.bg-usage-line {
+  display: grid;
+  grid-template-columns: minmax(10em, 1fr) minmax(10em, 1fr);
+  gap: 2px 14px;
+  padding: 4px 0;
+}
+
+.bg-usage-line .bg-input,
+.bg-usage-line textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  resize: vertical;
+}
+
+.bg-usage-line[data-changed] .assoc-text {
+  border-color: var(--ai);
+}
+
+/* Step 3: a pair Bunkacho's usage card explains, in place of the choice. */
+.step-explained a {
+  margin-left: 2px;
+  color: var(--ai);
 }
 
 .usage-note {

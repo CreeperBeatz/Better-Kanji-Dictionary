@@ -439,11 +439,18 @@ export interface UsageCard {
   notes: { ja: string | null; en: string | null; bg: string | null }[]
 }
 
+/** A usage card's Bulgarian (a bg card, usage:<reading>): line for line as its accepted English. */
+export interface UsageBg {
+  spellings: { def: string | null; examples: (string | null)[] }[]
+  notes: (string | null)[]
+}
+
 /**
  * What each type's value is: parts, a link, meaning groups, one group's id, or
- * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings.
+ * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings --
+ * or a usage card's lines.
  */
-export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | KanjiExtras | UsageCard | string | null
+export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | KanjiExtras | UsageCard | UsageBg | string | null
 
 /** A change waiting in the labeling queue (server/review.py). */
 export interface QueueItem {
@@ -576,7 +583,7 @@ export interface ItemDetail extends QueueItem {
     senses?: MeaningGroup[] | null
     word?: Word
     /** Bulgarian: the machine translation the card started from. */
-    built?: string[] | null
+    built?: string[] | UsageBg | null
     /** Bulgarian word cards: for each of its kanji with accepted groups, the group it is in here. */
     groups?: { char: string; group: string | null; en: string | null; bg: string | null }[]
     /** kanji_senses: its common words (and any placed), each in its group now. */
@@ -596,6 +603,10 @@ export interface ItemDetail extends QueueItem {
     extras?: { item: string | null; value: KanjiExtras | null; kokuji: boolean }
     /** usage: the kanji the card is about. */
     kanji?: { char: string; kanjidic?: string[]; curated?: string | null }[]
+    /** kanji_senses: the kanji a usage card writes for the same kun reading, its reading and item (会: 合, 遭 あう). */
+    usagePairs?: Record<string, { reading: string; item: string }>
+    /** a usage card's Bulgarian: the card's accepted English, to translate line for line. */
+    usage?: UsageCard | null
   }
 }
 
