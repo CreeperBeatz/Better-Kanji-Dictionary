@@ -33,6 +33,8 @@ export interface KanjiNode {
   upJlpt?: number | null
   /** On containers: the other form of the focus it is built from -- 糹 for 細 under 糸. */
   form?: string
+  /** On components: the kanji this part is a form of, its root -- 水 for 氵. */
+  root?: KanjiNode
 }
 
 /** Where a decomposition comes from (server/decomp_sources.py); `bkd` is this dictionary's own. */
