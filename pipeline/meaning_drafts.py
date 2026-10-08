@@ -74,6 +74,16 @@ def _db() -> sqlite3.Connection:
     return db
 
 
+def word_gloss(db: sqlite3.Connection, word_id: int, senses: int = 4, width: int = 50) -> str:
+    """A word's English for placing it: its first senses, numbered ("1. life; living 2. livelihood").
+    Not the first sense alone: a word with several was placed by that one, which is
+    not always the sense the kanji carries in it."""
+    rows = db.execute("SELECT gloss FROM sense WHERE word_id = ? ORDER BY ord LIMIT ?", (word_id, senses)).fetchall()
+    glosses = [(r["gloss"] or "").strip() for r in rows]
+    glosses = [g if len(g) <= width else g[:width].rsplit(";", 1)[0] or g[:width] for g in glosses if g]
+    return glosses[0] if len(glosses) == 1 else " ".join(f"{i}. {g}" for i, g in enumerate(glosses, 1))
+
+
 def _kanji(db: sqlite3.Connection, levels: list[int], chars: str | None = None) -> list[dict]:
     if chars:
         where, params = f"k.char IN ({','.join('?' * len(chars))})", list(chars)
@@ -88,9 +98,7 @@ def _kanji(db: sqlite3.Connection, levels: list[int], chars: str | None = None) 
     out = []
     for r in rows:
         words = db.execute(
-            "SELECT w.id, w.headword, w.reading, "
-            "(SELECT s.gloss FROM sense s WHERE s.word_id = w.id ORDER BY s.ord LIMIT 1) AS gloss "
-            "FROM word_char wc JOIN word w ON w.id = wc.word_id "
+            "SELECT w.id, w.headword, w.reading FROM word_char wc JOIN word w ON w.id = wc.word_id "
             f"WHERE wc.char = ? AND {scope.WORDS} ORDER BY w.nf IS NULL, w.nf, LENGTH(w.headword), w.id",
             (r["char"],),
         ).fetchall()
@@ -101,7 +109,7 @@ def _kanji(db: sqlite3.Connection, levels: list[int], chars: str | None = None) 
             "on": json.loads(r["on_yomi"] or "[]"),
             "kun": json.loads(r["kun_yomi"] or "[]"),
             "freq": r["freq"],
-            "words": [[w["id"], w["headword"], w["reading"], (w["gloss"] or "").split(";")[0][:60]] for w in words],
+            "words": [[w["id"], w["headword"], w["reading"], word_gloss(db, w["id"])] for w in words],
         })
     return out
 

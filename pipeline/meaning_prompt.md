@@ -61,6 +61,9 @@ Japanese words?*
 For **every** word listed under a kanji, pick the group the kanji is using
 **in that word**.
 
+- A word's English lists its first senses, numbered (1. … 2. …), when it
+  has several. Read them all: the first is not always the one the kanji
+  explains.
 - Judge by **what this kanji contributes to the word**, not by what the
   word means overall. In 先生 the 生 is "born, live" (one born before
   you), not "teacher". In 生ビール 生 is "raw / fresh", not "beer".

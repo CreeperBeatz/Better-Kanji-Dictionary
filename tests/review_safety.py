@@ -8,6 +8,8 @@
 - Accepting a proposal whose subject changed after it was made asks first.
 - A change that fails halfway leaves store.json and the Bulgarian overlay as they were.
 - A backup carries store.json.
+- A meanings card kept, rejected or withdrawn takes its extras with it.
+- A reloaded source does not ask again what was already answered.
 
 The review state lives in a temporary directory; the real database is read.
 """
@@ -122,6 +124,36 @@ def main() -> int:
     except RuntimeError:
         pass
     check("the Bulgarian overlay is put back", bg_overlay.gloss(life, 0, "x") == shown)
+
+    print("a meanings card's extras go with it")
+    groups = [{"id": "活.live", "en": "live, active"}]
+    m = review.add_item("kanji_senses", "活", groups, "ai:test")
+    x = review.add_item("kanji_extras", "活", {"link": "living", "mixups": []}, "ai:test")
+    review.decide(m["id"], "keep", "u-test")
+    items = review._read()["items"]
+    check("kept with its card", items[x["id"]]["status"] == "kept", items[x["id"]]["status"])
+    keep = next(d for d in review._read()["decisions"] if d["item"] == m["id"])
+    review.revert(keep["id"], "u-test")
+    items = review._read()["items"]
+    check("and reopened with it", items[m["id"]]["status"] == "open" and items[x["id"]]["status"] == "open")
+    review.withdraw([m["id"]], "redrafted")
+    check("withdrawn with it", review._read()["items"][x["id"]]["status"] == "withdrawn")
+    sug = review.add_item("kanji_senses", "活", groups, "u-other", origin="suggestion", by="u-other")
+    x2 = review.add_item("kanji_extras", "活", {"link": "alive", "mixups": []}, "ai:test")
+    review.decide(sug["id"], "reject", "u-test")
+    check("a rejected suggestion leaves the extras open", review._read()["items"][x2["id"]]["status"] == "open")
+
+    print("a reloaded source")
+    row = {"type": "form_link", "subject": "罒|皿", "proposed": {"kind": "looks_like", "note": "looks like 皿"}, "source": "ai:test"}
+    check("a proposal already accepted is not asked again", review.add_items([row]) == (0, 0))
+    item = review.add_item("decomposition", "林", None, "check:test")
+    review.decide(item["id"], "keep", "u-test")
+    check_row = {"type": "decomposition", "subject": "林", "proposed": None, "source": "check:test"}
+    check("a check kept, with the site unchanged, is not asked again", review.add_items([check_row]) == (0, 0))
+    item = review.add_item("decomposition", "林", ["木", "木"], "ai:test")
+    review.decide(item["id"], "edit", "u-test", ["木", "十"])
+    again = review.add_items([check_row])
+    check("once the site changed, the check is asked again", again == (1, 0), (again, review.current("decomposition", "林")))
 
     print("backup")
     item = review.add_item("decomposition", "森", ["林", "木"], "ai:test")

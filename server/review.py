@@ -97,6 +97,8 @@ TYPES = ("decomposition", "form_link", "part_meaning", "kanji_senses", "word_sen
 # Decided on another type's card, never listed in the queue on their own: a
 # kanji's extras ride on its meanings card.
 RIDERS = ("kanji_extras",)
+# An item a person (or the rule) answered; withdrawn ones were never answered.
+DECIDED = ("accepted", "edited", "kept", "rejected", "auto-accepted")
 # The three types a character's card decides together; the queue lists them as one stage.
 CHARACTER_TYPES = ("decomposition", "form_link", "part_meaning")
 CHARACTER = "character"
@@ -1144,11 +1146,16 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
     row that fails validation is skipped and counted, not raised.
     """
     with _change() as data:
-        open_keys = {
-            (i["type"], i["subject"], json.dumps(i["proposed"], sort_keys=True, ensure_ascii=False))
-            for i in data["items"].values() if i["status"] == "open"
-        }
-        added = refused = 0
+        key_of = lambda i: (i["type"], i["subject"], json.dumps(i["proposed"], sort_keys=True, ensure_ascii=False))  # noqa: E731
+        open_keys = {key_of(i) for i in data["items"].values() if i["status"] == "open"}
+        # Asked and answered: the same proposal again is not asked again. A check (nothing proposed)
+        # is, if what the site shows has changed since it was kept.
+        by_id = {d["id"]: d for d in data["decisions"]}
+        answered: dict[tuple, list[dict]] = {}
+        for i in data["items"].values():
+            if i["status"] in DECIDED:
+                answered.setdefault(key_of(i), []).append(by_id.get(i["decision"]) or {})
+        added = refused = again = 0
         for r in rows:
             try:
                 proposed = validate(r["type"], r["subject"], r.get("proposed"), data, pending_ok=True, machine=True)
@@ -1158,10 +1165,16 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
             key = (r["type"], r["subject"], json.dumps(proposed, sort_keys=True, ensure_ascii=False))
             if key in open_keys:
                 continue
+            if key in answered and (proposed is not None or any(
+                    "shown" not in d or d["shown"] == current(r["type"], r["subject"], data) for d in answered[key])):
+                again += 1
+                continue
             open_keys.add(key)
             _new_item(data, r["type"], r["subject"], proposed, r["source"], "proposal",
                       _text(r.get("reason")), r.get("evidence"), "system", r.get("priority", 0.0))
             added += 1
+        if again:
+            log.info("add_items: %d already decided, not asked again", again)
         return added, refused
 
 
@@ -1227,8 +1240,13 @@ def withdraw(item_ids: list[str], why: str) -> int:
         for item_id in item_ids:
             i = data["items"].get(item_id)
             if i and i["status"] == "open" and i["origin"] == "proposal":
+                rider = _rider_of(data, i)
                 _update(data, i, status="withdrawn", withdrawn_at=_now(), withdrawn_why=_text(why))
                 n += 1
+                # Its extras go too, unless another meanings proposal for the kanji is still open to show them.
+                if rider and not any(_rider_of(data, j) for j in data["items"].values()
+                                     if j["type"] == "kanji_senses" and j["subject"] == i["subject"] and j["status"] == "open"):
+                    _update(data, rider, status="withdrawn", withdrawn_at=_now(), withdrawn_why=_text(why))
         return n
 
 
@@ -1288,6 +1306,13 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
             d["shown"] = current(type_, subject, data)
         item = _close(data, item, "rejected" if action == "reject" else "kept", d)
         data["decisions"].append(d)
+        rider = _rider_of(data, item)
+        if rider:
+            # Its extras were drafted with it and are shown only on its card: they go the same way.
+            c = _decision(action, "kanji_extras", subject, None, None, user_id, rider["id"], None)
+            c["parent"] = d["id"]
+            _close(data, rider, "rejected" if action == "reject" else "kept", c)
+            data["decisions"].append(c)
         return dict(item)
 
     if action == "accept" and item["proposed"] is None:
@@ -1317,6 +1342,15 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
     if extras is not None and (type_ == "kanji_senses" or (type_ == "bg" and subject.startswith("kanji:"))):
         _decide_extras(data, _target(subject)[1] if type_ == "bg" else subject, extras, user_id, d["id"])
     return dict(item)
+
+
+def _rider_of(data: dict, item: dict) -> dict | None:
+    """A kanji's open extras item, when `item` is the meanings proposal whose card shows it
+    (not a suggestion, not a follow-up of skipped words)."""
+    if item["type"] != "kanji_senses" or item["origin"] != "proposal" or follow_up_words(item):
+        return None
+    return next((i for i in data["items"].values()
+                 if i["type"] == "kanji_extras" and i["subject"] == item["subject"] and i["status"] == "open"), None)
 
 
 def _decide_extras(data: dict, char: str, value: Any, user_id: str, parent: str) -> None:
@@ -1523,6 +1557,12 @@ def _reopen_decided(data: dict, d: dict, user_id: str) -> dict:
     r = _decision("reopen", d["type"], d["subject"], None, None, user_id, d["item"], f"reopen {d['id']}", supersedes=d["id"])
     r["reopens"] = True
     _reverted(data, d, r)
+    # A meanings card's extras, kept or rejected with it, come back with it.
+    for c in [c for c in data["decisions"] if c.get("parent") == d["id"] and not c.get("reverted_by")]:
+        if c["action"] in ("keep", "reject"):
+            rc = _decision("reopen", c["type"], c["subject"], None, None, user_id, c["item"], f"reopen {c['id']}", supersedes=c["id"])
+            rc["reopens"], rc["parent"] = True, r["id"]
+            _reverted(data, c, rc)
     return r
 
 

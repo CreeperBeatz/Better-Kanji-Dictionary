@@ -8,6 +8,8 @@
     # one Sonnet subagent per data/drafts/decomp/in/*.json, following pipeline/decomp_prompt.md
     python pipeline/decomp_drafts.py check [--batch D-000]
     python pipeline/decomp_drafts.py load [--dry-run] [--review-dir DIR]
+    python pipeline/decomp_drafts.py atomic [--load] [--review-dir DIR]
+                                                           # whole here, split by a source: one proposal per split
 
 Why (2026-10-06 data review): a decomposition reaches the queue only when
 IDS or KanjiVG disagree with it, or the cost ranking picks it. Mistakes all
@@ -28,6 +30,10 @@ in scope (the closure):
 - **a source keeps it whole** (D-018, Dani's rule: a base kanji stays
   whole): KanjiVG, IDS or Цалта give it no parts, and we split it
   (止 = 丄 卜, 糸 = 小 幺).
+- **whole here, a source splits it**: the other way round. Every other rule
+  looks only at characters with parts, so one wrongly kept whole never came
+  up (2026-10-08 audit). `atomic` puts each source's split on its card as a
+  proposal beside *keep it as it is*; most are base kanji, which stay whole.
 - **weak backing**: fewer than two of KanjiVG, IDS and Цалта split it as we
   do -- only one source does, they all split it otherwise, or none can be
   read (具, 合, 直). Two sources agreeing is the bar for a split no person
@@ -35,8 +41,9 @@ in scope (the closure):
 
 Every parts card -- these and the ones already queued -- then gets a draft:
 the parts it should have (or none), whether that keeps or changes today's,
-and a short proof: what each part does in it (meaning, sound, or the form of
-a kanji in that position) and what the old form shows. The loader puts the
+and a short proof: which sources split it so (KanjiVG, IDS, Цалта), or why it
+is a base kanji kept whole, and what the old form shows. What each part does
+(meaning, sound) is not judged for now (decomposition rule, 2026-10-06). The loader puts the
 draft on the card as evidence; where it names parts nobody proposed, it also
 becomes a proposal of its own. A flagged character with no card gets one.
 """
@@ -112,6 +119,9 @@ def flags() -> tuple[dict[str, list[str]], dict]:
         if x in BASE_CHECK and children.get(x):
             out[x].append("a base pictograph every source splits: whole, or their split? (D-018)")
         if not parts:
+            split = whole_but_split(x, splits)
+            if split:
+                out[x].append("whole here, but " + "; ".join(f"{name} splits it {''.join(p)}" for name, p in split.items()))
             continue
         if len(parts) == 1:
             out[x].append(f"one part only: {parts[0]}")
@@ -141,6 +151,56 @@ def flags() -> tuple[dict[str, list[str]], dict]:
             elif not whole and not unread:
                 out[x].append("no source we can read splits it")
     return dict(out), {"db": db, "children": children, "nodes": nodes, "scope": scope, "strokes": st, "ids": ids, "kvg": kvg}
+
+
+def whole_but_split(x: str, splits: dict[str, dict[str, list[str]]]) -> dict[str, list[str]]:
+    """For a character our graph keeps whole: each source that splits it into real parts
+    (no bare stroke, not itself), by the source's name."""
+    got = splits.get(x, {})
+    return {name: got[s] for s, name in BACKERS
+            if got.get(s) and x not in got[s] and not any(p in BARE_STROKES or rs.is_stroke(p) for p in got[s])}
+
+
+def atomic(load_them: bool, review_dir: Path | None) -> None:
+    """The characters kept whole that a source splits, with no parts card yet: listed, and with
+    `load_them` put in the queue -- one proposal per distinct split, named for the sources giving it."""
+    if load_them:
+        proposals.use_review_dir(review_dir)
+    db = proposals.connect()
+    children, _ = rs.graph(db)
+    in_scope = set(review_scope.kanji(db))
+    scope = rs.closure(children, review_scope.kanji(db))
+    splits = source_splits(db)
+    eq = rs.equivalence(db)
+    asked = {i["subject"] for i in review._read()["items"].values() if i["type"] == "decomposition" and i["status"] != "withdrawn"}
+    ids, kvg = rs.babelstone(), rs.kanjivg()
+    rows = []
+    for x in sorted(scope):
+        if children.get(x) or x in asked:
+            continue
+        split = whole_but_split(x, splits)
+        if not split:
+            continue
+        by_value: dict[frozenset, list[str]] = defaultdict(list)
+        for name, p in split.items():
+            by_value[frozenset(eq.get(c, c) for c in p)].append(name)
+        users = len(review.users_of(x))
+        for names in by_value.values():
+            parts = split[names[0]]
+            src = "+".join(f"{s}-diff" for s, name in BACKERS if name in names)
+            rows.append({"type": "decomposition", "subject": x, "proposed": parts, "source": src,
+                         "reason": f"kept whole here; {' and '.join(names)} split{'s' if len(names) == 1 else ''} it as {''.join(parts)}",
+                         "evidence": {"ids": ids.get(x), "kanjivg": kvg.get(x)},
+                         "priority": round(min(users, 50) / 10, 2)})
+        print(f"  {x}  {'kanji' if x in in_scope else 'part '}  in {users:>3} kanji   "
+              + "; ".join(f"{' + '.join(n)}: {''.join(split[n[0]])}" for n in by_value.values()))
+    chars = {r["subject"] for r in rows}
+    print(f"{len(chars)} characters ({len(chars & in_scope)} kanji in scope), {len(rows)} proposals")
+    if load_them:
+        added, refused = review.add_items(rows)
+        print(f"loaded: {added} added, {refused} refused")
+    else:
+        print("nothing written; --load puts them in the queue")
 
 
 def source_splits(db) -> dict[str, dict[str, list[str]]]:
@@ -348,6 +408,9 @@ def main() -> int:
     c = sub.add_parser("check")
     c.add_argument("--batch")
     proposals.load_parser(sub, "load")
+    at = sub.add_parser("atomic")
+    at.add_argument("--load", action="store_true", help="put them in the queue (default: only list them)")
+    at.add_argument("--review-dir", type=Path)
     args = ap.parse_args()
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "flags":
@@ -360,6 +423,8 @@ def main() -> int:
         prepare(args.new, args.audit, args.seed, args.exclude)
     elif args.cmd == "check":
         check(args.batch)
+    elif args.cmd == "atomic":
+        atomic(args.load, args.review_dir)
     else:
         load(args.dry_run, args.review_dir)
     return 0

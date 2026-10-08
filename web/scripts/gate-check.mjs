@@ -70,6 +70,22 @@ check('both done: accept is open', (await hint()) === '' && (await accept.isEnab
 await page.locator('.review-step[data-n="2"] .review-step-toggle').click()
 check('opening a step again keeps it checked', (await hint()) === '')
 
+console.log('work kept in the browser')
+const kokuItem = db.prepare("SELECT id FROM item WHERE type = 'kanji_senses' AND subject = '国' AND status = 'open'").get().id
+const seiItem = db.prepare("SELECT id FROM item WHERE type = 'kanji_senses' AND subject = '生' AND status = 'open'").get().id
+const key = (id) => `betterrtk:review-draft:${id}`
+await page.evaluate(([a, b]) => {
+  localStorage.setItem(a, JSON.stringify({ reason: 'begun on an older proposal', base: 'not-this-one', at: Date.now() }))
+  localStorage.setItem(b, JSON.stringify({ reason: 'kept before fingerprints', at: Date.now() }))
+}, [key(kokuItem), key(seiItem)])
+await open('国')
+check('work begun on another proposal is thrown away', (await page.evaluate((k) => localStorage.getItem(k), key(kokuItem))) === null)
+check('and the card says so', (await page.locator('.queue-item').textContent()).includes('The proposal changed after you began this card'))
+await open('生')
+const legacy = JSON.parse((await page.evaluate((k) => localStorage.getItem(k), key(seiItem))) ?? 'null')
+check('work from before fingerprints is kept', legacy?.reason === 'kept before fingerprints', JSON.stringify(legacy))
+check('without a notice', !(await page.locator('.queue-item').textContent()).includes('The proposal changed'))
+
 check('nothing was submitted', decided === 0, decided)
 check('no page errors', errors.length === 0, errors.join(' | '))
 console.log(failed ? `${failed} failed` : 'all good')

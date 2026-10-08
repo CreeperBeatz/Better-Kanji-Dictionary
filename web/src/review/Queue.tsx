@@ -34,7 +34,7 @@ import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements
 import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard, BgUsage } from './BgCard'
 import { CharacterCard } from './CharacterCard'
-import { clearDraft, readDraft, writeDraft } from './drafts'
+import { checkDraft, clearDraft, fingerprint, readDraft, writeDraft } from './drafts'
 import { DictionariesPanel } from './DictionariesPanel'
 import { Evidence } from './Evidence'
 import { candidatesOf, MixupsStep, OverallMeaning } from './Extras'
@@ -86,6 +86,7 @@ const S = strings(
     left: '{n} waiting',
     confidence: 'model confidence {n}',
     confirmFirst: 'Confirm every word in the groups first: {n} left',
+    workDropped: 'The proposal changed after you began this card. Your unsaved work on it was thrown away.',
     checkSteps: 'Check step {steps} first. Press "Done" at the bottom of the step.',
   },
   {
@@ -130,6 +131,7 @@ const S = strings(
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
     confirmFirst: 'Първо потвърдете всяка дума в групите: остават {n}',
+    workDropped: 'Предложението се промени, след като започнахте тази карта. Незапазената ви работа по нея е изхвърлена.',
     checkSteps: 'Първо проверете стъпка {steps}. Натиснете „Готово“ в края на стъпката.',
   },
 )
@@ -263,10 +265,15 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // editor would get the last item's value, and a list of parts handed to the
   // meaning-group editor throws.
   const [draftFor, setDraftFor] = useState<string | null>(null)
+  // The item whose kept work was thrown away because its proposal changed since.
+  const [droppedFor, setDroppedFor] = useState<string | null>(null)
   if (item && item.id !== draftFor) {
-    // Work left on this item before a reload comes back (review/drafts.ts).
+    // Work left on this item before a reload comes back (review/drafts.ts), if it was begun on this proposal.
+    // A character's card checks its own (CharacterCard.tsx).
+    const dropped = item.type !== 'character' && checkDraft(item.id, fingerprint([item.proposed, item.current]))
     const kept = readDraft(item.id)
     setDraftFor(item.id)
+    setDroppedFor(dropped ? item.id : null)
     setDraft(kept && 'draft' in kept ? (kept.draft ?? null) : (item.proposed ?? item.current))
     setReason(kept?.reason ?? '')
     setSkipped(new Set(kept?.skipped))
@@ -745,7 +752,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 key={item.id}
                 reason={reason}
                 onReason={setReason}
-                problem={problem}
+                problem={problem ?? (droppedFor === item.id ? t('workDropped') : null)}
                 actions={
                   <>
                     <button

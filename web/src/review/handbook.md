@@ -651,15 +651,17 @@ KanjiVG and KRADFILE split it as 丿 + 干.
 - **The current part is a lookalike.** 午 is 丿 over 干 stroke for stroke,
   but 午 is a pestle (it is the 午 in 杵 "pestle") and 干 is a shield. All
   66 kanji built on 午 (許 缶 陶 謡 遥 御 …) would depend on "shield".
-- **Nothing smaller does a job in 午**, so it is atomic.
+- **No source gives a real split.** IDS cuts strokes, and KanjiVG's 丿 + 干
+  is the lookalike. 午 is a picture, learned whole like a base kanji, so it
+  is atomic.
 
 > **Decision:** *no parts*, and save. The
 > likeness to 干 千 牛 belongs in *Similar → looks*.
 
 > **Lesson:** a character can visibly contain a kanji without being built
 > from it. Strict order is about the parts a character is built from, not
-> every shape it contains. When neither the proposal nor the current parts
-> do a job in the character, make it atomic.
+> every shape it contains. When the only splits on offer are strokes or
+> lookalikes, keep the character whole.
 
 ### 従: the old form picks the grouping
 
