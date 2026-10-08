@@ -8105,6 +8105,21 @@ html[data-nav]::view-transition-old(tabs):only-child {
   white-space: nowrap;
 }
 
+/* "Open in dictionary" as an icon: an open book with an arrow out of its corner. */
+.dict-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -2px;
+  padding: 0 2px;
+  color: var(--ai);
+  opacity: 0.75;
+}
+
+.dict-tab-icon:hover,
+.dict-tab-icon:focus-visible {
+  opacity: 1;
+}
+
 /* The printed page, over everything: fits the screen; a click shows it at full size to scroll. */
 .book-popup-panel {
   width: min(96vw, 1100px);
@@ -9374,4 +9389,33 @@ button.review-part {
 
 .dict-link a {
   text-decoration: none;
+}
+
+/* The dictionary tab's digital view: the entry whole, on its paper, not too wide to read. */
+.dv-views {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 10px;
+  padding-left: 12px;
+  border-left: 1px solid var(--rule);
+}
+
+.dv-digital {
+  max-width: 920px;
+}
+
+.dv-digital .dict-paper,
+.dv-digital .kd-entry,
+.dv-digital .book-entry {
+  max-width: none;
+}
+
+/* On a card, under a Kodansha sense cut to a few words: the way to see them all. */
+.kd-more {
+  margin: 1px 0 3px 22px;
+}
+
+.kd-more .kd-all {
+  color: #6b6b6b;
+  font-size: 11px;
 }

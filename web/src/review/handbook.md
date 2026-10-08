@@ -80,14 +80,20 @@ dictionary.
 - **The kanji book's own cards.** Some character cards come from
   the book itself (`tsalta-diff`, `tsalta`); judge them like any proposal. It
   calls some name variants old forms (埜 for 野): those are not old forms.
-- **The dictionary tab, for a second screen.** On a meanings card, *Open in
-  dictionary ↗* opens the scanned pages in a tab of their own: next to
-  *Other dictionaries*, on each dictionary in it, and on each kanji in steps
-  2 and 3. At the top of the tab, pick 1. the kanji and 2. the dictionary
-  (Kodansha, 新漢語林, Цалта's kanji book). The page turns with ← →, and
-  zooms with + − or Ctrl+wheel.
+- **The dictionary tab, for a second screen.** On a meanings card, the book
+  icon (an open book with an arrow) opens the dictionaries in a tab of their
+  own: next to *Other dictionaries*, on each dictionary in it, and on each
+  kanji in steps 2 and 3. At the top of the tab, pick 1. the kanji and 2. the
+  dictionary (Kodansha, 新漢語林, Цалта's kanji book, Wiktionary), then
+  *digital* or *scanned*.
+  - *Digital* is the transcription, drawn as the book prints it and never
+    folded. *Scanned* is the printed page: ← → turn it, + − or Ctrl+wheel
+    zoom. Wiktionary is only digital; of 新漢語林 only the Japan-only senses
+    are transcribed, so its scan has the rest.
+  - On the card, Kodansha shows 2 words a sense (and every amber word).
+    *See all in the expanded dictionary* opens the rest in the tab, digital.
   - Every link opens the *same* tab. Put it on your second screen: the next
-    kanji you open shows there, in the dictionary you picked last.
+    kanji you open shows there, as you left the tab.
   - A dictionary that does not have the kanji is greyed (*not in it*).
   - *Open on the site ↗*, at the top of a card, is different: it opens the
     kanji's page here.

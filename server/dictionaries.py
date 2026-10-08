@@ -326,18 +326,6 @@ class _Matcher:
         return None
 
 
-def book_pages(char: str) -> dict:
-    """Where each print dictionary has `char`: its entry number and the scanned pages it is on
-    (books.page_file serves them), None for a book without it. For the dictionary tab."""
-    k, g, t = _kodansha().get(char), _kangorin().get(char), books.kanji_ref(char)
-    return {
-        "char": char,
-        "kodansha": {"no": k.get("no"), "pages": k.get("pdf_pages") or []} if k and k.get("pdf_pages") else None,
-        "kangorin": {"no": g["no"], "pages": g["pages"]} if g and g.get("pages") else None,
-        "kanji": {"no": t["no"], "pages": t["pages"]} if t and t.get("pages") else None,
-    }
-
-
 def view(char: str, words: list[dict]) -> dict:
     """Every dictionary's entry for `char`, and where each puts the board's `words` (id -> [tag])."""
     out: dict = {"char": char, "kanjipedia": f"https://www.kanjipedia.jp/search?k={quote(char)}&kt=1&sk=perfect"}

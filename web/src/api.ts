@@ -660,14 +660,6 @@ export interface KanjiDictionaries {
   words: Record<string, { src: 'kodansha' | 'kangorin' | 'tsalta'; key: string; label: string }[]>
 }
 
-/** Where each print dictionary has a kanji (server/dictionaries.py book_pages): its entry and its scanned pages. */
-export interface BookPages {
-  char: string
-  kodansha: { no: number | null; pages: number[] } | null
-  kangorin: { no: number | null; pages: number[] } | null
-  kanji: { no: number | null; pages: number[] } | null
-}
-
 export interface BookRef {
   /** Цалта's kanji book, Иванов's dictionary (printed pages); Kodansha, 新漢語林 (PDF pages). */
   book: 'kanji' | 'bg-ja' | 'kodansha' | 'kangorin'
@@ -1142,9 +1134,6 @@ export const api = {
 
   /** Other dictionaries' entries for a kanji and where they put its board's words: reviewers and the admin only. */
   reviewDictionaries: (char: string) => get<KanjiDictionaries>(`/api/review/dictionaries/${encodeURIComponent(char)}`),
-
-  /** Where each print dictionary has a kanji, for the dictionary tab: reviewers and the admin only. */
-  reviewBookPages: (char: string) => get<BookPages>(`/api/review/book-pages/${encodeURIComponent(char)}`),
 
   /** A scanned page a card cites (server/books.py): reviewers and the admin only. */
   reviewBookPage: async (book: BookRef['book'], page: number) => {

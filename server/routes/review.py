@@ -119,14 +119,6 @@ def kanji_dictionaries(char: str, _: dict = Depends(reviewer)) -> dict:
     return dictionaries.view(char, review.board(char))
 
 
-@router.get("/book-pages/{char}")
-def book_pages(char: str, _: dict = Depends(reviewer)) -> dict:
-    """Where each print dictionary has a kanji, for the dictionary tab (review/BookViewer.tsx): reviewers and the admin only."""
-    if len(char) != 1:
-        raise AppError(400, "bad_subject", "one kanji")
-    return dictionaries.book_pages(char)
-
-
 @router.get("/page/kanji/{char}")
 def page_kanji(char: str, _: dict = Depends(require_user)) -> dict:
     """For the kanji page's Edit / Suggest changes: its meaning groups with their words."""

@@ -1,25 +1,29 @@
 /**
- * The dictionary tab (Dani, 2026-10-08): the print dictionaries' scanned
- * pages, in a tab of their own, for reviewers with two screens -- the
- * definitions on one, the card being labelled on the other.
+ * The dictionary tab (Dani, 2026-10-08): the other dictionaries in a tab of
+ * their own, for reviewers with two screens -- the definitions on one, the
+ * card being labelled on the other.
  *
  * At the top, pick 1. the kanji and 2. the dictionary (Kodansha, 新漢語林,
- * Цалта's kanji book); below, the scanned page of its entry, with page turning
- * and zoom (BookEvidence.tsx PageScan). The scans, never the transcription.
+ * Цалта's kanji book, Wiktionary), and whether to see it digital (the
+ * transcription drawn as the book prints it, whole, nothing folded) or
+ * scanned (the printed page, with page turning and zoom: BookEvidence.tsx
+ * PageScan). Each dictionary offers what it has: Wiktionary is only digital,
+ * and of 新漢語林 only the Japan-only senses are transcribed.
  *
- * Its address is /review/dictionary?char=生&book=kodansha. The "Open in
- * dictionary" links (review/dictLink.tsx) all open it in one named tab, so a
- * later link shows its kanji here. A link without a book keeps the
- * dictionary this tab showed last; Kodansha at first. Reviewers and the admin
- * only: the server refuses the pages to anyone else.
+ * Its address is /review/dictionary?char=生&book=kodansha&view=scan. The
+ * "Open in dictionary" links (review/dictLink.tsx) all open it in one named
+ * tab, so a later link shows its kanji here; what a link does not name stays
+ * as the tab had it (Kodansha's scan at first). Reviewers and the admin only:
+ * the server refuses the dictionaries to anyone else.
  */
 import { useEffect, useState } from 'react'
-import { api, type BookPages } from '../api'
+import { api, type KanjiDictionaries } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { LangSwitch } from '../i18n/LangSwitch'
-import { PageScan } from './BookEvidence'
-import type { DictBook } from './dictLink'
+import { KanjiEntry, PageScan } from './BookEvidence'
+import { KangorinMarks, KangorinSenses, KodanshaEntry, WiktionaryList } from './DictEntries'
+import type { DictBook, DictView } from './dictLink'
 
 const S = strings(
   {
@@ -31,9 +35,15 @@ const S = strings(
     kodansha: 'Kodansha',
     kangorin: '新漢語林',
     kanji_book: 'Цалта’s kanji book',
+    wiktionary: 'Wiktionary',
     notIn: 'not in it',
+    digital: 'digital',
+    scan: 'scanned',
+    noDigital: 'Not transcribed: only the scan.',
+    noScan: 'No scan: only digital.',
     pick: 'Type a kanji above, or open one from a card’s “Open in dictionary”.',
     missing: '{char} is not in {book} here. Pick another dictionary.',
+    entry: 'entry № {no}',
     pages: 'entry № {no}, on page {pages}',
     pagesMany: 'entry № {no}, on pages {pages}',
     loading: 'loading…',
@@ -47,20 +57,29 @@ const S = strings(
     kodansha: 'Kodansha',
     kangorin: '新漢語林',
     kanji_book: 'Канджи речникът на Цалта',
+    wiktionary: 'Уикиречник',
     notIn: 'няма го',
+    digital: 'дигитален',
+    scan: 'сканиран',
+    noDigital: 'Не е преписан: само сканирана страница.',
+    noScan: 'Няма сканирана страница: само дигитален.',
     pick: 'Напишете канджи горе или го отворете от „Отвори в речника“ на карта.',
     missing: '{char} го няма в {book} тук. Изберете друг речник.',
+    entry: 'статия № {no}',
     pages: 'статия № {no}, на страница {pages}',
     pagesMany: 'статия № {no}, на страници {pages}',
     loading: 'зарежда се…',
   },
 )
 
-const BOOKS: DictBook[] = ['kodansha', 'kangorin', 'kanji']
+const BOOKS: DictBook[] = ['kodansha', 'kangorin', 'kanji', 'wiktionary']
+const VIEWS: DictView[] = ['digital', 'scan']
 const LAST_BOOK = 'betterrtk:dictionary-book'
+const LAST_VIEW = 'betterrtk:dictionary-view'
 const RECENT = 'betterrtk:dictionary-recent'
 const isKanji = (c: string) => /^[㐀-鿿豈-﫿]$/.test(c)
 const isBook = (b: string | null): b is DictBook => !!b && (BOOKS as string[]).includes(b)
+const isView = (v: string | null): v is DictView => !!v && (VIEWS as string[]).includes(v)
 
 function readRecent(): string[] {
   try {
@@ -69,6 +88,14 @@ function readRecent(): string[] {
   } catch {
     return []
   }
+}
+
+/** What a dictionary has for the kanji: its entry number, a transcription to draw, scanned pages. */
+function holdings(d: KanjiDictionaries, b: DictBook): { no: number | null; digital: boolean; pages: number[] } {
+  if (b === 'kodansha') return { no: d.kodansha?.no ?? null, digital: !!d.kodansha, pages: d.kodansha?.pages ?? [] }
+  if (b === 'kangorin') return { no: d.kangorin?.no ?? null, digital: !!d.kangorin?.senses.length, pages: d.kangorin?.pages ?? [] }
+  if (b === 'kanji') return { no: d.tsalta?.no ?? null, digital: !!d.tsalta, pages: d.tsalta?.pages ?? [] }
+  return { no: null, digital: !!d.wiktionary?.length, pages: [] }
 }
 
 export default function BookViewer() {
@@ -83,15 +110,21 @@ export default function BookViewer() {
     const last = sessionStorage.getItem(LAST_BOOK)
     return isBook(b) ? b : isBook(last) ? last : 'kodansha'
   })
+  const [view, setView] = useState<DictView>(() => {
+    const v = new URLSearchParams(window.location.search).get('view')
+    const last = sessionStorage.getItem(LAST_VIEW)
+    return isView(v) ? v : isView(last) ? last : 'scan'
+  })
   const [draft, setDraft] = useState('')
   const [recent, setRecent] = useState(readRecent)
-  const [found, setFound] = useState<{ char: string; pages: BookPages | null; problem: string | null } | null>(null)
+  const [found, setFound] = useState<{ char: string; dicts: KanjiDictionaries | null; problem: string | null } | null>(null)
 
   // The address, the tab's title and the kanji opened before follow the choice.
   useEffect(() => {
     const tt = S(lang)
     sessionStorage.setItem(LAST_BOOK, book)
-    const q = new URLSearchParams(char ? { char, book } : { book })
+    sessionStorage.setItem(LAST_VIEW, view)
+    const q = new URLSearchParams(char ? { char, book, view } : { book, view })
     window.history.replaceState(null, '', `/review/dictionary?${q}`)
     document.title = char ? `${char} · ${tt(book === 'kanji' ? 'kanji_book' : book)}` : tt('heading')
     if (char) {
@@ -99,14 +132,14 @@ export default function BookViewer() {
       localStorage.setItem(RECENT, JSON.stringify(next))
       setRecent(next)
     }
-  }, [char, book, lang])
+  }, [char, book, view, lang])
 
   useEffect(() => {
     if (!char) return
     let live = true
-    api.reviewBookPages(char).then(
-      (pages) => live && setFound({ char, pages, problem: null }),
-      (e) => live && setFound({ char, pages: null, problem: errorText(e, lang) }),
+    api.reviewDictionaries(char).then(
+      (dicts) => live && setFound({ char, dicts, problem: null }),
+      (e) => live && setFound({ char, dicts: null, problem: errorText(e, lang) }),
     )
     return () => {
       live = false
@@ -122,29 +155,42 @@ export default function BookViewer() {
   }
 
   const here = found?.char === char ? found : null
-  const entry = here?.pages?.[book] ?? null
+  const d = here?.dicts ?? null
+  const has = d ? holdings(d, book) : null
+  // The view asked for, unless this dictionary has only the other one.
+  const shown: DictView | null = !has ? null : view === 'scan' ? (has.pages.length ? 'scan' : has.digital ? 'digital' : null) : has.digital ? 'digital' : has.pages.length ? 'scan' : null
   const name = (b: DictBook) => t(b === 'kanji' ? 'kanji_book' : b)
+  const where =
+    has?.no != null
+      ? shown === 'scan' && has.pages.length
+        ? t(has.pages.length > 1 ? 'pagesMany' : 'pages', {
+            no: has.no,
+            pages: has.pages.length > 1 ? `${has.pages[0]}–${has.pages[has.pages.length - 1]}` : has.pages[0],
+          })
+        : t('entry', { no: has.no })
+      : null
 
   let body: React.ReactNode
   if (!char) body = <p className="hint">{t('pick')}</p>
   else if (!here) body = <p className="hint">{t('loading')}</p>
   else if (here.problem) body = <p className="account-problem">{here.problem}</p>
-  else if (!entry) body = <p className="hint">{t('missing', { char, book: name(book) })}</p>
+  else if (!d || !has || !shown) body = <p className="hint">{t('missing', { char, book: name(book) })}</p>
+  else if (shown === 'scan')
+    body = <PageScan key={`${char}:${book}`} book={book as 'kodansha' | 'kangorin' | 'kanji'} page={has.pages[0]} extra={where && <span className="hint dv-entry">{where}</span>} />
   else
     body = (
-      <PageScan
-        key={`${char}:${book}`}
-        book={book}
-        page={entry.pages[0]}
-        extra={
-          <span className="hint dv-entry">
-            {t(entry.pages.length > 1 ? 'pagesMany' : 'pages', {
-              no: entry.no ?? '?',
-              pages: entry.pages.length > 1 ? `${entry.pages[0]}–${entry.pages[entry.pages.length - 1]}` : entry.pages[0],
-            })}
-          </span>
-        }
-      />
+      <div className="dv-digital">
+        {where && <p className="hint dv-entry">{where}</p>}
+        {book === 'kodansha' && d.kodansha && <KodanshaEntry char={char} k={d.kodansha} />}
+        {book === 'kangorin' && d.kangorin && (
+          <>
+            <KangorinMarks g={d.kangorin} />
+            <KangorinSenses g={d.kangorin} whole />
+          </>
+        )}
+        {book === 'kanji' && d.tsalta && <KanjiEntry src={d.tsalta} words="all" />}
+        {book === 'wiktionary' && d.wiktionary && <WiktionaryList entries={d.wiktionary} />}
+      </div>
     )
 
   return (
@@ -179,7 +225,8 @@ export default function BookViewer() {
         <div className="dv-field">
           <span className="dv-step">{t('book')}</span>
           {BOOKS.map((b) => {
-            const has = here?.pages?.[b]
+            const h = d ? holdings(d, b) : null
+            const none = !!h && !h.digital && !h.pages.length
             return (
               <button
                 key={b}
@@ -187,14 +234,33 @@ export default function BookViewer() {
                 className="search-filter"
                 data-on={book === b || undefined}
                 aria-pressed={book === b}
-                disabled={!!here?.pages && !has}
+                disabled={none}
                 onClick={() => setBook(b)}
               >
                 {name(b)}
-                {here?.pages && !has && <span className="hint"> · {t('notIn')}</span>}
+                {none && <span className="hint"> · {t('notIn')}</span>}
               </button>
             )
           })}
+          <span className="dv-views" role="group">
+            {VIEWS.map((v) => {
+              const off = !!has && (v === 'scan' ? !has.pages.length : !has.digital)
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  className="search-filter"
+                  data-on={shown === v || undefined}
+                  aria-pressed={shown === v}
+                  disabled={off}
+                  title={off ? t(v === 'scan' ? 'noScan' : 'noDigital') : undefined}
+                  onClick={() => setView(v)}
+                >
+                  {t(v)}
+                </button>
+              )
+            })}
+          </span>
         </div>
         <LangSwitch />
       </header>
