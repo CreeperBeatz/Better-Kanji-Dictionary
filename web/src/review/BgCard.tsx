@@ -66,7 +66,7 @@ export function BgCard({
   /** A kanji card: the Bulgarian of each group's about, by group id. */
   aboutBg?: Record<string, string>
   onAboutBg?: (v: Record<string, string>) => void
-  /** And the kanji's extras, for the Bulgarian of its origin and link. */
+  /** And the kanji's extras, for the Bulgarian of its link. */
   extras?: KanjiExtras | null
   onExtras?: (v: KanjiExtras) => void
 }) {
@@ -151,7 +151,7 @@ export function BgCard({
           marks
         />
       )}
-      {c.senses && (c.senses.some((g) => g.about) || extras?.origin || extras?.link) && (
+      {c.senses && (c.senses.some((g) => g.about) || extras?.link) && (
         <BgExtras groups={c.senses} aboutBg={aboutBg} onAboutBg={onAboutBg} extras={extras} onExtras={onExtras} />
       )}
     </div>

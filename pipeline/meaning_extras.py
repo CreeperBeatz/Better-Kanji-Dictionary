@@ -9,20 +9,23 @@
 Per group (on the kanji_senses value):
   about, aboutBg  what the kanji does in the group's words (run A; Bulgarian by the BG pass)
   examples        the 2-3 words that show the group best (run A)
-  original        the group holds the kanji's original meaning: Kodansha marks
-                  that sense "[original meaning]", and the group is where most
-                  of the words it lists under that sense are
   similar         kanji of the same meaning *in this group* (生 health -> 康 健).
                   Candidates are Kodansha's synonyms of the sense the group
                   maps to; those our own open data also links (the `similar`
                   table) start ticked. Only what a reviewer leaves ticked is kept.
 
 Per kanji (a kanji_extras item, decided on the same card):
-  origin, originBg, originSure   how the character was built (run A, from Wiktionary's glyph origin)
   link, linkBg                   how the groups connect (run A)
   mixups                         kanji easy to mix up with it: Kodansha's homophones,
                                  [{"char", "reading"}]; those Bunkacho's 異字同訓 list
                                  or our same-reading list also has start ticked
+
+Etymology is not asked on the card (Dani, 2026-10-08): it goes to a queue of
+its own, with other sources. Its drafts wait in the meanings item's evidence,
+`etymology`: origin, originBg, originSure (how the character was built, run A,
+from Wiktionary's glyph origin) and original (the group holding the original
+meaning: Kodansha marks that sense "[original meaning]", and the group is
+where most of the words it lists under that sense are).
 
 Kodansha's own words (its glosses) go in the evidence, for reviewers only;
 what is published is the reviewer's choice of kanji, never Kodansha's text.
@@ -281,18 +284,20 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                     "about": x["about"].get(short),
                     "aboutBg": b.get("about", {}).get(short),
                     "examples": x["examples"].get(short) or [],
-                    "original": s["id"] in (k.get("original") or []),
                     "similar": ticked.get(s["id"]) or [],
                 })
             note = {
-                "origin": x.get("origin"), "originBg": b.get("origin") if x.get("origin") else None,
-                "originSure": x.get("originSure", True) if x.get("origin") else None,
                 "link": x.get("link"), "linkBg": b.get("link") if x.get("link") else None,
                 "mixups": [{"char": r["char"], "reading": r["reading"]} for r in k.get("mixups") or [] if r["ticked"]],
             }
             evidence = {**(g.get("evidence") or {}), "candidates": {
                 "similar": k.get("similar") or {}, "unplaced": k.get("unplaced") or [], "mixups": k.get("mixups") or []}}
             evidence.pop("extras", None)  # now on the value itself
+            # Etymology is not asked on the card (Dani, 2026-10-08): kept here for a queue of its own.
+            evidence["etymology"] = {
+                "origin": x.get("origin"), "originBg": b.get("origin") if x.get("origin") else None,
+                "originSure": x.get("originSure", True) if x.get("origin") else None,
+                "original": k.get("original") or []}
             if dry_run:
                 review.validate("kanji_senses", c, senses, data, pending_ok=True, machine=True)
                 review.validate("kanji_extras", c, note, data, machine=True)

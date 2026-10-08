@@ -1,6 +1,6 @@
 // Usage: node scripts/steps-check.mjs -- the meanings card's steps 2 and 3 on 国 (review/Extras.tsx), on the dev
 // frontend (npm run dev, VITE_API=http://127.0.0.1:8010) against tests/sandbox.py on 8010 holding a copy of the queue.
-// Puts 邦 in two groups, takes it out of all, picks an original meaning; nothing is submitted.
+// Puts 邦 in two groups and takes it out of all; step 3 is about the kanji, with no etymology; nothing is submitted.
 import { DatabaseSync } from 'node:sqlite'
 import { chromium } from 'playwright'
 const API = process.env.API ?? 'http://127.0.0.1:8010'
@@ -31,7 +31,8 @@ const step3 = page.locator('.board-step').nth(1)
 const hou = step2.locator('.step-row', { has: page.locator('.step-char', { hasText: '邦' }) })
 const pressed = async (row) => row.first().locator('button[aria-pressed="true"]').allTextContents()
 
-check('2 and 3 are numbered steps', (await step2.locator('h4').textContent()).startsWith('2.') && (await step3.locator('h4').textContent()).startsWith('3.'))
+check('2 and 3 are numbered steps', (await step2.locator('h4').textContent()).startsWith('2.') && (await step3.locator('h4').textContent()).startsWith('3. About the kanji'))
+check('no step asks about etymology', !(await page.locator('.queue-edit').textContent()).match(/How it was built|Original meaning/i))
 check('邦 is listed under each of its Kodansha senses', (await hou.count()) === 2, await hou.count())
 check('the sense lines carry no ** marks', !(await step2.locator('h5').allTextContents()).some((x) => x.includes('**')))
 check('the province sense lists 藩', (await step2.locator('.step-sense', { hasText: 'province' }).locator('.step-char').allTextContents()).includes('藩'))
@@ -51,10 +52,6 @@ const hanRow = step2.locator('.step-row', { has: page.locator('.step-char', { ha
 await hanRow.getByRole('button', { name: /^2\./ }).click()
 check('藩 goes into a group', (await pressed(hanRow))[0]?.startsWith('2.'), await pressed(hanRow))
 
-await step3.getByRole('button', { name: /^1\./ }).click()
-await step3.getByRole('button', { name: /^3\./ }).click()
-const orig = await step3.locator('button[aria-pressed="true"]').allTextContents()
-check('only one group holds the original meaning', orig.length === 1 && orig[0].startsWith('3.'), orig)
 
 await step2.scrollIntoViewIfNeeded()
 await page.screenshot({ path: `${SHOTS}/steps-check.png` })

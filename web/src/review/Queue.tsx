@@ -204,7 +204,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
   const [labelsFrom, setLabelsFrom] = useState<Record<string, string>>({})
-  // A kanji's extras (origin, link, kanji to mix up), on its meanings and Bulgarian cards; and the Bulgarian of each group's about.
+  // A kanji's extras (link, kanji to mix up), on its meanings and Bulgarian cards; and the Bulgarian of each group's about.
   const [extras, setExtras] = useState<KanjiExtras | null>(null)
   const [extrasFrom, setExtrasFrom] = useState<KanjiExtras | null>(null)
   const [aboutBg, setAboutBg] = useState<Record<string, string>>({})

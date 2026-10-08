@@ -24,7 +24,7 @@ import type { Placements } from './board'
 import { elsewhere } from './dictMatch'
 import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
-import { GroupExtras, OriginalStep, SynonymsStep, type Candidates } from './Extras'
+import { GroupExtras, SynonymsStep, type Candidates } from './Extras'
 
 const S = strings(
   {
@@ -207,7 +207,7 @@ export function MeaningsBoard({
    * In the queue, a kanji's meanings card: Kodansha's candidates for the
    * kanji that mean the same. With it, each group shows its extras (about,
    * best examples), and the board is step 1 of 3: then 2, the same-meaning
-   * kanji sorted into the groups, and 3, the original meaning.
+   * kanji sorted into the groups (3, about the kanji, follows the board).
    */
   candidates?: Candidates
 }) {
@@ -639,12 +639,7 @@ export function MeaningsBoard({
           <b>{t('none')}</b> <span className="hint">{t('noneHint')}</span>
         </div>,
       )}
-      {extras && (
-        <>
-          <SynonymsStep char={char} groups={groups} onGroups={onGroups} candidates={candidates!} dicts={dicts} />
-          <OriginalStep groups={groups} onGroups={onGroups} dicts={dicts} />
-        </>
-      )}
+      {extras && <SynonymsStep char={char} groups={groups} onGroups={onGroups} candidates={candidates!} dicts={dicts} />}
       {menu && (
         <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
           <p className="board-menu-title">{menu.ids.length > 1 ? t('moveMany', { n: menu.ids.length }) : t('moveTo')}</p>

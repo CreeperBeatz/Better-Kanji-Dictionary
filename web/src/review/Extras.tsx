@@ -3,10 +3,14 @@
  *
  * - per group: what the kanji does in it (`about`) and its best examples;
  * - the card's steps after the board (Dani, 2026-10-08): 2, the kanji that
- *   mean the same, sorted into the groups step 1 left; 3, optional, the
- *   group holding the original meaning;
- * - per kanji: how it was built (`origin`), how its groups link, and the kanji
- *   it is easy to mix up with (they share a kun reading).
+ *   mean the same, sorted into the groups step 1 left; 3, about the kanji:
+ *   how its groups link, and the kanji it is easy to mix up with (they share
+ *   a kun reading).
+ *
+ * Etymology (how the kanji was built, its original meaning) is not asked
+ * here (Dani, 2026-10-08): it is "interesting stuff about the kanji", for a
+ * queue of its own with other sources. The drafts wait in the card's
+ * evidence (`etymology`).
  *
  * The links start as Kodansha's candidates: those our own data backs start
  * in a group (or ticked). Only what the reviewer leaves there is kept;
@@ -22,12 +26,8 @@ import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    extras: 'About the kanji',
+    extras: '3. About the kanji',
     extrasHint: 'Drafted with the groups; check them like the groups. Shown to learners once accepted.',
-    origin: 'How it was built',
-    originHint: 'From Wiktionary’s glyph origin only: nothing it does not say.',
-    originNone: 'no origin: the source says nothing about how it was built',
-    unsure: 'the source calls this uncertain',
     link: 'How its meanings connect',
     linkHint: 'One sentence, in the groups’ order. Empty when they do not connect.',
     kokuji: 'Made in Japan (kokuji): Chinese has no such character.',
@@ -48,16 +48,9 @@ const S = strings(
     notSame: 'not the same meaning',
     addKanji: '+ kanji',
     addSynonym: 'Add a kanji Kodansha does not list:',
-    original: '3. Original meaning',
-    optional: 'optional',
-    originalHint: 'Kodansha marks this meaning as the kanji’s original one: “{text}”. Pick the group that holds it.',
-    originalNone: 'Kodansha does not mark an original meaning for this kanji. You can leave this as it is.',
-    originalNo: 'No group / Kodansha does not say',
-    originalPlain: 'Pick the group that holds the kanji’s original meaning, if you know it. You can leave this as it is.',
     kodansha: 'Kodansha: {gloss}',
     unnamed: '(unnamed group)',
     bgAbout: 'In Bulgarian: what the kanji does in each group',
-    bgOrigin: 'How it was built, in Bulgarian',
     bgLink: 'How its meanings connect, in Bulgarian',
     usageHint: 'Bunkacho’s report says which kanji to write for this reading. Check each translation against the Japanese; keep the examples that show the difference best.',
     def: 'Definition',
@@ -66,12 +59,8 @@ const S = strings(
     removeExample: 'remove this example',
   },
   {
-    extras: 'За канджито',
+    extras: '3. За канджито',
     extrasHint: 'Написани заедно с групите; проверете ги като групите. Показват се на учещите, щом се приемат.',
-    origin: 'Как е построено',
-    originHint: 'Само от произхода на знака в Уикиречника: нищо, което той не казва.',
-    originNone: 'няма произход: източникът не казва как е построено',
-    unsure: 'източникът го нарича несигурно',
     link: 'Как се свързват значенията',
     linkHint: 'Едно изречение, по реда на групите. Празно, когато не се свързват.',
     kokuji: 'Създадено в Япония (кокуджи): в китайския няма такъв знак.',
@@ -92,16 +81,9 @@ const S = strings(
     notSame: 'не е същото значение',
     addKanji: '+ канджи',
     addSynonym: 'Добавете канджи, което Kodansha не дава:',
-    original: '3. Първоначално значение',
-    optional: 'по желание',
-    originalHint: 'Kodansha отбелязва това значение като първоначалното на канджито: „{text}“. Изберете групата, в която е то.',
-    originalNone: 'Kodansha не отбелязва първоначално значение за това канджи. Можете да го оставите така.',
-    originalNo: 'Никоя група / Kodansha не казва',
-    originalPlain: 'Изберете групата, в която е първоначалното значение на канджито, ако го знаете. Можете да го оставите така.',
     kodansha: 'Kodansha: {gloss}',
     unnamed: '(група без име)',
     bgAbout: 'На български: какво прави канджито във всяка група',
-    bgOrigin: 'Как е построено, на български',
     bgLink: 'Как се свързват значенията, на български',
     usageHint: 'Докладът на Бункачо казва кое канджи да се пише за това четене. Сверете всеки превод с японския; оставете примерите, които показват разликата най-добре.',
     def: 'Определение',
@@ -353,38 +335,7 @@ export function SynonymsStep({
   )
 }
 
-/** Step 3 of a meanings card, optional: the group that holds the kanji's original meaning, as Kodansha marks it. */
-export function OriginalStep({
-  groups,
-  onGroups,
-  dicts,
-}: {
-  groups: MeaningGroup[]
-  onGroups: (g: MeaningGroup[]) => void
-  dicts?: KanjiDictionaries | null
-}) {
-  const t = S(useLang())
-  const marked = (dicts?.kodansha?.senses ?? []).filter((s) => ORIGINAL.test(s.text))
-  const text = marked.map((s) => senseLine(s.text)).filter(Boolean).join(' · ')
-  const at = groups.find((g) => g.original)?.id ?? null
-  return (
-    <section className="board-step">
-      <h4>
-        {t('original')} <span className="hint">{t('optional')}</span>
-      </h4>
-      <p className="hint">{!dicts?.kodansha ? t('originalPlain') : marked.length ? t('originalHint', { text }) : t('originalNone')}</p>
-      <Picks
-        groups={groups}
-        on={(id) => id === at}
-        onPick={(id) => onGroups(groups.map((g) => ({ ...g, original: g.id === id || undefined })))}
-        none={t('originalNo')}
-        label={t('original')}
-      />
-    </section>
-  )
-}
-
-/** The kanji's own extras on its meanings card: origin, link, kokuji, and the kanji easy to mix up with it. */
+/** Step 3 of a meanings card, about the kanji: how its groups link, kokuji, and the kanji easy to mix up with it. */
 export function KanjiExtrasEditor({
   value,
   onChange,
@@ -403,28 +354,10 @@ export function KanjiExtrasEditor({
   const toggle = (m: Mixup) => set({ mixups: on(m.char) ? value.mixups.filter((x) => x.char !== m.char) : [...value.mixups, m] })
   const extra = value.mixups.filter((m) => !offered.some((o) => o.char === m.char))
   return (
-    <section className="extras">
+    <section className="board-step">
       <h4>{t('extras')}</h4>
       <p className="hint">{t('extrasHint')}</p>
       {kokuji && <p className="extras-kokuji">{t('kokuji')}</p>}
-      <label className="review-field">
-        <span>
-          {t('origin')} <span className="hint">{t('originHint')}</span>
-        </span>
-        <textarea
-          className="assoc-text"
-          rows={3}
-          maxLength={600}
-          value={value.origin ?? ''}
-          placeholder={t('originNone')}
-          onChange={(e) => set({ origin: e.target.value || null, originSure: e.target.value ? (value.originSure ?? true) : null })}
-        />
-      </label>
-      {value.origin && (
-        <label className="board-original">
-          <input type="checkbox" checked={value.originSure === false} onChange={(e) => set({ originSure: !e.target.checked })} /> {t('unsure')}
-        </label>
-      )}
       <label className="review-field">
         <span>
           {t('link')} <span className="hint">{t('linkHint')}</span>
@@ -459,7 +392,7 @@ export function KanjiExtrasEditor({
   )
 }
 
-/** The Bulgarian of a kanji's extras, on its Bulgarian card: each group's about, the origin, the link. */
+/** The Bulgarian of a kanji's extras, on its Bulgarian card: each group's about, and the link. */
 export function BgExtras({
   groups,
   aboutBg,
@@ -501,13 +434,6 @@ export function BgExtras({
             ))}
           </ul>
         </>
-      )}
-      {extras?.origin && (
-        <label className="review-field">
-          <span>{t('bgOrigin')}</span>
-          <span className="hint">{extras.origin}</span>
-          <textarea className="assoc-text" lang="bg" rows={3} maxLength={600} value={extras.originBg ?? ''} onChange={(e) => onExtras({ ...extras, originBg: e.target.value || null })} />
-        </label>
       )}
       {extras?.link && (
         <label className="review-field">

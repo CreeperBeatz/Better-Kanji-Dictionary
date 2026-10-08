@@ -6351,13 +6351,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 0.9em;
 }
 
-.board-original {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.9em;
-}
-
 .link-chip {
   display: inline-flex;
   align-items: baseline;
@@ -6411,6 +6404,11 @@ html[data-nav]::view-transition-old(tabs):only-child {
   color: var(--paper);
   font-size: 15px;
   font-weight: 600;
+}
+
+/* Step 3, about the kanji, follows the board outside its grid. */
+.board ~ .board-step {
+  margin: 12px 0;
 }
 
 .board-step h4,
@@ -6483,20 +6481,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .board-star[data-on] {
   color: #cfa25a;
-}
-
-.extras {
-  margin: 14px 0;
-  padding: 10px 12px;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.extras h4 {
-  margin: 0;
 }
 
 .extras-kokuji {

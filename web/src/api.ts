@@ -397,8 +397,6 @@ export interface MeaningGroup {
   aboutBg?: string
   /** The 2-3 words that show the group best (word ids, placed in it). */
   examples?: number[]
-  /** The group holds the kanji's original meaning. */
-  original?: boolean
   /** Kanji of the same meaning in this group. */
   similar?: string[]
 }
@@ -411,11 +409,6 @@ export interface Mixup {
 
 /** A kanji's extras (server/review.py kanji_extras): decided on its meanings card, their Bulgarian on its Bulgarian card. */
 export interface KanjiExtras {
-  /** How the character was built, from Wiktionary's glyph origin. */
-  origin: string | null
-  originBg: string | null
-  /** False when the source calls the explanation uncertain. */
-  originSure: boolean | null
   /** How its groups connect. */
   link: string | null
   linkBg: string | null

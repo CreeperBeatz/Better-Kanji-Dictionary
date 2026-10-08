@@ -374,7 +374,7 @@ Three kinds of word go there:
   have one kanji in this box and another in a real group: each kanji is
   judged on its own.
 
-### About the kanji: the extras
+### Steps 2 and 3: the rest of the card
 
 The card also carries what learners will read beside the groups. It was
 drafted with them; check it like the groups, and fix or empty what is wrong.
@@ -398,12 +398,7 @@ drafted with them; check it like the groups, and fix or empty what is wrong.
     group for Kodansha's *province, feudal domain* (藩 領 封 荘). Look for
     words like 国司 and 武蔵国 to decide.
   - None in a group is a good answer. A wrong group is not.
-- **Step 3, the original meaning** (optional). Pick the group that holds the
-  meaning Kodansha marks as the kanji's original one. If Kodansha marks
-  none, leave *No group*.
-- **Per kanji**, in *About the kanji* under the board:
-  - **How it was built**, from Wiktionary's glyph origin only: nothing that
-    source does not say. Tick *uncertain* when it says so.
+- **Step 3, about the kanji:**
   - **How its meanings connect**: one sentence, empty when they don't.
   - **Easy to mix up**: kanji that share a kun reading with it (生 いきる 活).
     Keep the pairs a learner really confuses.
@@ -411,6 +406,11 @@ drafted with them; check it like the groups, and fix or empty what is wrong.
 
 Accepting the card decides all of it with the groups. The Bulgarian of the
 lines is on the kanji's Bulgarian card.
+
+**Not on this card: etymology.** How the kanji was built and its original
+meaning are not asked here. They will get a queue of their own, with other
+sources. If a page shows a wrong story, report it with *Something else is
+wrong?*.
 
 ### One word at a time
 
@@ -465,8 +465,8 @@ English is still what you translate.
   uses the old wording until the data is rebuilt.
 - **Not sure?** *Skip* it, and come back to it from *skipped*.
 - **A kanji card's lines.** Under the groups, check the Bulgarian of each
-  group's line, of *how it was built* and of *how its meanings connect*,
-  against the English beside them.
+  group's line and of *how its meanings connect*, against the English beside
+  them.
 
 ## Which kanji to write
 

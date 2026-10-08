@@ -6,7 +6,7 @@ The task types (TASK-forms-review.md §5, and more since):
     form_link      subject 龶|王          value: {"kind": looks_like, "note": ..., "reverse": true?}; kind "none" = no link
     part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
     kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот",
-                                                  "about", "aboutBg", "examples": [word ids], "original", "similar": ["命"]}]
+                                                  "about", "aboutBg", "examples": [word ids], "similar": ["命"]}]
     kanji_extras   subject 生            value: {"origin", "originBg", "originSure", "link", "linkBg",
                                                  "mixups": [{"char": "産", "reading": "うまれる"}]}
     usage          subject はやい・…      value: {"reading", "no", "spellings": [{"kanji", "def", "defEn", "defBg",
@@ -606,8 +606,6 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
                 "bg": (s.get("bg") or "").strip()[:40] or None,
                 **_group_extras(subject, s),
             })
-        if sum(1 for s in out if s.get("original")) > 1:
-            raise _bad("senses_original", "only one group holds the original meaning")
         return out
 
     if type_ == "kanji_extras":
@@ -616,9 +614,9 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if value is None:
             return None
         if not isinstance(value, dict):
-            raise _bad("extras_invalid", "extras are an origin, a link and kanji to mix up")
-        out = {k: _prose(value.get(k), 600) for k in ("origin", "originBg", "link", "linkBg")}
-        out["originSure"] = (value.get("originSure") is not False) if out["origin"] else None
+            raise _bad("extras_invalid", "extras are a link and kanji to mix up")
+        # How the kanji was built is not decided here (Dani, 2026-10-08): etymology gets a queue of its own.
+        out = {k: _prose(value.get(k), 600) for k in ("link", "linkBg")}
         mix, seen = [], set()
         for m in value.get("mixups") or []:
             c = m.get("char") if isinstance(m, dict) else None
@@ -721,8 +719,6 @@ def _group_extras(char: str, s: dict) -> dict:
         if any(w not in ids for w in ex):
             raise _bad("senses_examples", "a group's best examples are up to 4 of its words")
         out["examples"] = ex
-    if s.get("original") is True:
-        out["original"] = True
     sim = s.get("similar") or []
     if not isinstance(sim, list) or len(sim) > 16 or any(not isinstance(c, str) or len(c) != 1 or c == char for c in sim):
         raise _bad("senses_similar", "similar kanji are single kanji, at most 16")
@@ -1147,7 +1143,7 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     item for the same kanji at the end of the queue, groups fixed, only them.
 
     `extras`, on a kanji's meanings or Bulgarian card: its kanji_extras value
-    as the reviewer left it (origin, link, kanji to mix up; their Bulgarian),
+    as the reviewer left it (link, kanji to mix up; their Bulgarian),
     decided under this one. `about_bg`, on its Bulgarian card: group id -> the
     Bulgarian of the group's `about`.
     """
