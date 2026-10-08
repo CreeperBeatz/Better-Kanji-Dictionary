@@ -30,11 +30,6 @@ const S = strings(
     map: 'Map',
     browseMap: 'Kanji Map',
     mapTitle: 'Every character at this level, to wander around in (M)',
-    formsView: 'How the graph draws a form of a kanji',
-    simple: 'simple',
-    simpleTitle: 'Each form drawn as its kanji: 水 where 氵 is written',
-    expanded: 'expanded',
-    expandedTitle: 'Each part as written, with the kanji it is a form of beside it',
   },
   {
     all: 'всички',
@@ -60,11 +55,6 @@ const S = strings(
     map: 'Карта',
     browseMap: 'Йероглифна карта',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
-    formsView: 'Как графът показва формата на канджи',
-    simple: 'опростен',
-    simpleTitle: 'Всяка форма като своето канджи: 水 там, където е написано 氵',
-    expanded: 'разгърнат',
-    expandedTitle: 'Всяка част както е написана, с канджито, чиято форма е, до нея',
   },
 )
 
@@ -103,21 +93,6 @@ export function LevelFilter({
           {typeof f.value === 'number' ? f.label : t(f.label as Key)}
         </button>
       ))}
-    </div>
-  )
-}
-
-/** How the graph draws a part that is a form of another kanji: as that kanji (simple), or as written (expanded). */
-export function FormsView({ simple, onSimple }: { simple: boolean; onSimple: (simple: boolean) => void }) {
-  const t = S(useLang())
-  return (
-    <div className="filter forms-view" role="group" aria-label={t('formsView')}>
-      <button data-on={simple} title={t('simpleTitle')} onClick={() => onSimple(true)}>
-        {t('simple')}
-      </button>
-      <button data-on={!simple} title={t('expandedTitle')} onClick={() => onSimple(false)}>
-        {t('expanded')}
-      </button>
     </div>
   )
 }

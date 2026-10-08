@@ -524,14 +524,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   fill: var(--muted);
 }
 
-/* The expanded graph: a form's root kanji, small at its upper right (氵 with 水). */
-.node .node-root {
-  fill: var(--paper-dim);
-  text-anchor: middle;
-  dominant-baseline: central;
-  pointer-events: none;
-}
-
 .node[data-kind='focus'] .glyph {
   font-weight: 600;
 }

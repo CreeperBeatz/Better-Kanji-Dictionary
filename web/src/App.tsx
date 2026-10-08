@@ -14,7 +14,7 @@ import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
-import { FormsView, LevelFilter, type StageView } from './StageControls'
+import { LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
@@ -140,8 +140,6 @@ const RAIL_TAB_KEY = 'betterrtk:railTab'
 // dictionary, so its results stay in view while one of them is open. The
 // rail's edge resizes the two together; the edge between them moves the split.
 const SPLIT_KEY = 'betterrtk:searchBeside'
-// '0' when the graph draws forms as written (expanded); simple, each as its kanji, otherwise.
-const FORMS_KEY = 'betterrtk:graphSimple'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
@@ -470,22 +468,6 @@ export function App() {
   // A sign-in link that did not work says why, where you would try again.
   const accountShown = accountOpen || authError !== null
   const [filter, setFilter] = useState<ContainerFilter>('common')
-  const [simpleGraph, setSimpleGraph] = useState(() => {
-    try {
-      return localStorage.getItem(FORMS_KEY) !== '0'
-    } catch {
-      return true
-    }
-  })
-  const chooseSimple = useCallback((on: boolean) => {
-    setSimpleGraph(on)
-    try {
-      if (on) localStorage.removeItem(FORMS_KEY)
-      else localStorage.setItem(FORMS_KEY, '0')
-    } catch {
-      // not remembered, which is fine
-    }
-  }, [])
   const [view, setViewState] = useState<StageView>(initialView)
   // The map is expensive to lay out, so once opened it stays mounted and keeps
   // its camera while the focus view is showing.
@@ -1781,7 +1763,6 @@ export function App() {
               legend={legendOpen}
               locked={mobile && graphLocked}
               onLock={mobile ? setGraphLocked : undefined}
-              simple={simpleGraph}
             />
           )}
 
@@ -1820,7 +1801,6 @@ export function App() {
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
               )}
-              {!error && view === 'focus' && <FormsView simple={simpleGraph} onSimple={chooseSimple} />}
               {/* On a phone it sits at the end of the search bar instead, always on screen. */}
               {!mobile && <ProfileButton onOpen={signIn} />}
             </div>

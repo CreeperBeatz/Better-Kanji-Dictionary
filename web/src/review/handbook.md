@@ -228,10 +228,6 @@ built from its root, so it has **no parts of its own**, and it takes its
 root's meaning. When step 1 makes the character a form, steps 2 and 3 are
 not asked, and saving gives it no parts.
 
-The graph shows the relation without a parts line. Its *simple* view draws
-each form as its root (海 as 水 + 毎); its *expanded* view draws the form as
-written, with its root small beside it.
-
 #### Judge it by the kanji
 
 Each card shows both characters in every font we have (the old 1978/1983

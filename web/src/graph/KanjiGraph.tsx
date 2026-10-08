@@ -27,8 +27,6 @@ interface Props {
    */
   locked?: boolean
   onLock?: (locked: boolean) => void
-  /** The simple view: a part that is a form of another kanji is drawn as that kanji, its root (水 for 氵). */
-  simple?: boolean
 }
 
 const S = strings(
@@ -50,8 +48,6 @@ const S = strings(
     legendVia: 'dashed, not at this level itself, but inside characters that are',
     via: 'not at this level itself, but inside characters that are',
     form: 'built from {f}, another form of it',
-    writtenAs: 'written {f} here',
-    formOf: 'a form of {r}',
   },
   {
     joyo: 'джойо',
@@ -71,8 +67,6 @@ const S = strings(
     legendVia: 'с прекъсната линия - не е от това ниво, но е част от йероглифи, които са',
     via: 'не е от това ниво, но е част от йероглифи, които са',
     form: 'съставен от {f}, друга негова форма',
-    writtenAs: 'тук се пише {f}',
-    formOf: 'форма на {r}',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -212,7 +206,7 @@ interface Spot {
  */
 export const KanjiGraph = memo(KanjiGraphView)
 
-function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock, simple = false }: Props) {
+function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
@@ -281,8 +275,6 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   const entries = useMemo(() => {
     const m = new Map<string, KanjiNode>()
     for (const n of [data.focus, ...data.containers, ...data.components.nodes]) m.set(n.char, n)
-    // The roots the simple view draws, for their hold card and menu.
-    for (const n of data.components.nodes) if (n.root && !m.has(n.root.char)) m.set(n.root.char, n.root)
     return m
   }, [data])
 
@@ -673,25 +665,21 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     const hasAbove = above !== undefined && sieve(above.containers, filter).shown.length > 0
     // The "more above" mark sits on the outer side, pointing away from the focus.
     const out = Math.atan2(n.y, n.x)
-    // The simple view draws a form as its root, and a press goes to the root; the expanded one
-    // draws it as written, with its root small beside it.
-    const asRoot = simple && n.root ? n.root : null
-    const target = asRoot?.char ?? n.char
     return (
       <g
         key={n.char}
         className={`node ${extra?.className ?? ''}`}
         data-kind={n.kind}
-        data-dim={asRoot ? false : n.dim}
+        data-dim={n.dim}
         data-via={n.via || undefined}
         style={{
           transform: `translate(${n.x}px, ${n.y}px)`,
           opacity: extra ? 1 : n.weight === undefined ? 1 : 0.42 + n.weight * 0.58,
         }}
-        {...handlers(target)}
+        {...handlers(n.char)}
         onMouseEnter={() => {
           setOver(n.char)
-          onHover(target)
+          onHover(n.char)
           if (n.kind === 'container') hoverContainer(n)
           extra?.onEnter?.()
         }}
@@ -704,14 +692,10 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
         tabIndex={0}
       >
         <title>
-          {target}
-          {titleMeanings(asRoot ?? n, t)}
+          {n.char}
+          {titleMeanings(n, t)}
           {`
-${levelOf(asRoot ?? n, t)}`}
-          {asRoot && `
-${t('writtenAs', { f: n.char })}`}
-          {!asRoot && n.root && `
-${t('formOf', { r: n.root.char })}`}
+${levelOf(n, t)}`}
           {n.via && `
 ${t('via')}`}
           {n.form && `
@@ -734,19 +718,14 @@ ${t('form', { f: n.form })}`}
         )}
 
         <text className="glyph" fontSize={n.radius * 1.28}>
-          {target}
+          {n.char}
         </text>
-        {!asRoot && n.root && (
-          <text className="node-root" x={n.radius * 0.9} y={-n.radius * 0.75} fontSize={n.radius * 0.62}>
-            {n.root.char}
-          </text>
-        )}
 
         {/* Hovering swaps the fan-out count for the level, which is the
             thing you want to know when deciding whether to learn it. */}
         {over === n.char ? (
           <text className="node-level" y={n.radius + 14}>
-            {levelOf(asRoot ?? n, t)}
+            {levelOf(n, t)}
           </text>
         ) : (
           n.kind === 'component' &&

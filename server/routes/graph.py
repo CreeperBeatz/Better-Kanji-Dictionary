@@ -407,12 +407,6 @@ def get_kanji(char: str) -> dict:
         n["depth"] = depth[c]
         components.append(n)
     components.sort(key=lambda n: (n["depth"], -(n["fanout"] or 0), n["char"]))
-    # Each form among the parts with its root, whole: the simple view draws 水 where 氵 is written.
-    rooted = {c: r for c, r in forms.roots().items() if c in depth and r != char}
-    root_nodes = _fetch(sorted(set(rooted.values())))
-    for n in components:
-        if n["char"] in rooted and rooted[n["char"]] in root_nodes:
-            n["root"] = root_nodes[rooted[n["char"]]]
 
     stroke_row = query_one("SELECT paths FROM stroke WHERE char = ?", (char,))
 

@@ -39,8 +39,6 @@ export interface PositionedNode {
   via?: boolean
   /** The other form of the focus a container is built from: 糹 for 細 under 糸. */
   form?: string
-  /** A component that is a form of another kanji: that kanji, its root (水 for 氵). */
-  root?: KanjiNode
 }
 
 export interface PositionedEdge {
@@ -171,7 +169,6 @@ function placeComponents(components: KanjiNode[]): PositionedNode[] {
         meanings: node.meanings,
         meaningsBg: node.meaningsBg ?? null,
         onYomi: node.onYomi,
-        root: node.root,
       })
     })
   }
