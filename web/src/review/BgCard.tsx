@@ -9,6 +9,7 @@ import type { ReactNode } from 'react'
 import type { BookGloss, BookKeyword, ItemDetail, KanjiExtras, MeaningGroup, Sense, UsageBg } from '../api'
 import { BookGlossPanel, BookKeywordPanel } from './BookEvidence'
 import { DictionaryLink } from './dictLink'
+import { Stage } from './Stage'
 import { BgExtras } from './Extras'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, KanjiFacts } from './editors'
@@ -22,7 +23,9 @@ const S = strings(
     add: 'add a meaning',
     remove: 'remove',
     hint: 'Check each Bulgarian gloss against the English beside it. Fix what is wrong or unnatural. Leave what is right.',
-    groups: 'Its meaning groups: give each its Bulgarian label',
+    groups: 'Its meaning groups: a Bulgarian label for each',
+    linesStep: 'Its lines in Bulgarian',
+    wordStep: 'Its Bulgarian, sense by sense',
     groupsHint: 'Short, natural Bulgarian for what the group stands for. The meanings above can start from them.',
     fromGroups: 'fill from the group labels below',
     inGroups: 'What its kanji bring here',
@@ -41,7 +44,9 @@ const S = strings(
     add: 'добавете значение',
     remove: 'махнете',
     hint: 'Сверете всеки български превод с английския до него. Поправете грешното или неестественото. Оставете вярното.',
-    groups: 'Групите му значения: дайте на всяка български етикет',
+    groups: 'Групите му значения: български етикет за всяка',
+    linesStep: 'Редовете му на български',
+    wordStep: 'Българският, значение по значение',
     groupsHint: 'Кратко, естествено на български, какво обхваща групата. Значенията по-горе могат да тръгнат от тях.',
     fromGroups: 'попълнете от етикетите на групите по-долу',
     inGroups: 'Какво внасят канджитата му тук',
@@ -115,9 +120,11 @@ export function BgCard({
             </ul>
           </div>
         )}
-        <p className="hint">{t('hint')}</p>
-        <BgSenses senses={w.senses} value={value} onChange={onChange} built={built} />
-        {Array.isArray(book) && book.length > 0 && <BookGlossPanel views={book as BookGloss[]} value={value} onChange={onChange} />}
+        <Stage n={1} title={t('wordStep')}>
+          <p className="hint">{t('hint')}</p>
+          <BgSenses senses={w.senses} value={value} onChange={onChange} built={built} />
+          {Array.isArray(book) && book.length > 0 && <BookGlossPanel views={book as BookGloss[]} value={value} onChange={onChange} />}
+        </Stage>
       </div>
     )
   }
@@ -125,6 +132,7 @@ export function BgCard({
   // a kanji
   return (
     <div className="bg-card">
+      <Stage n={1} title={t('meanings')}>
       <dl className="queue-compare">
         <KanjiFacts context={c} />
         <dt>{t('machine')}</dt>
@@ -133,7 +141,6 @@ export function BgCard({
       <BgMeanings
         value={value}
         onChange={onChange}
-        title={t('meanings')}
         name={t('meanings')}
         add={t('add')}
         tools={
@@ -149,18 +156,16 @@ export function BgCard({
         }
       />
       {book != null && <BookKeywordPanel view={book as BookKeyword} value={value} onChange={onChange} />}
+      </Stage>
       {c.senses && c.senses.length > 0 && (
-        <BgLabels
-          groups={c.senses}
-          labels={labels}
-          onLabels={onLabels}
-          title={t('groups')}
-          hint={t('groupsHint')}
-          marks
-        />
+        <Stage n={2} title={t('groups')}>
+          <BgLabels groups={c.senses} labels={labels} onLabels={onLabels} hint={t('groupsHint')} marks />
+        </Stage>
       )}
       {c.senses && (c.senses.some((g) => g.about) || extras?.link) && (
-        <BgExtras groups={c.senses} aboutBg={aboutBg} onAboutBg={onAboutBg} extras={extras} onExtras={onExtras} />
+        <Stage n={3} title={t('linesStep')}>
+          <BgExtras groups={c.senses} aboutBg={aboutBg} onAboutBg={onAboutBg} extras={extras} onExtras={onExtras} />
+        </Stage>
       )}
     </div>
   )
@@ -216,18 +221,16 @@ export function BgUsage({ detail, value, onChange }: { detail: ItemDetail; value
     onChange({ ...value, spellings: value.spellings.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
   return (
     <div className="bg-card bg-usage">
-      <p className="bg-head" lang="ja">
-        {card.reading}
-      </p>
       <p className="hint">{t('usageHint')}</p>
       {card.spellings.map((s, i) => (
-        <section key={i} className="usage-spelling">
-          <h4>
-            <span lang="ja">{s.kanji}</span>{' '}
-            {[...new Set([...s.kanji].filter((c) => /[㐀-鿿豈-﫿]/.test(c)))].map((c) => (
-              <DictionaryLink key={c} char={c} />
-            ))}
-          </h4>
+        <Stage
+          key={i}
+          n={i + 1}
+          title={<span lang="ja">{s.kanji}</span>}
+          extra={[...new Set([...s.kanji].filter((c) => /[㐀-鿿豈-﫿]/.test(c)))].map((c) => (
+            <DictionaryLink key={c} char={c} />
+          ))}
+        >
           <UsageLine ja={s.def} en={s.defEn} value={value.spellings[i]?.def} built={built?.spellings[i]?.def} onChange={(v) => setSpelling(i, { def: v })} />
           {s.examples.map((x, k) => (
             <UsageLine
@@ -239,11 +242,10 @@ export function BgUsage({ detail, value, onChange }: { detail: ItemDetail; value
               onChange={(v) => setSpelling(i, { examples: value.spellings[i].examples.map((y, m) => (m === k ? v : y)) })}
             />
           ))}
-        </section>
+        </Stage>
       ))}
       {card.notes.length > 0 && (
-        <section className="usage-notes">
-          <h4>{t('usageNotes')}</h4>
+        <Stage n={card.spellings.length + 1} title={t('usageNotes')}>
           {card.notes.map((n, i) => (
             <UsageLine
               key={i}
@@ -255,7 +257,7 @@ export function BgUsage({ detail, value, onChange }: { detail: ItemDetail; value
               onChange={(v) => onChange({ ...value, notes: value.notes.map((x, j) => (j === i ? v : x)) })}
             />
           ))}
-        </section>
+        </Stage>
       )}
     </div>
   )
@@ -380,13 +382,13 @@ export function BgLabels({
   groups: MeaningGroup[]
   labels: Record<string, string>
   onLabels: (l: Record<string, string>) => void
-  title: string
+  title?: string
   hint?: string
   marks?: boolean
 }) {
   return (
     <div className="bg-groups">
-      <span>{title}</span>
+      {title && <span>{title}</span>}
       {hint && <span className="hint">{hint}</span>}
       <ul className="bg-labels">
         {groups.map((g) => (

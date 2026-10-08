@@ -12,7 +12,7 @@
  * in one go (server/review.py decide_card).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, dataChanged, type BookRef, type PartsSource, type CardDecision, type CharacterCard as Card, type FormLink, type Impact, type ItemDetail, type PartMeaning, type TaskValue } from '../api'
+import { api, dataChanged, type PartsSource, type CardDecision, type CharacterCard as Card, type FormLink, type Impact, type ItemDetail, type KanjiDictionaries, type PartMeaning, type TaskValue } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { typing, useKey } from '../keys'
@@ -23,7 +23,9 @@ import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from '.
 import { SourceChips, SourceNotes } from '../detail/PartsSource'
 import { KindsInfoButton, KindsTable, useKindsInfo, useLinkSentence } from './KindsInfo'
 import { ReportButton } from './ReportButton'
-import { BookSource } from './BookEvidence'
+import { CardFooter, CardHead, ReviewCard } from './Card'
+import { DictionariesPanel } from './DictionariesPanel'
+import { Stage } from './Stage'
 import { FormSource } from '../detail/Forms'
 import { ResearchButton } from './ResearchButton'
 import { same } from './board'
@@ -32,8 +34,6 @@ import { clearDraft, readDraft, writeDraft } from './drafts'
 
 const S = strings(
   {
-    kind: 'character',
-    from: 'from {source}',
     loading: 'loading…',
     q_parts: 'What is {char} built from, as written today?',
     q_parts_hint: 'Base kanji stay whole. Otherwise take the split the sources give (the labels say which); history only when none helps; your own only when nothing else works.',
@@ -67,7 +67,6 @@ const S = strings(
     m_form: 'It is a form of a kanji (the link above lends its meaning)',
     m_none: 'Leave it with no meaning for now',
     conflict: 'A shape and “a form of” can’t both be right: the shape would win and the form of would lend nothing. Leave the form link as it is, or say it is a form of a kanji below.',
-    summary: 'Saving will:',
     s_parts_keep: 'keep {char}’s parts as they are',
     s_parts: 'give {char} the parts {parts}',
     s_atomic: 'make {char} a single piece, with no parts',
@@ -76,8 +75,6 @@ const S = strings(
     s_meaning: 'show on {char}’s page: {what}',
     s_meaning_keep: 'leave {char} with no meaning of its own',
     s_meaning_form: 'let {char} borrow the meaning of what it is a form of',
-    reason: 'Reason (optional)',
-    addReason: 'add a reason',
     save: 'save',
     oldForm: 'Old form',
     newForm: 'Today’s form',
@@ -88,8 +85,6 @@ const S = strings(
     confirmReset: 'Throw away what you chose on this card?',
   },
   {
-    kind: 'знак',
-    from: 'от {source}',
     loading: 'зарежда се…',
     q_parts: 'От какво е построен {char}, както се пише днес?',
     q_parts_hint: 'Основните канджи остават цели. Иначе вземете делението от източниците (етикетите казват кои); историята само ако те не помагат; свое само ако нищо друго не става.',
@@ -123,7 +118,6 @@ const S = strings(
     m_form: 'Форма е на канджи (връзката по-горе заема значението му)',
     m_none: 'Оставете го без значение засега',
     conflict: 'Форма без значение и „форма на“ не могат да са верни заедно: формата печели и „форма на“ не заема нищо. Оставете връзката както е или кажете по-долу, че е форма на канджи.',
-    summary: 'Записът ще:',
     s_parts_keep: 'запази частите на {char} както са',
     s_parts: 'даде на {char} частите {parts}',
     s_atomic: 'направи {char} едно цяло, без части',
@@ -132,8 +126,6 @@ const S = strings(
     s_meaning: 'покаже на страницата на {char}: {what}',
     s_meaning_keep: 'остави {char} без свое значение',
     s_meaning_form: 'остави {char} да заема значението на това, чиято форма е',
-    reason: 'Причина (по желание)',
-    addReason: 'добавете причина',
     save: 'запишете',
     oldForm: 'Стара форма',
     newForm: 'Днешна форма',
@@ -189,14 +181,25 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const [work, setWork] = useState<Work | null>(null)
   const [start, setStart] = useState<Work | null>(null)
   const [impact, setImpact] = useState<Impact | null>(null)
-  // The reason field, opened by "add a reason" (the card mounts anew for each character).
-  const [reasonOpen, setReasonOpen] = useState(false)
+  // Other dictionaries' entries for the character, on top of the card as on a meanings card.
+  const [dicts, setDicts] = useState<KanjiDictionaries | null>(null)
   const [busy, setBusy] = useState(false)
   const [notes, setNotes] = useState(false)
   // The (i) beside the forms and the meaning questions: what each choice means and changes.
   const [formsInfo, toggleFormsInfo] = useKindsInfo()
   const [partInfo, togglePartInfo] = useKindsInfo()
   const [problem, setProblem] = useState<string | null>(null)
+
+  useEffect(() => {
+    let live = true
+    api.reviewDictionaries(char).then(
+      (d) => live && setDicts(d),
+      () => live && setDicts(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [char])
 
   useEffect(() => {
     let stale = false
@@ -349,14 +352,10 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   })
 
   if (!card || !work) return <p className="hint">{problem ?? t('loading')}</p>
-  const sources = [...new Set(card.items.map((i) => i.source))].join(', ')
-  // An item that carries the kanji book's view of it (its split, its old form, its part's meaning) draws the entry itself.
-  const fromBook = (i: ItemDetail) => (i.evidence?.book as BookRef | undefined)?.book === 'kanji'
-  const bookParts = partsItems.find(fromBook)
-  const bookOnItems = card.items.some(fromBook)
+  // The item whose evidence carries the kanji book's split, for "use this split".
+  const bookParts = partsItems.find((i) => i.evidence?.book != null)
   // Each kind of question has its own number on every card -- 1 parts, 2 relations, 3 a part's
   // meaning -- so the number says what is asked, as the handbook's chapters do, whichever a card has.
-  const num = (n: 1 | 2 | 3) => `${n} · `
   const tiles = (p: string[]) => (p.length ? <PartTiles chars={p} onKanji={onKanji} /> : <span className="hint">{t('noParts')}</span>)
   const setParts = (patch: Partial<NonNullable<Work['parts']>>) => setWork({ ...work, parts: { ...work.parts!, ...patch } })
   const setForm = (fid: string, patch: Partial<Work['forms'][string]>) => setWork({ ...work, forms: { ...work.forms, [fid]: { ...work.forms[fid], ...patch } } })
@@ -382,49 +381,45 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   }
 
   return (
-    <article className="queue-item char-card">
-      <header className="queue-head">
-        <span className="queue-big" lang="ja">
-          {char}
-        </span>
-        <div>
-          <p className="queue-meta">
-            {t('kind')} · {t('from', { source: sources })}
-          </p>
-          {/* Old forms come from an official list: shown, not asked. A doubt is a report. */}
-          {[...(card.context.forms?.old ?? []).map((f) => ['old', f] as const), ...(card.context.forms?.new ?? []).map((f) => ['new', f] as const)].map(([k, f]) => (
-            <p key={k + f.char} className="hint card-old-form">
-              {t(k === 'old' ? 'oldForm' : 'newForm')}: <span lang="ja">{f.char}</span> <FormSource source={f.source} />
-            </p>
-          ))}
-          <ReportButton subject={`kanji:${char}`} from={id} />
-        </div>
-        <div className="queue-dict card-head-pills">
-          <ResearchButton card={card} />
-          <DictLinks type="decomposition" subject={char} />
-        </div>
-      </header>
-
+    <ReviewCard
+      className="char-card"
+      head={
+        <CardHead
+          glyph={char}
+          notes={
+            <>
+              {/* Old forms come from an official list: shown, not asked. A doubt is a report. */}
+              {[...(card.context.forms?.old ?? []).map((f) => ['old', f] as const), ...(card.context.forms?.new ?? []).map((f) => ['new', f] as const)].map(([k, f]) => (
+                <p key={k + f.char} className="hint card-old-form">
+                  {t(k === 'old' ? 'oldForm' : 'newForm')}: <span lang="ja">{f.char}</span> <FormSource source={f.source} />
+                </p>
+              ))}
+              <ReportButton subject={`kanji:${char}`} from={id} />
+            </>
+          }
+          actions={
+            <>
+              <ResearchButton card={card} />
+              <DictLinks type="decomposition" subject={char} />
+            </>
+          }
+        />
+      }
+      dicts={dicts && (dicts.kodansha || dicts.tsalta) ? <DictionariesPanel dicts={dicts} /> : undefined}
+    >
       <div className="queue-judge">
         <div className="queue-evidence">
           <FontStrip char={char} />
           <dl className="queue-compare">
             <KanjiFacts context={card.context} />
           </dl>
-          {/* The kanji book's entry, on every card it has one for -- its split, if any, is with the parts below. */}
-          {!bookOnItems && card.context.book && <BookSource src={card.context.book} />}
           {!meaningItem && card.context.users && Array.isArray(card.context.users) && <UsedIn chars={card.context.users} onKanji={onKanji} />}
         </div>
         {meaningItem && <PartEvidence detail={meaningItem} onKanji={onKanji} />}
       </div>
 
-      <div className="queue-decide">
         {work.parts && (
-          <section className="card-step">
-            <h4>
-              {num(1)}
-              {t('q_parts', { char })}
-            </h4>
+          <Stage n={1} title={t('q_parts', { char })}>
             <p className="hint">{t('q_parts_hint')}</p>
             <div className="card-options" role="radiogroup">
               {options.map((o) => {
@@ -495,15 +490,11 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               <h5>{t('changes')}</h5>
               {!partsChange ? <p className="hint">{t('noChange')}</p> : impact ? <ImpactView imp={impact} onKanji={onKanji} /> : <p className="hint">{t('loading')}</p>}
             </div>
-          </section>
+          </Stage>
         )}
 
         {formItems.length > 0 && (
-          <section className="card-step">
-            <h4>
-              {num(2)}
-              {t('q_forms', { char })} <KindsInfoButton open={formsInfo} onToggle={toggleFormsInfo} />
-            </h4>
+          <Stage n={2} title={t('q_forms', { char })} extra={<KindsInfoButton open={formsInfo} onToggle={toggleFormsInfo} />}>
             {formsInfo && <KindsTable of="form" />}
             <p className="hint">{t('q_forms_hint')}</p>
             {formItems.map((f) => {
@@ -543,15 +534,11 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                 </div>
               )
             })}
-          </section>
+          </Stage>
         )}
 
         {meaningItem && work.meaning && (
-          <section className="card-step">
-            <h4>
-              {num(3)}
-              {t('q_meaning', { char })} <KindsInfoButton open={partInfo} onToggle={togglePartInfo} />
-            </h4>
+          <Stage n={3} title={t('q_meaning', { char })} extra={<KindsInfoButton open={partInfo} onToggle={togglePartInfo} />}>
             {partInfo && <KindsTable of="part" />}
             <p className="hint">{t('q_meaning_hint')}</p>
             <div className="card-options" role="radiogroup">
@@ -577,52 +564,32 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                 <span className="card-option-label">{t('m_none')}</span>
               </label>
             </div>
-          </section>
+          </Stage>
         )}
 
         {conflict && <p className="queue-warn">{t('conflict')}</p>}
 
-        <div className="card-summary">
-          <h5>{t('summary')}</h5>
-          <ul>
-            {summary.map((s, i) => (
-              <li key={i} lang="ja">
-                {s}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {reasonOpen || work.reason ? (
-          <label className="review-field">
-            <span>{t('reason')}</span>
-            <input
-              className="assoc-text"
-              value={work.reason}
-              maxLength={500}
-              autoFocus={reasonOpen && !work.reason}
-              onChange={(e) => setWork({ ...work, reason: e.target.value })}
-            />
-          </label>
-        ) : (
-          <button type="button" className="clear queue-add-reason" onClick={() => setReasonOpen(true)}>
-            + {t('addReason')}
-          </button>
-        )}
-        {problem && <p className="account-problem">{problem}</p>}
-        {unpicked && <p className="hint card-pick-first">{t('pickFirst')}</p>}
-        <div className="queue-actions">
-          <button className="account-submit" disabled={busy || conflict || unpicked} title={unpicked ? t('pickFirst') : undefined} onClick={() => send(false)}>
-            {t('save')}
-          </button>
-          <button className="clear" disabled={busy} onClick={() => send(true)}>
-            {t('skip')}
-          </button>
-          <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
-            {t('reset')}
-          </button>
-        </div>
-      </div>
-    </article>
+        <CardFooter
+          key={id}
+          summary={summary}
+          reason={work.reason}
+          onReason={(r) => setWork({ ...work, reason: r })}
+          problem={problem}
+          before={unpicked && <p className="hint card-pick-first">{t('pickFirst')}</p>}
+          actions={
+            <>
+              <button className="account-submit" disabled={busy || conflict || unpicked} title={unpicked ? t('pickFirst') : undefined} onClick={() => send(false)}>
+                {t('save')}
+              </button>
+              <button className="clear" disabled={busy} onClick={() => send(true)}>
+                {t('skip')}
+              </button>
+              <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
+                {t('reset')}
+              </button>
+            </>
+          }
+        />
+    </ReviewCard>
   )
 }

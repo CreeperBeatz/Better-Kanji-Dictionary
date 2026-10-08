@@ -6532,31 +6532,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 /* A usage card: which kanji to write for a shared kun reading. */
-/* A which-kanji card (and its Bulgarian card): each spelling, and the notes on borderline cases,
-   framed apart like a card's steps, with a big heading. */
-.usage-spelling,
-.usage-notes {
-  margin: 14px 0;
-  padding: 12px 16px;
-  border: 1px solid var(--rule-bright);
-  border-radius: 8px;
-  background: var(--sumi-lift);
-}
-
-.queue-edit .usage-spelling h4,
-.queue-edit .usage-notes h4 {
-  margin: 0 0 8px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--rule);
-  color: var(--paper);
-  font-size: 22px;
-  font-weight: 600;
-}
-
-.queue-edit .usage-notes h4 {
-  font-size: 17px;
-}
-
 /* Each note apart from the next. */
 .usage-note + .usage-note,
 .usage-notes .bg-usage-line + .bg-usage-line {
@@ -8841,24 +8816,6 @@ button.review-part {
 
 /* A character's card (review/CharacterCard.tsx): parts, forms and what a part
    is, one step each, every answer a sentence saying what it does. */
-.card-step {
-  border-top: 1px solid var(--rule);
-  margin-top: 12px;
-  padding-top: 10px;
-}
-
-.card-step h4 {
-  margin: 0 0 2px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--paper);
-}
-
-.card-step > .hint {
-  margin: 0 0 8px;
-  font-size: 12.5px;
-}
-
 .card-options {
   display: flex;
   flex-direction: column;
@@ -9710,4 +9667,19 @@ button.review-part {
 
 .bkd-w {
   font-size: 15px;
+}
+
+/* The shared card (review/Card.tsx): the dictionaries on top; the footer lets the buttons stick to the item's foot. */
+.card-dicts {
+  margin: 4px 0 6px;
+}
+
+.card-foot {
+  display: contents;
+}
+
+.dict-night .book-src .book-line {
+  background: #1e1a16;
+  color: var(--paper);
+  border-color: var(--rule-bright);
 }

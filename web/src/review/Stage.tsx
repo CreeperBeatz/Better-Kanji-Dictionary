@@ -1,6 +1,6 @@
 /**
- * One step of a card (Dani, 2026-10-08): framed apart from the others, with a
- * big numbered title. The title folds and unfolds it; "Done" at its bottom
+ * One step of a card (Dani, 2026-10-08), on every card of every stage
+ * (review/Card.tsx): framed apart from the others, with a big numbered title. The title folds and unfolds it; "Done" at its bottom
  * folds it and brings the next step into view. Folded, it shows a line of
  * what it holds. Folding only hides: nothing is decided by it.
  */
@@ -20,7 +20,22 @@ const S = strings(
   },
 )
 
-export function Stage({ n, title, summary, children }: { n: number; title: ReactNode; summary?: ReactNode; children: ReactNode }) {
+/**
+ * `extra` sits beside the title, outside its fold button: links, an (i).
+ */
+export function Stage({
+  n,
+  title,
+  summary,
+  extra,
+  children,
+}: {
+  n: number
+  title: ReactNode
+  summary?: ReactNode
+  extra?: ReactNode
+  children: ReactNode
+}) {
   const t = S(useLang())
   const [shut, setShut] = useState(false)
   const root = useRef<HTMLElement>(null)
@@ -39,6 +54,7 @@ export function Stage({ n, title, summary, children }: { n: number; title: React
             {shut ? '▸' : '▾'}
           </span>
         </button>
+        {extra}
         {shut && summary && <span className="hint review-step-summary">{summary}</span>}
       </header>
       {!shut && (

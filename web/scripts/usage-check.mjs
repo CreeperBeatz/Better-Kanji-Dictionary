@@ -43,7 +43,7 @@ await page.screenshot({ path: `${SHOTS}/usage-step3.png` })
 await page.goto(`${WEB}/review/queue/usage/${idOf('usage', 'あう')}`, { waitUntil: 'networkidle' })
 await page.waitForSelector('.usage-card')
 check('no Bulgarian on the usage card', (await page.locator('.usage-card [lang="bg"]').count()) === 0)
-check('each spelling opens its kanji in the dictionary tab', JSON.stringify(await page.locator('.usage-spelling h4 .dict-tab').evaluateAll((as) => as.map((x) => new URL(x.href).searchParams.get('char'))))
+check('each spelling opens its kanji in the dictionary tab', JSON.stringify(await page.locator('.usage-card .review-step-head .dict-tab').evaluateAll((as) => as.map((x) => new URL(x.href).searchParams.get('char'))))
   === JSON.stringify(['会', '合', '遭']))
 check('no "Your answer", no source line', !(await page.locator('.queue-item').textContent()).includes('Your answer') && (await page.locator('.queue-head .queue-meta').count()) === 0)
 check('the reading is text', (await page.locator('.usage-kana').count()) > 0 && (await page.locator('.usage-kana-input').count()) === 0)
@@ -67,6 +67,21 @@ check('the Bulgarian card shows every line, with its Japanese and English', (awa
 const first = lines.first().locator('.bg-input')
 await first.fill('Хора се срещат лице в лице.')
 check('a changed line is outlined', (await lines.first().getAttribute('data-changed')) === 'true')
+check('the Bulgarian card is in numbered steps, a spelling each', (await page.locator('.bg-usage .review-step .review-step-n').count()) >= 2)
+check('it opens its kanji in the dictionary tab, not "Open on the site"', (await page.locator('.queue-head .dict-open').count()) === 0 && (await page.locator('.queue-head .dict-tab').count()) >= 1)
+
+// The character card: the same harness -- dictionaries on top, dark, folded; numbered steps.
+await page.goto(`${WEB}/review/queue/characters`, { waitUntil: 'networkidle' })
+await page.waitForSelector('.char-card .review-step')
+check('a character card has its dictionaries on top of the steps', await page.locator('.char-card .card-dicts + .queue-decide .review-step, .char-card > .card-dicts ~ .queue-decide .review-step').count() > 0)
+const night = await page.locator('.char-card .card-dicts .dict').first().evaluate((el) => {
+  el.open = true
+  const e = el.querySelector('.kd-entry, .book-entry')
+  return e ? getComputedStyle(e).backgroundColor : 'none'
+})
+check('in night colours', night !== 'none' && night.match(/\d+/g).slice(0, 3).reduce((a, n) => a + Number(n), 0) < 200, night)
+check('its steps have the numbered badge', (await page.locator('.char-card .review-step-n').count()) >= 1)
+await page.screenshot({ path: `${SHOTS}/usage-character.png` })
 await page.screenshot({ path: `${SHOTS}/usage-bg.png` })
 
 check('no page errors', errors.length === 0, errors.join(' | '))

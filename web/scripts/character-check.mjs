@@ -18,7 +18,7 @@ await admin.goto(`${BASE}/review/queue/characters`, { waitUntil: 'networkidle' }
 await wait(2000)
 const first = (await admin.locator('.char-card .queue-big').textContent()).trim()
 console.log('first card:', first)
-console.log('steps:', await admin.locator('.char-card .card-step h4').allTextContents())
+console.log('steps:', await admin.locator('.char-card .review-step-title').allTextContents())
 console.log('options:', await admin.locator('.char-card .card-option').allTextContents().then((t) => t.map((s) => s.slice(0, 60))))
 console.log('draft:', (await admin.locator('.card-draft').first().textContent().catch(() => '(none)')).slice(0, 160))
 console.log('summary:', await admin.locator('.card-summary li').allTextContents())
@@ -45,7 +45,7 @@ console.log(`${first} parts now:`, parts)
 // A card with a form link and a part meaning.
 await admin.goto(`${BASE}/review/queue/characters/${encodeURIComponent('char:丷')}`, { waitUntil: 'networkidle' })
 await wait(2000)
-console.log('丷 steps:', await admin.locator('.char-card .card-step h4').allTextContents())
+console.log('丷 steps:', await admin.locator('.char-card .review-step-title').allTextContents())
 await admin.screenshot({ path: `${SHOTS}/char-2-part.png`, fullPage: true })
 // A shape plus a form of: refused before saving.
 await admin.locator('.card-option', { hasText: /Use the proposal: 丷 is a form of/ }).first().click().catch(() => {})

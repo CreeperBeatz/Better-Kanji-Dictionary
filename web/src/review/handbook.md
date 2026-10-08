@@ -32,6 +32,22 @@ word written in jōyō kanji has one.)
 - Your work on a card is kept in this browser until you decide it: reload,
   close the tab or come back tomorrow, and it is as you left it.
 
+### Every card has the same parts
+
+Characters, meanings, which kanji and Bulgarian cards are laid out the same
+way, top to bottom:
+
+1. **The head.** What the card is about, in big type. Under it, what you need
+   to know about the card (a person's suggestion and why; an old form) and
+   *Something else is wrong?*. On the right, *Research in Claude* and the
+   book icon (*Open in dictionary*), or *Open on the site*.
+2. **Other dictionaries**, when the card is about a kanji: Kodansha and
+   Цалта's book, folded, in night colours. The book icon opens all of them
+   in the dictionary tab.
+3. **The steps**, each in a frame with its number. Click a title to fold it;
+   *Done: collapse this step* folds it and brings the next one up.
+4. **The foot.** What saving will do, *+ add a reason*, and the buttons.
+
 ### The buttons
 
 | Button | What it does | On |

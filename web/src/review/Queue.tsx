@@ -8,6 +8,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DictLinks } from './DictLinks'
+import { CardFooter, CardHead, ReviewCard } from './Card'
+import { DictionaryLinks } from './dictLink'
 import {
   api,
   dataChanged,
@@ -71,8 +73,6 @@ const S = strings(
     now: 'Now',
     proposed: 'Proposed',
     yourValue: 'Your answer',
-    reason: 'Reason (optional)',
-    addReason: 'add a reason',
     accept: 'accept',
     saveEdit: 'save my answer',
     keep: 'keep it as it is',
@@ -116,8 +116,6 @@ const S = strings(
     now: 'Сега',
     proposed: 'Предложено',
     yourValue: 'Вашият отговор',
-    reason: 'Причина (по желание)',
-    addReason: 'добавете причина',
     accept: 'приемете',
     saveEdit: 'запазете моя отговор',
     keep: 'оставете го както е',
@@ -147,6 +145,14 @@ function reportSubject(i: QueueItem): string | null {
   if (i.type === 'bg') return i.subject.startsWith('usage:') ? null : i.subject
   if (i.type === 'word_sense') return `word:${i.subject.split('|')[1]}`
   return `kanji:${i.subject.split('|')[0]}`
+}
+
+/** The kanji a Bulgarian card is about, to open in the dictionary tab: a kanji's, a word's (学生: 学 生), a which-kanji card's. */
+function bgKanji(i: QueueItem, d: ItemDetail | null): string[] {
+  const [kind, key] = i.subject.split(':')
+  if (kind === 'kanji') return [key]
+  if (kind === 'word') return [...(d?.context.word?.headword ?? i.label ?? '')]
+  return (d?.context.usage?.spellings ?? []).flatMap((s) => [...s.kanji])
 }
 
 /** A usage card's kanji, one per spelling: 早・速. */
@@ -208,8 +214,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [problem, setProblem] = useState<string | null>(null)
   // People's suggestions waiting: the proposals/suggestions filter shows only then.
   const [suggestionsN, setSuggestionsN] = useState(0)
-  // The reason field, opened by "add a reason" (or when the item kept one).
-  const [reasonOpen, setReasonOpen] = useState(false)
 
   // Only the latest load may land: a stage switched quickly, or the effect run
   // twice in development, would otherwise answer late and take the wanted item.
@@ -372,7 +376,6 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     clearDraft(item.id)
     setDraft(item.proposed ?? item.current)
     setReason('')
-    setReasonOpen(false)
     setPlacements(placedFrom)
     setSkipped(new Set())
     setLabels(labelsFrom)
@@ -458,7 +461,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   }
 
   return (
-    <div className="queue">
+    <div className="queue dict-night">
       {/* What to review: any stage, or what you skipped -- then one stage. */}
       <nav className="overlay-tabs queue-filters">
         <button
@@ -562,41 +565,56 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
             <CharacterCard key={item.id} id={item.id} char={item.subject} onDone={advance} onKanji={onKanji} />
           )}
           {item && item.type !== 'character' && (
-            <article className="queue-item">
-              <header className="queue-head">
-                <span className="queue-big" lang="ja">
-                  {subjectGlyphs(item)}
-                </span>
-                <div>
-                  {item.origin === 'suggestion' && (
+            <ReviewCard
+              head={
+                <CardHead
+                  glyph={subjectGlyphs(item)}
+                  notes={
                     <>
-                      <p className="queue-meta">
-                        {t(`t_${item.type}` as Key)} · {t('suggestionBy', { who: item.createdBy ? `@${item.createdBy.username}` : '?' })}
-                      </p>
-                      {item.reason && <p className="queue-reason">{item.reason}</p>}
+                      {item.origin === 'suggestion' && (
+                        <>
+                          <p className="queue-meta">
+                            {t(`t_${item.type}` as Key)} · {t('suggestionBy', { who: item.createdBy ? `@${item.createdBy.username}` : '?' })}
+                          </p>
+                          {item.reason && <p className="queue-reason">{item.reason}</p>}
+                        </>
+                      )}
+                      {item.origin !== 'suggestion' && typeof item.evidence?.confidence === 'number' && (
+                        <p className="queue-meta hint">{t('confidence', { n: Math.round(Number(item.evidence.confidence) * 100) / 100 })}</p>
+                      )}
+                      {reportSubject(item) && <ReportButton key={item.id} subject={reportSubject(item)!} from={item.id} />}
                     </>
-                  )}
-                  {item.origin !== 'suggestion' && typeof item.evidence?.confidence === 'number' && (
-                    <p className="queue-meta hint">{t('confidence', { n: Math.round(Number(item.evidence.confidence) * 100) / 100 })}</p>
-                  )}
-                  {reportSubject(item) && <ReportButton key={item.id} subject={reportSubject(item)!} from={item.id} />}
-                </div>
-                <div className="queue-dict">
-                  <DictLinks
-                    type={item.type}
-                    subject={item.subject}
-                    label={(detail?.id === item.id ? detail.context?.word?.headword : undefined) ?? item.label}
-                  />
-                  {detail?.id === item.id && board && detail.context.board && (
-                    <ResearchOpen
-                      prompt={() =>
-                        meaningsPrompt(item.subject, (draft ?? []) as MeaningGroup[], detail.context.board!, placements, dicts, detail.context.kanjidic ?? [])
-                      }
-                    />
-                  )}
-                  {detail?.id === item.id && item.type === 'bg' && !item.subject.startsWith('usage:') && <ResearchOpen prompt={() => bgPrompt(detail, (draft ?? []) as string[])} />}
-                </div>
-              </header>
+                  }
+                  actions={
+                    <>
+                      {/* A Bulgarian card opens its kanji in the dictionary tab; the others open their page here. */}
+                      {item.type === 'bg' ? (
+                        <DictionaryLinks chars={bgKanji(item, detail?.id === item.id ? detail : null)} />
+                      ) : (
+                        <DictLinks
+                          type={item.type}
+                          subject={item.subject}
+                          label={(detail?.id === item.id ? detail.context?.word?.headword : undefined) ?? item.label}
+                        />
+                      )}
+                      {detail?.id === item.id && board && detail.context.board && (
+                        <ResearchOpen
+                          prompt={() =>
+                            meaningsPrompt(item.subject, (draft ?? []) as MeaningGroup[], detail.context.board!, placements, dicts, detail.context.kanjidic ?? [])
+                          }
+                        />
+                      )}
+                      {detail?.id === item.id && item.type === 'bg' && !item.subject.startsWith('usage:') && <ResearchOpen prompt={() => bgPrompt(detail, (draft ?? []) as string[])} />}
+                    </>
+                  }
+                />
+              }
+              dicts={
+                board && dicts && detail?.id === item.id && detail.context.board ? (
+                  <DictionariesPanel dicts={dicts} words={detail.context.board} placements={placements} groups={(draft ?? []) as MeaningGroup[]} />
+                ) : undefined
+              }
+            >
 
               <div className="queue-judge">
               {item.type === 'report' ? (
@@ -620,12 +638,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
               )}
 
               {detail && item.type !== 'bg' && item.type !== 'kanji_senses' && item.type !== 'usage' && <Evidence detail={detail} onKanji={onKanji} onUse={setDraft} />}
-              {board && dicts && detail?.id === item.id && detail.context.board && (
-                <DictionariesPanel dicts={dicts} words={detail.context.board} placements={placements} groups={(draft ?? []) as MeaningGroup[]} />
-              )}
               </div>
 
-              <div className="queue-decide">
               <div className="queue-edit">
                 {item.type === 'bg' ? (
                   detail?.id === item.id ? (
@@ -712,43 +726,39 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     explained={detail.context.usagePairs}
                   />
                 )}
-                {reasonOpen || reason ? (
-                  <label className="review-field">
-                    <span>{t('reason')}</span>
-                    <input className="assoc-text" value={reason} maxLength={500} autoFocus={reasonOpen && !reason} onChange={(e) => setReason(e.target.value)} />
-                  </label>
-                ) : (
-                  <button type="button" className="clear queue-add-reason" onClick={() => setReasonOpen(true)}>
-                    + {t('addReason')}
-                  </button>
-                )}
               </div>
 
-              {problem && <p className="account-problem">{problem}</p>}
-              <div className="queue-actions">
-                <button
-                  className="account-submit"
-                  disabled={busy || blocked}
-                  title={blocked ? t('confirmFirst', { n: unconfirmed }) : undefined}
-                  onClick={() => decideDraft()}
-                >
-                  {edited ? t('saveEdit') : open ? t('keep') : item.type === 'report' ? t('confirmReport') : t('accept')}
-                </button>
-                {canReject(item) && (
-                  <button className="clear" disabled={busy} onClick={() => decide('reject')}>
-                    {t('reject')}
-                  </button>
-                )}
-                <button className="clear" disabled={busy} onClick={() => decide('skip')}>
-                  {t('skip')}
-                </button>
-                <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
-                  {t('reset')}
-                </button>
-                {blocked && <span className="hint queue-blocked">{t('confirmFirst', { n: unconfirmed })}</span>}
-              </div>
-              </div>
-            </article>
+              <CardFooter
+                key={item.id}
+                reason={reason}
+                onReason={setReason}
+                problem={problem}
+                actions={
+                  <>
+                    <button
+                      className="account-submit"
+                      disabled={busy || blocked}
+                      title={blocked ? t('confirmFirst', { n: unconfirmed }) : undefined}
+                      onClick={() => decideDraft()}
+                    >
+                      {edited ? t('saveEdit') : open ? t('keep') : item.type === 'report' ? t('confirmReport') : t('accept')}
+                    </button>
+                    {canReject(item) && (
+                      <button className="clear" disabled={busy} onClick={() => decide('reject')}>
+                        {t('reject')}
+                      </button>
+                    )}
+                    <button className="clear" disabled={busy} onClick={() => decide('skip')}>
+                      {t('skip')}
+                    </button>
+                    <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
+                      {t('reset')}
+                    </button>
+                    {blocked && <span className="hint queue-blocked">{t('confirmFirst', { n: unconfirmed })}</span>}
+                  </>
+                }
+              />
+            </ReviewCard>
           )}
         </div>
       )}

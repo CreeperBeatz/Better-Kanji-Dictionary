@@ -413,7 +413,7 @@ export function BookSplitView({
   const t = S(useLang())
   const split = view.split
   return (
-    <BookSource src={view}>
+    <BookSource src={view} entry="none">
       {split && (
         <p className="book-use">
           <span className="hint">{t('ourParts')}: </span>
@@ -441,7 +441,7 @@ export function BookSplitView({
 export function BookOldView({ view }: { view: BookOld }) {
   const t = S(useLang())
   return (
-    <BookSource src={view}>
+    <BookSource src={view} entry="none">
       <p className="book-use" lang="ja">
         {t('oldForm', { old: view.old })}
       </p>
@@ -460,7 +460,7 @@ export function BookPartPanel({ view }: { view: BookPartView }) {
           <span lang="bg">{view.names.map(([n, k]) => (k > 1 ? `${n} ×${k}` : n)).join(', ')}</span>
         </p>
       )}
-      {view.entry && <BookSource src={view.entry} />}
+      {view.entry && <BookSource src={view.entry} entry="none" />}
       {view.seen.map((s) => (
         <BookSource key={`${s.no}`} src={s} entry="none" />
       ))}

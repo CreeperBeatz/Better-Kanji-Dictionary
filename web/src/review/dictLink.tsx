@@ -82,3 +82,19 @@ export function DictionaryLink({
     </a>
   )
 }
+
+/** The book icon for each kanji: one alone, or each kanji with its own (学生: 学 📖 生 📖). */
+export function DictionaryLinks({ chars }: { chars: string[] }) {
+  const kanji = [...new Set(chars.filter((c) => /^[㐀-鿿豈-﫿]$/.test(c)))]
+  if (kanji.length < 2) return kanji.length ? <DictionaryLink char={kanji[0]} /> : null
+  return (
+    <span className="dict-tabs">
+      {kanji.map((c) => (
+        <span key={c} className="dict-tabs-one">
+          <span lang="ja">{c}</span>
+          <DictionaryLink char={c} />
+        </span>
+      ))}
+    </span>
+  )
+}

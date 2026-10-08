@@ -79,17 +79,24 @@ const S = strings(
 /** Kodansha's words a sense on a card (the amber ones always show); the dictionary tab has them all. */
 const WORDS_A_SENSE = 2
 
+// A card with no board (a character's): no words to mark, no groups to point at.
+const NO_WORDS: BoardWord[] = []
+const NO_PLACEMENTS: Placements = {}
+const NO_GROUPS: MeaningGroup[] = []
+
 export function DictionariesPanel({
   dicts,
-  words,
-  placements,
-  groups,
+  words = NO_WORDS,
+  placements = NO_PLACEMENTS,
+  groups = NO_GROUPS,
 }: {
   dicts: KanjiDictionaries
-  words: BoardWord[]
-  placements: Placements
-  groups: MeaningGroup[]
+  /** A meanings card's board: its words, where each is now, its groups. Without them, the entries as the books have them. */
+  words?: BoardWord[]
+  placements?: Placements
+  groups?: MeaningGroup[]
 }) {
+  const board = words.length > 0
   const lang = useLang()
   const t = S(lang)
   const stats = useMemo(() => senseStats(dicts, words, placements, groups), [dicts, words, placements, groups])
@@ -144,7 +151,7 @@ export function DictionariesPanel({
   }
 
   return (
-    <section className="dicts dict-night">
+    <section className="dicts">
       <header className="dicts-head">
         <h4>
           {t('title')} <DictionaryLink char={dicts.char} />
@@ -161,11 +168,15 @@ export function DictionariesPanel({
               char={dicts.char}
               k={k}
               limit={WORDS_A_SENSE}
-              mark={(w: DictWord) => {
-                const on = w.id != null && onBoard.has(w.id)
-                return { off: !on, away: w.id != null && away.has(w.id), title: on ? undefined : t('notOnBoard') }
-              }}
-              chip={(s) => (s.words?.length || stats.has(`kodansha|${s.key}`) ? chip('kodansha', s.key) : null)}
+              mark={
+                board
+                  ? (w: DictWord) => {
+                      const on = w.id != null && onBoard.has(w.id)
+                      return { off: !on, away: w.id != null && away.has(w.id), title: on ? undefined : t('notOnBoard') }
+                    }
+                  : undefined
+              }
+              chip={board ? (s) => (s.words?.length || stats.has(`kodansha|${s.key}`) ? chip('kodansha', s.key) : null) : undefined}
               more={(n) => (
                 <DictionaryLink char={dicts.char} book="kodansha" view="digital" className="kd-all" label={t(n === 1 ? 'seeAll1' : 'seeAll', { n })} />
               )}

@@ -527,13 +527,14 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
     <div className="usage-card">
       <p className="hint">{t('usageHint')}</p>
       {value.spellings.map((s, i) => (
-        <section key={i} className="usage-spelling">
-          <h4>
-            <span lang="ja">{s.kanji}</span>{' '}
-            {[...new Set([...s.kanji].filter(isKanji))].map((c) => (
-              <DictionaryLink key={c} char={c} />
-            ))}
-          </h4>
+        <Stage
+          key={i}
+          n={i + 1}
+          title={<span lang="ja">{s.kanji}</span>}
+          extra={[...new Set([...s.kanji].filter(isKanji))].map((c) => (
+            <DictionaryLink key={c} char={c} />
+          ))}
+        >
           <p lang="ja" className="usage-def">
             {s.def}
           </p>
@@ -574,11 +575,10 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
               )
             })}
           </ul>
-        </section>
+        </Stage>
       ))}
       {value.notes.length > 0 && (
-        <section className="usage-notes">
-          <h4>{t('notes')}</h4>
+        <Stage n={value.spellings.length + 1} title={t('notes')}>
           {value.notes.map((n, i) => (
             <div key={i} className="usage-note">
               <p lang="ja" className="hint">
@@ -594,7 +594,7 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
               />
             </div>
           ))}
-        </section>
+        </Stage>
       )}
     </div>
   )
