@@ -23,6 +23,7 @@
 import { useMemo, useState } from 'react'
 import type { KanjiDictionaries, KanjiExtras, LinkCandidate, MeaningGroup, UsageCard } from '../api'
 import { strings, useLang } from '../i18n'
+import { DictionaryLink } from './dictLink'
 
 const S = strings(
   {
@@ -35,6 +36,7 @@ const S = strings(
     mixupsShared: 'read this way by {chars}',
     mixYes: 'easy to mix up: show it',
     mixNo: 'not worth showing',
+    openDict: 'open in dictionary',
     none: 'none',
     about: 'What the kanji does in these words',
     examples: 'Learners see these words first',
@@ -69,6 +71,7 @@ const S = strings(
     mixupsShared: 'така се четат {chars}',
     mixYes: 'лесно се бъркат: покажете го',
     mixNo: 'не си струва да се показва',
+    openDict: 'отвори в речника',
     none: 'няма',
     about: 'Какво прави канджито в тези думи',
     examples: 'Учещите виждат първо тези думи',
@@ -290,7 +293,7 @@ export function SynonymsStep({
       </span>
       <span className="step-gloss">
         {s.gloss}
-        {s.en && <span className="hint"> · {t('mainMeaning', { en: s.en })}</span>}
+        {s.en && <span className="hint"> · {t('mainMeaning', { en: s.en })}</span>} <DictionaryLink char={s.char} label={t('openDict')} />
       </span>
       <Picks groups={groups} on={(id) => inGroup(s.char, id)} onPick={(to) => put(s.char, to)} none={t('notSame')} label={s.char} />
     </li>
@@ -398,7 +401,7 @@ export function MixupsStep({
                 </span>
                 <span className="step-gloss">
                   {r.gloss}
-                  {r.en && <span className="hint"> · {t('mainMeaning', { en: r.en })}</span>}
+                  {r.en && <span className="hint"> · {t('mainMeaning', { en: r.en })}</span>} <DictionaryLink char={r.char} label={t('openDict')} />
                 </span>
                 <span className="step-picks" role="group" aria-label={r.char}>
                   <button type="button" className="search-filter" data-on={kept(r.char) || undefined} aria-pressed={kept(r.char)} onClick={() => put(r, true)}>

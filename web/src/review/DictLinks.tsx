@@ -1,7 +1,7 @@
 /**
- * "Open in dictionary": what a review item is about -- the kanji, the word,
- * both kanji of a form link -- opened in a new tab, so the queue stays where
- * it is.
+ * "Open on the site": what a review item is about -- the kanji, the word,
+ * both kanji of a form link -- its page here, in a new tab, so the queue
+ * stays where it is. (The print dictionaries' scans: review/dictLink.tsx.)
  */
 
 import type { TaskType } from '../api'
@@ -9,13 +9,13 @@ import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    open: 'Open in dictionary',
-    openOne: 'Open {what} in the dictionary, in a new tab',
+    open: 'Open on the site',
+    openOne: 'Open {what} on this site, in a new tab',
     theWord: 'the word',
   },
   {
-    open: 'Отвори в речника',
-    openOne: 'Отворете {what} в речника, в нов раздел',
+    open: 'Отвори в сайта',
+    openOne: 'Отворете {what} в този сайт, в нов раздел',
     theWord: 'думата',
   },
 )

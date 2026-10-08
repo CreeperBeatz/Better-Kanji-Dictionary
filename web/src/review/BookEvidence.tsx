@@ -20,7 +20,7 @@ import {
 } from '../api'
 import { strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
-import { useKey } from '../keys'
+import { typing, useKey } from '../keys'
 import { Overlay } from '../Overlay'
 
 const S = strings(
@@ -133,12 +133,13 @@ const ZOOM_MAX = 6 // times the page's width when it fits
 const ZOOM_STEP = 1.25
 
 /**
- * A book's page in a popup over the review screen, from the entry's first
- * page: ← → (or the arrow keys) turn the pages; − + (Ctrl+wheel, the - + 0
- * keys) zoom from the whole page up to six times its width, and the page is
- * dragged to move around it. It has the keyboard while it is open.
+ * A book's scanned page, from the entry's first page: ← → (or the arrow keys)
+ * turn the pages; − + (Ctrl+wheel, the - + 0 keys) zoom from the whole page up
+ * to six times its width, and the page is dragged to move around it. It has
+ * the keyboard (but for a field being typed in); Escape calls `onEscape`.
+ * In the popup below, and in the dictionary tab (review/BookViewer.tsx).
  */
-export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page: number; onClose: () => void }) {
+export function PageScan({ book, page, onEscape, extra }: { book: BookRef['book']; page: number; onEscape?: () => void; extra?: ReactNode }) {
   const t = S(useLang())
   const [n, setN] = useState(page)
   // 1: the whole page in view; more: that many times the width it has then.
@@ -153,9 +154,10 @@ export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page
   // a card's shortcuts (a accepts) do nothing behind it.
   useKey(
     (e) => {
+      if (typing(e.target)) return
       e.stopPropagation()
       const keys: Record<string, () => void> = {
-        Escape: onClose,
+        ...(onEscape ? { Escape: onEscape } : {}),
         ArrowLeft: () => turn(-1),
         ArrowRight: () => turn(1),
         '+': () => zoomTo(zoom * ZOOM_STEP),
@@ -184,10 +186,9 @@ export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page
     return () => el.removeEventListener('wheel', wheel)
   }, [url])
 
-  const name = t(book)
-  const title = t('pageTitle', { book: name, n })
+  const title = t('pageTitle', { book: t(book), n })
   return (
-    <Overlay className="book-popup" panel="book-popup-panel" label={title} onClose={onClose} escape={false} closeTitle="Esc">
+    <>
       <div className="book-popup-bar">
         <button type="button" className="book-turn" onClick={() => turn(-1)} disabled={n <= 1} title={t('prev')} aria-label={t('prev')}>
           ←
@@ -196,6 +197,7 @@ export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page
         <button type="button" className="book-turn" onClick={() => turn(1)} title={t('next')} aria-label={t('next')}>
           →
         </button>
+        {extra}
         <span className="book-zoom">
           <button type="button" onClick={() => zoomTo(zoom / ZOOM_STEP)} disabled={zoom <= 1} title={t('zoomOut')} aria-label={t('zoomOut')}>
             −
@@ -241,6 +243,16 @@ export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page
           />
         </div>
       )}
+    </>
+  )
+}
+
+/** A book's page in a popup over the review screen. */
+export function PagePopup({ book, page, onClose }: { book: BookRef['book']; page: number; onClose: () => void }) {
+  const t = S(useLang())
+  return (
+    <Overlay className="book-popup" panel="book-popup-panel" label={t(book)} onClose={onClose} escape={false} closeTitle="Esc">
+      <PageScan book={book} page={page} onEscape={onClose} />
     </Overlay>
   )
 }

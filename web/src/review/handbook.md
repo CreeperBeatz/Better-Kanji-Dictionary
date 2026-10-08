@@ -80,6 +80,17 @@ dictionary.
 - **The kanji book's own cards.** Some character cards come from
   the book itself (`tsalta-diff`, `tsalta`); judge them like any proposal. It
   calls some name variants old forms (埜 for 野): those are not old forms.
+- **The dictionary tab, for a second screen.** On a meanings card, *Open in
+  dictionary ↗* opens the scanned pages in a tab of their own: next to
+  *Other dictionaries*, on each dictionary in it, and on each kanji in steps
+  2 and 3. At the top of the tab, pick 1. the kanji and 2. the dictionary
+  (Kodansha, 新漢語林, Цалта's kanji book). The page turns with ← →, and
+  zooms with + − or Ctrl+wheel.
+  - Every link opens the *same* tab. Put it on your second screen: the next
+    kanji you open shows there, in the dictionary you picked last.
+  - A dictionary that does not have the kanji is greyed (*not in it*).
+  - *Open on the site ↗*, at the top of a card, is different: it opens the
+    kanji's page here.
 
 ## Characters
 

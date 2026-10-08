@@ -8041,6 +8041,70 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
 }
 
+/* The dictionary tab (review/BookViewer.tsx): the kanji and the dictionary on top, the scanned page under them. */
+.dict-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100vh;
+  padding: 10px 16px 16px;
+  box-sizing: border-box;
+}
+
+.dv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 28px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.dv-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dv-step {
+  color: var(--paper);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.dv-char {
+  font-family: var(--mincho);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.dv-input {
+  width: 13em;
+}
+
+.dv-recent {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dv-recent .search-filter {
+  font-size: 15px;
+}
+
+.dv-page .book-scan img {
+  max-height: calc(100vh - 140px);
+}
+
+.dv-entry {
+  margin-left: 8px;
+}
+
+.dict-tab {
+  white-space: nowrap;
+}
+
 /* The printed page, over everything: fits the screen; a click shows it at full size to scroll. */
 .book-popup-panel {
   width: min(96vw, 1100px);

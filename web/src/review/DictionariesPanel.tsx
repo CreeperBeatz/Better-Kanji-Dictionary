@@ -14,7 +14,8 @@ import { useMemo, type ReactNode } from 'react'
 import type { BoardWord, BookRef, DictSense, DictWord, KanjiDictionaries, MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import type { Placements } from './board'
-import { KanjiEntry, OpenBook } from './BookEvidence'
+import { KanjiEntry } from './BookEvidence'
+import { DictionaryLink, type DictBook } from './dictLink'
 import { elsewhere, senseStats, type Bucket, type SenseStat } from './dictMatch'
 import { CATCH_ALL } from './editors'
 
@@ -290,7 +291,7 @@ export function DictionariesPanel({
       <summary className="book-head dict-sum">
         <span className="book-from">{t(book ? 'fromBook' : 'from')}:</span> <span className="book-name">{name}</span>
         {no != null && <> · №{no}</>}
-        {book && <OpenBook book={book} pages={pages} />}
+        {book && pages.length > 0 && <DictionaryLink char={dicts.char} book={book as DictBook} bookName={name} label={t('openDict')} />}
         {extra}
         {n > 0 && (
           <span className="dict-split-n" title={t('nSplitTitle')}>
@@ -304,7 +305,9 @@ export function DictionariesPanel({
   return (
     <section className="dicts">
       <header className="dicts-head">
-        <h4>{t('title')}</h4>
+        <h4>
+          {t('title')} <DictionaryLink char={dicts.char} />
+        </h4>
         <p className="hint">{t('hint')}</p>
         {away.size > 0 && <p className="dicts-away">{away.size === 1 ? t('elsewhere1') : t('elsewhere', { n: away.size })}</p>}
       </header>
@@ -337,7 +340,7 @@ export function DictionariesPanel({
           ) : (
             <p className="book-head dict-sum dict-link">
               <span className="book-from">{t('fromBook')}:</span> <span className="book-name">{t('kangorin')}</span> · №{g.no}
-              <OpenBook book="kangorin" pages={g.pages} />
+              {g.pages.length > 0 && <DictionaryLink char={dicts.char} book="kangorin" bookName={t('kangorin')} label={t('openDict')} />}
               {kangorinMarks(g)}
             </p>
           ))}
