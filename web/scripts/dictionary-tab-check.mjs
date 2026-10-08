@@ -37,7 +37,7 @@ const scanIn = async (p) => {
 check('the card head says "Open on the site"', (await page.locator('.dict-open').first().textContent()).includes('Open on the site'))
 const icon = page.locator('.dicts-head .dict-tab')
 check('"Open in dictionary" is an icon, named in its tooltip', (await icon.locator('svg').count()) === 1 && (await icon.textContent()).trim() === ''
-  && (await icon.getAttribute('title')).startsWith('Open 生 in dictionary'))
+  && (await icon.getAttribute('title')).startsWith('Open 生 in the dictionary tab'))
 // Kodansha on the card: 2 words a sense (amber ones aside), and the way to the rest.
 check('the card has Kodansha and Цалта, both folded', JSON.stringify(await page.locator('.dicts details.dict').evaluateAll((ds) => ds.map((d) => [d.dataset.src, d.open])))
   === JSON.stringify([['kodansha', false], ['tsalta', false]]))
@@ -56,7 +56,7 @@ for (let i = 0; i < (await blocks.count()); i++) {
 }
 check('the card shows at most 2 words a sense', most <= 2, most)
 const seeAll = page.locator('details.dict[data-src="kodansha"] .kd-all').first()
-check('a cut sense says there are more', (await seeAll.textContent()).includes('see all in the expanded dictionary'), await seeAll.textContent())
+check('a cut sense says there are more', (await seeAll.textContent()).includes('see all in the dictionary tab'), await seeAll.textContent())
 const [tab] = await Promise.all([ctx.waitForEvent('page'), page.locator('.dicts-head .dict-tab').click()])
 watch(tab)
 await tab.waitForLoadState('networkidle')

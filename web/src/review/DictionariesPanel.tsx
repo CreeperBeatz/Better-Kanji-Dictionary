@@ -45,8 +45,8 @@ const S = strings(
     nSplit: '{n} senses split',
     nSplit1: '1 sense split',
     nSplitTitle: 'Senses of this dictionary whose words on the board are in more than one group. Open it: their chips are amber.',
-    seeAll: '{n} more words: see all in the expanded dictionary',
-    seeAll1: '1 more word: see all in the expanded dictionary',
+    seeAll: '{n} more words: see all in the dictionary tab',
+    seeAll1: '1 more word: see all in the dictionary tab',
   },
   {
     title: 'Други речници',
@@ -71,8 +71,8 @@ const S = strings(
     nSplit: '{n} значения разделени',
     nSplit1: '1 значение разделено',
     nSplitTitle: 'Значения от този речник, чиито думи на дъската са в повече от една група. Отворете го: техните етикети са кехлибарени.',
-    seeAll: 'още {n} думи: вижте всички в разгънатия речник',
-    seeAll1: 'още 1 дума: вижте всички в разгънатия речник',
+    seeAll: 'още {n} думи: вижте всички в раздела с речниците',
+    seeAll1: 'още 1 дума: вижте всички в раздела с речниците',
   },
 )
 

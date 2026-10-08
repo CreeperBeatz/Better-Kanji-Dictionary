@@ -95,7 +95,7 @@ dictionary.
     are transcribed, so its scan has the rest.
   - On the card, *Other dictionaries* has only Kodansha and Цалта's book,
     folded, in small type. Kodansha shows 2 words a sense (and every amber
-    word); *see all in the expanded dictionary* opens the rest in the tab,
+    word); *see all in the dictionary tab* opens the rest there,
     digital. 新漢語林, Wiktionary and 漢字ペディア (a link to its own site)
     are only in the tab.
   - Each Kodansha sense ends with *→ the group* its words on the board are in
@@ -233,7 +233,7 @@ change, even if it is technically accurate.
 | *no relation* | nothing a learner should see: a Chinese simplified form, a rare variant, or a character built from the other | 业·業, 林·木 |
 
 - **A check with nothing proposed** is a link the dictionary was built
-  with that no person has looked at. Leave it as it is when it is right;
+  with that no person has looked at. Keep it as it is when it is right;
   otherwise say what it is instead.
 - **Old forms are not a question.** "會 is the old form of 会" comes from an
   official list (Unihan, which follows the Jōyō Kanji Table), so the card
@@ -256,7 +256,7 @@ change, even if it is technically accurate.
   of another (林 is two 木, 炎 two 火, 𢆶 two 幺) contains it, and that is
   its parts: 林's parts are 木. It is a character with a meaning of its own
   (林 is a grove, not a tree), so it lends nothing and borrows nothing.
-  Choose *no relation*, or *leave it as it is* when nothing links them yet. If the
+  Choose *no relation*, or *keep it as it is* when nothing links them yet. If the
   doubled character has no meaning in the dictionary (𢆶), it gets one
   under *Part meanings*.
 - Don't take a *looks like* that points at a kanji with the wrong meaning
@@ -448,7 +448,7 @@ drafted with them; check it like the groups, and fix or empty what is wrong.
     only a dictionary would list (生 / 埋 いける).
   - **A pair Bunkacho explains is not asked.** 会 / 合 / 遭 (あう) are in
     Bunkacho's usage report: the row says *Bunkacho explains this pair*, with
-    a link to its card under *which kanji*. The pair is kept, and that card
+    a link to its which-kanji card. The pair is kept, and that card
     says how to tell the kanji apart.
   - Pairs in our own data start as kept.
   - Kodansha lists none for most kanji: then the step says so, and there is
@@ -520,11 +520,11 @@ is accepted. Then it has the same lines as that card, in the same places.
 - **A kanji card's lines.** Under the groups, check the Bulgarian of each
   group's line and of *how its meanings connect*, against the English beside
   them.
-- **A which-kanji card.** Every line of the usage card: each spelling's
+- **A which-kanji card.** Every line of the which-kanji card: each spelling's
   definition, its examples, the notes. Each shows the Japanese and the
   accepted English; check the Bulgarian under them against both.
 
-## Which kanji to write
+## Which kanji
 
 > **Question:** does the translation say what Bunkacho's Japanese says?
 
@@ -578,7 +578,7 @@ reason field and tell the admin, so it can be added here.
 - **So it is a shape.** Several unrelated old parts became the same two
   strokes. No meaning is true across them.
 
-> **Decision:** *leave it as it is* for both form links. Answer 丷 as *a
+> **Decision:** *keep it as it is* for both form links. Answer 丷 as *a
 > shape with no meaning*, named for what it looks like, with a note saying
 > what it is in which kanji.
 

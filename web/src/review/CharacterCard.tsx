@@ -34,7 +34,7 @@ const S = strings(
   {
     kind: 'character',
     from: 'from {source}',
-    loading: 'loading',
+    loading: 'loading…',
     q_parts: 'What is {char} built from, as written today?',
     q_parts_hint: 'Base kanji stay whole. Otherwise take the split the sources give (the labels say which); history only when none helps; your own only when nothing else works.',
     q_forms: 'How is {char} related to these characters?',
@@ -48,22 +48,22 @@ const S = strings(
     editTitle: 'Change the draft: the parts field opens with what it says',
     keepNow: 'Keep it as it is',
     atomic: 'No parts: it is learned as one piece',
-    other: 'Something else:',
+    other: 'Something else',
     noParts: 'no parts',
     noLink: 'no link',
-    confidence: 'confidence {n}',
+    confidence: 'model confidence {n}',
     lookalikes: 'only look alike',
     flagged: 'Why this card',
     changes: 'What this changes',
     noChange: 'Nothing changes.',
     linkProposed: 'Use the proposal',
-    linkNow: 'Leave it as it is',
+    linkNow: 'Keep it as it is',
     linkOther: 'Something else',
     draftVerdict: 'the part’s draft says: {v}',
     v_keep: 'keep it',
     v_reject: 'it is wrong',
     m_proposed: 'Use the proposal',
-    m_other: 'My own version',
+    m_other: 'Something else',
     m_form: 'It is a form of a kanji (the link above lends its meaning)',
     m_none: 'Leave it with no meaning for now',
     conflict: 'A shape and “a form of” can’t both be right: the shape would win and the form of would lend nothing. Leave the form link as it is, or say it is a form of a kanji below.',
@@ -72,11 +72,12 @@ const S = strings(
     s_parts: 'give {char} the parts {parts}',
     s_atomic: 'make {char} a single piece, with no parts',
     s_link: 'set: {sentence}',
-    s_link_keep: 'leave {pair} as it is',
+    s_link_keep: 'keep {pair} as it is',
     s_meaning: 'show on {char}’s page: {what}',
     s_meaning_keep: 'leave {char} with no meaning of its own',
     s_meaning_form: 'let {char} borrow the meaning of what it is a form of',
     reason: 'Reason (optional)',
+    addReason: 'add a reason',
     save: 'save',
     oldForm: 'Old form',
     newForm: 'Today’s form',
@@ -85,12 +86,11 @@ const S = strings(
     reset: 'reset card',
     resetTitle: 'Throw away what you chose on this card and start again',
     confirmReset: 'Throw away what you chose on this card?',
-    keys: 'a save · s skip · j/k next/previous',
   },
   {
     kind: 'знак',
     from: 'от {source}',
-    loading: 'зареждане',
+    loading: 'зарежда се…',
     q_parts: 'От какво е построен {char}, както се пише днес?',
     q_parts_hint: 'Основните канджи остават цели. Иначе вземете делението от източниците (етикетите казват кои); историята само ако те не помагат; свое само ако нищо друго не става.',
     q_forms: 'Как е свързан {char} с тези знаци?',
@@ -104,22 +104,22 @@ const S = strings(
     editTitle: 'Променете черновата: полето за части се отваря с нейния отговор',
     keepNow: 'Оставете го както е',
     atomic: 'Без части: учи се като едно цяло',
-    other: 'Нещо друго:',
+    other: 'Нещо друго',
     noParts: 'без части',
     noLink: 'няма връзка',
-    confidence: 'увереност {n}',
+    confidence: 'увереност на модела {n}',
     lookalikes: 'само приличат',
     flagged: 'Защо е тази карта',
     changes: 'Какво променя',
     noChange: 'Нищо не се променя.',
     linkProposed: 'Използвайте предложението',
-    linkNow: 'Оставете както е',
+    linkNow: 'Оставете го както е',
     linkOther: 'Нещо друго',
     draftVerdict: 'черновата за частта казва: {v}',
     v_keep: 'запазете',
     v_reject: 'грешно е',
     m_proposed: 'Използвайте предложението',
-    m_other: 'Моя версия',
+    m_other: 'Нещо друго',
     m_form: 'Форма е на канджи (връзката по-горе заема значението му)',
     m_none: 'Оставете го без значение засега',
     conflict: 'Форма без значение и „форма на“ не могат да са верни заедно: формата печели и „форма на“ не заема нищо. Оставете връзката както е или кажете по-долу, че е форма на канджи.',
@@ -128,11 +128,12 @@ const S = strings(
     s_parts: 'даде на {char} частите {parts}',
     s_atomic: 'направи {char} едно цяло, без части',
     s_link: 'зададе: {sentence}',
-    s_link_keep: 'остави {pair} както е',
+    s_link_keep: 'оставете {pair} както е',
     s_meaning: 'покаже на страницата на {char}: {what}',
     s_meaning_keep: 'остави {char} без свое значение',
     s_meaning_form: 'остави {char} да заема значението на това, чиято форма е',
     reason: 'Причина (по желание)',
+    addReason: 'добавете причина',
     save: 'запишете',
     oldForm: 'Стара форма',
     newForm: 'Днешна форма',
@@ -141,7 +142,6 @@ const S = strings(
     reset: 'нулирайте картата',
     resetTitle: 'Изхвърлете избраното на тази карта и започнете отначало',
     confirmReset: 'Да се изхвърли ли избраното на тази карта?',
-    keys: 'a запис · s пропускане · j/k следващо/предишно',
   },
 )
 
@@ -189,6 +189,8 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const [work, setWork] = useState<Work | null>(null)
   const [start, setStart] = useState<Work | null>(null)
   const [impact, setImpact] = useState<Impact | null>(null)
+  // The reason field, opened by "add a reason" (the card mounts anew for each character).
+  const [reasonOpen, setReasonOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notes, setNotes] = useState(false)
   // The (i) beside the forms and the meaning questions: what each choice means and changes.
@@ -591,10 +593,22 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           </ul>
         </div>
 
-        <label className="review-field">
-          <span>{t('reason')}</span>
-          <input className="assoc-text" value={work.reason} maxLength={500} onChange={(e) => setWork({ ...work, reason: e.target.value })} />
-        </label>
+        {reasonOpen || work.reason ? (
+          <label className="review-field">
+            <span>{t('reason')}</span>
+            <input
+              className="assoc-text"
+              value={work.reason}
+              maxLength={500}
+              autoFocus={reasonOpen && !work.reason}
+              onChange={(e) => setWork({ ...work, reason: e.target.value })}
+            />
+          </label>
+        ) : (
+          <button type="button" className="clear queue-add-reason" onClick={() => setReasonOpen(true)}>
+            + {t('addReason')}
+          </button>
+        )}
         {problem && <p className="account-problem">{problem}</p>}
         {unpicked && <p className="hint card-pick-first">{t('pickFirst')}</p>}
         <div className="queue-actions">
@@ -607,7 +621,6 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
           <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
             {t('reset')}
           </button>
-          <span className="hint queue-keys">{t('keys')}</span>
         </div>
       </div>
     </article>

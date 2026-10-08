@@ -19,7 +19,7 @@ const S = strings(
     stages: 'By stage',
     s_character: 'Characters',
     s_kanji_senses: 'Meanings',
-    s_usage: 'Which kanji to write',
+    s_usage: 'Which kanji',
     s_bg: 'Bulgarian translations',
     s_report: 'Reports',
     d_character: 'one card per character: what it is built from, which kanji it is a form of, and what a part with no meaning is',
@@ -32,7 +32,7 @@ const S = strings(
     dictionary: 'The dictionary',
     meaningsCover: '{n} of {total} kanji have accepted meanings',
     wordsCover: '{n} of {total} drafted words placed in a group (decided with their kanji’s meanings)',
-    loading: 'loading',
+    loading: 'loading…',
   },
   {
     tasks: '{done} от {total} задачи за преглед са готови',
@@ -44,7 +44,7 @@ const S = strings(
     stages: 'По етапи',
     s_character: 'Знаци',
     s_kanji_senses: 'Значения',
-    s_usage: 'Кое канджи да се пише',
+    s_usage: 'Кое канджи',
     s_bg: 'Преводи на български',
     s_report: 'Доклади',
     d_character: 'по една карта за знак: от какво е построен, форма на кое канджи е и какво е част без значение',
@@ -57,7 +57,7 @@ const S = strings(
     dictionary: 'Речникът',
     meaningsCover: '{n} от {total} канджи имат приети значения',
     wordsCover: '{n} от {total} чернови думи са разпределени в група (решават се със значенията на канджито си)',
-    loading: 'зареждане',
+    loading: 'зарежда се…',
   },
 )
 

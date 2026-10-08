@@ -35,7 +35,7 @@ const S = strings(
     mixupsSum: '{n} kept',
     mixupsHint: 'These share a kun reading with {char}. Keep the ones learners really mix up.',
     explained: 'Bunkacho explains this pair:',
-    explainedTitle: 'Its usage card (which kanji to write), in a new tab',
+    explainedTitle: 'Its which-kanji card, in a new tab',
     mixupsNone: 'Kodansha lists no kanji that shares a kun reading with {char}. Nothing to check here.',
     mixYes: 'easy to mix up: show it',
     mixNo: 'not worth showing',
@@ -45,7 +45,7 @@ const S = strings(
     synonyms: 'Kanji with the same meaning',
     synonymsSum: '{n} kanji in a group',
     synonymsHint: 'Put each kanji in the group where it means the same as {char}. A meaning with no group? Add the group in step 1.',
-    synonymsNone: 'Kodansha lists no synonyms for this kanji. You can add one below.',
+    synonymsNone: 'Kodansha lists no kanji with the same meaning as {char}. You can add one below.',
     kodanshaSense: 'Kodansha {sense}',
     kodanshaNoSense: 'Kodansha',
     added: 'Added by a reviewer',
@@ -56,7 +56,7 @@ const S = strings(
     unnamed: '(unnamed group)',
     bgAbout: 'In Bulgarian: what the kanji does in each group',
     bgLink: 'How its meanings connect, in Bulgarian',
-    usageHint: 'Check each English line against the Japanese. Keep the examples that show the difference best.',
+    usageHint: 'Check each English line against the Japanese beside it. Fix what is wrong or unnatural. Keep the examples that show the difference best.',
     kana: 'reading',
     kanaEdit: 'Correct the reading (it was made by machine)',
     def: 'Definition',
@@ -72,7 +72,7 @@ const S = strings(
     mixupsSum: 'оставени: {n}',
     mixupsHint: 'Тези имат общо четене кун с {char}. Оставете тези, които учещите наистина бъркат.',
     explained: 'Бункачо обяснява тази двойка:',
-    explainedTitle: 'Картата ѝ за употреба (кое канджи да се пише), в нов раздел',
+    explainedTitle: 'Картата „кое канджи“ за нея, в нов раздел',
     mixupsNone: 'Kodansha не дава канджи с общо четене кун с {char}. Тук няма какво да се проверява.',
     mixYes: 'лесно се бъркат: покажете го',
     mixNo: 'не си струва да се показва',
@@ -82,7 +82,7 @@ const S = strings(
     synonyms: 'Канджи със същото значение',
     synonymsSum: 'канджи в група: {n}',
     synonymsHint: 'Сложете всяко канджи в групата, в която значи същото като {char}. Значение без група? Добавете групата в стъпка 1.',
-    synonymsNone: 'Kodansha не дава синоними за това канджи. Можете да добавите по-долу.',
+    synonymsNone: 'Kodansha не дава канджи със същото значение като {char}. Можете да добавите по-долу.',
     kodanshaSense: 'Kodansha {sense}',
     kodanshaNoSense: 'Kodansha',
     added: 'Добавени от проверяващ',
@@ -93,7 +93,7 @@ const S = strings(
     unnamed: '(група без име)',
     bgAbout: 'На български: какво прави канджито във всяка група',
     bgLink: 'Как се свързват значенията, на български',
-    usageHint: 'Сверете всеки английски ред с японския. Оставете примерите, които показват разликата най-добре.',
+    usageHint: 'Сверете всеки английски ред с японския до него. Поправете грешното или неестественото. Оставете примерите, които показват разликата най-добре.',
     kana: 'четене',
     kanaEdit: 'Поправете четенето (направено е машинно)',
     def: 'Определение',
@@ -314,7 +314,7 @@ export function SynonymsStep({
 
   return (
     <Stage n={2} title={t('synonyms')} summary={t('synonymsSum', { n: new Set(groups.flatMap((g) => g.similar ?? [])).size })}>
-      <p className="hint">{pool.size ? t('synonymsHint', { char }) : t('synonymsNone')}</p>
+      <p className="hint">{pool.size ? t('synonymsHint', { char }) : t('synonymsNone', { char })}</p>
       {bySense.map(([n, list]) => {
         const text = n ? senseText(n) : ''
         return (

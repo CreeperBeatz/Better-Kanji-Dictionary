@@ -8,12 +8,12 @@ import { strings, useLang } from '../i18n'
 
 const S = strings(
   {
-    title: 'Open {char} in dictionary: the dictionaries’ tab (Kodansha first)',
-    titleBook: 'Open {char} in {book}, in the dictionaries’ tab',
+    title: 'Open {char} in the dictionary tab (Kodansha first)',
+    titleBook: 'Open {char} in {book}, in the dictionary tab',
   },
   {
-    title: 'Отвори {char} в речника: разделът с речниците (първо Kodansha)',
-    titleBook: 'Отвори {char} в {book}, в раздела с речниците',
+    title: 'Отворете {char} в раздела с речниците (първо Kodansha)',
+    titleBook: 'Отворете {char} в {book}, в раздела с речниците',
   },
 )
 

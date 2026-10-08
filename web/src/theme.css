@@ -6532,15 +6532,36 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 /* A usage card: which kanji to write for a shared kun reading. */
-.usage-spelling {
-  margin: 10px 0;
-  padding: 8px 10px;
-  border-left: 3px solid var(--rule);
+/* A which-kanji card (and its Bulgarian card): each spelling, and the notes on borderline cases,
+   framed apart like a card's steps, with a big heading. */
+.usage-spelling,
+.usage-notes {
+  margin: 14px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 8px;
+  background: var(--sumi-lift);
 }
 
-.usage-spelling h4 {
-  margin: 0 0 4px;
-  font-size: 1.2em;
+.queue-edit .usage-spelling h4,
+.queue-edit .usage-notes h4 {
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--paper);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.queue-edit .usage-notes h4 {
+  font-size: 17px;
+}
+
+/* Each note apart from the next. */
+.usage-note + .usage-note,
+.usage-notes .bg-usage-line + .bg-usage-line {
+  padding-top: 10px;
+  border-top: 1px dotted var(--rule-bright);
 }
 
 .usage-def {
