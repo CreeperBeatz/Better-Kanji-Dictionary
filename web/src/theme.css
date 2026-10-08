@@ -8882,6 +8882,13 @@ button.review-part {
   padding: 0 4px;
 }
 
+/* Step 1's reminder: a form of a kanji that still looks like it has that kanji as its part (CharacterCard.tsx). */
+.card-root-hint {
+  color: var(--paper);
+  border-left: 3px solid var(--ai);
+  padding-left: 8px;
+}
+
 .card-option-wrap > .review-field {
   margin: 4px 0 6px 12px;
 }

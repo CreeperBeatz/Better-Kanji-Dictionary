@@ -232,6 +232,11 @@ Either way the form link is what carries the meaning across. If it is
 missing, add it with *Edit* at the bottom of the character's page, in its
 Forms section.
 
+So a form that still looks like its kanji gets **both**: the kanji as its
+part in step 1 (it sets the study order), and *is a form of* in step 2 (it
+lends the meaning). 龰 is 止 at the bottom of 足: part 止, and a form of 止.
+When step 2 has *is a form of*, step 1 says so above the answers.
+
 #### Read the impact
 
 "This adds a containment edge" means the study order moves. "157 kanji

@@ -86,6 +86,20 @@ const legacy = JSON.parse((await page.evaluate((k) => localStorage.getItem(k), k
 check('work from before fingerprints is kept', legacy?.reason === 'kept before fingerprints', JSON.stringify(legacy))
 check('without a notice', !(await page.locator('.queue-item').textContent()).includes('This card changed'))
 
+console.log('a form of a kanji: step 1 says the kanji is its part')
+await page.goto(`${WEB}/review/queue/characters/${encodeURIComponent('char:龰')}`, { waitUntil: 'networkidle' })
+await page.waitForSelector('.review-step[data-n="1"]')
+const rootHint = page.locator('.review-step[data-n="1"] .card-root-hint')
+check('step 1 names 止', (await rootHint.count()) === 1 && (await rootHint.textContent()).includes('龰 is a form of 止'), await rootHint.count())
+await page.locator('.review-step[data-n="1"]').screenshot({ path: `${process.env.SHOTS ?? 'C:/tmp/shots'}/root-hint.png` })
+// Step 2 says "no link" instead: the reminder goes.
+const step2 = page.locator('.review-step[data-n="2"]')
+const noLink = step2.getByText(/no link|No link|no relation/).first()
+if (await noLink.count()) {
+  await noLink.click()
+  check('a link changed away from "a form of" takes the reminder away', (await rootHint.count()) === 0, await rootHint.count())
+}
+
 check('nothing was submitted', decided === 0, decided)
 check('no page errors', errors.length === 0, errors.join(' | '))
 console.log(failed ? `${failed} failed` : 'all good')
