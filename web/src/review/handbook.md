@@ -303,10 +303,11 @@ split: pick or type the pieces, then tick **Only how it looks**. The
 character stays whole for the graph and the study order; the split is kept
 apart from its parts.
 
-- **Only pieces a learner already knows, covering the whole shape.** 土 =
-  十 + 一 passes. 日 = 口 does not: the inner stroke is lost. 木 = 八 + 十
-  does not: that is a stroke split, not a way to read it.
-- **Two pieces or more.** One lookalike is a *looks like* link in step 1.
+- **Only pieces a learner already knows and can see in it.** 土 = 十 + 一.
+  A piece may cover only part of the shape: 為 ends in 灬, so its visual
+  split is 灬 alone.
+- **Not a stroke split.** 木 = 八 + 十 cuts strokes apart; it is not a way
+  to read 木.
 
 #### A form has no parts here
 

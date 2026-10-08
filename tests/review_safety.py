@@ -185,7 +185,8 @@ def main() -> int:
     scholar = review.add_item("decomposition", "士", None, "check:test")
     check("a visual split beside parts is refused", code(lambda: review.decide_card(
         "士", [{"item": scholar["id"], "action": "keep"}], "u-test", visual=["十", "一"])) == "visual_with_parts")
-    check("one piece is not a split", code(lambda: review.validate("visual_split", "土", {"parts": ["十"]})) == "visual_invalid")
+    check("one piece is a split (為 ends in 灬)", review.validate("visual_split", "為", {"parts": ["灬"]}) == {"parts": ["灬"]})
+    check("no piece is not", code(lambda: review.validate("visual_split", "土", {"parts": []})) == "visual_invalid")
     parent = next(d for d in review._read()["decisions"] if d["subject"] == "土" and d["type"] == "decomposition")
     review.revert(parent["id"], "u-test")
     check("reverting the card takes the visual split back", review.live_value("visual_split", "土") is None)

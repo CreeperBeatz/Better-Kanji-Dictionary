@@ -588,8 +588,8 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if value is None:
             return None
         parts = value.get("parts") if isinstance(value, dict) else None
-        if not isinstance(parts, list) or len(parts) < 2 or any(not isinstance(c, str) or len(c) != 1 for c in parts):
-            raise _bad("visual_invalid", "a visual split is two or more characters")
+        if not isinstance(parts, list) or not parts or any(not isinstance(c, str) or len(c) != 1 for c in parts):
+            raise _bad("visual_invalid", "a visual split is one character or more")
         if subject in parts:
             raise _bad("parts_self", "a character cannot contain itself")
         unknown = [c for c in parts if not _known(c)]
