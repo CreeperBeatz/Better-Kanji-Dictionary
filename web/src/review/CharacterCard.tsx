@@ -31,7 +31,7 @@ import { FormSource } from '../detail/Forms'
 import { ResearchButton } from './ResearchButton'
 import { same } from './board'
 import { draftOf, partsOptions, setOf } from './cardOptions'
-import { checkDraft, clearDraft, fingerprint, readDraft, writeDraft } from './drafts'
+import { checkDraft, clearDraft, DROPPED, fingerprint, readDraft, writeDraft } from './drafts'
 
 const S = strings(
   {
@@ -84,7 +84,6 @@ const S = strings(
     reset: 'reset card',
     resetTitle: 'Throw away what you chose on this card and start again',
     confirmReset: 'Throw away what you chose on this card?',
-    workDropped: 'The proposal changed after you began this card. Your unsaved work on it was thrown away.',
   },
   {
     loading: 'зарежда се…',
@@ -136,7 +135,6 @@ const S = strings(
     reset: 'нулирайте картата',
     resetTitle: 'Изхвърлете избраното на тази карта и започнете отначало',
     confirmReset: 'Да се изхвърли ли избраното на тази карта?',
-    workDropped: 'Предложението се промени, след като започнахте тази карта. Незапазената ви работа по нея е изхвърлена.',
   },
 )
 
@@ -217,7 +215,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         setStart(s)
         // Work begun on other proposals (a redraft) is thrown away, and the card says so;
         // work kept from an older card layout whose answer is gone starts afresh.
-        if (checkDraft(id, fingerprint(c.items.map((i) => [i.id, i.proposed])))) setProblem(t('workDropped'))
+        if (checkDraft(id, fingerprint(c.items.map((i) => [i.id, i.proposed])))) setProblem(DROPPED(lang)('workDropped'))
         const kept = readDraft(id)?.card as Work | undefined
         const keys = new Set(['', 'other', ...partsOptions(c.items.filter((i) => i.type === 'decomposition'), c.context.parts, draftOf(c.items)).map((o) => o.key)])
         setWork(kept && (!kept.parts || keys.has(kept.parts.pick)) ? kept : s)

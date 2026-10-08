@@ -110,7 +110,6 @@ def flags() -> tuple[dict[str, list[str]], dict]:
     ids, kvg = rs.babelstone(), rs.kanjivg()
     splits = source_splits(db)
     eq = rs.equivalence(db)
-    key = lambda p: frozenset(eq.get(c, c) for c in p)  # noqa: E731 -- order and position (糹 for 糸) don't count
     out: dict[str, list[str]] = defaultdict(list)
     for x in sorted(scope):
         parts = children.get(x, [])
@@ -139,8 +138,8 @@ def flags() -> tuple[dict[str, list[str]], dict]:
         whole = [name for s, name in BACKERS if got.get(s) == []]
         if whole:
             out[x].append(f"{' and '.join(whole)} keep{'s' if len(whole) == 1 else ''} it whole: a base kanji stays whole (D-018)")
-        agree = [name for s, name in BACKERS if got.get(s) and key(got[s]) == key(parts)]
-        other = [f"{name} {''.join(got[s])}" for s, name in BACKERS if got.get(s) and key(got[s]) != key(parts)]
+        agree = [name for s, name in BACKERS if got.get(s) and parts_key(eq, got[s]) == parts_key(eq, parts)]
+        other = [f"{name} {''.join(got[s])}" for s, name in BACKERS if got.get(s) and parts_key(eq, got[s]) != parts_key(eq, parts)]
         if len(agree) < 2:
             if agree and other:
                 out[x].append(f"only {agree[0]} splits it like this ({'; '.join(other)})")
@@ -151,6 +150,11 @@ def flags() -> tuple[dict[str, list[str]], dict]:
             elif not whole and not unread:
                 out[x].append("no source we can read splits it")
     return dict(out), {"db": db, "children": children, "nodes": nodes, "scope": scope, "strokes": st, "ids": ids, "kvg": kvg}
+
+
+def parts_key(eq: dict[str, str], parts: list[str]) -> frozenset[str]:
+    """The same parts in another order, or one written in another position (糹 for 糸), are the same answer."""
+    return frozenset(eq.get(p, p) for p in parts)
 
 
 def whole_but_split(x: str, splits: dict[str, dict[str, list[str]]]) -> dict[str, list[str]]:
@@ -169,10 +173,10 @@ def atomic(load_them: bool, review_dir: Path | None) -> None:
     db = proposals.connect()
     children, _ = rs.graph(db)
     in_scope = set(review_scope.kanji(db))
-    scope = rs.closure(children, review_scope.kanji(db))
+    scope = rs.closure(children, in_scope)
     splits = source_splits(db)
     eq = rs.equivalence(db)
-    asked = {i["subject"] for i in review._read()["items"].values() if i["type"] == "decomposition" and i["status"] != "withdrawn"}
+    asked = review.subjects("decomposition")
     ids, kvg = rs.babelstone(), rs.kanjivg()
     rows = []
     for x in sorted(scope):
@@ -183,7 +187,7 @@ def atomic(load_them: bool, review_dir: Path | None) -> None:
             continue
         by_value: dict[frozenset, list[str]] = defaultdict(list)
         for name, p in split.items():
-            by_value[frozenset(eq.get(c, c) for c in p)].append(name)
+            by_value[parts_key(eq, p)].append(name)
         users = len(review.users_of(x))
         for names in by_value.values():
             parts = split[names[0]]
@@ -355,28 +359,24 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     found, _ = flags()
     eq = rs.equivalence(proposals.connect())
 
-    def norm(parts: list[str]) -> frozenset[str]:
-        """The same parts in another order, or one written in another position (糹 for 糸), are the same answer."""
-        return frozenset(eq.get(p, p) for p in parts)
-
     for g in good:
         c = g["char"]
         if c in decided:
             continue
         g = {**g, "flags": found.get(c, g["flags"])}
         # A learner sees no difference: a keep.
-        if norm(g["parts"]) == norm(g["current"]):
+        if parts_key(eq, g["parts"]) == parts_key(eq, g["current"]):
             g = {**g, "verdict": "keep", "parts": g["current"]}
         draft = {"parts": g["parts"], "verdict": g["verdict"], "why": g["why"], "confidence": g["confidence"],
                  "lookalikes": g["lookalikes"], "flags": g["flags"]}
         for i in cards.get(c, []):
             evidence[i["id"]] = draft
-        proposed = [norm(i["proposed"]) for i in cards.get(c, []) if i["proposed"] is not None]
+        proposed = [parts_key(eq, i["proposed"]) for i in cards.get(c, []) if i["proposed"] is not None]
         priority = round(min(g["inScope"], 300) / 30, 2)
         # A draft with a bare stroke is no source proposal (review.validate refuses it from a machine):
         # it stays on the card as the draft's view, which the reviewer may take as their own.
         strokes = any(p in review.STROKES for p in g["parts"])
-        if g["verdict"] == "change" and norm(g["parts"]) not in proposed and not strokes:
+        if g["verdict"] == "change" and parts_key(eq, g["parts"]) not in proposed and not strokes:
             rows.append({"type": "decomposition", "subject": c, "proposed": g["parts"], "source": SOURCE,
                          "reason": g["why"], "evidence": {"draft": draft}, "priority": priority + 1})
             n["proposal"] += 1

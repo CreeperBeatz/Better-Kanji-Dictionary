@@ -34,7 +34,7 @@ import { finalizeBoard, NO_WORDS, placed, same, startPlacements, type Placements
 import { MeaningsBoard } from './MeaningsBoard'
 import { BgCard, BgUsage } from './BgCard'
 import { CharacterCard } from './CharacterCard'
-import { checkDraft, clearDraft, fingerprint, readDraft, writeDraft } from './drafts'
+import { checkDraft, clearDraft, DROPPED, fingerprint, readDraft, writeDraft } from './drafts'
 import { DictionariesPanel } from './DictionariesPanel'
 import { Evidence } from './Evidence'
 import { candidatesOf, MixupsStep, OverallMeaning } from './Extras'
@@ -86,7 +86,6 @@ const S = strings(
     left: '{n} waiting',
     confidence: 'model confidence {n}',
     confirmFirst: 'Confirm every word in the groups first: {n} left',
-    workDropped: 'The proposal changed after you began this card. Your unsaved work on it was thrown away.',
     checkSteps: 'Check step {steps} first. Press "Done" at the bottom of the step.',
   },
   {
@@ -131,7 +130,6 @@ const S = strings(
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
     confirmFirst: 'Първо потвърдете всяка дума в групите: остават {n}',
-    workDropped: 'Предложението се промени, след като започнахте тази карта. Незапазената ви работа по нея е изхвърлена.',
     checkSteps: 'Първо проверете стъпка {steps}. Натиснете „Готово“ в края на стъпката.',
   },
 )
@@ -207,7 +205,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // Words in the groups not yet confirmed: a meanings card is accepted only once there are none.
   const [unconfirmed, setUnconfirmed] = useState(0)
   // A meanings card's steps 2 and 3, by number: unchecked until their "Done" is pressed (review/Stage.tsx).
-  const [steps, setSteps] = useState<{ id: string | null; done: Record<number, boolean> }>({ id: null, done: {} })
+  const [steps, setSteps] = useState<Record<number, boolean>>({})
   const [fresh, setFresh] = useState(0)
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
@@ -265,15 +263,15 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   // editor would get the last item's value, and a list of parts handed to the
   // meaning-group editor throws.
   const [draftFor, setDraftFor] = useState<string | null>(null)
-  // The item whose kept work was thrown away because its proposal changed since.
-  const [droppedFor, setDroppedFor] = useState<string | null>(null)
+  // Kept work on this item was thrown away: the card changed since it was begun.
+  const [dropped, setDropped] = useState(false)
   if (item && item.id !== draftFor) {
-    // Work left on this item before a reload comes back (review/drafts.ts), if it was begun on this proposal.
+    // Work left on this item before a reload comes back (review/drafts.ts), if it was begun on this card as it is.
     // A character's card checks its own (CharacterCard.tsx).
-    const dropped = item.type !== 'character' && checkDraft(item.id, fingerprint([item.proposed, item.current]))
+    setDropped(item.type !== 'character' && checkDraft(item.id, fingerprint([item.proposed, item.current])))
     const kept = readDraft(item.id)
     setDraftFor(item.id)
-    setDroppedFor(dropped ? item.id : null)
+    setSteps({})
     setDraft(kept && 'draft' in kept ? (kept.draft ?? null) : (item.proposed ?? item.current))
     setReason(kept?.reason ?? '')
     setSkipped(new Set(kept?.skipped))
@@ -399,12 +397,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setBoardWork(false)
     setFresh((n) => n + 1)
   }
-  const itemId = item?.id ?? null
-  const stepChecked = useCallback(
-    (n: number, done: boolean) => setSteps((s) => ({ id: itemId, done: { ...(s.id === itemId ? s.done : {}), [n]: done } })),
-    [itemId],
-  )
-  const unchecked = steps.id === item?.id ? Object.keys(steps.done).filter((n) => !steps.done[Number(n)]).sort() : []
+  const stepChecked = useCallback((n: number, done: boolean) => setSteps((s) => (s[n] === done ? s : { ...s, [n]: done })), [])
+  const unchecked = Object.keys(steps).filter((n) => !steps[Number(n)])
   const blockedBy = !board ? null : unconfirmed > 0 ? t('confirmFirst', { n: unconfirmed }) : unchecked.length ? t('checkSteps', { steps: unchecked.join(', ') }) : null
   const blocked = !!blockedBy
   const decideDraft = useCallback(
@@ -752,7 +746,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 key={item.id}
                 reason={reason}
                 onReason={setReason}
-                problem={problem ?? (droppedFor === item.id ? t('workDropped') : null)}
+                problem={problem ?? (dropped ? DROPPED(lang)('workDropped') : null)}
                 actions={
                   <>
                     <button

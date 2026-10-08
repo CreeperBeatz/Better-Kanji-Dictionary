@@ -498,7 +498,7 @@ export interface Impact {
 
 export interface Decision {
   id: string
-  action: 'accept' | 'edit' | 'keep' | 'reject' | 'direct' | 'auto' | 'revert' | 'reopen'
+  action: 'accept' | 'edit' | 'keep' | 'reject' | 'direct' | 'auto' | 'revert' | 'reopen' | 'take_back'
   type: TaskType
   subject: string
   before: TaskValue
@@ -514,8 +514,8 @@ export interface Decision {
   parent?: string | null
   /** A keep or reject: what the site showed when it was decided. */
   shown?: TaskValue
-  /** A reopen that took back a keep or reject: it changed nothing, so it has no revert. */
-  reopens?: boolean
+  /** What the admin's revert does with it: put its value back, or take back a keep or reject (its card reopens). */
+  revertible?: 'revert' | 'take_back' | null
   /** For a kanji's meanings: how many word placements were decided with it. */
   words?: number
 }

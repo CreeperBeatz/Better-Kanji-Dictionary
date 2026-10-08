@@ -11,6 +11,13 @@
  * fall out -- so it is thrown away, and the card says so.
  */
 import type { KanjiExtras, TaskValue } from '../api'
+import { strings } from '../i18n'
+
+/** Shown on a card whose kept work `checkDraft` threw away. */
+export const DROPPED = strings(
+  { workDropped: 'This card changed after you began it. Your unsaved work on it was thrown away.' },
+  { workDropped: 'Тази карта се промени, след като я започнахте. Незапазената ви работа по нея е изхвърлена.' },
+)
 
 const PREFIX = 'betterrtk:review-draft:'
 const KEEP_DAYS = 30

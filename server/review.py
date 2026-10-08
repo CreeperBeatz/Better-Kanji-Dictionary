@@ -132,7 +132,7 @@ ONE_WAY = ("old", "form_of", "looks_like")
 # grains in 米, hair in 首). A shape's name is shown as a name, never as a meaning.
 PART_KINDS = ("meaning", "shape")
 # What a decision changed: these can be reverted. keep/reject change nothing;
-# "revert" on one of them reopens its item instead (_reopen_decided).
+# "revert" on one of them takes it back instead: its item reopens (_take_back).
 CHANGES = ("accept", "edit", "direct", "auto", "revert", "reopen")
 
 MAX_OPEN_SUGGESTIONS = 20
@@ -280,10 +280,10 @@ def _change():
     it, and a block that raises leaves the state as it was.
     """
     global _state
-    work = None
     with _lock:
         conn = _db()
         conn.execute("BEGIN IMMEDIATE")  # other processes wait; their commits are read first
+        undo: list = []
         try:
             base = _current()
             work = {
@@ -292,8 +292,8 @@ def _change():
                 "decisions": list(base["decisions"]),
                 "live": {k: dict(v) for k, v in base["live"].items()},
                 "_dirty": {"items": {}, "decisions": {}, "live": set()},
+                "_undo": undo,
             }
-            work["_undo"] = []
             yield work
             _write(conn, base, work)
             conn.execute("COMMIT")
@@ -301,13 +301,13 @@ def _change():
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
             # What went outside review.db (store.json, the Bulgarian overlay) goes back too, newest first.
-            for undo in reversed(work.get("_undo", []) if work else []):
+            for fn in reversed(undo):
                 try:
-                    undo()
+                    fn()
                 except Exception:  # noqa: BLE001 -- the first error is the one to raise
                     log.exception("undoing a failed change")
             raise
-        work.pop("_undo", None)
+        work.pop("_undo")
         _state = work
 
 
@@ -346,7 +346,11 @@ def _put(data: dict, item: dict) -> dict:
 
 
 def _update(data: dict, item: dict, **fields) -> dict:
-    """`item` with `fields` changed, as a new dict in its place (see _change)."""
+    """`item` with `fields` changed, as a new dict in its place (see _change).
+    A new proposal (a redraft) is made against today's value: its span for
+    `_changed_since` starts again."""
+    if "proposed" in fields and fields["proposed"] != item.get("proposed"):
+        fields["opened"] = _now()
     return _put(data, {**item, **fields})
 
 
@@ -893,26 +897,28 @@ def _bg_shown(subject: str) -> list[str] | None:
     return bg_overlay.kanji(key, None) or _bg_built(subject)
 
 
-def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, explicit_words: bool = False,
-           auto_words: bool = False) -> None:
+def _store_decomposition(char: str, parts: list[str] | None) -> None:
+    if parts is None:
+        store.clear_decomposition(char)
+    else:
+        store.set_decomposition(char, parts)
+
+
+def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, words: str = "none") -> None:
     """Make `value` live (None: back to the built data). The caller saves.
 
-    `explicit_words`: the reviewer placed the kanji's words themselves (the
-    meanings board), so none are reopened behind their back.
-    `auto_words`: a kanji's groups accepted in the queue without the board;
-    its words that pass `word_rule` go live. Never from a page edit or a
-    revert: groups nobody accepted in the queue place no word.
+    `words`, for a kanji's meanings: "board", the reviewer placed its words
+    themselves, so none are reopened behind their back; "queue", its groups
+    accepted in the queue without the board, so the words that pass
+    `word_rule` go live; "none" (a page edit, a revert, a loader), the words
+    of changed groups are reopened and none is placed.
     """
     if type_ == "report":
         return  # confirmed or not, the site stays as its sources have it
     if type_ == "decomposition":
-        prev = store.decomposition_overrides().get(subject)
-        prev = list(prev) if prev is not None else None
-        if value is None:
-            store.clear_decomposition(subject)
-        else:
-            store.set_decomposition(subject, value)
-        data["_undo"].append(lambda: store.clear_decomposition(subject) if prev is None else store.set_decomposition(subject, prev))
+        prev = live_value(type_, subject, data)
+        _store_decomposition(subject, value)
+        data["_undo"].append(lambda: _store_decomposition(subject, prev))
         _schedule_pack()
         return
     if type_ == "bg":
@@ -934,10 +940,10 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
     elif type_ == "kanji_senses":
         before = _senses(data, subject) or []
         _set_live(data, type_, subject, {"senses": value, "decision": decision})
-        if not explicit_words:
+        if words != "board":
             _reopen_words(data, subject, before, value, decision)
-            if auto_words:
-                _auto_words(data, subject, value)
+        if words == "queue":
+            _auto_words(data, subject, value)
     else:
         _set_live(data, type_, subject, {"sense": value, "decision": decision})
 
@@ -1063,12 +1069,11 @@ def _changed_since(data: dict, item: dict) -> list[dict]:
     anything but the item: its proposal was drafted against an older value.
     A change reverted in the same span cancels out."""
     since = item.get("opened") or item["created"]
-    ds = [d for d in data["decisions"]
-          if d["subject"] == item["subject"] and d["type"] == item["type"] and d["at"] > since
-          and d["action"] in CHANGES and not d.get("reopens") and d.get("item") != item["id"]]
-    ids = {d["id"] for d in ds}
-    undone = {x for r in ds if r["action"] == "revert" and r.get("supersedes") in ids for x in (r["id"], r["supersedes"])}
-    return [d for d in ds if d["id"] not in undone]
+    later = [d for d in data["decisions"]
+             if d["subject"] == item["subject"] and d["type"] == item["type"] and d["at"] > since
+             and d["action"] in CHANGES and d.get("item") != item["id"]]
+    ids = {d["id"] for d in later}
+    return [d for d in later if d["reverted_by"] not in ids and d.get("supersedes") not in ids]
 
 
 def _moves_of(item: dict) -> dict | None:
@@ -1139,6 +1144,10 @@ def _moves(char: str, groups: Any, moves: Any) -> dict[str, str | None]:
     return out
 
 
+def _proposal_key(type_: str, subject: str, proposed: Any) -> tuple[str, str, str]:
+    return type_, subject, json.dumps(proposed, sort_keys=True, ensure_ascii=False)
+
+
 def add_items(rows: list[dict]) -> tuple[int, int]:
     """Many proposals at once, for loaders: one read and one write, not one per item.
 
@@ -1146,15 +1155,16 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
     row that fails validation is skipped and counted, not raised.
     """
     with _change() as data:
-        key_of = lambda i: (i["type"], i["subject"], json.dumps(i["proposed"], sort_keys=True, ensure_ascii=False))  # noqa: E731
-        open_keys = {key_of(i) for i in data["items"].values() if i["status"] == "open"}
+        wanted = {(r["type"], r["subject"]) for r in rows}
+        mine = [i for i in data["items"].values() if (i["type"], i["subject"]) in wanted]
+        open_keys = {_proposal_key(i["type"], i["subject"], i["proposed"]) for i in mine if i["status"] == "open"}
         # Asked and answered: the same proposal again is not asked again. A check (nothing proposed)
         # is, if what the site shows has changed since it was kept.
-        by_id = {d["id"]: d for d in data["decisions"]}
+        decided = [i for i in mine if i["status"] in DECIDED]
+        by_id = {d["id"]: d for d in data["decisions"]} if decided else {}
         answered: dict[tuple, list[dict]] = {}
-        for i in data["items"].values():
-            if i["status"] in DECIDED:
-                answered.setdefault(key_of(i), []).append(by_id.get(i["decision"]) or {})
+        for i in decided:
+            answered.setdefault(_proposal_key(i["type"], i["subject"], i["proposed"]), []).append(by_id.get(i["decision"]) or {})
         added = refused = again = 0
         for r in rows:
             try:
@@ -1162,13 +1172,14 @@ def add_items(rows: list[dict]) -> tuple[int, int]:
             except AppError:
                 refused += 1
                 continue
-            key = (r["type"], r["subject"], json.dumps(proposed, sort_keys=True, ensure_ascii=False))
+            key = _proposal_key(r["type"], r["subject"], proposed)
             if key in open_keys:
                 continue
-            if key in answered and (proposed is not None or any(
-                    "shown" not in d or d["shown"] == current(r["type"], r["subject"], data) for d in answered[key])):
-                again += 1
-                continue
+            if key in answered:
+                now = current(r["type"], r["subject"], data) if proposed is None else None
+                if proposed is not None or any(d.get("shown", now) == now for d in answered[key]):
+                    again += 1
+                    continue
             open_keys.add(key)
             _new_item(data, r["type"], r["subject"], proposed, r["source"], "proposal",
                       _text(r.get("reason")), r.get("evidence"), "system", r.get("priority", 0.0))
@@ -1240,13 +1251,9 @@ def withdraw(item_ids: list[str], why: str) -> int:
         for item_id in item_ids:
             i = data["items"].get(item_id)
             if i and i["status"] == "open" and i["origin"] == "proposal":
-                rider = _rider_of(data, i)
-                _update(data, i, status="withdrawn", withdrawn_at=_now(), withdrawn_why=_text(why))
+                i = _update(data, i, status="withdrawn", withdrawn_at=_now(), withdrawn_why=_text(why))
                 n += 1
-                # Its extras go too, unless another meanings proposal for the kanji is still open to show them.
-                if rider and not any(_rider_of(data, j) for j in data["items"].values()
-                                     if j["type"] == "kanji_senses" and j["subject"] == i["subject"] and j["status"] == "open"):
-                    _update(data, rider, status="withdrawn", withdrawn_at=_now(), withdrawn_why=_text(why))
+                _settle_extras(data, i, why=_text(why))
         return n
 
 
@@ -1306,13 +1313,7 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
             d["shown"] = current(type_, subject, data)
         item = _close(data, item, "rejected" if action == "reject" else "kept", d)
         data["decisions"].append(d)
-        rider = _rider_of(data, item)
-        if rider:
-            # Its extras were drafted with it and are shown only on its card: they go the same way.
-            c = _decision(action, "kanji_extras", subject, None, None, user_id, rider["id"], None)
-            c["parent"] = d["id"]
-            _close(data, rider, "rejected" if action == "reject" else "kept", c)
-            data["decisions"].append(c)
+        _settle_extras(data, item, d)
         return dict(item)
 
     if action == "accept" and item["proposed"] is None:
@@ -1328,7 +1329,7 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
     before = live_value(type_, subject, data)
     explicit = _on_the_board(type_, words)
     d = _decision(action, type_, subject, before, after, user_id, item_id, reason)
-    _apply(data, type_, subject, after, d["id"], explicit_words=explicit, auto_words=not explicit)
+    _apply(data, type_, subject, after, d["id"], words="board" if explicit else "queue")
     item = _close(data, item, "accepted" if action == "accept" else "edited", d)
     data["decisions"].append(d)
     if explicit:
@@ -1344,13 +1345,29 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
     return dict(item)
 
 
-def _rider_of(data: dict, item: dict) -> dict | None:
-    """A kanji's open extras item, when `item` is the meanings proposal whose card shows it
-    (not a suggestion, not a follow-up of skipped words)."""
-    if item["type"] != "kanji_senses" or item["origin"] != "proposal" or follow_up_words(item):
-        return None
-    return next((i for i in data["items"].values()
-                 if i["type"] == "kanji_extras" and i["subject"] == item["subject"] and i["status"] == "open"), None)
+def _open_extras(data: dict, char: str) -> dict | None:
+    return next((i for i in data["items"].values() if i["type"] == "kanji_extras" and i["subject"] == char and i["status"] == "open"), None)
+
+
+def _shows_extras(item: dict) -> bool:
+    """A meanings proposal's card shows its kanji's extras (a suggestion's or a follow-up's does not)."""
+    return item["type"] == "kanji_senses" and item["origin"] == "proposal" and not follow_up_words(item)
+
+
+def _settle_extras(data: dict, host: dict, d: dict | None = None, why: str | None = None) -> None:
+    """`host`, a meanings proposal, closed without deciding its extras: kept or rejected by
+    `d`, or withdrawn. The extras were drafted with it and are shown only on its card, so
+    they go the same way, unless another open proposal for the kanji still shows them."""
+    rider = _open_extras(data, host["subject"]) if _shows_extras(host) else None
+    if not rider or any(j["status"] == "open" and j["subject"] == host["subject"] and _shows_extras(j) for j in data["items"].values()):
+        return
+    if d is None:
+        _update(data, rider, status="withdrawn", withdrawn_at=_now(), withdrawn_why=why)
+        return
+    c = _decision(d["action"], "kanji_extras", rider["subject"], None, None, d["by"], rider["id"], None)
+    c["parent"] = d["id"]
+    _close(data, rider, "rejected" if d["action"] == "reject" else "kept", c)
+    data["decisions"].append(c)
 
 
 def _decide_extras(data: dict, char: str, value: Any, user_id: str, parent: str) -> None:
@@ -1358,7 +1375,7 @@ def _decide_extras(data: dict, char: str, value: Any, user_id: str, parent: str)
     or edited, or, with none open, changed directly -- a decision under `parent`."""
     after = validate("kanji_extras", char, value, data)
     before = live_value("kanji_extras", char, data)
-    item = next((i for i in data["items"].values() if i["type"] == "kanji_extras" and i["subject"] == char and i["status"] == "open"), None)
+    item = _open_extras(data, char)
     if item:
         act = "accept" if item["proposed"] == after else "edit"
         c = _decision(act, "kanji_extras", char, before, after, user_id, item["id"], None)
@@ -1395,7 +1412,7 @@ def _label_groups(data: dict, char: str, labels: Any, user_id: str, parent: str,
         return
     c = _decision("direct", "kanji_senses", char, before, after, user_id, None, "Bulgarian labels")
     c["parent"] = parent
-    _apply(data, "kanji_senses", char, after, c["id"], explicit_words=True)
+    _apply(data, "kanji_senses", char, after, c["id"], words="board")
     data["decisions"].append(c)
 
 
@@ -1523,9 +1540,10 @@ def revert(decision_id: str, user_id: str) -> dict:
         d = next((x for x in data["decisions"] if x["id"] == decision_id), None)
         if not d:
             raise AppError(404, "decision_not_found", "no such decision")
-        if d["action"] in ("keep", "reject") and not d["reverted_by"] and not d.get("parent"):
-            return dict(_reopen_decided(data, d, user_id))
-        if d["action"] not in CHANGES or d["reverted_by"] or d.get("reopens"):
+        kind = _revertible(data, d)
+        if kind == "take_back":
+            return dict(_take_back(data, d, user_id))
+        if kind is None:
             raise AppError(409, "not_revertible", "that decision changed nothing, or was already reverted")
         if live_value(d["type"], d["subject"], data) != d["after"]:
             raise AppError(409, "changed_since", "this was changed again since; revert the later change first")
@@ -1533,7 +1551,7 @@ def revert(decision_id: str, user_id: str) -> dict:
         if d["before"] is not None or d["type"] == "decomposition":
             validate(d["type"], d["subject"], d["before"], data)
         children = [c for c in data["decisions"] if c.get("parent") == decision_id and not c.get("reverted_by")]
-        _apply(data, d["type"], d["subject"], d["before"], r["id"], explicit_words=bool(children))
+        _apply(data, d["type"], d["subject"], d["before"], r["id"], words="board" if children else "none")
         _reverted(data, d, r)
         # The words placed on the meanings board go back with it.
         for c in children:
@@ -1541,7 +1559,7 @@ def revert(decision_id: str, user_id: str) -> dict:
                 rc = _undo(c, user_id)
             elif c["action"] in CHANGES and live_value(c["type"], c["subject"], data) == c["after"]:
                 rc = _undo(c, user_id)
-                _apply(data, c["type"], c["subject"], c["before"], rc["id"], explicit_words=True)
+                _apply(data, c["type"], c["subject"], c["before"], rc["id"])
             else:
                 continue
             rc["parent"] = r["id"]
@@ -1549,20 +1567,32 @@ def revert(decision_id: str, user_id: str) -> dict:
         return dict(r)
 
 
-def _reopen_decided(data: dict, d: dict, user_id: str) -> dict:
-    """A keep or reject taken back: nothing live changes, its item is open again."""
+def _revertible(data: dict, d: dict) -> str | None:
+    """What `revert` does with a decision: "revert" puts its value back, "take_back"
+    reopens a keep or reject that still closes its item; None, neither."""
+    if d["reverted_by"]:
+        return None
+    if d["action"] in CHANGES:
+        return "revert"
     item = data["items"].get(d["item"]) if d["item"] else None
-    if not item or item["decision"] != d["id"]:
-        raise AppError(409, "not_revertible", "that decision changed nothing, or was already reverted")
-    r = _decision("reopen", d["type"], d["subject"], None, None, user_id, d["item"], f"reopen {d['id']}", supersedes=d["id"])
-    r["reopens"] = True
-    _reverted(data, d, r)
-    # A meanings card's extras, kept or rejected with it, come back with it.
-    for c in [c for c in data["decisions"] if c.get("parent") == d["id"] and not c.get("reverted_by")]:
-        if c["action"] in ("keep", "reject"):
-            rc = _decision("reopen", c["type"], c["subject"], None, None, user_id, c["item"], f"reopen {c['id']}", supersedes=c["id"])
-            rc["reopens"], rc["parent"] = True, r["id"]
-            _reverted(data, c, rc)
+    if d["action"] in ("keep", "reject") and not d.get("parent") and item and item["decision"] == d["id"]:
+        return "take_back"
+    return None
+
+
+def _take_back(data: dict, d: dict, user_id: str) -> dict:
+    """A keep or reject taken back: nothing live changes; its item is open again, and
+    so are the extras kept or rejected with it."""
+    def back(x: dict, parent: str | None = None) -> dict:
+        r = _decision("take_back", x["type"], x["subject"], None, None, user_id, x["item"], f"take back {x['id']}", supersedes=x["id"])
+        if parent:
+            r["parent"] = parent
+        _reverted(data, x, r)
+        return r
+
+    r = back(d)
+    for c in [c for c in data["decisions"] if c.get("parent") == d["id"] and not c["reverted_by"] and c["action"] in ("keep", "reject")]:
+        back(c, r["id"])
     return r
 
 
@@ -1944,7 +1974,7 @@ def _is_kanji(c: str) -> bool:
 
 def _extras_context(data: dict, char: str) -> dict:
     """A kanji's extras for its cards: the open item's draft, else what is accepted; and its fixed facts."""
-    item = next((i for i in data["items"].values() if i["type"] == "kanji_extras" and i["subject"] == char and i["status"] == "open"), None)
+    item = _open_extras(data, char)
     return {"item": item["id"] if item else None, "value": item["proposed"] if item else live_value("kanji_extras", char, data),
             "kokuji": char in kokuji()}
 
@@ -2174,7 +2204,7 @@ def history(user_id: str | None, limit: int = 100, type_: str | None = None, by:
     names = _names(everyone | {d["by"] for d in rows})
     people = sorted((names[b] for b in everyone if b in names), key=lambda c: (c["id"] == "auto", (c["name"] or "").lower()))
     return {
-        "items": [{**d, "byCard": names.get(d["by"]), "words": kids.get(d["id"], 0)} for d in rows],
+        "items": [{**d, "byCard": names.get(d["by"]), "words": kids.get(d["id"], 0), "revertible": _revertible(data, d)} for d in rows],
         "people": people,
     }
 

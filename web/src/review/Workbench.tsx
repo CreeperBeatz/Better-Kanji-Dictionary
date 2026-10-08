@@ -45,7 +45,7 @@ const S = strings(
     revert: 'revert',
     reverted: 'reverted',
     confirmRevert: 'Put back the value from before this decision?',
-    reopenItem: 'reopen',
+    takeBack: 'reopen',
     confirmReopen: 'Put this card back in the queue? Nothing on the site changes.',
     a_accept: 'accepted',
     a_edit: 'edited',
@@ -55,6 +55,7 @@ const S = strings(
     a_auto: 'auto-accepted',
     a_revert: 'reverted',
     a_reopen: 'reopened',
+    a_take_back: 'taken back: back in the queue',
     handbook: 'Handbook',
     progress: 'Progress',
     mode: 'Review mode',
@@ -98,7 +99,7 @@ const S = strings(
     revert: 'върнете',
     reverted: 'върнато',
     confirmRevert: 'Да се върне ли стойността отпреди това решение?',
-    reopenItem: 'отворете отново',
+    takeBack: 'отворете отново',
     confirmReopen: 'Да се върне ли тази карта в опашката? Нищо на сайта не се променя.',
     a_accept: 'прието',
     a_edit: 'редактирано',
@@ -108,6 +109,7 @@ const S = strings(
     a_auto: 'прието автоматично',
     a_revert: 'върнато',
     a_reopen: 'отворено отново',
+    a_take_back: 'взето обратно: отново в опашката',
     handbook: 'Наръчник',
     progress: 'Напредък',
     mode: 'Режим преглед',
@@ -350,8 +352,6 @@ function People() {
 }
 
 const CHANGES = new Set(['accept', 'edit', 'direct', 'auto', 'revert', 'reopen'])
-// Changed nothing, but can be taken back: the card goes back to the queue.
-const TAKE_BACK = new Set(['keep', 'reject'])
 
 /** Decisions, newest first: your own, or everyone's for the admin. */
 function History({ admin }: { admin: boolean }) {
@@ -379,7 +379,7 @@ function History({ admin }: { admin: boolean }) {
   useEffect(load, [load])
 
   async function revert(d: Decision) {
-    if (!window.confirm(t(TAKE_BACK.has(d.action) ? 'confirmReopen' : 'confirmRevert'))) return
+    if (!window.confirm(t(d.revertible === 'take_back' ? 'confirmReopen' : 'confirmRevert'))) return
     setProblem(null)
     try {
       await api.revert(d.id)
@@ -453,23 +453,19 @@ function History({ admin }: { admin: boolean }) {
                 <ValueView type={d.type} value={d.shown} subject={d.subject} />
               </span>
             )}
-            {CHANGES.has(d.action) && !d.reopens && (
+            {CHANGES.has(d.action) && (
               <span className="decision-change">
                 <ValueView type={d.type} value={d.before} subject={d.subject} /> → <ValueView type={d.type} value={d.after} subject={d.subject} />
               </span>
             )}
             {!!d.words && <span className="hint"> {t('words', { n: d.words })}</span>}
             {d.reason && <span className="hint decision-reason">{d.reason}</span>}
-            {admin &&
-              !d.reopens &&
-              (CHANGES.has(d.action) || (TAKE_BACK.has(d.action) && d.item && !d.parent)) &&
-              (d.reverted_by ? (
-                <span className="hint"> · {t(TAKE_BACK.has(d.action) ? 'a_reopen' : 'reverted')}</span>
-              ) : (
-                <button className="clear" onClick={() => revert(d)}>
-                  {t(TAKE_BACK.has(d.action) ? 'reopenItem' : 'revert')}
-                </button>
-              ))}
+            {admin && d.reverted_by && <span className="hint"> · {t('reverted')}</span>}
+            {admin && d.revertible && (
+              <button className="clear" onClick={() => revert(d)}>
+                {t(d.revertible === 'take_back' ? 'takeBack' : 'revert')}
+              </button>
+            )}
           </li>
         ))}
       </ul>

@@ -80,11 +80,11 @@ await page.evaluate(([a, b]) => {
 }, [key(kokuItem), key(seiItem)])
 await open('国')
 check('work begun on another proposal is thrown away', (await page.evaluate((k) => localStorage.getItem(k), key(kokuItem))) === null)
-check('and the card says so', (await page.locator('.queue-item').textContent()).includes('The proposal changed after you began this card'))
+check('and the card says so', (await page.locator('.queue-item').textContent()).includes('This card changed after you began it'))
 await open('生')
 const legacy = JSON.parse((await page.evaluate((k) => localStorage.getItem(k), key(seiItem))) ?? 'null')
 check('work from before fingerprints is kept', legacy?.reason === 'kept before fingerprints', JSON.stringify(legacy))
-check('without a notice', !(await page.locator('.queue-item').textContent()).includes('The proposal changed'))
+check('without a notice', !(await page.locator('.queue-item').textContent()).includes('This card changed'))
 
 check('nothing was submitted', decided === 0, decided)
 check('no page errors', errors.length === 0, errors.join(' | '))

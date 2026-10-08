@@ -88,8 +88,11 @@ def main() -> int:
     review.decide(item["id"], "keep", "u-test")
     d = next(x for x in review._read()["decisions"] if x["item"] == item["id"])
     check("keep records what the site showed", d.get("shown") == review.current("decomposition", "森"), d.get("shown"))
+    row = lambda x: next(h for h in review.history(None, limit=500)["items"] if h["id"] == x)  # noqa: E731
+    check("History offers to take it back", row(d["id"])["revertible"] == "take_back")
     r = review.revert(d["id"], "u-test")
     check("taking a keep back reopens the card", review._read()["items"][item["id"]]["status"] == "open")
+    check("... is logged as take_back, which itself has no revert", r["action"] == "take_back" and row(r["id"])["revertible"] is None)
     check("... and changes nothing live", review.live_value("decomposition", "森") is None)
     check("the reopen itself has no revert", code(lambda: review.revert(r["id"], "u-test")) == "not_revertible")
     check("a keep taken back once can't be again", code(lambda: review.revert(d["id"], "u-test")) == "not_revertible")

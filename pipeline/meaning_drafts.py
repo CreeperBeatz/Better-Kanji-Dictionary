@@ -47,6 +47,7 @@ Drafts live in data/drafts/meanings/ (untracked).
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import random
 import sqlite3
@@ -74,6 +75,7 @@ def _db() -> sqlite3.Connection:
     return db
 
 
+@functools.cache  # a word is listed under each of its kanji (先生 under 先 and 生)
 def word_gloss(db: sqlite3.Connection, word_id: int, senses: int = 4, width: int = 50) -> str:
     """A word's English for placing it: its first senses, numbered ("1. life; living 2. livelihood").
     Not the first sense alone: a word with several was placed by that one, which is
