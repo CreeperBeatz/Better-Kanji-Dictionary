@@ -1748,10 +1748,15 @@ def character_card(char: str) -> dict:
     if not ids:
         raise AppError(404, "card_empty", "nothing waits about this character")
     users = users_of(char)
+    built = forms.forms_of(char)
+    # The parts of every character step 1 could make its root, for step 2 to show as inherited.
+    roots = {f["char"] for f in built["formOf"]} | {c for i in ids if data["items"][i]["type"] == "form_link"
+                                                     for c in data["items"][i]["subject"].split("|") if c != char}
     return {
         "char": char,
         "items": [item(i) for i in ids],
-        "context": {"char": char, **_kanji_info(char), "forms": forms.forms_of(char), "users": users,
+        "context": {"char": char, **_kanji_info(char), "forms": built, "users": users,
+                    "rootParts": {c: _children(c) for c in sorted(roots)},
                     "old": _old_forms(users[:40]), "parts": _children(char),
                     # Each source's split, so every answer can say who gives it.
                     "splits": decomp_sources.splits(char),

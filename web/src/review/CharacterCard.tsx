@@ -40,7 +40,10 @@ const S = strings(
     q_forms: 'How is {char} related to these characters?',
     q_forms_hint: 'Where one is a form of the other, mark which is the root. A form has no parts of its own, and lends the root’s meaning to every kanji with it: check the lists.',
     root: 'The root:',
-    formNoParts: '{char} is a form of {root}. A form has no parts of its own: it uses those of {root}.',
+    q_parts_form: '{char} inherits its parts from {root}',
+    inherited: 'Inherited from {root}:',
+    inheritedNone: 'no parts, {root} is learned as one piece',
+    formNoParts: '{char} is a form of {root} (step 1), so it has no parts of its own.',
     q_meaning: '{char} has no meaning in the dictionary. What is it?',
     q_meaning_hint: 'A real character with its own meaning, a shape several old parts merged into (a name, not a meaning), or a form of a kanji (step above).',
     useProposal: 'Use the proposal',
@@ -92,7 +95,10 @@ const S = strings(
     q_forms: 'Как е свързан {char} с тези знаци?',
     q_forms_hint: 'Където едното е форма на другото, отбележете кое е коренът. Формата няма свои части и заема значението на корена за всяко канджи с нея: проверете списъците.',
     root: 'Коренът:',
-    formNoParts: '{char} е форма на {root}. Формата няма свои части: ползва тези на {root}.',
+    q_parts_form: '{char} наследява частите си от {root}',
+    inherited: 'Наследено от {root}:',
+    inheritedNone: 'без части, {root} се учи като едно цяло',
+    formNoParts: '{char} е форма на {root} (стъпка 1), затова няма свои части.',
     q_meaning: '{char} няма значение в речника. Какво е?',
     q_meaning_hint: 'Истински знак със свое значение, форма, в която са се слели няколко стари части (име, не значение), или форма на канджи (стъпката по-горе).',
     useProposal: 'Използвайте предложението',
@@ -279,7 +285,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
   const chosenKey = chosen?.join('') ?? ''
   useEffect(() => {
     setImpact(null)
-    if (!partsChange || !chosen) return
+    if (!partsChange || !chosen || isForm) return
     let stale = false
     api.reviewImpact(char, chosen).then(
       (i) => !stale && setImpact(i),
@@ -288,7 +294,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
     return () => {
       stale = true
     }
-  }, [char, chosenKey, partsChange])
+  }, [char, chosenKey, partsChange, isForm])
 
   // The part's meaning, resolved to what it would be; a form takes its root's.
   const meaningValue: PartMeaning | null =
@@ -518,14 +524,16 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
         )}
 
         {work.parts && isForm && (
-          <Stage n={2} title={t('q_parts', { char })}>
+          <Stage n={2} title={t('q_parts_form', { char, root })}>
+            {[...roots].map((r) => {
+              const got = card.context.rootParts?.[r] ?? []
+              return (
+                <p key={r} className="card-inherited">
+                  {t('inherited', { root: r })} {got.length ? tiles(got) : <span className="hint">{t('inheritedNone', { root: r })}</span>}
+                </p>
+              )
+            })}
             <p className="hint">{t('formNoParts', { char, root })}</p>
-            {partsChange && (
-              <div className="card-changes">
-                <h5>{t('changes')}</h5>
-                {impact ? <ImpactView imp={impact} onKanji={onKanji} /> : <p className="hint">{t('loading')}</p>}
-              </div>
-            )}
           </Stage>
         )}
 

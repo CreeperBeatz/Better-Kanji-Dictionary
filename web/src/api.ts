@@ -573,7 +573,13 @@ export interface CardDecision {
 export interface CharacterCard {
   char: string
   items: ItemDetail[]
-  context: ItemDetail['context'] & { parts: string[]; splits: SourceSplit[]; book?: BookRef | null }
+  context: ItemDetail['context'] & {
+    parts: string[]
+    splits: SourceSplit[]
+    book?: BookRef | null
+    /** The parts of each character step 1 could make its root: a form shows them as inherited. */
+    rootParts?: Record<string, string[]>
+  }
 }
 
 export interface ItemDetail extends QueueItem {

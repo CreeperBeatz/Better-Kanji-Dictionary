@@ -8890,6 +8890,14 @@ button.review-part {
   padding: 0 4px;
 }
 
+/* Step 2 of a form: the parts it inherits from its root, as tiles on one line (CharacterCard.tsx). */
+.card-inherited {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+}
+
 /* A form link's "the root is": two small answers in a row, under the link's answers (CharacterCard.tsx). */
 .card-root {
   display: flex;
