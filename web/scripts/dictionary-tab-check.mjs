@@ -39,7 +39,9 @@ const icon = page.locator('.dicts-head .dict-tab')
 check('"Open in dictionary" is an icon, named in its tooltip', (await icon.locator('svg').count()) === 1 && (await icon.textContent()).trim() === ''
   && (await icon.getAttribute('title')).startsWith('Open 生 in dictionary'))
 // Kodansha on the card: 2 words a sense (amber ones aside), and the way to the rest.
-await page.locator('details.dict[data-src="kodansha"] > summary').click({ position: { x: 5, y: 8 } })
+check('the card has Kodansha and Цалта, both open', JSON.stringify(await page.locator('.dicts details.dict').evaluateAll((ds) => ds.map((d) => [d.dataset.src, d.open])))
+  === JSON.stringify([['kodansha', true], ['tsalta', true]]))
+check('the rest is one line away', (await page.locator('.dicts-more').textContent()).includes('Wiktionary, 漢字ペディア, and every word: in the expanded dictionary'), await page.locator('.dicts-more').textContent())
 const blocks = page.locator('details.dict[data-src="kodansha"] .kd-block')
 let most = 0
 for (let i = 0; i < (await blocks.count()); i++) {
@@ -101,6 +103,8 @@ await tab.getByRole('button', { name: /Wiktionary/ }).click()
 await tab.waitForSelector('.dv-digital .dict-sense')
 check('Wiktionary: digital only, so no switch', (await tab.locator('.dv-views').count()) === 0)
 check('新漢語林 on 生: not in it', await tab.getByRole('button', { name: /新漢語林/ }).isDisabled())
+const kp = tab.locator('.dv-ext')
+check('漢字ペディア is a link in the tab', (await kp.getAttribute('href')).startsWith('https://www.kanjipedia.jp/') && (await kp.getAttribute('target')) === '_blank')
 await page.screenshot({ path: `${SHOTS}/dictionary-card.png` })
 check('no page errors', errors.length === 0, errors.join(' | '))
 console.log(failed ? `${failed} failed` : 'all good')

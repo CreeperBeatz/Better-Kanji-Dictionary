@@ -90,8 +90,11 @@ dictionary.
     folded. *Scanned* is the printed page: ← → turn it, + − or Ctrl+wheel
     zoom. Wiktionary is only digital; of 新漢語林 only the Japan-only senses
     are transcribed, so its scan has the rest.
-  - On the card, Kodansha shows 2 words a sense (and every amber word).
-    *See all in the expanded dictionary* opens the rest in the tab, digital.
+  - On the card, *Other dictionaries* has only Kodansha and Цалта's book,
+    open and in small type. Kodansha shows 2 words a sense (and every amber
+    word); *see all in the expanded dictionary* opens the rest in the tab,
+    digital. 新漢語林, Wiktionary and 漢字ペディア (a link to its own site)
+    are only in the tab.
   - Every link opens the *same* tab. Put it on your second screen: the next
     kanji you open shows there, as you left the tab.
   - A dictionary that does not have the kanji is greyed (*not in it*).

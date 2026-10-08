@@ -9424,6 +9424,20 @@ button.review-part {
   max-width: none;
 }
 
+/* On a card the entries are set small (Dani, 2026-10-08); the dictionary tab has them at full size. */
+.dicts .kd-entry,
+.dicts .book-entry {
+  zoom: 0.85;
+}
+
+.dicts-more {
+  color: var(--muted);
+}
+
+.dv-ext {
+  text-decoration: none;
+}
+
 /* On a card, under a Kodansha sense cut to a few words: the way to see them all. */
 .kd-more {
   margin: 1px 0 3px 22px;

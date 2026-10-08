@@ -4,7 +4,8 @@
  * card being labelled on the other.
  *
  * At the top, pick 1. the kanji and 2. the dictionary (Kodansha, 新漢語林,
- * Цалта's kanji book, Wiktionary), and whether to see it digital (the
+ * Цалта's kanji book, Wiktionary; 漢字ペディア is a link to its own site),
+ * and whether to see it digital (the
  * transcription drawn as the book prints it, whole, nothing folded) or
  * scanned (the printed page, with page turning and zoom: BookEvidence.tsx
  * PageScan), a choice shown under the dictionaries only where it has both:
@@ -38,6 +39,7 @@ const S = strings(
     kanji_book: 'Цалта’s kanji book',
     wiktionary: 'Wiktionary',
     notIn: 'not in it',
+    kanjipediaTitle: 'The 漢検漢字辞典 on kanjipedia.jp, in a new tab: its numbered meanings, each with example words. Read there, never copied.',
     digital: 'digital',
     scan: 'scanned',
     pick: 'Type a kanji above, or open one from a card’s “Open in dictionary”.',
@@ -58,6 +60,7 @@ const S = strings(
     kanji_book: 'Канджи речникът на Цалта',
     wiktionary: 'Уикиречник',
     notIn: 'няма го',
+    kanjipediaTitle: '漢検漢字辞典 на kanjipedia.jp, в нов раздел: номерираните значения, всяко с примерни думи. Чете се там, никога не се копира.',
     digital: 'дигитален',
     scan: 'сканиран',
     pick: 'Напишете канджи горе или го отворете от „Отвори в речника“ на карта.',
@@ -241,6 +244,11 @@ export default function BookViewer() {
                   </button>
                 )
               })}
+              {d && (
+                <a className="search-filter dv-ext" href={d.kanjipedia} target="_blank" rel="noopener" title={t('kanjipediaTitle')}>
+                  漢字ペディア ↗
+                </a>
+              )}
             </div>
             {/* Only when the dictionary has both to choose from. */}
             {has?.digital && has.pages.length > 0 && (
