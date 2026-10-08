@@ -651,6 +651,8 @@ export interface KanjiDictionaries {
     kun: { head: string; kana: string | null; text: string | null; senses: DictSense[] }[]
     independent: { head: string; kana: string | null; text: string | null }[]
     special: DictWord[]
+    /** Its SYNONYMS box: which sense (`n`, as in `senses`) each synonym is of. */
+    synonyms?: { n: string; char: string; gloss: string }[]
   }
   kangorin?: {
     no: number

@@ -437,6 +437,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     if (typing(e.target) || e.ctrlKey || e.metaKey || e.altKey || !item) return
     // A character's card takes a, Enter and s itself; j and k still move.
     if (item.type === 'character' && !['j', 'k', 'ArrowDown', 'ArrowUp'].includes(e.key)) return
+    // Enter on a button (a group picked in step 2, skip …) presses that button, not accept.
+    if (e.key === 'Enter' && e.target instanceof HTMLElement && e.target.closest('button, a')) return
     if (e.key === 'a' || e.key === 'Enter') {
       if (!blocked) decideDraft()
     }

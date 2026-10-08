@@ -132,6 +132,8 @@ def main() -> int:
         print("meanings: senses, then words, and reopening")
         senses = [{"id": "life", "en": "life, birth"}, {"id": "raw", "en": "raw, fresh"}]
         check("no senses is too few", call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": []})[0] == 400)
+        two_original = [{**s, "original": True} for s in senses]
+        check("only one group holds the original meaning", call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": two_original})[0] == 400)
         _, wrow = call("GET", "/api/review/queue", "reviewer")
         from server.db import query
 

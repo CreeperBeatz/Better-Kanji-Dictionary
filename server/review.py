@@ -608,6 +608,8 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
                 "noteBg": (s.get("noteBg") or "").strip()[:200] or None,
                 **_group_extras(subject, s),
             })
+        if sum(1 for s in out if s.get("original")) > 1:
+            raise _bad("senses_original", "only one group holds the original meaning")
         return out
 
     if type_ == "kanji_extras":

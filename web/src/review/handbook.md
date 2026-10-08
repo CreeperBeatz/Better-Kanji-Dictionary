@@ -379,14 +379,26 @@ drafted with them; check it like the groups, and fix or empty what is wrong.
 
 - **Per group:**
   - a line on what the kanji does in its words;
-  - *original meaning*, ticked where Kodansha marks the kanji's original
-    meaning and most of that sense's words are in this group;
-  - its **best examples**: the starred words (☆ on a word card). Star 2–3
-    common, clear words.
-  - **Same meaning here**: kanji that mean what this group means
-    (生 *life* → 命). Candidates come from Kodansha's synonyms; a struck-out
-    one is not kept. Those our own data links start ticked. Tick what a
-    learner should see; Kodansha's own word is in the tooltip, for you only.
+  - its **best examples**: the starred words (☆ on a word card). Learners
+    see them first. Star 2–3 common, clear words.
+- **Step 2, kanji with the same meaning**, under the board. Put each kanji
+  in the group where it means the same as this kanji (生 *life* → 命).
+  Learners see the kanji you put in a group. A kanji that fits no group
+  stays in *not the same meaning*.
+  - The list is Kodansha's synonyms, sorted by Kodansha's meaning. Each
+    kanji shows Kodansha's word for the shared meaning (藩 *feudal domain*),
+    then its own main meaning.
+  - Those our own data links start in a group. The rest start in *not the
+    same meaning*.
+  - **A Kodansha meaning with no group to go in?** Check whether the kanji
+    still has that meaning in Japanese. If it does, go back to step 1 and
+    add the group. Then put the kanji in it. Example: 国's draft has no
+    group for Kodansha's *province, feudal domain* (藩 領 封 荘). Look for
+    words like 国司 and 武蔵国 to decide.
+  - None in a group is a good answer. A wrong group is not.
+- **Step 3, the original meaning** (optional). Pick the group that holds the
+  meaning Kodansha marks as the kanji's original one. If Kodansha marks
+  none, leave *No group*.
 - **Per kanji**, in *About the kanji* under the board:
   - **How it was built**, from Wiktionary's glyph origin only: nothing that
     source does not say. Tick *uncertain* when it says so.

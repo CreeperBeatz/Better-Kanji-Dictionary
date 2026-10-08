@@ -24,11 +24,12 @@ import type { Placements } from './board'
 import { elsewhere } from './dictMatch'
 import { readDraft, writeDraft } from './drafts'
 import { CATCH_ALL } from './editors'
-import { GroupExtras, type Candidates } from './Extras'
+import { GroupExtras, OriginalStep, SynonymsStep, type Candidates } from './Extras'
 
 const S = strings(
   {
     groups: 'Meaning groups',
+    groupsStep: '1. Meanings',
     groupsHint: '1 to 6, by what the kanji does in words. Drag words between groups, or right-click a word (or a selection of several) to pick its group.',
     tickHint: 'Tick each word as you check it: the card can be accepted once every word in the groups is ticked.',
     allConfirmed: 'every word confirmed',
@@ -83,6 +84,7 @@ const S = strings(
   },
   {
     groups: 'Групи значения',
+    groupsStep: '1. Значения',
     groupsHint: 'От 1 до 6, според това какво прави канджито в думите. Плъзгайте думите между групите или щракнете с десния бутон върху дума (или върху няколко избрани), за да им изберете група.',
     tickHint: 'Отмятайте всяка дума, щом я проверите: картата може да се приеме, когато всички думи в групите са отметнати.',
     allConfirmed: 'всички думи са потвърдени',
@@ -208,9 +210,10 @@ export function MeaningsBoard({
   /** Other dictionaries' entries (review/dictMatch.ts): their badges on the words; a word one places elsewhere starts unticked. */
   dicts?: KanjiDictionaries | null
   /**
-   * In the queue, a kanji's meanings card: Kodansha's candidates for each
-   * group's same-meaning kanji. With it, each group shows its extras (about,
-   * original meaning, best examples, same meaning) to check and edit.
+   * In the queue, a kanji's meanings card: Kodansha's candidates for the
+   * kanji that mean the same. With it, each group shows its extras (about,
+   * best examples), and the board is step 1 of 3: then 2, the same-meaning
+   * kanji sorted into the groups, and 3, the original meaning.
    */
   candidates?: Candidates
 }) {
@@ -593,7 +596,7 @@ export function MeaningsBoard({
   return (
     <div className="board" ref={boardRef} data-only={only !== undefined || undefined}>
       <div className="board-top">
-        <h4>{t('groups')}</h4>
+        <h4>{t(extras ? 'groupsStep' : 'groups')}</h4>
         <span className="hint">
           {t('groupsHint')}
           {checks && ` ${t('tickHint')}`}
@@ -626,7 +629,7 @@ export function MeaningsBoard({
               {t('remove')}
             </button>
             {extras && (
-              <GroupExtras char={char} group={g} onChange={(patch) => setGroup(i, patch)} candidates={candidates!} headwords={headwords} />
+              <GroupExtras group={g} onChange={(patch) => setGroup(i, patch)} headwords={headwords} />
             )}
           </div>
           ),
@@ -648,6 +651,12 @@ export function MeaningsBoard({
         <div className="board-fixed">
           <b>{t('none')}</b> <span className="hint">{t('noneHint')}</span>
         </div>,
+      )}
+      {extras && (
+        <>
+          <SynonymsStep char={char} groups={groups} onGroups={onGroups} candidates={candidates!} dicts={dicts} />
+          <OriginalStep groups={groups} onGroups={onGroups} dicts={dicts} />
+        </>
       )}
       {menu && (
         <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>

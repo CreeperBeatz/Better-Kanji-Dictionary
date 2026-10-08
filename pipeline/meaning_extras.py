@@ -81,15 +81,7 @@ def _homophones(entry: dict) -> list[tuple[str, str, str]]:
     return out
 
 
-def _synonyms(entry: dict) -> list[tuple[str, str, str]]:
-    """Kodansha's SYNONYMS box as (sense number, kanji, gloss)."""
-    out, sense = [], None
-    for x in (entry.get("sections") or {}).get("synonyms") or []:
-        if x.get("kind") == "sense":
-            sense = x.get("sense") or ""
-        elif x.get("kind") == "ref" and sense is not None and x.get("ja"):
-            out.append((sense, x["ja"], x.get("gloss") or ""))
-    return out
+_synonyms = dictionaries.kodansha_synonyms
 
 
 def _covers(n: str, key: str) -> bool:

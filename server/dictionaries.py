@@ -120,7 +120,20 @@ def _kodansha_view(e: dict) -> dict:
                         for x in s.get("independent") or [] if x.get("kind") == "headword"],
         "special": [{"ja": x.get("ja"), "reading": x.get("reading"), "gloss": x.get("gloss")}
                     for x in s.get("special_readings") or [] if x.get("kind") == "word"],
+        # Its SYNONYMS box, so the meanings card can say which sense each synonym is of.
+        "synonyms": [{"n": n, "char": c, "gloss": g} for n, c, g in kodansha_synonyms(e)],
     }
+
+
+def kodansha_synonyms(e: dict) -> list[tuple[str, str, str]]:
+    """Kodansha's SYNONYMS box as (sense number, kanji, gloss)."""
+    out, sense = [], None
+    for x in (e.get("sections") or {}).get("synonyms") or []:
+        if x.get("kind") == "sense":
+            sense = x.get("sense") or ""
+        elif x.get("kind") == "ref" and sense is not None and x.get("ja"):
+            out.append((sense, x["ja"], x.get("gloss") or ""))
+    return out
 
 
 # ---------------------------------------------------------------- 新漢語林
