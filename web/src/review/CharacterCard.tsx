@@ -38,7 +38,6 @@ const S = strings(
     loading: 'loading…',
     q_parts: 'What is {char} built from, as written today?',
     formOfHint: '{char} is a form of {root} (step 2). If it still looks like {root}, its part is {root}, as ⺮ is 竹. If it no longer looks like it, pick no parts, as for 氵 and 水.',
-    q_parts_hint: 'Base kanji stay whole. Otherwise take the split the sources give (the labels say which); history only when none helps; your own only when nothing else works.',
     q_forms: 'How is {char} related to these characters?',
     q_forms_hint: 'A form link never changes parts. “A form of” lends its meaning to every kanji with the part: check the lists.',
     q_meaning: '{char} has no meaning in the dictionary. What is it?',
@@ -90,7 +89,6 @@ const S = strings(
     loading: 'зарежда се…',
     q_parts: 'От какво е построен {char}, както се пише днес?',
     formOfHint: '{char} е форма на {root} (стъпка 2). Ако още прилича на {root}, частта му е {root}, както при ⺮ и 竹. Ако вече не прилича, изберете „без части“, както при 氵 и 水.',
-    q_parts_hint: 'Основните канджи остават цели. Иначе вземете делението от източниците (етикетите казват кои); историята само ако те не помагат; свое само ако нищо друго не става.',
     q_forms: 'Как е свързан {char} с тези знаци?',
     q_forms_hint: 'Връзка между форми никога не променя частите. „Форма на“ заема значението си на всяко канджи с частта: проверете списъците.',
     q_meaning: '{char} няма значение в речника. Какво е?',
@@ -441,7 +439,6 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
                 {t('formOfHint', { char, root })}
               </p>
             ))}
-            <p className="hint">{t('q_parts_hint')}</p>
             <div className="card-options" role="radiogroup">
               {options.map((o) => {
                 const isDraft = o.key === 'draft'
