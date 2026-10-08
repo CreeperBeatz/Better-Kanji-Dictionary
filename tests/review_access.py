@@ -159,7 +159,12 @@ def main() -> int:
         review.add_item("word_sense", sure, "青.colour", "ai:test", evidence={"runs": [run("青.colour", 0.9), run("青.colour", 0.85)]})
         review.add_item("word_sense", unsure, "青.colour", "ai:test", evidence={"runs": [run("青.colour", 0.9), run("青.colour", 0.6)]})
         review.add_item("word_sense", split, "青.colour", "ai:test", evidence={"runs": [run("青.colour", 0.9), run("青.young", 0.9)]})
-        call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "青", "value": [{"id": "colour", "en": "blue, green"}, {"id": "young", "en": "young, unripe"}]})
+        groups = [{"id": "colour", "en": "blue, green"}, {"id": "young", "en": "young, unripe"}]
+        call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "青", "value": groups})
+        check("groups set on the page place no word", review.word_senses("青") == {})
+        call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "青", "value": []})
+        groups_item = review.add_item("kanji_senses", "青", groups, "ai:test")
+        call("POST", f"/api/review/items/{groups_item['id']}/decide", "reviewer", {"action": "accept"})
         placed = review.word_senses("青")
         check("agreeing, confident runs are accepted", placed.get(int(sure.split("|")[1])) == "青.colour", placed)
         check("a low confidence waits for a person", int(unsure.split("|")[1]) not in placed)

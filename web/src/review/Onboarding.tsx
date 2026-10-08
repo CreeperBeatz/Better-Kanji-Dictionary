@@ -200,7 +200,8 @@ function cards(go: (i: number) => void): Card[] {
             <li>Drag words between groups, or right-click for the menu.</li>
             <li>
               <b>Tick every word</b> in the groups as you check it. Words two AI runs agreed on start ticked: glance over
-              them and untick a wrong one. Accept stays greyed until every word is ticked.
+              them and untick a wrong one. Accept stays greyed until every word is ticked, and until you press <i>Done</i> on
+              steps 2 and 3.
             </li>
             <li>
               Unsure of a word? <i>Not sure: leave for later</i>. It comes back at the end of the queue.

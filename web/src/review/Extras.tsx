@@ -254,12 +254,15 @@ export function SynonymsStep({
   onGroups,
   candidates,
   dicts,
+  onChecked,
 }: {
   char: string
   groups: MeaningGroup[]
   onGroups: (g: MeaningGroup[]) => void
   candidates: Candidates
   dicts?: KanjiDictionaries | null
+  /** The card's accept waits for this step's "Done" (review/Stage.tsx). */
+  onChecked?: (done: boolean) => void
 }) {
   const t = S(useLang())
   // Kanji a reviewer added that Kodansha does not list, kept in sight while in no group.
@@ -325,7 +328,13 @@ export function SynonymsStep({
   )
 
   return (
-    <Stage n={2} title={t('synonyms')} summary={t('synonymsSum', { n: new Set(groups.flatMap((g) => g.similar ?? [])).size })}>
+    <Stage
+      n={2}
+      title={t('synonyms')}
+      summary={t('synonymsSum', { n: new Set(groups.flatMap((g) => g.similar ?? [])).size })}
+      onChecked={onChecked}
+      empty={!pool.size && !extra.length}
+    >
       <p className="hint">{pool.size ? t('synonymsHint', { char }) : t('synonymsNone', { char })}</p>
       {bySense.map(([n, list]) => {
         const text = n ? senseText(n) : ''
@@ -396,11 +405,14 @@ export function MixupsStep({
   onChange,
   candidates,
   explained = {},
+  onChecked,
 }: {
   char: string
   value: KanjiExtras
   onChange: (v: KanjiExtras) => void
   candidates: Candidates
+  /** The card's accept waits for this step's "Done" (review/Stage.tsx). */
+  onChecked?: (done: boolean) => void
   /** The kanji a usage card writes for the same reading: its reading and item (server/review.py _usage_pairs). */
   explained?: Record<string, { reading: string; item: string }>
 }) {
@@ -428,7 +440,13 @@ export function MixupsStep({
     onChange({ ...value, mixups: on ? [...value.mixups.filter((m) => m.char !== r.char), { char: r.char, reading: r.reading }] : value.mixups.filter((m) => m.char !== r.char) })
 
   return (
-    <Stage n={3} title={t('mixups', { char })} summary={rows.length ? t('mixupsSum', { n: value.mixups.length }) : t('mixupsNone', { char })}>
+    <Stage
+      n={3}
+      title={t('mixups', { char })}
+      summary={rows.length ? t('mixupsSum', { n: value.mixups.length }) : t('mixupsNone', { char })}
+      onChecked={onChecked}
+      empty={!rows.length}
+    >
       <p className="hint">{rows.length ? t('mixupsHint', { char }) : t('mixupsNone', { char })}</p>
       {[...byReading].map(([reading, list]) => (
         <div key={reading} className="step-sense">

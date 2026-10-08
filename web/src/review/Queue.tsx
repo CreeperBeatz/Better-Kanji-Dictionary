@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DictLinks } from './DictLinks'
+import { askIfStale } from './stale'
 import { CardFooter, CardHead, ReviewCard } from './Card'
 import { DictionaryLinks } from './dictLink'
 import {
@@ -85,6 +86,7 @@ const S = strings(
     left: '{n} waiting',
     confidence: 'model confidence {n}',
     confirmFirst: 'Confirm every word in the groups first: {n} left',
+    checkSteps: 'Check step {steps} first. Press "Done" at the bottom of the step.',
   },
   {
     all: 'всички',
@@ -128,6 +130,7 @@ const S = strings(
     left: '{n} чакат',
     confidence: 'увереност на модела {n}',
     confirmFirst: 'Първо потвърдете всяка дума в групите: остават {n}',
+    checkSteps: 'Първо проверете стъпка {steps}. Натиснете „Готово“ в края на стъпката.',
   },
 )
 
@@ -201,6 +204,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   const [boardWork, setBoardWork] = useState(false)
   // Words in the groups not yet confirmed: a meanings card is accepted only once there are none.
   const [unconfirmed, setUnconfirmed] = useState(0)
+  // A meanings card's steps 2 and 3, by number: unchecked until their "Done" is pressed (review/Stage.tsx).
+  const [steps, setSteps] = useState<{ id: string | null; done: Record<number, boolean> }>({ id: null, done: {} })
   const [fresh, setFresh] = useState(0)
   // A kanji's Bulgarian card: its groups' Bulgarian labels, and what they were.
   const [labels, setLabels] = useState<Record<string, string>>({})
@@ -339,7 +344,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   )
 
   const decide = useCallback(
-    async (action: 'accept' | 'edit' | 'reject' | 'skip', value?: TaskValue, words?: Placements, skip?: Placements) => {
+    async (action: 'accept' | 'edit' | 'keep' | 'reject' | 'skip', value?: TaskValue, words?: Placements, skip?: Placements) => {
       if (!item || busy) return
       setBusy(true)
       setProblem(null)
@@ -348,7 +353,10 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         const withAbout = item.type === 'bg' && Object.keys(aboutBg).length ? aboutBg : undefined
         // The extras are decided with the card when it decides anything: not on a skip.
         const withExtras = action !== 'skip' && extras ? extras : undefined
-        await api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withExtras, withAbout)
+        await askIfStale(
+          (staleOk) => api.decide(item.id, action, value, reason.trim() || undefined, words, skip, withLabels, withExtras, withAbout, staleOk),
+          lang,
+        )
         if (action !== 'skip') clearDraft(item.id)
         if ((action === 'accept' || action === 'edit') && LIVE_ON_PAGE.includes(item.type)) dataChanged()
         advance(action === 'skip')
@@ -362,7 +370,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
   )
 
   const groups: MeaningGroup[] | null | undefined = detail?.context.senses
-  // Nothing proposed (a cost-ranked check): leaving it as it is is a rejection of any change.
+  // Nothing proposed (a cost-ranked check): leaving it as it is keeps today's value.
   const open = item?.proposed === null
   const board = item?.type === 'kanji_senses'
   const moved = board && !same(placements, placedFrom)
@@ -384,7 +392,14 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
     setBoardWork(false)
     setFresh((n) => n + 1)
   }
-  const blocked = board && unconfirmed > 0
+  const itemId = item?.id ?? null
+  const stepChecked = useCallback(
+    (n: number, done: boolean) => setSteps((s) => ({ id: itemId, done: { ...(s.id === itemId ? s.done : {}), [n]: done } })),
+    [itemId],
+  )
+  const unchecked = steps.id === item?.id ? Object.keys(steps.done).filter((n) => !steps.done[Number(n)]).sort() : []
+  const blockedBy = !board ? null : unconfirmed > 0 ? t('confirmFirst', { n: unconfirmed }) : unchecked.length ? t('checkSteps', { steps: unchecked.join(', ') }) : null
+  const blocked = !!blockedBy
   const decideDraft = useCallback(
     (value: TaskValue = draft) => {
       if (!item) return
@@ -399,8 +414,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
         const later = Object.keys(skip).length ? skip : undefined
         return same(fin.groups, item.proposed) ? decide('accept', undefined, words, later) : decide('edit', fin.groups, words, later)
       }
-      // Left as it was: a check is rejected (nothing to change), a proposal accepted.
-      if (same(value, item.proposed === null ? item.current : item.proposed)) return decide(item.proposed === null ? 'reject' : 'accept')
+      // Left as it was: a check keeps today's value (on purpose, logged as such), a proposal is accepted.
+      if (same(value, item.proposed === null ? item.current : item.proposed)) return decide(item.proposed === null ? 'keep' : 'accept')
       return item.type === 'decomposition' && !strokesOk(value, lang) ? undefined : decide('edit', value)
     },
     [item, draft, decide, detail, placements, lang, skipped],
@@ -663,6 +678,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                       key={`${item.id}:${fresh}`}
                       onWork={setBoardWork}
                       onUnconfirmed={setUnconfirmed}
+                      onStepChecked={stepChecked}
                       cacheKey={item.id}
                       char={item.subject}
                       groups={(draft ?? []) as MeaningGroup[]}
@@ -714,6 +730,8 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                 )}
                 {board && extras && detail?.id === item.id && !isFollowUp(item) && (
                   <MixupsStep
+                    key={`mixups:${item.id}:${fresh}`}
+                    onChecked={(done) => stepChecked(3, done)}
                     char={item.subject}
                     value={extras}
                     onChange={setExtras}
@@ -733,7 +751,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     <button
                       className="account-submit"
                       disabled={busy || blocked}
-                      title={blocked ? t('confirmFirst', { n: unconfirmed }) : undefined}
+                      title={blockedBy ?? undefined}
                       onClick={() => decideDraft()}
                     >
                       {edited ? t('saveEdit') : open ? t('keep') : item.type === 'report' ? t('confirmReport') : t('accept')}
@@ -749,7 +767,7 @@ export function Queue({ onKanji, onDecided }: { onKanji?: (char: string) => void
                     <button className="clear queue-reset" disabled={busy || !changed} title={t('resetTitle')} onClick={reset}>
                       {t('reset')}
                     </button>
-                    {blocked && <span className="hint queue-blocked">{t('confirmFirst', { n: unconfirmed })}</span>}
+                    {blockedBy && <span className="hint queue-blocked">{blockedBy}</span>}
                   </>
                 }
               />

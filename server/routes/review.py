@@ -43,7 +43,7 @@ def item(item_id: str, _: dict = Depends(reviewer)) -> dict:
 def decide(item_id: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
     return {"item": review.decide(item_id, payload.get("action", ""), me["id"], payload.get("value"), payload.get("reason"),
                                   payload.get("words"), payload.get("skip"), payload.get("labels"),
-                                  payload.get("extras"), payload.get("aboutBg"))}
+                                  payload.get("extras"), payload.get("aboutBg"), bool(payload.get("staleOk")))}
 
 
 @router.get("/characters/{char}")
@@ -54,7 +54,8 @@ def character(char: str, _: dict = Depends(reviewer)) -> dict:
 
 @router.post("/characters/{char}/decide")
 def decide_character(char: str, payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
-    return {"items": review.decide_card(char, payload.get("decisions"), me["id"], payload.get("reason"))}
+    return {"items": review.decide_card(char, payload.get("decisions"), me["id"], payload.get("reason"),
+                                        bool(payload.get("staleOk")))}
 
 
 @router.get("/progress")

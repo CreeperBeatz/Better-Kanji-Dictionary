@@ -69,6 +69,13 @@ No key accepts or saves. Click the button, so that every accept is a choice.
 **A reason** is optional: *+ add a reason*, under the card, opens the field.
 History shows it with your decision.
 
+**Changed since the proposal.** Sometimes a person changes a value after its
+proposal was made. Then *accept* tells you the date and asks again. Look at
+the card first: the proposal may now be wrong.
+
+**Keep and reject can be taken back.** In History, the admin can *reopen* one.
+The card goes back to the queue. Nothing on the site changes.
+
 **Something else is wrong?** Every card has it under its title. A mistake
 the card can't fix (a word's English, a kanji's readings or levels, its
 similar kanji, a part on another card) goes to *reports* for a reviewer to
@@ -365,6 +372,10 @@ collapse or open it; *Done: collapse this step*, at its bottom, collapses it
 and brings the next one up. A collapsed step shows a line of what it holds.
 Collapsing only hides it: nothing is decided until you accept.
 
+Steps 2 and 3 must be checked. Press *Done* at the bottom of each when you
+have looked at every row. *Accept* waits until you do. A step with nothing
+to check counts as done.
+
 Each group is a box with its words under it (reading and gloss). The kanji's
 common words come placed where the AI drafted them; words with a **red edge**
 are the ones it was unsure of, so look at those first.
@@ -382,11 +393,15 @@ are the ones it was unsure of, so look at those first.
   accept is what you meant.
 - **Accept waits for the ticks.** Until every word in the groups and in the
   no-meaning box is confirmed, *accept* is greyed and says how many are left.
-  Words left for later and words not in a group don't count.
-- **Some words start ticked.** Two drafting runs placed every word
-  independently; where both put it in the same group, both sure, it starts
-  confirmed (about 7 words in 10). Glance over them, and untick one that is
-  wrong: it is your decision, not theirs. The rest are yours to tick.
+  Words left for later and words not in a group don't count. Then it waits
+  for *Done* on steps 2 and 3.
+- **Some words start ticked.** A second drafting run placed every word
+  again, into the groups the first run made. Where both runs put a word in
+  the same group, both sure, it starts confirmed (about 7 words in 10). The
+  runs are the same model with the same dictionaries, so they can be wrong
+  together. Glance over them, and untick one that is wrong: it is your
+  decision, not theirs. A word in the no-meaning box never starts ticked:
+  *the kanji brings no meaning to the word* is always your call.
 - **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
   submit, the groups and every other word are decided, and the skipped words
   come back together as a follow-up for the same kanji at the very end of the

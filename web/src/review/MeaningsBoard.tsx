@@ -163,6 +163,7 @@ export function MeaningsBoard({
   dicts,
   candidates,
   overall,
+  onStepChecked,
 }: {
   /** The item, to keep the board's own state under in the browser until it is decided. */
   cacheKey: string
@@ -204,6 +205,8 @@ export function MeaningsBoard({
   candidates?: Candidates
   /** Step 1's overall box (how the groups connect), above the groups. */
   overall?: React.ReactNode
+  /** Told when step 2 (same meaning) needs checking and when it is checked: the card's accept waits for it. */
+  onStepChecked?: (n: number, done: boolean) => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -645,7 +648,16 @@ export function MeaningsBoard({
       ) : (
         stepOne
       )}
-      {extras && <SynonymsStep char={char} groups={groups} onGroups={onGroups} candidates={candidates!} dicts={dicts} />}
+      {extras && (
+        <SynonymsStep
+          char={char}
+          groups={groups}
+          onGroups={onGroups}
+          candidates={candidates!}
+          dicts={dicts}
+          onChecked={onStepChecked && ((done) => onStepChecked(2, done))}
+        />
+      )}
       {menu && (
         <div ref={menuRef} className="board-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
           <p className="board-menu-title">{menu.ids.length > 1 ? t('moveMany', { n: menu.ids.length }) : t('moveTo')}</p>

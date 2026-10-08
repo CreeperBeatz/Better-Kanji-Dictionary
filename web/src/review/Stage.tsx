@@ -3,8 +3,12 @@
  * (review/Card.tsx): framed apart from the others, with a big numbered title. The title folds and unfolds it; "Done" at its bottom
  * folds it and brings the next step into view. Folded, it shows a line of
  * what it holds. Folding only hides: nothing is decided by it.
+ *
+ * A step whose card waits for it (`onChecked`) is told unchecked when it
+ * appears, and checked when its "Done" is pressed, or at once when it holds
+ * nothing to check (`empty`).
  */
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { strings, useLang } from '../i18n'
 
 const S = strings(
@@ -29,17 +33,29 @@ export function Stage({
   summary,
   extra,
   children,
+  onChecked,
+  empty = false,
 }: {
   n: number
   title: ReactNode
   summary?: ReactNode
   extra?: ReactNode
   children: ReactNode
+  /** The card's accept waits until this step is checked: true once "Done" is pressed. */
+  onChecked?: (done: boolean) => void
+  /** Nothing in the step to check: it counts as checked. */
+  empty?: boolean
 }) {
   const t = S(useLang())
   const [shut, setShut] = useState(false)
   const root = useRef<HTMLElement>(null)
+  const checked = useRef(onChecked)
+  useEffect(() => {
+    checked.current = onChecked
+  })
+  useEffect(() => checked.current?.(empty), [empty])
   function done() {
+    onChecked?.(true)
     setShut(true)
     // The step folds where it is; the next one comes up under it.
     requestAnimationFrame(() => root.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }))

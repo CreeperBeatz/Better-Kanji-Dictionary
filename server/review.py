@@ -59,7 +59,9 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import logging
 import re
+import shutil
 import sqlite3
 import sys
 import threading
@@ -76,6 +78,7 @@ from .routes.graph import children_of, parents_map, parents_of
 from .routes.search import _fetch_words
 
 ROOT = Path(__file__).parent.parent
+log = logging.getLogger(__name__)
 REVIEW_DIR = ROOT / "data" / "review"
 DB = REVIEW_DIR / "review.db"
 LEGACY = REVIEW_DIR / "review.json"  # the store before review.db; read once, then renamed
@@ -126,7 +129,8 @@ ONE_WAY = ("old", "form_of", "looks_like")
 # merged into it and no one meaning is true in all its kanji (丷 is 八 in 半,
 # grains in 米, hair in 首). A shape's name is shown as a name, never as a meaning.
 PART_KINDS = ("meaning", "shape")
-# What a decision changed: these can be reverted. skip/reject change nothing.
+# What a decision changed: these can be reverted. keep/reject change nothing;
+# "revert" on one of them reopens its item instead (_reopen_decided).
 CHANGES = ("accept", "edit", "direct", "auto", "revert", "reopen")
 
 MAX_OPEN_SUGGESTIONS = 20
@@ -263,6 +267,10 @@ def _read() -> dict:
 def _change():
     """For changing: a copy to change, written when the block ends, as one transaction.
 
+    A change that writes outside review.db (`_apply`: store.json, the
+    Bulgarian overlay) puts a function in `_undo` that puts it back, so a
+    card that fails halfway leaves nothing behind.
+
     The copy shares items and decisions with the state readers see, so
     neither is changed in place: `_update`, `_update_decision` and
     `_set_live` put changed copies in, and mark them to be written. Only the
@@ -270,6 +278,7 @@ def _change():
     it, and a block that raises leaves the state as it was.
     """
     global _state
+    work = None
     with _lock:
         conn = _db()
         conn.execute("BEGIN IMMEDIATE")  # other processes wait; their commits are read first
@@ -282,13 +291,21 @@ def _change():
                 "live": {k: dict(v) for k, v in base["live"].items()},
                 "_dirty": {"items": {}, "decisions": {}, "live": set()},
             }
+            work["_undo"] = []
             yield work
             _write(conn, base, work)
             conn.execute("COMMIT")
         except BaseException:
             if conn.in_transaction:
                 conn.execute("ROLLBACK")
+            # What went outside review.db (store.json, the Bulgarian overlay) goes back too, newest first.
+            for undo in reversed(work.get("_undo", []) if work else []):
+                try:
+                    undo()
+                except Exception:  # noqa: BLE001 -- the first error is the one to raise
+                    log.exception("undoing a failed change")
             raise
+        work.pop("_undo", None)
         _state = work
 
 
@@ -348,13 +365,18 @@ def _set_live(data: dict, type_: str, subject: str, entry: dict | None) -> None:
 
 
 def backup(dest: Path) -> None:
-    """A consistent copy of the store, safe while the server runs."""
+    """A consistent copy of the store, safe while the server runs: review.db to
+    `dest`, and store.json, where accepted parts live, beside it as
+    `<dest>.store.json`."""
     with _lock:
         out = sqlite3.connect(dest)
         try:
             _db().backup(out)
         finally:
             out.close()
+        with store._lock:
+            if store.STORE.exists():
+                shutil.copy2(store.STORE, dest.with_name(dest.name + ".store.json"))
 
 
 # ---------------------------------------------------------------- the graph, for checks and impact
@@ -869,24 +891,33 @@ def _bg_shown(subject: str) -> list[str] | None:
     return bg_overlay.kanji(key, None) or _bg_built(subject)
 
 
-def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, explicit_words: bool = False) -> None:
+def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, explicit_words: bool = False,
+           auto_words: bool = False) -> None:
     """Make `value` live (None: back to the built data). The caller saves.
 
     `explicit_words`: the reviewer placed the kanji's words themselves (the
-    meanings board), so none are reopened or auto-accepted behind their back.
+    meanings board), so none are reopened behind their back.
+    `auto_words`: a kanji's groups accepted in the queue without the board;
+    its words that pass `word_rule` go live. Never from a page edit or a
+    revert: groups nobody accepted in the queue place no word.
     """
     if type_ == "report":
         return  # confirmed or not, the site stays as its sources have it
     if type_ == "decomposition":
+        prev = store.decomposition_overrides().get(subject)
+        prev = list(prev) if prev is not None else None
         if value is None:
             store.clear_decomposition(subject)
         else:
             store.set_decomposition(subject, value)
+        data["_undo"].append(lambda: store.clear_decomposition(subject) if prev is None else store.set_decomposition(subject, prev))
         _schedule_pack()
         return
     if type_ == "bg":
+        prev = live_value("bg", subject, data)
         _set_live(data, "bg", subject, None if value is None else {"value": value, "decision": decision})
         _bg_live(subject, value)
+        data["_undo"].append(lambda: _bg_live(subject, prev))
         _schedule_pack()
         return
     if value is None:
@@ -903,7 +934,8 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, expl
         _set_live(data, type_, subject, {"senses": value, "decision": decision})
         if not explicit_words:
             _reopen_words(data, subject, before, value, decision)
-            _auto_words(data, subject, value)
+            if auto_words:
+                _auto_words(data, subject, value)
     else:
         _set_live(data, type_, subject, {"sense": value, "decision": decision})
 
@@ -966,9 +998,11 @@ AUTO_CONFIDENCE = 0.8
 
 
 def word_rule(item: dict, accepted_ids: set[str]) -> bool:
-    """TASK §6 for a word's meaning: two independent runs agree, both are
-    confident, and their pick is one of the kanji's accepted groups."""
-    return _runs_agree(item) and item["proposed"] in accepted_ids | {CATCH_ALL}
+    """TASK §6 for a word's meaning: two runs agree, both are confident, and
+    their pick is one of the kanji's accepted groups. Never "the kanji brings
+    no meaning to the word" (catch-all): the drafts shrug that way when unsure
+    (D-006), so a person says it."""
+    return _runs_agree(item) and item["proposed"] in accepted_ids
 
 
 def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
@@ -1019,7 +1053,20 @@ def _close(data: dict, item: dict, status: str, d: dict) -> dict:
 
 
 def _reopen_item(data: dict, item: dict) -> dict:
-    return _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[])
+    return _update(data, item, status="open", decided_by=None, decided_at=None, decision=None, skipped_by=[], opened=_now())
+
+
+def _changed_since(data: dict, item: dict) -> list[dict]:
+    """Changes to the item's subject since it was queued or last reopened, by
+    anything but the item: its proposal was drafted against an older value.
+    A change reverted in the same span cancels out."""
+    since = item.get("opened") or item["created"]
+    ds = [d for d in data["decisions"]
+          if d["subject"] == item["subject"] and d["type"] == item["type"] and d["at"] > since
+          and d["action"] in CHANGES and not d.get("reopens") and d.get("item") != item["id"]]
+    ids = {d["id"] for d in ds}
+    undone = {x for r in ds if r["action"] == "revert" and r.get("supersedes") in ids for x in (r["id"], r["supersedes"])}
+    return [d for d in ds if d["id"] not in undone]
 
 
 def _moves_of(item: dict) -> dict | None:
@@ -1190,8 +1237,11 @@ FOLLOW_UP_PRIORITY = -1.0  # below everything else: the end of the queue
 
 def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
            words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
-           extras: dict | None = None, about_bg: dict | None = None) -> dict:
-    """`words`, for a kanji's meanings: word id -> group id (None: in no group),
+           extras: dict | None = None, about_bg: dict | None = None, stale_ok: bool = False) -> dict:
+    """`stale_ok`: accept even though the subject changed after the proposal
+    was made (the reviewer was asked, see `_changed_since`).
+
+    `words`, for a kanji's meanings: word id -> group id (None: in no group),
     as the reviewer left them on the board. Each becomes a decision of its own,
     under this one, and is reverted with it.
 
@@ -1209,12 +1259,12 @@ def decide(item_id: str, action: str, user_id: str, value: Any = None, reason: s
     Bulgarian of the group's `about`.
     """
     with _change() as data:
-        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, extras, about_bg)
+        return _decide(data, item_id, action, user_id, value, _text(reason), words, skip, labels, extras, about_bg, stale_ok)
 
 
 def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = None, reason: str | None = None,
             words: dict | None = None, skip: dict | None = None, labels: dict | None = None,
-            extras: dict | None = None, about_bg: dict | None = None) -> dict:
+            extras: dict | None = None, about_bg: dict | None = None, stale_ok: bool = False) -> dict:
     """decide() inside a change already open: a character's card decides several items in one."""
     if action not in ACTIONS:
         raise _bad("bad_action", "action is accept, edit, keep, reject or skip")
@@ -1233,19 +1283,27 @@ def _decide(data: dict, item_id: str, action: str, user_id: str, value: Any = No
     if action in ("reject", "keep"):
         # Nothing changes either way; "keep" says today's value is right, on purpose.
         d = _decision(action, type_, subject, None, None, user_id, item_id, reason)
+        if type_ != "report":
+            # What the site showed when it was kept: a rebuild that changes it later can be told apart.
+            d["shown"] = current(type_, subject, data)
         item = _close(data, item, "rejected" if action == "reject" else "kept", d)
         data["decisions"].append(d)
         return dict(item)
 
     if action == "accept" and item["proposed"] is None:
         raise _bad("needs_edit", "this item has no proposal to accept; pick a value")
+    if action == "accept" and not stale_ok:
+        later = _changed_since(data, item)
+        if later:
+            at = later[-1]["at"][:10]
+            raise AppError(409, "changed_since_draft", f"this was changed on {at}, after its proposal was made. Look at the card again", at=at)
     after = validate(type_, subject, item["proposed"] if action == "accept" else value, data)
     if after is None:
         raise _bad("needs_value", "pick a value")
     before = live_value(type_, subject, data)
     explicit = _on_the_board(type_, words)
     d = _decision(action, type_, subject, before, after, user_id, item_id, reason)
-    _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
+    _apply(data, type_, subject, after, d["id"], explicit_words=explicit, auto_words=not explicit)
     item = _close(data, item, "accepted" if action == "accept" else "edited", d)
     data["decisions"].append(d)
     if explicit:
@@ -1400,7 +1458,9 @@ def direct(type_: str, subject: str, value: Any, user_id: str, reason: str | Non
             return {"unchanged": True}
         d = _decision("direct", type_, subject, before, after, user_id, None, _text(reason))
         if before != after:
-            _apply(data, type_, subject, after, d["id"], explicit_words=explicit)
+            # The page sends only the words that moved, so the words of a changed group
+            # are reopened first; the moved ones are then decided by `_place_words`.
+            _apply(data, type_, subject, after, d["id"])
         moved = _place_words(data, subject, words, user_id, d["id"]) if explicit else 0
         if before == after and not moved:
             return {"unchanged": True}
@@ -1429,7 +1489,9 @@ def revert(decision_id: str, user_id: str) -> dict:
         d = next((x for x in data["decisions"] if x["id"] == decision_id), None)
         if not d:
             raise AppError(404, "decision_not_found", "no such decision")
-        if d["action"] not in CHANGES or d["reverted_by"]:
+        if d["action"] in ("keep", "reject") and not d["reverted_by"] and not d.get("parent"):
+            return dict(_reopen_decided(data, d, user_id))
+        if d["action"] not in CHANGES or d["reverted_by"] or d.get("reopens"):
             raise AppError(409, "not_revertible", "that decision changed nothing, or was already reverted")
         if live_value(d["type"], d["subject"], data) != d["after"]:
             raise AppError(409, "changed_since", "this was changed again since; revert the later change first")
@@ -1451,6 +1513,17 @@ def revert(decision_id: str, user_id: str) -> dict:
             rc["parent"] = r["id"]
             _reverted(data, c, rc)
         return dict(r)
+
+
+def _reopen_decided(data: dict, d: dict, user_id: str) -> dict:
+    """A keep or reject taken back: nothing live changes, its item is open again."""
+    item = data["items"].get(d["item"]) if d["item"] else None
+    if not item or item["decision"] != d["id"]:
+        raise AppError(409, "not_revertible", "that decision changed nothing, or was already reverted")
+    r = _decision("reopen", d["type"], d["subject"], None, None, user_id, d["item"], f"reopen {d['id']}", supersedes=d["id"])
+    r["reopens"] = True
+    _reverted(data, d, r)
+    return r
 
 
 def _undo(d: dict, user_id: str) -> dict:
@@ -1617,7 +1690,8 @@ def character_card(char: str) -> dict:
     }
 
 
-def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | None = None) -> list[dict]:
+def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | None = None,
+                stale_ok: bool = False) -> list[dict]:
     """A character's card, decided as one: every item on it, in one change.
 
     `decisions`: [{"item", "action", "value"}], one per open item on the card;
@@ -1650,7 +1724,7 @@ def decide_card(char: str, decisions: list[dict], user_id: str, reason: str | No
                 x = it["subject"].split("|")[1 if v.get("reverse") else 0]
                 if x == char:
                     raise _bad("shape_and_form_of", "a shape and a form of can't both be right: pick one")
-        return [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason) for d in decisions]
+        return [_decide(data, d["item"], d["action"], user_id, d.get("value"), reason, stale_ok=stale_ok) for d in decisions]
 
 
 def _by_kanji(rows: list[dict]) -> list[dict]:
@@ -1948,7 +2022,8 @@ def _board_word(w: dict, group: str | None, item: dict | None) -> dict:
         "confidence": ev.get("confidence"),
         "agree": ev.get("agree"),
         # Two drafting runs put it in the same group, both sure: the board starts it ticked.
-        "sure": bool(item and item["status"] == "open" and _runs_agree(item)),
+        # Not "brings no meaning": a person ticks that one (see word_rule).
+        "sure": bool(item and item["status"] == "open" and item["proposed"] != CATCH_ALL and _runs_agree(item)),
     }
 
 

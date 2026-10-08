@@ -510,6 +510,12 @@ export interface Decision {
   reason: string | null
   supersedes: string | null
   reverted_by: string | null
+  /** Under another decision (a word placed with its kanji's meanings): reverted with that one. */
+  parent?: string | null
+  /** A keep or reject: what the site showed when it was decided. */
+  shown?: TaskValue
+  /** A reopen that took back a keep or reject: it changed nothing, so it has no revert. */
+  reopens?: boolean
   /** For a kanji's meanings: how many word placements were decided with it. */
   words?: number
 }
@@ -1136,8 +1142,8 @@ export const api = {
   reviewCharacter: (char: string) => get<CharacterCard>(`/api/review/characters/${encodeURIComponent(char)}`),
 
   /** Every item on a character's card decided at once; all "skip" leaves the card for later. */
-  decideCharacter: (char: string, decisions: CardDecision[], reason?: string) =>
-    send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', { decisions, reason }),
+  decideCharacter: (char: string, decisions: CardDecision[], reason?: string, staleOk?: boolean) =>
+    send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', { decisions, reason, staleOk }),
 
   /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
   reviewBookEntry: (no: number | null, char: string | null) =>
@@ -1171,6 +1177,8 @@ export const api = {
     extras?: KanjiExtras,
     /** A kanji's Bulgarian card: group id -> the Bulgarian of the group's `about`. */
     aboutBg?: Record<string, string>,
+    /** Accept though the subject changed after the proposal was made (the reviewer was asked). */
+    staleOk?: boolean,
   ) =>
     send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', {
       action,
@@ -1181,6 +1189,7 @@ export const api = {
       labels,
       extras,
       aboutBg,
+      staleOk,
     }),
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),

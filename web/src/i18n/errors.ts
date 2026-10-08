@@ -114,6 +114,10 @@ const ERRORS: Record<string, [string, string]> = {
   item_not_found: ['no such item', 'няма такава задача'],
   item_closed: ['this item was already decided', 'по тази задача вече е решено'],
   decision_not_found: ['no such decision', 'няма такова решение'],
+  changed_since_draft: [
+    'this was changed on {at}, after its proposal was made. Look at the card again',
+    'това е променено на {at}, след като предложението е направено. Погледнете картата отново',
+  ],
   not_revertible: ['that decision changed nothing, or was already reverted', 'това решение не е променило нищо или вече е върнато'],
   changed_since: ['this was changed again since; revert the later change first', 'оттогава е променяно пак; първо върнете по-късната промяна'],
   suggest_reason: ['say why, so a reviewer can check it', 'кажете защо, за да може рецензент да провери'],

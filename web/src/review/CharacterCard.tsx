@@ -18,6 +18,7 @@ import { errorText } from '../i18n/errors'
 import { typing, useKey } from '../keys'
 import { FontStrip } from '../detail/FontStrip'
 import { DictLinks } from './DictLinks'
+import { askIfStale } from './stale'
 import { KanjiFacts, PartMeaningView, PartTiles, strokesOk, ValueEditor } from './editors'
 import { FormEvidence, ImpactView, PartEvidence, PartsEvidence, UsedIn } from './Evidence'
 import { SourceChips, SourceNotes } from '../detail/PartsSource'
@@ -322,7 +323,8 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
     setBusy(true)
     setProblem(null)
     try {
-      await api.decideCharacter(char, list, skip ? undefined : work.reason.trim() || undefined)
+      const why = skip ? undefined : work.reason.trim() || undefined
+      await askIfStale((staleOk) => api.decideCharacter(char, list, why, staleOk), lang)
       if (!skip) {
         clearDraft(id)
         if (list.some((d) => d.action === 'accept' || d.action === 'edit')) dataChanged()
