@@ -1,9 +1,7 @@
 /**
- * "Open in dictionary": a kanji's page in the print dictionaries, in the
- * dictionary tab (review/BookViewer.tsx). Every link targets the same named
- * tab: the first opens it, the next ones show their kanji in it, so a
- * reviewer can keep it on a second screen while labelling on the first.
- * Ctrl-, Shift- or ⌘-click opens a tab of its own instead.
+ * "Open in dictionary": a kanji in the dictionary tab (review/BookViewer.tsx),
+ * a new browser tab each time (Dani, 2026-10-08), so several can be open at
+ * once.
  */
 import { strings, useLang } from '../i18n'
 
@@ -17,9 +15,6 @@ const S = strings(
     titleBook: 'Отворете {char} в {book}, в раздела с речниците',
   },
 )
-
-/** The tab's name: every link opens or reuses this one tab. */
-export const DICTIONARY_TAB = 'bkd-dictionary'
 
 export type DictBook = 'kodansha' | 'kangorin' | 'kanji' | 'wiktionary' | 'bkd'
 /** The transcription drawn as the book prints it, or the scanned page. */
@@ -45,8 +40,7 @@ function BookIcon() {
 
 /**
  * The link: the book icon, its name in the tooltip; with `label`, that text
- * instead. Without `book` or `view`, the tab shows what it showed last
- * (Kodansha's scan at first).
+ * instead. Without `book` the tab opens on Kodansha; without `view`, digital.
  */
 export function DictionaryLink({
   char,
@@ -69,17 +63,12 @@ export function DictionaryLink({
     <a
       className={`clear dict-tab${label ? ' book-page' : ' dict-tab-icon'}${className ? ` ${className}` : ''}`}
       href={href}
-      target={DICTIONARY_TAB}
+      target="_blank"
+      rel="noopener"
       title={book && bookName ? t('titleBook', { char, book: bookName }) : t('title', { char })}
       aria-label={label ? undefined : book && bookName ? t('titleBook', { char, book: bookName }) : t('title', { char })}
-      onClick={(e) => {
-        e.stopPropagation()
-        // Ctrl / Shift / ⌘-click: a tab of its own, as a link does. A plain click: the one dictionary tab.
-        if (e.ctrlKey || e.metaKey || e.shiftKey) return
-        // Inside a <summary>, a plain click would also fold or unfold it.
-        e.preventDefault()
-        window.open(href, DICTIONARY_TAB)
-      }}
+      // Inside a <summary>, not a fold or unfold as well.
+      onClick={(e) => e.stopPropagation()}
     >
       {label ? `${label} ↗` : <BookIcon />}
     </a>

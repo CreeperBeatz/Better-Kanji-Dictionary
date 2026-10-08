@@ -59,6 +59,10 @@ const S = strings(
     usageHint: 'Check each English line against the Japanese beside it. Fix what is wrong or unnatural. Keep the examples that show the difference best.',
     kana: 'reading',
     kanaEdit: 'Correct the reading (it was made by machine)',
+    kanaDone: 'done',
+    kanaDoneHint: 'Keep the reading as you wrote it (Enter)',
+    kanaCancel: 'cancel',
+    kanaCancelHint: 'Put back the reading as it was (Esc)',
     def: 'Definition',
     examplesUsage: 'Examples',
     notes: 'Notes on borderline cases',
@@ -96,6 +100,10 @@ const S = strings(
     usageHint: 'Сверете всеки английски ред с японския до него. Поправете грешното или неестественото. Оставете примерите, които показват разликата най-добре.',
     kana: 'четене',
     kanaEdit: 'Поправете четенето (направено е машинно)',
+    kanaDone: 'готово',
+    kanaDoneHint: 'Запазете четенето, както го написахте (Enter)',
+    kanaCancel: 'отказ',
+    kanaCancelHint: 'Върнете четенето, както беше (Esc)',
     def: 'Определение',
     examplesUsage: 'Примери',
     notes: 'Бележки за граничните случаи',
@@ -185,6 +193,10 @@ const covers = (n: string, sense: string) => sense === n || (sense.startsWith(n)
 const quiet = (s: string) => (/[a-z]/.test(s) ? s : s.toLowerCase())
 
 const ORIGINAL = /\[original meaning[^\]]*\]?/i
+
+/** Rows enough for a note's whole text, so it never scrolls (where the browser can't size it itself). */
+export const rowsFor = (text: string | null | undefined, perLine = 90) =>
+  Math.max(3, (text ?? '').split(/\n/).reduce((n, line) => n + Math.ceil((line.length || 1) / perLine), 0) + 1)
 
 /** Whether our main meaning tells more than Kodansha's word for the shared sense ("Quick" beside "quick" does not). */
 const differs = (en: string | null | undefined, gloss: string | null | undefined): boolean => {
@@ -519,8 +531,14 @@ export function BgExtras({
 /** A usage card: each spelling's definition and examples, the report's Japanese beside the translations. */
 export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (v: UsageCard) => void }) {
   const t = S(useLang())
-  // The kana being corrected, by spelling and example ("0:2"): shown as text until then.
-  const [kanaOpen, setKanaOpen] = useState<Set<string>>(new Set())
+  // The kana being corrected, by spelling and example ("0:2"), with what it was, to put back on cancel.
+  const [kanaOpen, setKanaOpen] = useState<Map<string, string | null>>(new Map())
+  const closeKana = (key: string) =>
+    setKanaOpen((o) => {
+      const n = new Map(o)
+      n.delete(key)
+      return n
+    })
   const setSpelling = (i: number, patch: Partial<UsageCard['spellings'][number]>) =>
     onChange({ ...value, spellings: value.spellings.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
   return (
@@ -549,19 +567,46 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
                   <span className="usage-ja">
                     <span lang="ja">{x.ja}</span>
                     {kanaOpen.has(key) ? (
-                      <input
-                        className="assoc-text usage-kana-input"
-                        lang="ja"
-                        value={x.kana ?? ''}
-                        maxLength={300}
-                        aria-label={t('kana')}
-                        autoFocus
-                        onChange={(e) => setEx({ kana: e.target.value || null })}
-                      />
+                      <span className="usage-kana-edit-row">
+                        <input
+                          className="assoc-text usage-kana-input"
+                          lang="ja"
+                          value={x.kana ?? ''}
+                          maxLength={300}
+                          aria-label={t('kana')}
+                          autoFocus
+                          onChange={(e) => setEx({ kana: e.target.value || null })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setEx({ kana: kanaOpen.get(key) ?? null })
+                              closeKana(key)
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault()
+                              closeKana(key)
+                            }
+                          }}
+                        />
+                        <button type="button" className="clear" title={t('kanaDoneHint')} onClick={() => closeKana(key)}>
+                          {t('kanaDone')}
+                        </button>
+                        <button
+                          type="button"
+                          className="clear usage-kana-cancel"
+                          title={t('kanaCancelHint')}
+                          onClick={() => {
+                            setEx({ kana: kanaOpen.get(key) ?? null })
+                            closeKana(key)
+                          }}
+                        >
+                          {t('kanaCancel')}
+                        </button>
+                      </span>
                     ) : (
                       <span className="usage-kana" lang="ja">
                         {x.kana}{' '}
-                        <button type="button" className="clear usage-kana-edit" title={t('kanaEdit')} aria-label={t('kanaEdit')} onClick={() => setKanaOpen((o) => new Set(o).add(key))}>
+                        <button type="button" className="clear usage-kana-edit" title={t('kanaEdit')} aria-label={t('kanaEdit')} onClick={() => setKanaOpen((o) => new Map(o).set(key, x.kana))}>
                           ✎
                         </button>
                       </span>
@@ -585,8 +630,8 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
                 {n.ja}
               </p>
               <textarea
-                className="assoc-text"
-                rows={2}
+                className="assoc-text usage-note-text"
+                rows={rowsFor(n.en)}
                 maxLength={800}
                 value={n.en ?? ''}
                 aria-label={t('notes')}

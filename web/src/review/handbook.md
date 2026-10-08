@@ -117,9 +117,8 @@ dictionary.
   - Each Kodansha sense ends with *→ the group* its words on the board are in
     now. Amber means its words are split between groups: look at those
     first. A sense with no word on the board shows none.
-  - Every link opens the *same* tab. Put it on your second screen: the next
-    kanji you open shows there, as you left the tab. To open one in a tab of
-    its own, Ctrl-click (⌘-click) or Shift-click it.
+  - Each link opens a new tab, so you can keep several open: one per
+    kanji, or the same kanji in two dictionaries side by side.
   - The tab is in English, as its dictionaries are, whatever the language of
     the rest of the site.
   - A dictionary that does not have the kanji is greyed (*not in it*).

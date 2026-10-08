@@ -10,7 +10,7 @@ import type { BookGloss, BookKeyword, ItemDetail, KanjiExtras, MeaningGroup, Sen
 import { BookGlossPanel, BookKeywordPanel } from './BookEvidence'
 import { DictionaryLink } from './dictLink'
 import { Stage } from './Stage'
-import { BgExtras } from './Extras'
+import { BgExtras, rowsFor } from './Extras'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, KanjiFacts } from './editors'
 
@@ -201,7 +201,7 @@ function UsageLine({
         {ja}
       </span>
       <span className="bg-en">{en}</span>
-      {long ? <textarea rows={2} maxLength={800} {...props} /> : <input maxLength={300} {...props} />}
+      {long ? <textarea {...props} className={`${props.className} usage-note-text`} rows={rowsFor(value)} maxLength={800} /> : <input maxLength={300} {...props} />}
       <LatinWarn text={value ?? ''} />
     </div>
   )

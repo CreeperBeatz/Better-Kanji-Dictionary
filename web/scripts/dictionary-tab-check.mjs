@@ -57,7 +57,7 @@ for (let i = 0; i < (await blocks.count()); i++) {
 check('the card shows at most 2 words a sense', most <= 2, most)
 const seeAll = page.locator('details.dict[data-src="kodansha"] .kd-all').first()
 check('a cut sense says there are more', (await seeAll.textContent()).includes('see all in the dictionary tab'), await seeAll.textContent())
-const [tab] = await Promise.all([ctx.waitForEvent('page'), page.locator('.dicts-head .dict-tab').click()])
+let [tab] = await Promise.all([ctx.waitForEvent('page'), page.locator('.dicts-head .dict-tab').click()])
 watch(tab)
 await tab.waitForLoadState('networkidle')
 check('the panel opens the dictionary tab on 生', new URL(tab.url()).pathname === '/review/dictionary' && new URL(tab.url()).searchParams.get('char') === '生', tab.url())
@@ -85,15 +85,19 @@ await tab.keyboard.press('ArrowRight')
 await tab.waitForTimeout(400)
 check('→ turns the page', (await tab.locator('.book-popup-title').textContent()) !== title)
 
-// From step 3: 産 (うまれる). The same tab shows it, still in Цалта's book, still scanned.
+// From step 3: 産 (うまれる), in a new tab of its own; the first tab stays on 生.
 const before = ctx.pages().length
-await page.locator('.review-step[data-n="3"]').locator('.step-row', { has: page.locator('.step-char', { hasText: '産' }) }).locator('.dict-tab').click()
-await tab.waitForURL(/char=%E7%94%A3|char=産/, { timeout: 15000 })
-await tab.waitForLoadState('networkidle')
-check('a row’s link reuses the same tab', ctx.pages().length === before, ctx.pages().length)
-check('it shows 産', (await tab.locator('.dv-char').textContent()) === '産')
-check('in the dictionary picked last, as it was seen', (await tab.locator('.dv-books > button[aria-pressed="true"]').textContent()).startsWith('Цалта') && (await scanIn(tab)))
-check('生 is among the recent', (await tab.locator('.dv-recent button').allTextContents()).includes('生'))
+const [second] = await Promise.all([
+  ctx.waitForEvent('page'),
+  page.locator('.review-step[data-n="3"]').locator('.step-row', { has: page.locator('.step-char', { hasText: '産' }) }).locator('.dict-tab').click(),
+])
+watch(second)
+await second.waitForLoadState('networkidle')
+check('a row’s link opens a new tab', ctx.pages().length === before + 1, ctx.pages().length)
+check('it shows 産, Kodansha first', (await second.locator('.dv-char').textContent()) === '産' && (await second.locator('.dv-books > button[aria-pressed="true"]').textContent()).startsWith('Kodansha'))
+check('the first tab is still on 生, in Цалта, scanned: two copies, each its own', (await tab.locator('.dv-char').textContent()) === '生' && (await scanIn(tab)))
+check('生 is among the recent', (await second.locator('.dv-recent button').allTextContents()).includes('生'))
+await second.close()
 
 await tab.locator('.dv-input').fill('国')
 await tab.waitForTimeout(600)
@@ -102,9 +106,9 @@ await tab.getByRole('button', { name: /新漢語林/ }).click()
 check('新漢語林 has 国 only as a scan (no Japan-only sense transcribed): its page, no switch', (await scanIn(tab)) && (await views().getAttribute('data-none')) === 'true')
 await tab.screenshot({ path: `${SHOTS}/dictionary-tab-kangorin.png` })
 
-// "see all": Kodansha, digital, whole and unfolded.
-await seeAll.click()
-await tab.waitForURL(/view=digital/, { timeout: 15000 })
+// "see all": Kodansha, digital, whole and unfolded, in a new tab.
+;[tab] = await Promise.all([ctx.waitForEvent('page'), seeAll.click()])
+watch(tab)
 await tab.waitForSelector('.dv-digital .kd-entry')
 const cardWords = await page.locator('details.dict[data-src="kodansha"] .kd-w').count()
 const allWords = await tab.locator('.dv-digital .kd-w').count()

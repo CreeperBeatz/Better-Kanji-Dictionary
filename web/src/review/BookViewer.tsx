@@ -15,10 +15,10 @@
  * A and D move to the dictionary before and after.
  *
  * Its address is /review/dictionary?char=生&book=kodansha&view=digital. The
- * "Open in dictionary" links (review/dictLink.tsx) all open it in one named
- * tab, so a later link shows its kanji here; what a link does not name stays
- * as the tab had it (Kodansha at first). Reviewers and the admin only: the
- * server refuses the dictionaries to anyone else.
+ * "Open in dictionary" links (review/dictLink.tsx) open it in a new tab each
+ * time, Kodansha first unless they name a dictionary; each tab is a copy of
+ * its own. Reviewers and the admin only: the server refuses the
+ * dictionaries to anyone else.
  */
 import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiDictionaries, type WordsWithResponse } from '../api'

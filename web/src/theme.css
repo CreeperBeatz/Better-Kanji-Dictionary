@@ -6569,6 +6569,16 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 0.85em;
 }
 
+.usage-kana-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usage-kana-cancel {
+  color: var(--muted);
+}
+
 .usage-kana-edit {
   padding: 0 2px;
   font-size: 0.9em;
@@ -9682,4 +9692,12 @@ button.review-part {
   background: #1e1a16;
   color: var(--paper);
   border-color: var(--rule-bright);
+}
+
+/* A which-kanji card's notes on borderline cases: the box as tall as its text, no scrolling. */
+.usage-note-text {
+  width: 100%;
+  min-height: 4.5em;
+  resize: vertical;
+  field-sizing: content;
 }
