@@ -20,7 +20,7 @@ const S = strings(
 /** The tab's name: every link opens or reuses this one tab. */
 export const DICTIONARY_TAB = 'bkd-dictionary'
 
-export type DictBook = 'kodansha' | 'kangorin' | 'kanji' | 'wiktionary'
+export type DictBook = 'kodansha' | 'kangorin' | 'kanji' | 'wiktionary' | 'bkd'
 /** The transcription drawn as the book prints it, or the scanned page. */
 export type DictView = 'digital' | 'scan'
 

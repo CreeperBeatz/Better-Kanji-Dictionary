@@ -9638,3 +9638,76 @@ button.review-part {
   display: inline-flex;
   gap: 4px;
 }
+
+/* The dictionary tab: digital / scanned keeps its place when there is no choice, so nothing moves. */
+.dv-views[data-none] {
+  visibility: hidden;
+}
+
+/* Better Kanji Dictionary's own entry in the dictionary tab. */
+.bkd-entry {
+  max-width: 920px;
+  padding: 14px 18px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 8px;
+  background: var(--sumi-lift);
+}
+
+.bkd-top {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.bkd-top p {
+  margin: 0 0 4px;
+}
+
+.bkd-glyph {
+  font-family: var(--mincho);
+  font-size: 72px;
+  line-height: 1;
+}
+
+.bkd-meanings {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.bkd-readings {
+  font-size: 15px;
+}
+
+.bkd-parts {
+  margin: 12px 0 0;
+}
+
+.bkd-part + .bkd-part::before {
+  content: ' · ';
+  color: var(--muted);
+}
+
+.bkd-entry h5 {
+  margin: 14px 0 6px;
+  color: var(--paper);
+  font-size: 15px;
+}
+
+.bkd-group {
+  margin: 8px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+
+.bkd-group p {
+  margin: 2px 0;
+}
+
+.bkd-words {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.bkd-w {
+  font-size: 15px;
+}

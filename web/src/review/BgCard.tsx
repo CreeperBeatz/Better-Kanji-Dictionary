@@ -8,6 +8,7 @@
 import type { ReactNode } from 'react'
 import type { BookGloss, BookKeyword, ItemDetail, KanjiExtras, MeaningGroup, Sense, UsageBg } from '../api'
 import { BookGlossPanel, BookKeywordPanel } from './BookEvidence'
+import { DictionaryLink } from './dictLink'
 import { BgExtras } from './Extras'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, KanjiFacts } from './editors'
@@ -221,7 +222,12 @@ export function BgUsage({ detail, value, onChange }: { detail: ItemDetail; value
       <p className="hint">{t('usageHint')}</p>
       {card.spellings.map((s, i) => (
         <section key={i} className="usage-spelling">
-          <h4 lang="ja">{s.kanji}</h4>
+          <h4>
+            <span lang="ja">{s.kanji}</span>{' '}
+            {[...new Set([...s.kanji].filter((c) => /[㐀-鿿豈-﫿]/.test(c)))].map((c) => (
+              <DictionaryLink key={c} char={c} />
+            ))}
+          </h4>
           <UsageLine ja={s.def} en={s.defEn} value={value.spellings[i]?.def} built={built?.spellings[i]?.def} onChange={(v) => setSpelling(i, { def: v })} />
           {s.examples.map((x, k) => (
             <UsageLine

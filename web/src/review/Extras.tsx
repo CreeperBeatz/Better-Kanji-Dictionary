@@ -528,7 +528,12 @@ export function UsageEditor({ value, onChange }: { value: UsageCard; onChange: (
       <p className="hint">{t('usageHint')}</p>
       {value.spellings.map((s, i) => (
         <section key={i} className="usage-spelling">
-          <h4 lang="ja">{s.kanji}</h4>
+          <h4>
+            <span lang="ja">{s.kanji}</span>{' '}
+            {[...new Set([...s.kanji].filter(isKanji))].map((c) => (
+              <DictionaryLink key={c} char={c} />
+            ))}
+          </h4>
           <p lang="ja" className="usage-def">
             {s.def}
           </p>
