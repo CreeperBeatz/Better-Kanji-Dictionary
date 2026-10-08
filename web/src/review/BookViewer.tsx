@@ -7,8 +7,9 @@
  * Цалта's kanji book, Wiktionary), and whether to see it digital (the
  * transcription drawn as the book prints it, whole, nothing folded) or
  * scanned (the printed page, with page turning and zoom: BookEvidence.tsx
- * PageScan). Each dictionary offers what it has: Wiktionary is only digital,
- * and of 新漢語林 only the Japan-only senses are transcribed.
+ * PageScan), a choice shown under the dictionaries only where it has both:
+ * Wiktionary is only digital, and of 新漢語林 only the Japan-only senses are
+ * transcribed.
  *
  * Its address is /review/dictionary?char=生&book=kodansha&view=scan. The
  * "Open in dictionary" links (review/dictLink.tsx) all open it in one named
@@ -39,8 +40,6 @@ const S = strings(
     notIn: 'not in it',
     digital: 'digital',
     scan: 'scanned',
-    noDigital: 'Not transcribed: only the scan.',
-    noScan: 'No scan: only digital.',
     pick: 'Type a kanji above, or open one from a card’s “Open in dictionary”.',
     missing: '{char} is not in {book} here. Pick another dictionary.',
     entry: 'entry № {no}',
@@ -61,8 +60,6 @@ const S = strings(
     notIn: 'няма го',
     digital: 'дигитален',
     scan: 'сканиран',
-    noDigital: 'Не е преписан: само сканирана страница.',
-    noScan: 'Няма сканирана страница: само дигитален.',
     pick: 'Напишете канджи горе или го отворете от „Отвори в речника“ на карта.',
     missing: '{char} го няма в {book} тук. Изберете друг речник.',
     entry: 'статия № {no}',
@@ -222,45 +219,40 @@ export default function BookViewer() {
             </span>
           )}
         </div>
-        <div className="dv-field">
+        <div className="dv-field dv-book">
           <span className="dv-step">{t('book')}</span>
-          {BOOKS.map((b) => {
-            const h = d ? holdings(d, b) : null
-            const none = !!h && !h.digital && !h.pages.length
-            return (
-              <button
-                key={b}
-                type="button"
-                className="search-filter"
-                data-on={book === b || undefined}
-                aria-pressed={book === b}
-                disabled={none}
-                onClick={() => setBook(b)}
-              >
-                {name(b)}
-                {none && <span className="hint"> · {t('notIn')}</span>}
-              </button>
-            )
-          })}
-          <span className="dv-views" role="group">
-            {VIEWS.map((v) => {
-              const off = !!has && (v === 'scan' ? !has.pages.length : !has.digital)
-              return (
-                <button
-                  key={v}
-                  type="button"
-                  className="search-filter"
-                  data-on={shown === v || undefined}
-                  aria-pressed={shown === v}
-                  disabled={off}
-                  title={off ? t(v === 'scan' ? 'noScan' : 'noDigital') : undefined}
-                  onClick={() => setView(v)}
-                >
-                  {t(v)}
-                </button>
-              )
-            })}
-          </span>
+          <div className="dv-choices">
+            <div className="dv-books">
+              {BOOKS.map((b) => {
+                const h = d ? holdings(d, b) : null
+                const none = !!h && !h.digital && !h.pages.length
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    className="search-filter"
+                    data-on={book === b || undefined}
+                    aria-pressed={book === b}
+                    disabled={none}
+                    onClick={() => setBook(b)}
+                  >
+                    {name(b)}
+                    {none && <span className="hint"> · {t('notIn')}</span>}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Only when the dictionary has both to choose from. */}
+            {has?.digital && has.pages.length > 0 && (
+              <div className="dv-views" role="group">
+                {VIEWS.map((v) => (
+                  <button key={v} type="button" className="search-filter" data-on={shown === v || undefined} aria-pressed={shown === v} onClick={() => setView(v)}>
+                    {t(v)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <LangSwitch />
       </header>

@@ -9392,12 +9392,26 @@ button.review-part {
 }
 
 /* The dictionary tab's digital view: the entry whole, on its paper, not too wide to read. */
+/* 2. Dictionary: the dictionaries on a row; under them, digital or scanned where it has both. */
+.dv-book {
+  align-items: flex-start;
+}
+
+.dv-book .dv-step {
+  padding-top: 2px;
+}
+
+.dv-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dv-books,
 .dv-views {
-  display: inline-flex;
-  gap: 4px;
-  margin-left: 10px;
-  padding-left: 12px;
-  border-left: 1px solid var(--rule);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .dv-digital {
