@@ -1,9 +1,9 @@
 /**
  * Other dictionaries on a meanings card, above the board: Kodansha's senses
- * with a few of the words it lists under each, and Цалта's entry, both open,
- * set small (Dani, 2026-10-08). The rest -- 新漢語林, Wiktionary, a link to
- * 漢字ペディア -- and every word are in the dictionary tab (BookViewer.tsx),
- * one line away.
+ * with a few of the words it lists under each, and Цалта's entry, folded at
+ * first, set small (Dani, 2026-10-08). The rest -- 新漢語林, Wiktionary, a
+ * link to 漢字ペディア -- and every word are in the dictionary tab
+ * (BookViewer.tsx), behind the icon by the heading.
  *
  * Each sense says which group its words on the board are in now
  * (review/dictMatch.ts), so a sense with no group of its own, or one whose
@@ -24,7 +24,6 @@ import { CATCH_ALL } from './editors'
 const S = strings(
   {
     title: 'Other dictionaries',
-    hint: 'Each sense shows the group its words on the board are in now. Amber: its words are split between groups. A sense with no word on the board shows none.',
     elsewhere: '{n} words on the board are in another group than the rest of their dictionary sense (amber on the board).',
     elsewhere1: '1 word on the board is in another group than the rest of its dictionary sense (amber on the board).',
     kodansha: 'Kodansha Kanji Learner’s Dictionary',
@@ -33,8 +32,6 @@ const S = strings(
     onSenses: 'compounds by sense',
     kun: 'kun words',
     special: 'special readings',
-    wiktionary: 'Wiktionary',
-    inTab: '{names}, and every word: in the expanded dictionary',
     none: 'not on the board',
     split: 'split',
     catchAll: 'no meaning',
@@ -53,7 +50,6 @@ const S = strings(
   },
   {
     title: 'Други речници',
-    hint: 'Всяко значение показва групата, в която са думите му на дъската сега. Кехлибарено: думите му са разделени между групи. Значение без дума на дъската не показва група.',
     elsewhere: '{n} думи на дъската са в друга група от останалите думи на значението си в речника (кехлибарени на дъската).',
     elsewhere1: '1 дума на дъската е в друга група от останалите думи на значението си в речника (кехлибарена на дъската).',
     kodansha: 'Kodansha Kanji Learner’s Dictionary',
@@ -62,8 +58,6 @@ const S = strings(
     onSenses: 'сложни думи по значение',
     kun: 'кун думи',
     special: 'особени четения',
-    wiktionary: 'Уикиречник',
-    inTab: '{names} и всички думи: в разгънатия речник',
     none: 'не е на дъската',
     split: 'разделено',
     catchAll: 'без значение',
@@ -128,8 +122,6 @@ export function DictionariesPanel({
   }
 
   const k = dicts.kodansha
-  // What only the dictionary tab has, named on a line of its own.
-  const elsewhereNames = [dicts.kangorin && '新漢語林', dicts.wiktionary?.length && t('wiktionary'), '漢字ペディア'].filter(Boolean).join(', ')
   // How many of a dictionary's senses have their words split between groups: shown while it is folded.
   const splitIn = (src: string) => [...stats].filter(([key, st]) => key.startsWith(`${src}|`) && st.counts.size > 1).length
 
@@ -157,12 +149,11 @@ export function DictionariesPanel({
         <h4>
           {t('title')} <DictionaryLink char={dicts.char} />
         </h4>
-        <p className="hint">{t('hint')}</p>
         {away.size > 0 && <p className="dicts-away">{away.size === 1 ? t('elsewhere1') : t('elsewhere', { n: away.size })}</p>}
       </header>
       <div className="dicts-list">
         {k && (
-          <details className="dict" data-src="kodansha" open>
+          <details className="dict" data-src="kodansha">
             {head('kodansha', t('kodansha'), k.no, 'kodansha', k.pages, <span className="dict-core" title={t('core')}>
                 {t('coreLabel')} {k.core.join(' · ')}
               </span>)}
@@ -182,14 +173,11 @@ export function DictionariesPanel({
           </details>
         )}
         {dicts.tsalta && (
-          <details className="dict" data-src="tsalta" open>
+          <details className="dict" data-src="tsalta">
             {head('tsalta', t('tsalta'), dicts.tsalta.no, 'kanji', dicts.tsalta.pages)}
             <KanjiEntry src={dicts.tsalta} words="all" />
           </details>
         )}
-        <p className="book-head dict-sum dict-link dicts-more">
-          {t('inTab', { names: elsewhereNames })} <DictionaryLink char={dicts.char} />
-        </p>
       </div>
     </section>
   )

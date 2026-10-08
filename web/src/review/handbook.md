@@ -91,10 +91,13 @@ dictionary.
     zoom. Wiktionary is only digital; of 新漢語林 only the Japan-only senses
     are transcribed, so its scan has the rest.
   - On the card, *Other dictionaries* has only Kodansha and Цалта's book,
-    open and in small type. Kodansha shows 2 words a sense (and every amber
+    folded, in small type. Kodansha shows 2 words a sense (and every amber
     word); *see all in the expanded dictionary* opens the rest in the tab,
     digital. 新漢語林, Wiktionary and 漢字ペディア (a link to its own site)
     are only in the tab.
+  - Each Kodansha sense ends with *→ the group* its words on the board are in
+    now. Amber means its words are split between groups: look at those
+    first. A sense with no word on the board shows none.
   - Every link opens the *same* tab. Put it on your second screen: the next
     kanji you open shows there, as you left the tab.
   - A dictionary that does not have the kanji is greyed (*not in it*).
@@ -341,9 +344,10 @@ are the ones it was unsure of, so look at those first.
   phone, a long press opens the menu where the browser allows it.)
 - **Confirm every word.** Tick each word you have checked (hover a card for
   its checkbox), or right-click *Confirm* on one word or a selection.
-  Confirmed words move into a *confirmed* part at the top of their box, open
-  so you can still see them. Each part of a box (*confirmed*, *common*,
-  *uncommon*) folds with its arrow; the box itself always shows. Moving a word clears
+  Confirmed words move into a *confirmed* part at the top of their box,
+  folded so the words still to check stand out; open it with its arrow to
+  see them. Each part of a box (*confirmed*, *common*, *uncommon*) folds with
+  its arrow; the box itself always shows. Moving a word clears
   its tick. Groups need no ticking: fix or remove a wrong one, and what you
   accept is what you meant.
 - **Accept waits for the ticks.** Until every word in the groups and in the

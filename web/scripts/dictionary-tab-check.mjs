@@ -39,9 +39,10 @@ const icon = page.locator('.dicts-head .dict-tab')
 check('"Open in dictionary" is an icon, named in its tooltip', (await icon.locator('svg').count()) === 1 && (await icon.textContent()).trim() === ''
   && (await icon.getAttribute('title')).startsWith('Open 生 in dictionary'))
 // Kodansha on the card: 2 words a sense (amber ones aside), and the way to the rest.
-check('the card has Kodansha and Цалта, both open', JSON.stringify(await page.locator('.dicts details.dict').evaluateAll((ds) => ds.map((d) => [d.dataset.src, d.open])))
-  === JSON.stringify([['kodansha', true], ['tsalta', true]]))
-check('the rest is one line away', (await page.locator('.dicts-more').textContent()).includes('Wiktionary, 漢字ペディア, and every word: in the expanded dictionary'), await page.locator('.dicts-more').textContent())
+check('the card has Kodansha and Цалта, both folded', JSON.stringify(await page.locator('.dicts details.dict').evaluateAll((ds) => ds.map((d) => [d.dataset.src, d.open])))
+  === JSON.stringify([['kodansha', false], ['tsalta', false]]))
+check('no hint, no line to the tab', (await page.locator('.dicts-head .hint').count()) === 0 && (await page.locator('.dicts-more').count()) === 0)
+await page.locator('details.dict[data-src="kodansha"] > summary').click({ position: { x: 5, y: 8 } })
 const blocks = page.locator('details.dict[data-src="kodansha"] .kd-block')
 let most = 0
 for (let i = 0; i < (await blocks.count()); i++) {

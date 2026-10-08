@@ -219,7 +219,8 @@ export function MeaningsBoard({
   const [kept] = useState(() => readDraft(cacheKey)?.board)
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [over, setOver] = useState<string | undefined>()
-  // Folded parts of a box, by bucket id and part: 生.life|common, 生.life|uncommon (the confirmed part: shutOk).
+  // Folded parts of a box, by bucket id and part: 生.life|common, 生.life|uncommon. The confirmed
+  // part starts folded (Dani, 2026-10-08): openOk holds the boxes where it was opened.
   const [shut, setShut] = useState<Set<string>>(new Set(kept?.shut))
   // Confirmation, a reviewer's checklist while working: the words checked.
   // Confirmed words move into a "confirmed" part of their box, open unless folded.
@@ -235,7 +236,7 @@ export function MeaningsBoard({
   // Where the dictionaries put each word, against where it is now.
   const away = useMemo(() => (dicts ? elsewhere(dicts, words, placements, groups) : new Map<number, string[]>()), [dicts, words, placements, groups])
   const [okWords, setOkWords] = useState<Set<number>>(() => (kept ? new Set(kept.okWords) : new Set(preTicked)))
-  const [shutOk, setShutOk] = useState<Set<string>>(new Set(kept?.shutOk))
+  const [openOk, setOpenOk] = useState<Set<string>>(new Set(kept?.openOk))
   // The right-click menu: where it opens and which words it moves.
   const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; from: Bucket } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -268,12 +269,12 @@ export function MeaningsBoard({
 
   useEffect(() => {
     const asStarted = okWords.size === preTicked.size && [...okWords].every((id) => preTicked.has(id))
-    const empty = asStarted && !shutOk.size && !shut.size
+    const empty = asStarted && !openOk.size && !shut.size
     writeDraft(cacheKey, {
-      board: empty ? undefined : { okWords: [...okWords], shutOk: [...shutOk], shut: [...shut] },
+      board: empty ? undefined : { okWords: [...okWords], openOk: [...openOk], shut: [...shut] },
     })
     onWork?.(!empty)
-  }, [cacheKey, okWords, shutOk, shut, onWork, preTicked])
+  }, [cacheKey, okWords, openOk, shut, onWork, preTicked])
 
   // Words by bucket, each sorted by newspaper rank, JLPT, then grade.
   const byBucket = useMemo(() => {
@@ -560,10 +561,10 @@ export function MeaningsBoard({
         {all.length === 0 && <p className="hint board-empty">{t('empty')}</p>}
         {done.length > 0 && (
           <div className="board-part board-done">
-            <button className="board-part-toggle board-done-toggle" onClick={() => setShutOk((s) => toggled(s, id))} aria-expanded={!shutOk.has(id)}>
-              {shutOk.has(id) ? '▸' : '▾'} {t('confirmed')} <span className="hint">{done.length}</span>
+            <button className="board-part-toggle board-done-toggle" onClick={() => setOpenOk((s) => toggled(s, id))} aria-expanded={openOk.has(id)}>
+              {openOk.has(id) ? '▾' : '▸'} {t('confirmed')} <span className="hint">{done.length}</span>
             </button>
-            {!shutOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
+            {openOk.has(id) && <ul className="board-words">{done.map((w) => card(w, key))}</ul>}
           </div>
         )}
         {[true, false].map((common) => {

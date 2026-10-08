@@ -1,6 +1,6 @@
 // Usage: node scripts/confirm-check.mjs [base]  (against tests/sandbox.py with tests/load_sandbox.py, default http://127.0.0.1:8010)
 // A meanings card can't be accepted until every word in its groups is
-// confirmed; confirmed words stay in sight, in an open "confirmed" part.
+// confirmed; confirmed words move to a "confirmed" part, folded until opened.
 import { chromium } from 'playwright'
 import { signedIn } from './session.mjs'
 const BASE = process.argv[2] ?? 'http://127.0.0.1:8010'
@@ -27,7 +27,7 @@ console.log('the a key does nothing while blocked:', (await page.locator('.queue
 // Tick one, then see it stays in sight.
 await open().first().evaluate((el) => el.click())
 await wait(200)
-console.log('confirmed part open by default:', await page.locator('.board-done .board-words').first().isVisible())
+console.log('confirmed part folded by default:', (await page.locator('.board-done .board-words').count()) === 0)
 await page.screenshot({ path: `${SHOTS}/confirm-2-one.png` })
 
 for (let n = await open().count(); n > 0; n = await open().count()) await open().first().evaluate((el) => el.click())
