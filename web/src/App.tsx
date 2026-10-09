@@ -1825,11 +1825,8 @@ export function App() {
           onTab={workbenchTab}
           onClose={closeWorkbench}
           onSignIn={signIn}
-          onKanji={(c) => {
-            // Over the review entry, so back comes back to the review screen.
-            setWorkbench(null)
-            openKanji(c)
-          }}
+          // A kanji's page in a new tab, so the card being reviewed stays where it is.
+          onKanji={(c) => window.open(`/kanji/${encodeURIComponent(c)}`, '_blank', 'noopener')}
         />
       )}
       {/* After the review screen, so signing in from its gate opens above it. */}
