@@ -32,17 +32,20 @@ async function open(char) {
   await page.waitForSelector('.review-step[data-n="2"]')
 }
 async function tickAll() {
-  // The tick's input is styled away; a click on it in the page is what a click on the tick does.
-  // A few at a time, as a person would: hundreds of clicks in one task nest React's updates.
+  // Select every word still to confirm, then right-click, Confirm: as a person would.
+  // A few clicks at a time: hundreds in one task nest React's updates.
   for (let i = 0; i < 200; i++) {
     const n = await page.evaluate(() => {
-      const boxes = [...document.querySelectorAll('.board-check input:not(:checked):not(:disabled)')].slice(0, 5)
-      for (const b of boxes) b.click()
-      return boxes.length
+      const words = [...document.querySelectorAll('.board-word:not([data-ok]):not([data-skipped]):not([data-picked]):not([data-context])')].slice(0, 5)
+      for (const w of words) w.click()
+      return words.length
     })
-    if (!n) return
+    if (!n) break
     await page.waitForTimeout(30)
   }
+  if (!(await page.locator('.board-word[data-picked]').count())) return
+  await page.locator('.board-word[data-picked]').first().click({ button: 'right' })
+  await page.locator('.board-menu .board-menu-ok').click()
 }
 
 console.log('国: no mix-ups, so only step 2 waits')

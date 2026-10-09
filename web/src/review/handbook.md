@@ -406,24 +406,25 @@ are the ones it was unsure of, so look at those first.
 - **Move words** by dragging them, or right-clicking one to pick its group.
   Click several to select them first and the menu moves them all. (On a
   phone, a long press opens the menu where the browser allows it.)
-- **Confirm every word.** Tick each word you have checked (hover a card for
-  its checkbox), or right-click *Confirm* on one word or a selection.
+- **Confirm every word.** Right-click *Confirm* on one word, or click
+  several to select them and right-click *Confirm* once for all.
   Confirmed words move into a *confirmed* part at the top of their box,
   folded so the words still to check stand out; open it with its arrow to
   see them. Each part of a box (*confirmed*, *common*, *uncommon*) folds with
   its arrow; the box itself always shows. Moving a word clears
-  its tick. Groups need no ticking: fix or remove a wrong one, and what you
+  its confirmation. Groups need no confirming: fix or remove a wrong one, and what you
   accept is what you meant.
-- **Accept waits for the ticks.** Until every word in the groups and in the
+- **Accept waits for the confirmations.** Until every word in the groups and in the
   no-meaning box is confirmed, *accept* is greyed and says how many are left.
   Words left for later and words not in a group don't count. Then it waits
   for *Done* on steps 2 and 3.
-- **Some words start ticked.** A second drafting run placed every word
+- **Some words start confirmed.** A second drafting run placed every word
   again, into the groups the first run made. Where both runs put a word in
   the same group, both sure, it starts confirmed (about 7 words in 10). The
   runs are the same model with the same dictionaries, so they can be wrong
-  together. Glance over them, and untick one that is wrong: it is your
-  decision, not theirs. A word in the no-meaning box never starts ticked:
+  together. Glance over them, and take back one that is wrong
+  (right-click, *Take back the confirmation*): it is your
+  decision, not theirs. A word in the no-meaning box never starts confirmed:
   *the kanji brings no meaning to the word* is always your call.
 - **Not sure about a word?** Right-click it, *Not sure: leave for later*. On
   submit, the groups and every other word are decided, and the skipped words
@@ -431,6 +432,8 @@ are the ones it was unsure of, so look at those first.
   queue (*left for later*), each where you had it, with the groups fixed.
 - **Add or remove groups** with *add a group* / *remove group*. A removed
   group's words drop to *Not in a group*.
+- **Not sure what a word means?** Hover its card and click ↗: the word's
+  page opens in a new tab.
 - **Not in a group** holds the in-scope words no group claims, and shows
   only when it holds some. Drag one into a group if it belongs there; to put
   a word there, right-click it, *Not in a group*.

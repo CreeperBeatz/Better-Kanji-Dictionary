@@ -6216,8 +6216,9 @@ html[data-nav]::view-transition-old(tabs):only-child {
   z-index: 60;
   min-width: 220px;
   max-width: 260px;
-  max-height: 280px;
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 4px;
   background: var(--sumi-lift);
   border: 1px solid var(--rule-bright);
@@ -6655,39 +6656,32 @@ html[data-nav]::view-transition-old(tabs):only-child {
   margin-top: 10px;
 }
 
-/* Confirming: a checkbox on each card and box, shown on hover (always on
-   touch screens), and kept in view once ticked. */
-.board-check {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 6px;
-  vertical-align: 2px;
-  visibility: hidden;
-  cursor: pointer;
-}
-
-.board-check input {
-  margin: 0;
-  accent-color: #7fb88a;
-  cursor: inherit;
-}
-
-.board-check[data-off] {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.board-word:hover .board-check,
-.board-word[data-ok] .board-check {
-  visibility: visible;
-}
-
+/* A confirmed word (right-click, Confirm): a green edge. */
 .board-word[data-ok] {
   border-color: rgba(127, 184, 138, 0.45);
 }
 
+/* The word's page, in a new tab: shown on hover (always on touch screens). */
+.board-open {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-decoration: none;
+  visibility: hidden;
+}
+
+.board-open:hover,
+.board-open:focus-visible {
+  color: var(--ai);
+}
+
+.board-word:hover .board-open,
+.board-open:focus-visible {
+  visibility: visible;
+}
+
 @media (hover: none) {
-  .board-check {
+  .board-open {
     visibility: visible;
   }
 }
@@ -8199,8 +8193,13 @@ html[data-nav]::view-transition-old(tabs):only-child {
   font-size: 15px;
 }
 
-.dv-page .book-scan img {
+/* The box keeps the screen's height when zoomed: the page moves inside it. */
+.dv-page .book-scan {
   max-height: calc(100vh - 140px);
+}
+
+.dv-page .book-scan img {
+  max-height: calc(100vh - 142px); /* the box's, less its border */
 }
 
 .dv-entry {

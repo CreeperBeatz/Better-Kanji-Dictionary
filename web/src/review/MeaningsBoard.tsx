@@ -14,7 +14,7 @@
  * turns it into what the server takes: the groups with their final ids, and
  * word id -> group id.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type BoardWord, type KanjiDictionaries, type MeaningGroup } from '../api'
 import { strings, useLang } from '../i18n'
 import { useKey } from '../keys'
@@ -42,7 +42,7 @@ const S = strings(
     clearPick: 'clear selection',
     picked: '{n} selected',
     empty: 'no words',
-    confirmWord: 'Confirm: it belongs here',
+    openWord: 'Open {word} in the dictionary, in a new tab',
     confirmed: 'confirmed',
     nConfirmed: '{n} confirmed',
     moveTo: 'Move to',
@@ -61,7 +61,7 @@ const S = strings(
     followUp: 'Left for later: only the words skipped last time. The groups are already decided.',
     oneWord: 'One word to place: move {word} to the group it belongs in. The groups are decided; the other words show what each holds.',
     unsure: 'the drafting model was unsure here',
-    sure: 'ticked from the start: two drafting runs put it here, both sure. Untick it if it is wrong.',
+    sure: 'ticked from the start: two drafting runs put it here, both sure. If it is wrong, right-click it and take the confirmation back.',
     words: '{n} words',
     common: 'common',
     uncommon: 'uncommon',
@@ -89,7 +89,7 @@ const S = strings(
     clearPick: 'изчистете избора',
     picked: 'избрани: {n}',
     empty: 'няма думи',
-    confirmWord: 'Потвърдете: на мястото си е',
+    openWord: 'Отворете {word} в речника, в нов раздел',
     confirmed: 'потвърдени',
     nConfirmed: 'потвърдени: {n}',
     moveTo: 'Преместете в',
@@ -108,7 +108,7 @@ const S = strings(
     followUp: 'Оставени за по-късно: само пропуснатите миналия път думи. Групите вече са решени.',
     oneWord: 'Една дума за подреждане: преместете {word} в групата, към която принадлежи. Групите са решени; другите думи показват какво съдържа всяка.',
     unsure: 'моделът не беше сигурен тук',
-    sure: 'отметната от начало: две чернови я сложиха тук, и двете сигурни. Махнете отметката, ако е грешно.',
+    sure: 'отметната от начало: две чернови я сложиха тук, и двете сигурни. Ако е грешно, щракнете с десния бутон и отменете потвърждението.',
     words: '{n} думи',
     common: 'чести',
     uncommon: 'редки',
@@ -187,7 +187,7 @@ export function MeaningsBoard({
    * later and words in no group don't count.
    */
   onUnconfirmed?: (n: number) => void
-  /** On a page, not in the queue: no ticks to confirm words, nothing to leave for later. */
+  /** On a page, not in the queue: nothing to confirm, nothing to leave for later. */
   plain?: boolean
   /**
    * One word to place: the groups are fixed, only this word moves, and the
@@ -235,10 +235,20 @@ export function MeaningsBoard({
   const [menu, setMenu] = useState<{ x: number; y: number; ids: number[]; from: Bucket } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // Opened at the pointer, then moved in so all of it is on the screen.
+  useLayoutEffect(() => {
+    const el = menuRef.current
+    if (!menu || !el) return
+    const r = el.getBoundingClientRect()
+    el.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - r.width - 8))}px`
+    el.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - r.height - 8))}px`
+  }, [menu])
+
   useEffect(() => {
     if (!menu) return
+    // A click or a scroll inside the menu keeps it open; anywhere else closes it.
     const close = (e: Event) => {
-      if (e instanceof MouseEvent && menuRef.current?.contains(e.target as Node)) return
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return
       setMenu(null)
     }
     window.addEventListener('mousedown', close)
@@ -374,26 +384,27 @@ export function MeaningsBoard({
         onContextMenu={(e) => {
           e.preventDefault()
           const ids = picked.has(w.id) ? [...picked] : [w.id]
-          setMenu({ x: Math.min(e.clientX, window.innerWidth - 260), y: Math.min(e.clientY, window.innerHeight - 280), ids, from })
+          setMenu({ x: e.clientX, y: e.clientY, ids, from })
         }}
         data-sure={(ok && preTicked.has(w.id)) || undefined}
         data-elsewhere={away.has(w.id) || undefined}
         title={unsure ? t('unsure') : ok && preTicked.has(w.id) ? t('sure') : undefined}
       >
         <span className="board-head" lang="ja">
-          {!plain && (
-            <label className="board-check" title={t('confirmWord')} data-off={isSkipped || undefined} onClick={(e) => e.stopPropagation()}>
-              <input
-                type="checkbox"
-                checked={ok}
-                disabled={isSkipped}
-                aria-label={t('confirmWord')}
-                onChange={() => setOkWords((s) => toggled(s, w.id))}
-              />
-            </label>
-          )}
           {w.headword}
           {star(w, from)}
+          <a
+            className="board-open"
+            href={`/word/${w.id}`}
+            target="_blank"
+            rel="noopener"
+            draggable={false}
+            title={t('openWord', { word: w.headword })}
+            aria-label={t('openWord', { word: w.headword })}
+            onClick={(e) => e.stopPropagation()}
+          >
+            ↗
+          </a>
         </span>
         <span className="board-reading" lang="ja">
           {w.reading}
