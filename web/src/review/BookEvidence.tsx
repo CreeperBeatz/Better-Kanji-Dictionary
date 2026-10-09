@@ -6,7 +6,7 @@
  * when the drawn entry looks wrong: a button opens it in a popup, and only
  * reviewers and the admin can fetch it.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   api,
@@ -43,7 +43,7 @@ const S = strings(
     whole: 'whole page',
     noPage: 'There is no page here.',
     loading: 'loading…',
-    zoom: 'Double-click to zoom; Ctrl+wheel or + − for more. Drag to move around the page.',
+    zoom: 'Click to zoom; Ctrl+wheel or + − for more. Drag to move around the page; click again for the whole page.',
     unsure: 'The transcription may be wrong here',
     shared: 'This spelling fits more than one word: the book may mean another of them.',
     ourParts: 'In our parts',
@@ -78,7 +78,7 @@ const S = strings(
     whole: 'цялата страница',
     noPage: 'Тук няма страница.',
     loading: 'зарежда се…',
-    zoom: 'Щракнете двукратно за увеличение; Ctrl+колелце или + − за повече. Плъзнете, за да се движите по страницата.',
+    zoom: 'Щракнете за увеличение; Ctrl+колелце или + − за повече. Плъзнете, за да се движите по страницата; щракнете отново за цялата страница.',
     unsure: 'Преписът тук може да е грешен',
     shared: 'Този запис пасва на повече от една дума: книгата може да има предвид друга от тях.',
     ourParts: 'В нашите части',
@@ -134,8 +134,10 @@ const ZOOM_STEP = 1.25
 
 /**
  * A book's scanned page, from the entry's first page: ← → (or the arrow keys)
- * turn the pages; − + (Ctrl+wheel, the - + 0 keys) zoom from the whole page up
- * to six times its width, and the page is dragged to move around it. It has
+ * turn the pages; a click zooms in on the point clicked and a second click
+ * shows the whole page again; − + (Ctrl+wheel, the - + 0 keys) zoom from the
+ * whole page up to six times its width, and the page is dragged to move
+ * around it. It has
  * the keyboard (but for a field being typed in); Escape calls `onEscape`.
  * In the popup below, and in the dictionary tab (review/BookViewer.tsx).
  */
@@ -146,7 +148,10 @@ export function PageScan({ book, page, onEscape, extra }: { book: BookRef['book'
   const [zoom, setZoom] = useState(1)
   const [fitW, setFitW] = useState<number | null>(null)
   const box = useRef<HTMLDivElement>(null)
-  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null)
+  // A press on the page: a drag once it moves, else a click.
+  const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null)
+  // The point clicked, as a share of the picture and where it is in the box, to keep under the pointer as it zooms.
+  const anchor = useRef<{ fx: number; fy: number; x: number; y: number } | null>(null)
   const { value: url, problem } = useFetched(`${book}/${n}`, () => api.reviewBookPage(book, n).then((b) => URL.createObjectURL(b)), scans)
   const zoomTo = (z: number) => setZoom(Math.min(ZOOM_MAX, Math.max(1, Math.round(z * 100) / 100)))
   const turn = (d: number) => setN((p) => Math.max(1, p + d))
@@ -186,6 +191,26 @@ export function PageScan({ book, page, onEscape, extra }: { book: BookRef['book'
     return () => el.removeEventListener('wheel', wheel)
   }, [url])
 
+  useLayoutEffect(() => {
+    const a = anchor.current
+    const img = box.current?.querySelector('img')
+    anchor.current = null
+    if (!a || !img || !box.current) return
+    box.current.scrollLeft = img.offsetLeft + a.fx * img.offsetWidth - a.x
+    box.current.scrollTop = img.offsetTop + a.fy * img.offsetHeight - a.y
+  }, [zoom])
+
+  function clicked(e: React.PointerEvent) {
+    const img = box.current?.querySelector('img')
+    if (!img || !box.current) return
+    if (zoom > 1) return zoomTo(1)
+    const r = img.getBoundingClientRect()
+    const b = box.current.getBoundingClientRect()
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return
+    anchor.current = { fx: (e.clientX - r.left) / r.width, fy: (e.clientY - r.top) / r.height, x: e.clientX - b.left, y: e.clientY - b.top }
+    zoomTo(2)
+  }
+
   const title = t('pageTitle', { book: t(book), n })
   return (
     <>
@@ -221,17 +246,24 @@ export function PageScan({ book, page, onEscape, extra }: { book: BookRef['book'
           data-zoom={zoom > 1 || undefined}
           title={t('zoom')}
           onPointerDown={(e) => {
-            if (zoom === 1 || !box.current) return
-            drag.current = { x: e.clientX, y: e.clientY, left: box.current.scrollLeft, top: box.current.scrollTop }
+            if (e.button !== 0 || !box.current) return
+            drag.current = { x: e.clientX, y: e.clientY, left: box.current.scrollLeft, top: box.current.scrollTop, moved: false }
             e.currentTarget.setPointerCapture(e.pointerId)
           }}
           onPointerMove={(e) => {
             const d = drag.current
             if (!d || !box.current) return
+            if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) d.moved = true
+            if (zoom === 1) return
             box.current.scrollLeft = d.left - (e.clientX - d.x)
             box.current.scrollTop = d.top - (e.clientY - d.y)
           }}
-          onPointerUp={() => (drag.current = null)}
+          onPointerUp={(e) => {
+            const d = drag.current
+            drag.current = null
+            if (d && !d.moved) clicked(e)
+          }}
+          onPointerCancel={() => (drag.current = null)}
         >
           <img
             src={url}
@@ -239,7 +271,6 @@ export function PageScan({ book, page, onEscape, extra }: { book: BookRef['book'
             draggable={false}
             style={zoom > 1 && fitW ? { width: fitW * zoom } : undefined}
             onLoad={(e) => zoom === 1 && setFitW(e.currentTarget.clientWidth)}
-            onDoubleClick={() => zoomTo(zoom === 1 ? 2 : 1)}
           />
         </div>
       )}
