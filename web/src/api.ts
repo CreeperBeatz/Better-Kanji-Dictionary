@@ -204,6 +204,12 @@ export interface KanjiLite {
   meaningsBg: string[] | null
 }
 
+/** A kanji close to one meaning of another: which of its own meanings that is, and a word of it. */
+export interface CloseKanji extends KanjiLite {
+  sense: { en: string | null; bg: string | null } | null
+  word: Word | null
+}
+
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */
 export interface MixUp {
   /** As a word reads it: あげる; a usage card's may be two, あがる・あげる. */
@@ -230,7 +236,7 @@ export interface KanjiMeaning {
   /** Its special readings: 上手 じょうず under higher. */
   exceptions: Word[]
   /** Kanji close to it in meaning: 昇, 登 for "go up". */
-  similar: KanjiLite[]
+  similar: CloseKanji[]
   /** Kanji easy to mix up on one of its readings: 挙げる, 揚げる beside 上げる. */
   mixups: MixUp[]
 }

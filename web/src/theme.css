@@ -736,6 +736,71 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
+/* Close in meaning: one row a kanji -- the kanji, the meaning of it that is
+   close, a word of that meaning. */
+.meaning-similar > .meaning-aside {
+  margin: 2px 0;
+}
+
+.meaning-similar ul {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+.close-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0 10px;
+  padding: 2px 0;
+}
+
+.close-kanji {
+  padding: 0;
+  font-family: var(--mincho);
+  font-size: 17px;
+  color: var(--paper);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.close-kanji:hover,
+.close-kanji:focus-visible {
+  color: var(--ai);
+}
+
+.close-sense {
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
+.close-word {
+  padding: 0;
+  font-size: 13px;
+  color: var(--paper);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--faint);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.close-word [lang='ja'] {
+  font-family: var(--mincho);
+}
+
+.close-word-reading {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.close-word:hover,
+.close-word:focus-visible {
+  border-bottom-color: var(--ai);
+}
+
 /* A kanji named beside a meaning: close to it, or easy to mix up with it. */
 .kanji-chip {
   display: inline-flex;
@@ -825,6 +890,20 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .meanings-all {
   display: inline-block;
   margin-top: 10px;
+}
+
+/* A kanji's page: each section's title is ruled off, the line across the column. */
+.kanji-page :is(.facts-title, .strokes h3, .readings h3, .meanings > h3, .special-readings > h3, .forms h3, .font-strip h3, .similar-rows h3),
+.kanji-page .vocab-head {
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.kanji-page .vocab-head h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 /* ---------------------------------------------------------------- graph */

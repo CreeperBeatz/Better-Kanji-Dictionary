@@ -15,7 +15,7 @@
  * here: "all words" has them.
  */
 import type { ReactNode } from 'react'
-import type { KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
+import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { ReadingKana, SpecialReadings } from './Readings'
@@ -66,6 +66,7 @@ export function Meanings({
   onYomi,
   kunYomi,
   onKanji,
+  onWord,
   onWordsWith,
   row,
 }: {
@@ -73,6 +74,7 @@ export function Meanings({
   onYomi: string[]
   kunYomi: string[]
   onKanji: (c: string) => void
+  onWord: (w: Word) => void
   onWordsWith?: () => void
   /** The page's word row, so words look the same everywhere on it. */
   row: (w: Word) => ReactNode
@@ -112,7 +114,7 @@ export function Meanings({
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
-        <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+        <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWord={onWord} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -142,12 +144,14 @@ function Meaning({
   m,
   n,
   onKanji,
+  onWord,
   onWordsWith,
   row,
 }: {
   m: KanjiMeaning
   n: number
   onKanji: (c: string) => void
+  onWord: (w: Word) => void
   onWordsWith?: () => void
   row: (w: Word) => ReactNode
 }) {
@@ -197,12 +201,14 @@ function Meaning({
       {(m.similar.length > 0 || m.mixups.length > 0) && (
         <footer>
           {m.similar.length > 0 && (
-            <p className="meaning-similar">
-              <span className="meaning-aside">{t('similar')}</span>
-              {m.similar.map((k) => (
-                <KanjiChip key={k.char} k={k} lang={lang} onKanji={onKanji} />
-              ))}
-            </p>
+            <div className="meaning-similar">
+              <p className="meaning-aside">{t('similar')}</p>
+              <ul>
+                {m.similar.map((k) => (
+                  <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} onWord={onWord} />
+                ))}
+              </ul>
+            </div>
           )}
           {m.mixups.map((x) => (
             <MixUpLine key={x.reading} x={x} onKanji={onKanji} label />
@@ -210,6 +216,24 @@ function Meaning({
         </footer>
       )}
     </article>
+  )
+}
+
+/** 昇 · rise, ascend · 昇る のぼる: the kanji, the meaning of it that is close, and a word of that meaning. */
+function CloseRow({ k, lang, onKanji, onWord }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void; onWord: (w: Word) => void }) {
+  const sense = (k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)) || meaningsOf(k, lang).value[0]
+  return (
+    <li className="close-row">
+      <button className="close-kanji" lang="ja" onClick={() => onKanji(k.char)} title={meaningsOf(k, lang).value[0]}>
+        {k.char}
+      </button>
+      <span className="close-sense">{sense}</span>
+      {k.word && (
+        <button className="close-word" onClick={() => onWord(k.word!)}>
+          <span lang="ja">{k.word.headword}</span> <span className="close-word-reading" lang="ja">{k.word.reading}</span>
+        </button>
+      )}
+    </li>
   )
 }
 

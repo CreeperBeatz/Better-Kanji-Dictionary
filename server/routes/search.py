@@ -790,6 +790,16 @@ LANE_WORDS = 5
 ALSO_WORDS = 2
 
 
+# Words too common in the meanings' wording to say two meanings are alike.
+_PLAIN = {"the", "and", "for", "with", "that", "this", "its", "from", "something", "thing", "things", "kanji",
+          "word", "words", "also", "can", "one", "are", "into", "out", "being", "more", "such", "has", "have",
+          "what", "who", "which", "when", "where", "used", "use", "says", "names", "covers", "means", "mean"}
+
+
+def _wording(g: dict) -> set[str]:
+    return set(re.findall(r"[a-z]{3,}", f"{g.get('en') or ''} {g.get('about') or ''}".lower())) - _PLAIN
+
+
 def _key_word(w: dict) -> bool:
     """A word worth showing on a kanji's page: common, and on the N5-N2 lists or
     among the 4,000 most frequent (nf08)."""
@@ -926,6 +936,19 @@ def kanji_page(char: str) -> dict:
         for r, cs in mix.items() if cs
     ]
 
+    def close(c: str, here: dict) -> dict:
+        """A kanji close to this meaning, and which of its own meanings that is: the one
+        that names this kanji back (昇's "rise, ascend" for 上's "go up"), else the
+        one worded most like this one; with a word of it (its first example)."""
+        groups = [g for g in review.site_meanings(c)["senses"] or [] if g["id"] != review.CATCH_ALL]
+        mine = _wording(here)
+        g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
+            groups, key=lambda g: len(_wording(g) & mine), default=None
+        )
+        ex = (g.get("examples") or [None])[0] if g else None
+        word = _fetch_words([ex]).get(ex) if ex else None
+        return {**lite(c), "sense": {"en": g.get("en"), "bg": g.get("bg")} if g else None, "word": word}
+
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,
         with the kanji's kana marked."""
@@ -973,7 +996,7 @@ def kanji_page(char: str) -> dict:
             "on": [{"reading": r, "words": [marked(w) for w in pick(by[r], first)], "total": len(by[r])} for r in on],
             "also": [{"reading": r, "words": [marked(w) for w in by[r][:ALSO_WORDS]]} for r in also],
             "exceptions": [as_here(r) for r in exceptions],
-            "similar": [lite(c) for c in s.get("similar") or [] if c not in mixed],
+            "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
             "mixups": here,
         })
     sound = [w for w in in_group.get(review.CATCH_ALL, []) if w not in special_ids]
