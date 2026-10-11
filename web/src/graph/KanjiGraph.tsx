@@ -3,6 +3,7 @@ import { api, type GraphResponse, type KanjiNode } from '../api'
 import { strings, useLang, type Translate } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { HoldCard } from './HoldCard'
+import { radicalNumber } from './radicals'
 import { computeLayout, PEEK_SPAN, placePeek, type PeekItem, type PositionedNode } from './layout'
 
 export type ContainerFilter = 'all' | 'common' | 1 | 2 | 3 | 4 | 5
@@ -646,6 +647,7 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     // Only if the filter would show something up there: a mark that opens
     // onto nothing is a promise the peek does not keep.
     const hasAbove = above !== undefined && sieve(above.containers, filter).shown.length > 0
+    const radical = radicalNumber(n.char)
     // The "more above" mark sits on the outer side, pointing away from the focus.
     const out = Math.atan2(n.y, n.x)
     return (
@@ -716,17 +718,18 @@ ${t('form', { f: n.form })}`}
           </g>
         )}
 
-        {/* Hovering swaps the fan-out count for the level, which is the
-            thing you want to know when deciding whether to learn it. */}
+        {/* Under a part that is one of the 214 radicals, its number. Hovering
+            swaps it for the level, which is the thing you want to know when
+            deciding whether to learn it. */}
         {over === n.char ? (
           <text className="node-level" y={n.radius + 14}>
             {levelOf(n, t)}
           </text>
         ) : (
           n.kind === 'component' &&
-          n.fanout > 1 && (
+          radical !== null && (
             <text className="fanout" y={n.radius + 13}>
-              {n.fanout}
+              {radical}
             </text>
           )
         )}
