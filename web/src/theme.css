@@ -5551,11 +5551,15 @@ html {
   }
 }
 
-.hold-card-open {
+/* Side by side: to the dictionary, or make it the centre. */
+.hold-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
 }
 
-/* A right click on the graph, or a press and hold: what else a node does. */
+/* A right click on the graph: what else a node does. */
 .graph-menu {
   position: absolute;
   z-index: 6;
