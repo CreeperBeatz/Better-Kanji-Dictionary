@@ -12,6 +12,7 @@ Latin letters -- before English. When romaji wins but the Bulgarian reading
 would have found words too, that reading comes back in `alternatives`.
 """
 
+import functools
 import json
 import re
 import threading
@@ -88,13 +89,14 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
         if w:
             w["forms"].append({"text": r["text"], "kana": bool(r["kana"]), "rare": bool(r["rare"])})
 
+    # One query for every word's accent, not one each: a kanji's page fetches hundreds.
+    heads = sorted({w["headword"] for w in words.values()})
+    pitch = {
+        (r["word"], r["reading"]): r["pitch"]
+        for r in query(f"SELECT word, reading, pitch FROM accent WHERE word IN ({','.join('?' * len(heads))})", tuple(heads))
+    } if heads else {}
     for w in words.values():
-        row = query(
-            "SELECT pitch FROM accent WHERE word = ? AND reading = ? LIMIT 1",
-            (w["headword"], w["reading"]),
-        )
-        if row:
-            w["pitch"] = row[0]["pitch"]
+        w["pitch"] = pitch.get((w["headword"], w["reading"]))
     return words
 
 
@@ -642,18 +644,29 @@ def words_for_kanji(char: str, limit: int = Query(12, ge=1, le=60)) -> dict:
     }
 
 
+@functools.cache
+def _has_readings() -> bool:
+    """Whether the database has the readings stage (pipeline/readings.py): one
+    from before it has no word_reading or classical_radical."""
+    return query_one("SELECT 1 FROM sqlite_master WHERE name = 'word_reading'") is not None
+
+
+def _mark(r) -> list[int]:
+    """Where the kanji's kana are in a word_reading row's reading, [from, to): じょう in じょうしょう."""
+    return [r["at"], r["at"] + len(r["kana"])]
+
+
 def _marked(char: str, words: dict[int, dict]) -> dict[int, dict]:
-    """The words, each with the kana of its reading that are `char`'s marked (`mark`,
-    [from, to)): じょう in じょうしょう. Left as they are on a database from before
-    the readings stage (pipeline/readings.py)."""
-    if not words or not query_one("SELECT 1 FROM sqlite_master WHERE name = 'word_reading'"):
+    """The words, each with the kana of its reading that are `char`'s marked (`mark`).
+    Left as they are on a database from before the readings stage."""
+    if not words or not _has_readings():
         return words
     ids = list(words)
     for r in query(
         f"SELECT word_id, at, kana FROM word_reading WHERE char = ? AND main = 1 AND word_id IN ({','.join('?' * len(ids))})",
         (char, *ids),
     ):
-        words[r["word_id"]]["mark"] = [r["at"], r["at"] + len(r["kana"])]
+        words[r["word_id"]]["mark"] = _mark(r)
     return words
 
 
@@ -835,7 +848,7 @@ def kanji_page(char: str) -> dict:
     if len(char) != 1:
         return out
     formed = {r.strip("-"): w for r, w in reading_words(char)["words"].items()}
-    has_readings = query_one("SELECT 1 FROM sqlite_master WHERE name = 'word_reading'") is not None
+    has_readings = _has_readings()
     rows = query(
         "SELECT r.word_id, r.reading, r.kana, r.span, r.written, r.whole, r.main, r.at FROM word_reading r "
         "JOIN word w ON w.id = r.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
@@ -854,7 +867,7 @@ def kanji_page(char: str) -> dict:
     # The reading each word gives the kanji, as its entry reads it, for the meanings.
     reading_of = {r["word_id"]: r["reading"] for r in rows if r["main"] and r["reading"] is not None}
     # Which kana of a word's reading are the kanji's, for the page to mark: じょう in じょうしょう.
-    mark_of = {r["word_id"]: [r["at"], r["at"] + len(r["kana"])] for r in rows if r["main"]}
+    mark_of = {r["word_id"]: _mark(r) for r in rows if r["main"]}
 
     # Special readings by the kanji they span and their kana, the commonest first,
     # each word as its entry writes and reads it: not 良人 おっと, a spelling of 夫.
@@ -924,7 +937,7 @@ def kanji_page(char: str) -> dict:
         mix.setdefault(m["reading"], []).append(m["char"])
     for card in cards:
         if not any(r in mix for r in card["reading"].split("・")):
-            mix[card["reading"]] = [c for s in card["spellings"] for c in s["kanji"] if c != char and "一" <= c <= "鿿"]
+            mix[card["reading"]] = [c for s in card["spellings"] for c in s["kanji"] if c != char and review._is_kanji(c)]
     nodes = _fetch(sorted({c for cs in mix.values() for c in cs} | {c for s in senses for c in s.get("similar") or []}))
 
     def lite(c: str) -> dict:
@@ -932,7 +945,7 @@ def kanji_page(char: str) -> dict:
         return {"char": c, "meanings": n.get("meanings") or [], "meaningsBg": n.get("meaningsBg")}
 
     mixups = [
-        {"reading": r, "kanji": [lite(c) for c in dict.fromkeys(cs)], "usage": card_of.get(r) or card_of.get(r.split("・")[0])}
+        {"reading": r, "kanji": [lite(c) for c in dict.fromkeys(cs)], "usage": card_of.get(r.split("・")[0])}
         for r, cs in mix.items() if cs
     ]
 
@@ -950,7 +963,7 @@ def kanji_page(char: str) -> dict:
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,
         with the kanji's kana marked."""
-        return {**words[r["word_id"]], "headword": r["written"], "reading": r["whole"], "mark": [r["at"], r["at"] + len(r["kana"])]}
+        return {**words[r["word_id"]], "headword": r["written"], "reading": r["whole"], "mark": _mark(r)}
 
     def marked(w: int) -> dict:
         """The word with the kanji's kana in its reading marked, where the readings stage knows them."""
@@ -968,7 +981,7 @@ def kanji_page(char: str) -> dict:
             if w not in special_ids and w in reading_of:
                 by.setdefault(reading_of[w], []).append(w)
 
-        def ruled(r: str, ids: list[int] = ids, by: dict = by) -> bool:
+        def ruled(r: str) -> bool:
             """Whether the meaning has this reading as a rule, not now and then: three
             of its words or a fifth of them, or the word the reading forms."""
             ws = by[r]
@@ -990,8 +1003,8 @@ def kanji_page(char: str) -> dict:
         out["meanings"].append({
             "id": s["id"], "en": s.get("en"), "bg": s.get("bg"), "about": s.get("about"), "aboutBg": s.get("aboutBg"),
             "total": len(ids),
-            "kun": {"words": [marked(w) for w in pick(kun_ids, [*formed_here, *first])], "total": len(kun_ids)} if kun_ids else None,
-            "on": [{"reading": r, "words": [marked(w) for w in pick(by[r], first)], "total": len(by[r])} for r in on],
+            "kun": {"words": [marked(w) for w in pick(kun_ids, [*formed_here, *first])]} if kun_ids else None,
+            "on": [{"reading": r, "words": [marked(w) for w in pick(by[r], first)]} for r in on],
             "also": [{"reading": r, "words": [marked(w) for w in by[r][:ALSO_WORDS]]} for r in also],
             "exceptions": [as_here(r) for r in exceptions],
             "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
@@ -999,7 +1012,7 @@ def kanji_page(char: str) -> dict:
         })
     sound = [w for w in in_group.get(review.CATCH_ALL, []) if w not in special_ids]
     if sound:
-        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [])], "total": len(sound)}
+        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [])]}
     out["link"], out["linkBg"] = extras.get("link"), extras.get("linkBg")
     out["mixups"] = [m for m in mixups if m["reading"] not in claimed]
 
