@@ -24,6 +24,9 @@ const S = strings(
     seeComponents: 'Components',
     seeComponentsTitle: 'Show what {char} is built from, and what it is part of',
     strokes: 'Strokes',
+    frequency: 'Frequency',
+    inNewspapers: 'rank {n} of 2,500 in newspapers',
+    level: 'Level',
     gradeLabel: 'Grade',
     gradeSchool: '{n}, elementary school',
     gradeSecondary: 'secondary school',
@@ -52,6 +55,9 @@ const S = strings(
     seeComponents: 'Компоненти',
     seeComponentsTitle: 'Покажете от какво е изграден {char} и в какво участва',
     strokes: 'Черти',
+    frequency: 'Честота',
+    inNewspapers: 'място {n} от 2500 във вестниците',
+    level: 'Ниво',
     gradeLabel: 'Клас',
     gradeSchool: '{n}, начално училище',
     gradeSecondary: 'средно училище',
@@ -266,6 +272,18 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <>
             <dt>{t('strokes')}</dt>
             <dd>{n.strokes}</dd>
+          </>
+        )}
+        {n.freq != null && (
+          <>
+            <dt>{t('frequency')}</dt>
+            <dd>{t('inNewspapers', { n: n.freq })}</dd>
+          </>
+        )}
+        {n.jlpt != null && (
+          <>
+            <dt>{t('level')}</dt>
+            <dd>JLPT N{n.jlpt}</dd>
           </>
         )}
         {grade && (
