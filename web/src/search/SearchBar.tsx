@@ -161,6 +161,9 @@ export function SearchBar({ q, onType, onFocus, onSubmit, inputRef, after }: Pro
         {after}
       </div>
 
+      {/* Behind the pad, the page blurred: drawing is all there is to do.
+          A press on it puts the pad away, and goes no further. */}
+      {drawing && <div className="drawpop-veil" aria-hidden="true" />}
       {drawing && (
         <div ref={drawRef} className="drawpop" role="dialog" aria-label={t('drawTitle')}>
           <div className="drawpop-head">
