@@ -11,6 +11,7 @@ import type { ReactNode } from 'react'
 import type { ReadingInfo, Word } from '../api'
 import { strings, useLang } from '../i18n'
 import { glossOf } from '../i18n/content'
+import { hiraganaToKatakana } from '../local/japanese'
 import { ValencyMark } from '../search/Valency'
 
 const S = strings(
@@ -36,6 +37,18 @@ const S = strings(
 
 /** A reading as the page keys it: the dashes that mark a prefix or suffix dropped. */
 const plain = (r: string) => r.replace(/^-+|-+$/g, '')
+
+/** A reading as printed: on in katakana, kun with its okurigana set apart (あ・げる). */
+export function ReadingKana({ r, on }: { r: string; on: boolean }) {
+  if (on) return <>{hiraganaToKatakana(r)}</>
+  const [stem, okuri] = r.split('.')
+  return (
+    <>
+      {stem}
+      {okuri && <span className="okuri">{okuri}</span>}
+    </>
+  )
+}
 
 export function Readings({
   on,
@@ -90,13 +103,7 @@ function ReadingGroup({
           const it = info?.[r]
           const formed = it?.formed ?? null
           const rare = full && !it?.common
-          const [stem, okuri] = r.split('.')
-          const kana = (
-            <>
-              {stem}
-              {okuri && <span className="okuri">{okuri}</span>}
-            </>
-          )
+          const kana = <ReadingKana r={r} on={!kun} />
           return (
             <li key={r} className="reading-row" data-rare={rare || undefined}>
               <span className="reading-kana" lang="ja" title={rare ? t('rare') : undefined}>

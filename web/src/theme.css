@@ -605,6 +605,252 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: -4px 0 6px;
 }
 
+/* ---------------------------------------------------------------- a kanji's meanings, as one unit */
+
+.meanings {
+  margin-top: 18px;
+}
+
+.meanings > h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* How the meanings follow from each other. */
+.meanings-link {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+
+/* Every reading at a glance; one leads to the meaning that uses it most. */
+.reading-index p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0 0 4px;
+}
+
+.reading-index .reading-kind {
+  width: 2.4em;
+}
+
+.reading-chip {
+  padding: 0;
+  font-family: var(--mincho);
+  font-size: 15px;
+  color: var(--paper);
+  background: none;
+  border: 0;
+}
+
+button.reading-chip {
+  border-bottom: 1px dotted var(--faint);
+  cursor: pointer;
+}
+
+button.reading-chip:hover,
+button.reading-chip:focus-visible {
+  color: var(--ai);
+  border-bottom-color: var(--ai);
+}
+
+.reading-chip .okuri,
+.meaning-reading .okuri {
+  color: var(--muted);
+}
+
+.reading-chip[data-rare] {
+  color: var(--faint);
+}
+
+/* One meaning: what it is, its readings, its words, what is close to it. */
+.meaning {
+  margin-top: 10px;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--sumi-sunk);
+  scroll-margin-top: 12px;
+}
+
+.meaning header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.meaning-n {
+  font-size: 11.5px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.meaning h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--paper);
+}
+
+.meaning-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  margin-left: auto;
+  font-family: var(--mincho);
+  font-size: 14px;
+  color: var(--paper-dim);
+}
+
+.meaning-reading {
+  white-space: nowrap;
+}
+
+.meaning-about {
+  margin: 4px 0 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+
+.meaning-words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.meaning-more {
+  display: block;
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.meaning-more:hover,
+.meaning-more:focus-visible {
+  color: var(--paper-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.meaning footer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+}
+
+.meaning footer p,
+.meaning-mixups p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 2px 0;
+}
+
+.meaning-aside {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* A kanji named beside a meaning: close to it, or easy to mix up with it. */
+.kanji-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--paper-dim);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.kanji-chip [lang='ja'] {
+  font-family: var(--mincho);
+  font-size: 16px;
+  color: var(--paper);
+}
+
+.kanji-chip:hover [lang='ja'],
+.kanji-chip:focus-visible [lang='ja'] {
+  color: var(--ai);
+}
+
+.mixup-reading {
+  font-family: var(--mincho);
+  font-size: 14px;
+  color: var(--paper-dim);
+}
+
+/* Which one to write: the usage card, folded. */
+.usage summary {
+  margin: 2px 0;
+  font-size: 11.5px;
+  color: var(--ai);
+  cursor: pointer;
+}
+
+.usage-spellings {
+  margin: 4px 0;
+}
+
+.usage-spellings > div {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0 12px;
+  padding: 4px 0;
+}
+
+.usage-spellings > div + div {
+  border-top: 1px dashed var(--rule);
+}
+
+.usage-spellings dt {
+  font-family: var(--mincho);
+  font-size: 16px;
+  color: var(--paper);
+}
+
+.usage-spellings dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
+.usage-spellings dd p {
+  margin: 0 0 2px;
+}
+
+.usage-example [lang='ja'] {
+  font-family: var(--mincho);
+  color: var(--paper);
+}
+
+.meaning-plain h4,
+.meaning-mixups h4 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.meaning-mixups {
+  margin-top: 18px;
+}
+
+.meanings-all {
+  display: inline-block;
+  margin-top: 10px;
+}
+
 /* ---------------------------------------------------------------- graph */
 
 .graph-svg {

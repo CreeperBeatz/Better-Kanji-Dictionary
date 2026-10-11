@@ -35,6 +35,16 @@ export function katakanaToHiragana(s: string): string {
   return out
 }
 
+/** On readings are printed in katakana, kun in hiragana: じょう as ジョウ. */
+export function hiraganaToKatakana(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!
+    out += c >= 0x3041 && c <= 0x3096 ? String.fromCodePoint(c + 0x60) : ch
+  }
+  return out
+}
+
 // ---------------------------------------------------------------- romaji
 
 const ROMAJI: Record<string, string> = {

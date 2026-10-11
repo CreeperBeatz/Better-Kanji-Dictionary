@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { api, type GraphResponse, type KanjiNode, type KanjiReadings, type ReadingInfo, type Word, type WordsWithResponse } from '../api'
-import { CATCH_ALL, groupLabel } from '../review/editors'
+import { useEffect, useRef, useState } from 'react'
+import { api, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
@@ -13,8 +12,7 @@ import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency } from '../search/Valency'
 import { Readings, SpecialReadings } from './Readings'
-import { GroupToggle } from '../search/WordsWith'
-import { toggled } from '../sets'
+import { Meanings } from './MeaningCards'
 
 const S = strings(
   {
@@ -33,18 +31,13 @@ const S = strings(
     radical: 'Radical',
     radicalNo: 'no. {n}',
     onThisPage: 'On this page',
-    readings: 'Readings',
+    meanings: 'Meanings',
     writing: 'Writing',
-    words: 'Words',
-    special: 'Special readings',
     similar: 'Similar',
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
-    notInGroup: 'Not in a group',
-    catchAll: 'No meaning of its own',
     allWords: 'See all words with {char} →',
-    hidden: '{n} hidden, see all words',
     formOf: 'a form of {char}',
     shape: 'a shape: “{name}”',
     shapeNone: 'no meaning of its own',
@@ -66,18 +59,13 @@ const S = strings(
     radical: 'Ключ',
     radicalNo: '№ {n}',
     onThisPage: 'На тази страница',
-    readings: 'Четения',
+    meanings: 'Значения',
     writing: 'Писане',
-    words: 'Думи',
-    special: 'Особени четения',
     similar: 'Подобни',
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
-    notInGroup: 'Извън групите',
-    catchAll: 'Без собствено значение',
     allWords: 'Всички думи с {char} →',
-    hidden: '{n} скрити, вижте всички думи',
     formOf: 'форма на {char}',
     shape: 'форма: „{name}“',
     shapeNone: 'няма свое значение',
@@ -106,11 +94,8 @@ interface Props {
   onWordsWith?: (char: string) => void
 }
 
-// The page shows only the most common few; the rest are a search away, by meaning.
+// With no meaning groups, the page shows this many key words; the rest are a search away.
 const PAGE_WORDS = 8
-// Once the kanji's meanings are grouped: at most this many key words under each.
-const GROUP_WORDS = 8
-const REST = 'rest'
 
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
@@ -173,20 +158,15 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
-  // Its common words by meaning group, once reviewers have grouped them; null
-  // while on the way, and with no groups (or no server) the plain list shows.
-  const [grouped, setGrouped] = useState<{ char: string; data: WordsWithResponse | null } | null>(null)
-  // The groups folded away, by id; all open on each new kanji.
-  const [shut, setShut] = useState<{ char: string; ids: Set<string> }>({ char: '', ids: new Set() })
-  // Its readings with their words, special readings and radical. Offline, only
-  // the word each reading forms, from the device: `full` false.
-  const [readings, setReadings] = useState<{ char: string; data: KanjiReadings; full: boolean } | null>(null)
+  // Its meanings with their readings and words, special readings and radical.
+  // Offline, only the word each reading forms, from the device: `full` false.
+  const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
-  const page = useRef<HTMLElement>(null)
+  const root = useRef<HTMLElement>(null)
 
-  // Vocabulary follows the focus, not the hover -- otherwise it would thrash
-  // as the cursor crosses the graph.
+  // Words follow the focus, not the hover -- otherwise they would thrash as
+  // the cursor crosses the graph. The plain list is for a kanji with no meaning groups.
   useEffect(() => {
     let stale = false
     setWords([])
@@ -194,29 +174,24 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       (d) => !stale && setWords(d.words),
       () => {},
     )
-    const char = data.focus.char
-    api.wordsWith(char, true, 0, GROUP_WORDS).then(
-      (d) => !stale && setGrouped({ char, data: d }),
-      () => !stale && setGrouped({ char, data: null }),
-    )
     return () => {
       stale = true
     }
   }, [data.focus.char])
 
-  // Each reading with the word it forms (あ.げる on 上 is 上げる) and the words read that way.
   useEffect(() => {
     let stale = false
     const char = data.focus.char
-    api.kanjiReadings(char).then(
-      (d) => !stale && setReadings({ char, data: d, full: true }),
+    api.kanjiPage(char).then(
+      (d) => !stale && setPage({ char, data: d, full: true }),
       () =>
         api.readingWords(char).then(
           (d) => {
             if (stale) return
-            const info: Record<string, ReadingInfo> = {}
-            for (const [r, w] of Object.entries(d.words)) info[r.replace(/^-+|-+$/g, '')] = { formed: w, common: 0, examples: [] }
-            setReadings({ char, data: { char, readings: info, special: [], radical: null }, full: false })
+            const readings: Record<string, ReadingInfo> = {}
+            for (const [r, w] of Object.entries(d.words)) readings[r.replace(/^-+|-+$/g, '')] = { formed: w, common: 0, examples: [] }
+            const empty = { meanings: [], link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
+            setPage({ char, data: { char, readings, ...empty }, full: false })
           },
           () => {},
         ),
@@ -231,42 +206,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const n = hovered ?? data.focus
   const isPreview = hovered !== null && hovered.char !== data.focus.char
 
-  const here = readings?.char === n.char ? readings : null
-  const special = readings?.char === data.focus.char ? readings.data.special : []
-  const specialIds = new Set(special.map((w) => w.id))
-  // The words: by group once the kanji has groups, else the plain list -- decided
-  // once the groups have answered, so the list does not turn into groups under you.
-  const groupedData = grouped?.char === data.focus.char ? grouped.data : null
-  const vocabReady = grouped?.char === data.focus.char
-  const groups = (groupedData?.groups ?? []).filter((g) => g.words.length > 0)
-  const rest = groups.length ? (groupedData?.rest.words ?? []) : []
-  const shutHere = shut.char === data.focus.char ? shut.ids : new Set<string>()
-  // A group as a box of its own: its title bar folds it, > folded, pointing down open.
-  const vocabGroup = (id: string, label: ReactNode, n: number, ws: Word[]) => {
-    const open = !shutHere.has(id)
-    const shown = keyWords(ws, specialIds, GROUP_WORDS)
-    return (
-      <div key={id} className="vocab-group" data-shut={!open || undefined}>
-        <h4>
-          <GroupToggle
-            className="vocab-group-toggle"
-            open={open}
-            onToggle={() => setShut({ char: data.focus.char, ids: toggled(shutHere, id) })}
-            label={label}
-            n={n}
-          />
-        </h4>
-        {open && <ul>{shown.map(vocabRow)}</ul>}
-        {open && onWordsWith && n > shown.length && (
-          <button className="clear vocab-hidden" onClick={() => onWordsWith(data.focus.char)}>
-            {t('hidden', { n: n - shown.length })}
-          </button>
-        )}
-      </div>
-    )
-  }
+  const here = page?.char === n.char ? page : null
+  const unit = !isPreview && here && here.data.meanings.length > 0 ? here.data : null
+  const special = here?.data.special ?? []
   const vocabRow = (w: Word) => (
-    <li key={w.id}>
+    <li key={`${w.id}-${w.headword}`}>
       <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
         <span className="vocab-word">{w.headword}</span>
         <span className="vocab-reading">{w.reading}</span>
@@ -279,23 +223,25 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const grade = gradeOf(n.grade, t)
   const radical = here?.data.radical
   const radicalMeaning = radical && meaningsOf({ meanings: realMeanings(radical.meanings), meaningsBg: radical.meaningsBg }, lang).value[0]
-  const hasWords = vocabReady && (groups.length > 0 || words.length > 0)
-  const hasSimilar = !!similar && similar.mean.length + similar.look.length + similar.read.length > 0
+  // What the meanings already say is not said again below: kanji close in
+  // meaning sit in their meaning, and kanji with the same reading under "easy to mix up".
+  const saysSimilar = !!unit?.meanings.some((m) => m.similar.length > 0)
+  const saysMixups = !!unit && (unit.mixups.length > 0 || unit.meanings.some((m) => m.mixups.length > 0))
+  const mean = similar && !saysSimilar ? similar.mean : []
+  const read = similar && !saysMixups ? similar.read : []
   // The page's parts, for the links at its top: only those it has.
   const sections: [Section, boolean][] = [
-    ['readings', n.onYomi.length + n.kunYomi.length > 0],
+    ['meanings', n.onYomi.length + n.kunYomi.length > 0 || words.length > 0],
     ['writing', true],
-    ['words', hasWords],
-    ['special', special.length > 0],
-    ['similar', hasSimilar],
+    ['similar', mean.length + read.length > 0],
   ]
   const goTo = (id: Section) => {
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    page.current?.querySelector(`[data-section="${id}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+    root.current?.querySelector(`[data-section="${id}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
   }
 
   return (
-    <section className="rail-section kanji-page" ref={page}>
+    <section className="rail-section kanji-page" ref={root}>
       {onComponents && !isPreview && (
         <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>
           {t('seeComponents')}
@@ -353,8 +299,43 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </p>
       )}
 
-      <div data-section="readings">
-        <Readings on={n.onYomi} kun={n.kunYomi} info={here?.data.readings ?? null} full={here?.full ?? false} onWord={onWord} />
+      <div data-section="meanings">
+        {unit ? (
+          <Meanings
+            page={unit}
+            onYomi={n.onYomi}
+            kunYomi={n.kunYomi}
+            info={unit.readings}
+            onWord={onWord}
+            onKanji={onKanji}
+            onWordsWith={onWordsWith && (() => onWordsWith(data.focus.char))}
+            row={vocabRow}
+          />
+        ) : (
+          // No meaning groups (yet), offline, or a preview: the readings, then the plain list.
+          <>
+            <Readings on={n.onYomi} kun={n.kunYomi} info={here?.data.readings ?? null} full={here?.full ?? false} onWord={onWord} />
+            {!isPreview && words.length > 0 && (
+              <div className="vocab">
+                <div className="vocab-head">
+                  <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
+                  {onWordsWith && (
+                    <button className="clear vocab-all" onClick={() => onWordsWith(data.focus.char)}>
+                      {t('allWords', { char: data.focus.char })}
+                    </button>
+                  )}
+                </div>
+                <ul>{keyWords(words, new Set(special.map((w) => w.id)), PAGE_WORDS).map(vocabRow)}</ul>
+              </div>
+            )}
+            {!isPreview && <SpecialReadings words={special} row={vocabRow} />}
+          </>
+        )}
+        {unit && onWordsWith && (
+          <button className="clear vocab-all meanings-all" onClick={() => onWordsWith(data.focus.char)}>
+            {t('allWords', { char: data.focus.char })}
+          </button>
+        )}
       </div>
 
       {!isPreview && (
@@ -362,50 +343,16 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <StrokeOrder char={data.focus.char} strokes={data.strokes} />
           <FontStrip char={data.focus.char} />
           {forms && <Forms data={forms} onKanji={onKanji} />}
+          {similar && <LooksLike items={similar.look} onKanji={onKanji} />}
         </div>
       )}
 
-      {!isPreview && hasWords && (
-        <div className="vocab" data-section="words">
-          <div className="vocab-head">
-            <h3>{t('wordsUsing', { char: data.focus.char })}</h3>
-            {onWordsWith && (
-              <button className="clear vocab-all" onClick={() => onWordsWith(data.focus.char)}>
-                {t('allWords', { char: data.focus.char })}
-              </button>
-            )}
-          </div>
-          {groups.length > 0 ? (
-            <>
-              {groups.map((g) =>
-                vocabGroup(
-                  g.id,
-                  g.id === CATCH_ALL ? t('catchAll') : groupLabel(g.id, groupedData?.senses ?? null, lang),
-                  g.words.length,
-                  g.words,
-                ),
-              )}
-              {rest.length > 0 && vocabGroup(REST, t('notInGroup'), groupedData?.rest.total ?? rest.length, rest)}
-            </>
-          ) : (
-            <ul>{keyWords(words, specialIds, PAGE_WORDS).map(vocabRow)}</ul>
-          )}
-        </div>
-      )}
-
-      {!isPreview && special.length > 0 && (
-        <div data-section="special">
-          <SpecialReadings words={special} row={vocabRow} />
-        </div>
-      )}
-
-      {/* After the words: what it is confused with -- meaning first, then
-          shape, then reading, which is the rarest question to have. */}
-      {!isPreview && hasSimilar && (
+      {/* What the meanings did not say already: kanji of similar meaning, then
+          of the same reading, which is the rarest question to have. */}
+      {!isPreview && mean.length + read.length > 0 && (
         <div data-section="similar">
-          <Related kind="mean" items={similar.mean} onKanji={onKanji} />
-          <LooksLike items={similar.look} onKanji={onKanji} />
-          <Related kind="read" items={similar.read} onKanji={onKanji} />
+          <Related kind="mean" items={mean} onKanji={onKanji} />
+          <Related kind="read" items={read} onKanji={onKanji} />
         </div>
       )}
 
@@ -414,13 +361,13 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   )
 }
 
-type Section = 'readings' | 'writing' | 'words' | 'special' | 'similar'
+type Section = 'meanings' | 'writing' | 'similar'
 
 /**
  * The words worth showing on the page, at most `max`: common, and either on
- * the N5-N2 lists or among the 4,000 most frequent (nf08). So a group shows
- * as many as it has that matter. One with none of those shows its most common
- * word. Special readings have their own place.
+ * the N5-N2 lists or among the 4,000 most frequent (nf08); else the commonest.
+ * The server picks a meaning's words the same way (search._key_word).
+ * Special readings have their own place.
  */
 function keyWords(ws: Word[], special: Set<number>, max: number): Word[] {
   const left = ws.filter((w) => !special.has(w.id))

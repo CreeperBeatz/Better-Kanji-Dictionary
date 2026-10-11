@@ -195,8 +195,51 @@ export interface ReadingInfo {
   examples: Word[]
 }
 
-export interface KanjiReadings {
+/** A kanji named on another's page: easy to mix up with it, or close in meaning. */
+export interface KanjiLite {
   char: string
+  meanings: string[]
+  meaningsBg: string[] | null
+}
+
+/** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */
+export interface MixUp {
+  /** As a word reads it: あげる; a usage card's may be two, あがる・あげる. */
+  reading: string
+  kanji: KanjiLite[]
+  usage: UsageCard | null
+}
+
+/** One meaning of a kanji on its page, with all that goes with it. */
+export interface KanjiMeaning {
+  id: string
+  en: string | null
+  bg: string | null
+  about: string | null
+  aboutBg: string | null
+  /** The kanji's readings its words use, the most used first: あ.げる, じょう. */
+  readings: string[]
+  /** Its key words, the chosen examples first. */
+  words: Word[]
+  /** All its common words. */
+  total: number
+  /** Kanji close to it in meaning: 昇, 登 for "go up". */
+  similar: KanjiLite[]
+  /** Kanji easy to mix up on one of its readings: 挙げる, 揚げる beside 上げる. */
+  mixups: MixUp[]
+}
+
+/** A kanji's meanings, readings and words, as its page shows them (server: search.kanji_page). */
+export interface KanjiPage {
+  char: string
+  meanings: KanjiMeaning[]
+  /** How its meanings follow from each other. */
+  link: string | null
+  linkBg: string | null
+  /** Kanji easy to mix up on a reading no meaning has. */
+  mixups: MixUp[]
+  /** Words where it is there for its sound: 上海. */
+  soundOnly: { words: Word[]; total: number } | null
   /** By the reading with its dashes dropped: あ.げる, じょう. */
   readings: Record<string, ReadingInfo>
   /** Words that read it in a way of their own: 今日 きょう under 今. One word each. */
@@ -1023,8 +1066,8 @@ export const api = {
       ['limit', String(limit)],
     ]),
 
-  /** What the kanji page shows of its readings: examples, special readings, the radical. Server only. */
-  kanjiReadings: (char: string) => get<KanjiReadings>(`/api/search/kanji-readings/${encodeURIComponent(char)}`),
+  /** A kanji page's meanings, readings and words, and its radical. Server only. */
+  kanjiPage: (char: string) => get<KanjiPage>(`/api/search/kanji-page/${encodeURIComponent(char)}`),
 
   /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
   readingWords: (char: string) =>
