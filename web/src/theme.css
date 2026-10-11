@@ -748,26 +748,37 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0;
 }
 
+/* The whole row is one button: it opens the kanji at the shared meaning. */
 .close-row {
   display: grid;
   grid-template-columns: auto minmax(5em, auto) 1fr;
   align-items: baseline;
   gap: 0 10px;
-  padding: 2px 0;
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 3px 6px;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.close-row:hover,
+.close-row:focus-visible {
+  background: var(--sumi-lift);
 }
 
 .close-kanji {
-  padding: 0;
   font-family: var(--mincho);
   font-size: 17px;
   color: var(--paper);
-  background: none;
-  border: 0;
-  cursor: pointer;
 }
 
-.close-kanji:hover,
-.close-kanji:focus-visible {
+.close-row:hover .close-kanji,
+.close-row:focus-visible .close-kanji {
   color: var(--ai);
 }
 
@@ -776,9 +787,31 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+/* The meaning they share, boxed so it reads as that and not as more of the keyword. */
 .close-sense {
-  font-size: 12.5px;
-  color: var(--paper-dim);
+  justify-self: start;
+  padding: 0 7px;
+  font-size: 12px;
+  color: var(--paper);
+  border: 1px solid var(--rule-bright);
+  border-radius: 9px;
+}
+
+/* A meaning brought into view from another kanji's page glows a moment. */
+@keyframes meaning-flash {
+  0%,
+  35% {
+    background: var(--ai-wash);
+    box-shadow: 0 0 0 2px var(--ai);
+  }
+  100% {
+    background: var(--sumi-sunk);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.meaning-flash {
+  animation: meaning-flash 2.2s var(--ease) 0.25s both;
 }
 
 /* A kanji named beside a meaning: close to it, or easy to mix up with it. */

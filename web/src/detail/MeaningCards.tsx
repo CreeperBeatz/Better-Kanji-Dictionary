@@ -14,10 +14,11 @@
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
  */
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
+import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { ReadingKana, SpecialReadings } from './Readings'
 
 const S = strings(
@@ -30,6 +31,8 @@ const S = strings(
     exceptions: 'Exceptions',
     exceptionsHint: 'read as one word, not kanji by kanji',
     similar: 'Close in meaning',
+    similarHint: 'The box shows the meaning they share.',
+    openAt: 'Open {char} at this meaning',
     mixups: 'Easy to mix up',
     mixupsHint: 'Other kanji with the same kun reading.',
     tellApart: 'Which one to write',
@@ -48,6 +51,8 @@ const S = strings(
     exceptions: 'Изключения',
     exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
     similar: 'Близки по значение',
+    similarHint: 'В рамката е общото значение.',
+    openAt: 'Отворете {char} на това значение',
     mixups: 'Лесно се бъркат',
     mixupsHint: 'Други канджи със същото кун четене.',
     tellApart: 'Кое да се пише',
@@ -80,6 +85,17 @@ export function Meanings({
   const lang = useLang()
   const t = S(lang)
   const link = (lang === 'bg' && page.linkBg) || page.link
+  // Opened from a "close in meaning" row: that meaning comes into view and glows a moment.
+  useEffect(() => {
+    const id = takeMeaningFocus(page.char)
+    const card = id && document.getElementById(meaningAnchor(id))
+    if (!card) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
+    card.classList.remove('meaning-flash')
+    void card.offsetWidth // so the glow starts again on a second visit
+    card.classList.add('meaning-flash')
+  }, [page.char])
 
   return (
     <div className="meanings">
@@ -159,7 +175,7 @@ function Meaning({
   const now = m.also.flatMap((a) => a.words)
   const more = m.total - (m.kun?.words.length ?? 0) - on.length - now.length - m.exceptions.length
   return (
-    <article className="meaning">
+    <article className="meaning" id={meaningAnchor(m.id)}>
       <header>
         <span className="meaning-n">{n}</span>
         <h4>{label}</h4>
@@ -198,7 +214,9 @@ function Meaning({
         <footer>
           {m.similar.length > 0 && (
             <div className="meaning-similar">
-              <p className="meaning-aside">{t('similar')}</p>
+              <p className="meaning-aside">
+                {t('similar')} <span className="hint">{t('similarHint')}</span>
+              </p>
               <ul>
                 {m.similar.map((k) => (
                   <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
@@ -215,17 +233,30 @@ function Meaning({
   )
 }
 
-/** 典 · Code · ceremony: the kanji, its keyword, and the meaning of it that is close to this one. */
+/**
+ * 典 · Code · [ceremony]: the kanji, its keyword, and in a box the meaning of
+ * it that is close to this one. The row opens the kanji at that meaning.
+ */
 function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void }) {
+  const t = S(lang)
   const keyword = meaningsOf(k, lang).value[0]
   const sense = k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)
   return (
-    <li className="close-row">
-      <button className="close-kanji" lang="ja" onClick={() => onKanji(k.char)}>
-        {k.char}
+    <li>
+      <button
+        className="close-row"
+        title={t('openAt', { char: k.char })}
+        onClick={() => {
+          if (k.sense) focusMeaningNext(k.char, k.sense.id)
+          onKanji(k.char)
+        }}
+      >
+        <span className="close-kanji" lang="ja">
+          {k.char}
+        </span>
+        <span className="close-keyword">{keyword}</span>
+        {sense && <span className="close-sense">{sense}</span>}
       </button>
-      <span className="close-keyword">{keyword}</span>
-      <span className="close-sense">{sense}</span>
     </li>
   )
 }

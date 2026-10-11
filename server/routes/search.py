@@ -945,7 +945,7 @@ def kanji_page(char: str) -> dict:
         g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
-        return {**lite(c), "sense": {"en": g.get("en"), "bg": g.get("bg")} if g else None}
+        return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None}
 
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,

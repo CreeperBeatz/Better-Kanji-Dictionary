@@ -206,7 +206,7 @@ export interface KanjiLite {
 
 /** A kanji close to one meaning of another, and which of its own meanings that is. */
 export interface CloseKanji extends KanjiLite {
-  sense: { en: string | null; bg: string | null } | null
+  sense: { id: string; en: string | null; bg: string | null } | null
 }
 
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */
