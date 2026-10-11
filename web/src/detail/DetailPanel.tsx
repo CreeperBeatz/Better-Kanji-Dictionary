@@ -187,7 +187,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             if (stale) return
             const readings: Record<string, ReadingInfo> = {}
             for (const [r, w] of Object.entries(d.words)) readings[r.replace(/^-+|-+$/g, '')] = { formed: w, common: 0, examples: [] }
-            const empty = { meanings: [], map: {}, link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
+            const empty = { meanings: [], link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
             setPage({ char, data: { char, readings, ...empty }, full: false })
           },
           () => {},
@@ -287,10 +287,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         {unit ? (
           <Meanings
             page={unit}
-            onYomi={n.onYomi}
-            kunYomi={n.kunYomi}
-            info={unit.readings}
-            onWord={onWord}
             onKanji={onKanji}
             onWordsWith={onWordsWith && (() => onWordsWith(data.focus.char))}
             row={vocabRow}

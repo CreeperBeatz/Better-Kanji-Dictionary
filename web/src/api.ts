@@ -219,8 +219,8 @@ export interface KanjiMeaning {
   aboutBg: string | null
   /** All its common words. */
   total: number
-  /** Its words that read the kanji in Japanese (上げる, 値上げ), and the kun readings it has as a rule. */
-  kun: { readings: string[]; words: Word[]; total: number } | null
+  /** Its words that read the kanji in Japanese: 上げる, 値上げ. */
+  kun: { words: Word[]; total: number } | null
   /** One part per on reading it has as a rule, the most used first: ジョウ, 上昇 向上. */
   on: { reading: string; words: Word[]; total: number }[]
   /** On readings it has in only a word or two: 重 チョウ in 重複. */
@@ -237,8 +237,6 @@ export interface KanjiMeaning {
 export interface KanjiPage {
   char: string
   meanings: KanjiMeaning[]
-  /** Each reading's meanings (ids), where it is a rule: がく -> music; for the line of readings. */
-  map: Record<string, string[]>
   /** How its meanings follow from each other. */
   link: string | null
   linkBg: string | null

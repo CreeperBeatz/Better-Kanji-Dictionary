@@ -1,36 +1,30 @@
 /**
  * A kanji's meanings, readings and words as one unit. Each meaning is a card:
- * what it is, then its words by how they read the kanji -- the kun words (its
- * kun readings with okurigana set apart and が or を), then one part per on
- * reading it has as a rule, in katakana. A reading it has in only a word or
- * two is a faded "also"; its special readings are its exceptions. Then the
- * kanji close to it in meaning, and the kanji easy to mix up on one of its
- * readings, with the 異字同訓 card that tells them apart.
+ * what it is, then its words by how they read the kanji -- the kun words,
+ * then the on words -- each word saying its own reading, so no reading is
+ * named twice. An on reading the meaning has in only a word or two is faded
+ * at the end of its on words; its special readings are its exceptions. Then
+ * the kanji close to it in meaning, and the kanji easy to mix up on one of
+ * its readings, with the 異字同訓 card that tells them apart.
  *
- * Above the cards: how the meanings follow from each other, and every reading
- * with the numbers of the meanings it is a rule in (ガク 1, ラク 2 3), which
- * lead to them. A rare reading, in no common word, is faded. Below them:
+ * Above the cards: how the meanings follow from each other. Below them:
  * words where the kanji is there for its sound, the special readings, and
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
  */
 import type { ReactNode } from 'react'
-import type { KanjiLite, KanjiMeaning, KanjiPage, MixUp, ReadingInfo, UsageCard, Word } from '../api'
+import type { KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
-import { ValencyMark } from '../search/Valency'
-import { ReadingKana, SpecialReadings } from './Readings'
+import { SpecialReadings } from './Readings'
 
 const S = strings(
   {
     title: 'Meanings and readings',
     on: 'On',
     kun: 'Kun',
-    rare: 'Rare: no common word has this reading.',
-    toMeaning: 'Go to meaning {n}',
-    also: 'Also',
-    exception: 'Exception',
-    exceptionHint: 'read as one word, not kanji by kanji',
+    exceptions: 'Exceptions',
+    exceptionsHint: 'read as one word, not kanji by kanji',
     similar: 'Close in meaning',
     mixups: 'Easy to mix up',
     mixupsHint: 'Other kanji with the same kun reading.',
@@ -45,11 +39,8 @@ const S = strings(
     title: 'Значения и четения',
     on: 'Он',
     kun: 'Кун',
-    rare: 'Рядко: нито една честа дума няма това четене.',
-    toMeaning: 'Към значение {n}',
-    also: 'Също',
-    exception: 'Изключение',
-    exceptionHint: 'чете се като цяла дума, не канджи по канджи',
+    exceptions: 'Изключения',
+    exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
     similar: 'Близки по значение',
     mixups: 'Лесно се бъркат',
     mixupsHint: 'Други канджи със същото кун четене.',
@@ -62,23 +53,13 @@ const S = strings(
   },
 )
 
-const plain = (r: string) => r.replace(/^-+|-+$/g, '')
-
 export function Meanings({
   page,
-  onYomi,
-  kunYomi,
-  info,
-  onWord,
   onKanji,
   onWordsWith,
   row,
 }: {
   page: KanjiPage
-  onYomi: string[]
-  kunYomi: string[]
-  info: Record<string, ReadingInfo>
-  onWord: (w: Word) => void
   onKanji: (c: string) => void
   onWordsWith?: () => void
   /** The page's word row, so words look the same everywhere on it. */
@@ -86,48 +67,15 @@ export function Meanings({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const on = new Set(onYomi.map(plain))
   const link = (lang === 'bg' && page.linkBg) || page.link
-  const number = new Map(page.meanings.map((m, i) => [m.id, i + 1]))
 
   return (
     <div className="meanings">
       <h3>{t('title')}</h3>
       {link && <p className="meanings-link">{link}</p>}
 
-      <div className="reading-index">
-        {[
-          ['on', onYomi],
-          ['kun', kunYomi],
-        ].map(
-          ([kind, list]) =>
-            list.length > 0 && (
-              <p key={kind as string}>
-                <span className="reading-kind">{t(kind as 'on' | 'kun')}</span>
-                {[...new Set((list as string[]).map(plain))].map((r) => {
-                  const rare = !info[r]?.common
-                  // The meanings it is a rule in, by their numbers: ガク 1, ラク 2 3.
-                  const where = page.map[r] ?? []
-                  return (
-                    <span key={r} className="reading-entry" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
-                      <span className="reading-chip" lang="ja">
-                        <ReadingKana r={r} on={kind === 'on'} />
-                      </span>
-                      {where.map((id) => (
-                        <button key={id} className="reading-to" title={t('toMeaning', { n: number.get(id) ?? 0 })} onClick={() => scrollToMeaning(id)}>
-                          {number.get(id)}
-                        </button>
-                      ))}
-                    </span>
-                  )
-                })}
-              </p>
-            ),
-        )}
-      </div>
-
       {page.meanings.map((m, i) => (
-        <Meaning key={m.id} m={m} n={i + 1} on={on} info={info} onWord={onWord} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+        <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -153,28 +101,15 @@ export function Meanings({
   )
 }
 
-const meaningAnchor = (id: string) => `meaning-${id}`
-
-function scrollToMeaning(id: string) {
-  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  document.getElementById(meaningAnchor(id))?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
-}
-
 function Meaning({
   m,
   n,
-  on,
-  info,
-  onWord,
   onKanji,
   onWordsWith,
   row,
 }: {
   m: KanjiMeaning
   n: number
-  on: Set<string>
-  info: Record<string, ReadingInfo>
-  onWord: (w: Word) => void
   onKanji: (c: string) => void
   onWordsWith?: () => void
   row: (w: Word) => ReactNode
@@ -183,76 +118,36 @@ function Meaning({
   const t = S(lang)
   const label = (lang === 'bg' && m.bg) || m.en
   const about = (lang === 'bg' && m.aboutBg) || m.about
-  const shown = (m.kun?.words.length ?? 0) + m.on.reduce((k, o) => k + o.words.length, 0)
-  const more = m.total - shown - m.exceptions.length
+  const on = m.on.flatMap((o) => o.words)
+  const now = m.also.flatMap((a) => a.words)
+  const more = m.total - (m.kun?.words.length ?? 0) - on.length - now.length - m.exceptions.length
   return (
-    <article className="meaning" id={meaningAnchor(m.id)}>
+    <article className="meaning">
       <header>
         <span className="meaning-n">{n}</span>
         <h4>{label}</h4>
       </header>
       {about && <p className="meaning-about">{about}</p>}
 
-      {/* Its words by how they read the kanji: in Japanese, then each Chinese reading it has as a rule. */}
+      {/* Its words by how they read the kanji; each word says its own reading. */}
       {m.kun && (
         <div className="lane">
-          <p className="lane-head">
-            <span className="lane-kind">{t('kun')}</span>
-            <span className="lane-readings" lang="ja">
-              {m.kun.readings.map((r) => {
-                const formed = info[r]?.formed
-                return (
-                  <span key={r} className="meaning-reading">
-                    {formed ? (
-                      <button className="yomi-link" onClick={() => onWord(formed)}>
-                        <ReadingKana r={r} on={false} />
-                      </button>
-                    ) : (
-                      <ReadingKana r={r} on={false} />
-                    )}
-                    {formed && <ValencyMark word={formed} />}
-                  </span>
-                )
-              })}
-            </span>
-          </p>
+          <p className="lane-kind">{t('kun')}</p>
           <ul className="meaning-words">{m.kun.words.map(row)}</ul>
         </div>
       )}
-      {m.on.map((o) => (
-        <div key={o.reading} className="lane">
-          <p className="lane-head">
-            <span className="lane-kind">{t('on')}</span>
-            <span className="lane-readings" lang="ja">
-              <ReadingKana r={o.reading} on={on.has(o.reading)} />
-            </span>
-          </p>
-          <ul className="meaning-words">{o.words.map(row)}</ul>
+      {on.length + now.length > 0 && (
+        <div className="lane">
+          <p className="lane-kind">{t('on')}</p>
+          <ul className="meaning-words">{on.map(row)}</ul>
+          {/* A reading it has in only a word or two: faded, so it does not read as a rule. */}
+          {now.length > 0 && <ul className="meaning-words lane-now">{now.map(row)}</ul>}
         </div>
-      ))}
-      {/* Now and then, not as a rule: faded, so it does not read as one. */}
-      {m.also.map((a) => (
-        <p key={a.reading} className="lane-also">
-          {t('also')}{' '}
-          <span lang="ja">
-            <ReadingKana r={a.reading} on={on.has(a.reading)} />
-          </span>
-          {': '}
-          {a.words.map((w, i) => (
-            <span key={w.id}>
-              {i > 0 && ', '}
-              <button className="reading-example" lang="ja" onClick={() => onWord(w)} title={w.reading}>
-                {w.headword}
-              </button>
-            </span>
-          ))}
-        </p>
-      ))}
+      )}
       {m.exceptions.length > 0 && (
-        <div className="lane lane-exceptions">
-          <p className="lane-head">
-            <span className="lane-kind">{t('exception')}</span>
-            <span className="hint">{t('exceptionHint')}</span>
+        <div className="lane">
+          <p className="lane-kind">
+            {t('exceptions')} <span className="hint">{t('exceptionsHint')}</span>
           </p>
           <ul className="meaning-words">{m.exceptions.map(row)}</ul>
         </div>

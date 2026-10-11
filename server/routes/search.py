@@ -794,9 +794,8 @@ def kanji_page(char: str) -> dict:
     (上手 じょうず under "higher"). `total`: its common words. And the kanji
     close to it in meaning, and `mixups`: kanji easy to mix up with on one of
     its readings (挙げる and 揚げる beside 上げる), each with the usage card that
-    tells them apart. `map`: each reading's meanings, for the page's line of
-    readings. `link`: how the meanings follow from each other. `mixups`: those
-    on no meaning's reading. `soundOnly`: words where the kanji is there for its
+    tells them apart. `link`: how the meanings follow from each other.
+    `mixups`: those on no meaning's reading. `soundOnly`: words where the kanji is there for its
     sound (上海). `readings`, keyed by the reading with its dashes dropped
     (あ.げる, じょう): the word it forms, how many common words read the kanji
     so, and the commonest of them. `special`: its special readings, the kana
@@ -806,7 +805,7 @@ def kanji_page(char: str) -> dict:
     from .. import review
     from .graph import _fetch
 
-    out: dict = {"char": char, "meanings": [], "map": {}, "link": None, "linkBg": None, "mixups": [], "soundOnly": None,
+    out: dict = {"char": char, "meanings": [], "link": None, "linkBg": None, "mixups": [], "soundOnly": None,
                  "readings": {}, "special": [], "radical": None}
     if len(char) != 1:
         return out
@@ -937,8 +936,6 @@ def kanji_page(char: str) -> dict:
         formed_here = [formed[r]["id"] for r in kun if formed.get(r)]
         on = sorted((r for r in by if r in on_readings and ruled(r)), key=lambda r: -len(by[r]))
         also = [r for r in by if r in on_readings and not ruled(r)]
-        for r in [*(r for r in kun if ruled(r)), *on]:
-            out["map"].setdefault(r, []).append(s["id"])
         exceptions = [r for r in special if r["word_id"] in ids]
         placed_special |= {r["word_id"] for r in exceptions}
         # A reading's kana as a word says it: あ.げる is あげる.
@@ -950,11 +947,7 @@ def kanji_page(char: str) -> dict:
         out["meanings"].append({
             "id": s["id"], "en": s.get("en"), "bg": s.get("bg"), "about": s.get("about"), "aboutBg": s.get("aboutBg"),
             "total": len(ids),
-            "kun": {
-                "readings": sorted((r for r in kun if ruled(r)), key=lambda r: -len(by[r])),
-                "words": [words[w] for w in pick(kun_ids, [*formed_here, *first])],
-                "total": len(kun_ids),
-            } if kun_ids else None,
+            "kun": {"words": [words[w] for w in pick(kun_ids, [*formed_here, *first])], "total": len(kun_ids)} if kun_ids else None,
             "on": [{"reading": r, "words": [words[w] for w in pick(by[r], first)], "total": len(by[r])} for r in on],
             "also": [{"reading": r, "words": [words[w] for w in by[r][:ALSO_WORDS]]} for r in also],
             "exceptions": [as_here(r) for r in exceptions],
