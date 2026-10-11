@@ -9195,6 +9195,41 @@ button.review-part {
   margin-bottom: 0;
 }
 
+/* All words with a kanji: each meaning a box of its own, as on the kanji's
+   page, its title bar ruled off. The words in no group are boxed in dashes:
+   they are not a meaning. One list alone needs no box. */
+.words-with .meaning-group:not([data-rest='alone']) {
+  margin-top: 12px;
+  padding: 0 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--sumi-sunk);
+}
+
+.words-with .meaning-group[data-rest='after'] {
+  border-style: dashed;
+  background: none;
+}
+
+.words-with .meaning-group:not([data-rest='alone']) h3 {
+  margin: 0 -12px;
+  padding: 6px 12px 4px;
+  font-size: 14px;
+  color: var(--paper);
+}
+
+.words-with .meaning-group[data-shut]:not([data-rest='alone']) {
+  padding-bottom: 0;
+}
+
+.words-with .meaning-group[data-shut] h3 {
+  border-bottom: 0;
+}
+
+.words-with .meaning-group .words {
+  margin-top: 10px;
+}
+
 /* Under a search's kanji, once one is open beside it: its words, by meaning. */
 .words-with-open {
   display: block;

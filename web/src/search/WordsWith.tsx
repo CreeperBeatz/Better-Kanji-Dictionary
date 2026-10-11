@@ -205,7 +205,12 @@ export function WordsWith({
 
       {/* Always there once there are groups, even empty: the end of the list. */}
       {data && (data.rest.words.length > 0 || data.groups.length > 0) && (
-        <div className="meaning-group" data-shut={shut.has(REST) || undefined}>
+        <div
+          className="meaning-group"
+          data-shut={shut.has(REST) || undefined}
+          // The words in no group, after the groups; or, with no groups, the one list there is.
+          data-rest={data.groups.length > 0 ? 'after' : 'alone'}
+        >
           {data.groups.length > 0 && head(REST, data.rest.total, t('others'))}
           {!shut.has(REST) && (
             <>
