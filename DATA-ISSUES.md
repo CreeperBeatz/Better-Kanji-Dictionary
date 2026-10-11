@@ -240,14 +240,15 @@ Source: our own canonical choice (KRADFILE and KanjiVG write 辶;
 pipeline/review_sources.py folds ⻌ ⻍ ⻎ into 辶).
 Note: our page fonts (Shippori Mincho, Zen Kaku Gothic New) have no ⻌, so
 the browser takes it from a system font.
-**Status: partly fixed** (2026-10-11, branch fix/road-dots, not deployed).
+**Status: partly fixed** (2026-10-11, deployed: c551e3f, e117d5a; prod DB
+swapped, migration run on prod and on the local review store).
 Dani chose "each kanji's part looks like what is written". 58 kanji now hold
 ⻌ and 115 hold 辶. Which kanji have one dot was measured: Noto Sans JP, Noto
 Serif JP and Yu Gothic all agree (decomp.ROAD_ONE_DOT). ⻌ is a form of 辵, like 辶.
 The sources stage writes the sources' 辶 the same way. A typed or proposed
-part gets the right dots too (review.road_dots). For prod, data/pi-migrate/road_dots.py
-fixes the 11 live splits and 11 open cards. pipeline/form_checks.py then
-queues the 2 new form links.
+part gets the right dots too (review.road_dots). data/pi-migrate/road_dots.py
+fixed the 11 live splits (as the Opus bot) and 11 open cards. pipeline/form_checks.py
+queued the 2 new form links. On the graph, ⻌ is radical 162 like 辶.
 Left: a middle piece keeps its own dots. 随 髄 (one dot) get theirs through 迶
 (two). 謎 (two) gets its dots through 迷 (one). The one note on 辶 stays on 辶.
 
