@@ -199,7 +199,9 @@ function initialRailTab(): RailTab {
   }
 }
 
-const TITLE = document.title
+// The page's own name, from index.html. A hot reload runs this again with a
+// page's name already in front ("緑 · …"), so only what follows the last dot counts.
+const TITLE = document.title.split(' · ').pop()!
 
 /**
  * How far a quick flick goes sideways across a page to turn to the next tab,
