@@ -5388,6 +5388,28 @@ html {
   max-width: 62%;
 }
 
+.word-head[data-long] {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 8px;
+}
+
+.word-head[data-long] > :first-child {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
+.word-head[data-long] .detail-meanings {
+  order: 1;
+  flex-basis: 100%;
+}
+
+/* Too long for a line, it breaks where Japanese breaks: never before ー or a small kana. */
+.entry-head {
+  line-break: strict;
+}
+
 .word-head .detail-meanings {
   flex: 1;
   min-width: 0;
