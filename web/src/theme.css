@@ -2873,6 +2873,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   width: min(100%, 300px);
   justify-self: center;
   margin: 0;
+  /* Light enough to find in direct sunlight: where to draw. */
+  border: 2px solid var(--paper-dim);
 }
 
 .drawpop .drawpad-actions {
@@ -2957,8 +2959,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     right: 10px;
   }
 
+  /* As wide as the popup; only a very short screen keeps it smaller. */
   .drawpop .drawpad {
-    width: min(100%, 34vh);
+    width: min(100%, 55vh);
   }
 
 }
