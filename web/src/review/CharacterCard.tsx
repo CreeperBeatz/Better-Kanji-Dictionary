@@ -571,7 +571,7 @@ export function CharacterCard({ id, char, onDone, onKanji }: { id: string; char:
               {options.map((o) => {
                 const isDraft = o.key === 'draft'
                 const by = givenBy(o.parts)
-                const chips = isDraft ? (['sonnet', ...by] as PartsSource[]) : by
+                const chips = isDraft ? ([draft?.model === 'opus' ? 'opus' : 'sonnet', ...by] as PartsSource[]) : by
                 const editing = isDraft && work.parts!.pick === 'other'
                 return (
                   <div key={o.key} className="card-option-wrap">
