@@ -29,7 +29,7 @@ import sqlite3
 from collections import Counter
 
 import review_sources as rs
-from decomp import BARE_STROKES, Decomposition, is_stroke
+from decomp import BARE_STROKES, Decomposition, is_stroke, road
 
 
 def _prefer(children: dict[str, list[str]], nodes: set[str], eq: dict[str, str]) -> dict[str, str]:
@@ -89,6 +89,8 @@ def build(db: sqlite3.Connection) -> None:
     def ours(raw: list[str], x: str) -> list[str] | None:
         """A source's parts as graph nodes; None when one is unknown, a stroke, or the character itself."""
         mapped = rs._ours(raw, nodes, eq, prefer)
+        if mapped is not None:
+            mapped = road(x, mapped)
         if mapped is None or x in mapped or any(p in BARE_STROKES or is_stroke(p) for p in mapped):
             return None
         return mapped

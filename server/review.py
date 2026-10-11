@@ -569,7 +569,7 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
             return None
         if not isinstance(value, list) or any(not isinstance(c, str) or len(c) != 1 for c in value):
             raise _bad("parts_invalid", "parts must be single characters")
-        parts = list(dict.fromkeys(value))  # 品 is 口 once: repeats collapse by design
+        parts = list(dict.fromkeys(road_dots(subject, value)))  # 品 is 口 once: repeats collapse by design
         if machine:
             parts = side_forms(subject, parts)
         if subject in parts:
@@ -923,8 +923,25 @@ def side_forms(char: str, parts: list[str]) -> list[str]:
     form written as that form: 織 is 糹 + 戠 in the graph, so a proposal's 糸 becomes 糹
     (竹 → ⺮, 人 → 亻, 止 → 龰 …). Only that way round: a proposal's form is never turned
     into its root, which is often the more literal of the two (裏's 𧘇, 養's 𦍌)."""
-    now, roots = _children(char), forms.roots()
+    now, roots, parts = _children(char), forms.roots(), road_dots(char, parts)
     return [p if p in now else next((q for q in now if roots.get(q) == p and q not in parts), p) for p in parts]
+
+
+ROAD_SHAPES = frozenset("辶⻌⻍⻎")
+
+
+def road_dots(char: str, parts: list[str]) -> list[str]:
+    """The road part written the way `char` writes it, whoever typed it: ⻌ (one dot) in 近 道,
+    辶 (two dots) in 遡 辻. The built graph knows for the kanji it builds with it (pipeline/decomp.py
+    ROAD_ONE_DOT); for any other, a jōyō kanji has one dot, but 遡 遜 and the rest two (D-022)."""
+    if not ROAD_SHAPES.intersection(parts):
+        return parts
+    built = query_one("SELECT child FROM edge WHERE parent = ? AND child IN ('辶', '⻌')", (char,))
+    form = built and built["child"]
+    if not form:
+        joyo = query_one("SELECT joyo FROM kanji WHERE char = ?", (char,))
+        form = "⻌" if joyo and joyo["joyo"] and char not in "遡遜" else "辶"
+    return [form if p in ROAD_SHAPES else p for p in parts]
 
 
 def _store_decomposition(char: str, parts: list[str] | None) -> None:

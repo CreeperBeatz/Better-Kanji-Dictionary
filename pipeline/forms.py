@@ -58,7 +58,7 @@ POSITIONAL: list[tuple[str, str | None]] = [
     ("刀刂", None),
     ("竹⺮", None),
     ("足⻊", None),
-    ("辵辶", None),
+    ("辵辶⻌", None),
     ("老耂", None),
     ("网罒", None),
     ("羊𦍌", None),

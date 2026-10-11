@@ -63,6 +63,27 @@ ALIASES = {
     "⻭": "歯",
 }
 
+# The road part has two code points that Japanese fonts draw differently:
+# 辶 (U+8FB6) with two dots, ⻌ (U+2ECC) with one. The sources write 辶 for
+# every kanji, but 近 道 and the other jōyō kanji are written with one dot;
+# only 遡 遜 and most non-jōyō kanji (辻 這 逢: the 2000 list of printed
+# forms, JIS 2004) keep two. ROAD_ONE_DOT is measured, not reasoned: the
+# kanji whose own road part Noto Sans JP, Noto Serif JP and Yu Gothic all
+# draw with one dot (2026-10-11, DATA-ISSUES.md D-022).
+ROAD, ROAD_ONE_DOT_FORM = "辶", "⻌"
+ROAD_SHAPES = frozenset("辶⻌⻍⻎")
+ROAD_ONE_DOT = frozenset(
+    "巡込迅返迫迭述迷退逃逐途通速造連逮週逸遅遇遊運遍過達遠適遭遮遷選遺避還"
+    "辺迎近追送逆透逓逝進遂道違遣遵"
+    "遥遼迩迪迌擿𨕫𨑕"
+)
+
+
+def road(char: str, parts) -> list[str]:
+    """`parts` of `char` with the road part written the way `char` writes it."""
+    form = ROAD_ONE_DOT_FORM if char in ROAD_ONE_DOT else ROAD
+    return [form if p in ROAD_SHAPES else p for p in parts]
+
 # Decompositions the rules above cannot reach, set by hand. 食 is a radical of
 # its own in KRADFILE, so its override (人 + 良) is refused along with 門 -> 彐月;
 # 坐's override line is truncated to 人 alone.
@@ -80,6 +101,8 @@ CURATED = {
     "里": ["田", "土"],
     "戸": ["一", "尸"],
     "骨": ["冎", "月"],
+    # cjk-decomp builds ⻌ from 辶 (me = a variant): two ways to write one part.
+    "⻌": [],
 }
 
 # 卄 is overloaded: the grass top of 草/花 and the two-hands shape of 弁/戒/弄.
@@ -211,7 +234,7 @@ class Decomposition:
         for p in entry[1]:
             out |= self._expand(p, 0, frozenset({ch}))
         if not self.as_build_py:
-            out = {ALIASES.get(c, c) for c in out}
+            out = set(road(ch, (ALIASES.get(c, c) for c in out)))
         if GRASS_SOURCE in out and ch in self.grass:
             out = (out - {GRASS_SOURCE}) | {GRASS}
         out.discard(ch)

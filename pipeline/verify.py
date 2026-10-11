@@ -63,8 +63,11 @@ def main() -> int:
     check("記 is built from 言 己", sorted(kids) == sorted(["言", "己"]), "".join(kids))
     kids = [r["child"] for r in db.execute("SELECT child FROM edge WHERE parent = ?", ("食",))]
     check("食 is built from 人 良", sorted(kids) == sorted(["人", "良"]), "".join(kids))
-    whole = [c for c in "口月門心氵辶卄" if one("SELECT COUNT(*) FROM edge WHERE parent = ?", c)]
-    check("口 月 門 心 氵 辶 卄 stay whole", not whole, "".join(whole))
+    whole = [c for c in "口月門心氵辶⻌卄" if one("SELECT COUNT(*) FROM edge WHERE parent = ?", c)]
+    check("口 月 門 心 氵 辶 ⻌ 卄 stay whole", not whole, "".join(whole))
+    # D-022: the road part has the dots its kanji is written with.
+    wrong = [p for p, r in zip("近道遡辻", "⻌⻌辶辶") if not one("SELECT COUNT(*) FROM edge WHERE parent = ? AND child = ?", p, r)]
+    check("近 道 hold ⻌ (one dot), 遡 辻 hold 辶 (two)", not wrong, "".join(wrong))
     hands = one("SELECT joyo_count FROM fanout WHERE char = ?", "廾") or 0
     check("grass kanji do not hold 廾 (two hands)", hands < 40, str(hands))
     bare = one("SELECT COUNT(*) FROM kanji k WHERE k.freq IS NOT NULL AND NOT EXISTS "

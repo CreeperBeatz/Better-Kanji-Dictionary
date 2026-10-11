@@ -196,6 +196,10 @@ def main() -> int:
     check("a form is never turned into its root", review.side_forms("裏", ["亠", "里", "𧘇"]) == ["亠", "里", "𧘇"])
     green = review.add_item("decomposition", "緑", ["糸", "彔"], "ids-diff")
     check("a loaded proposal comes in with the side form", review._read()["items"][green["id"]]["proposed"] == ["糹", "彔"])
+    check("a source's 辶 in 近 is the graph's one-dot ⻌", review.side_forms("近", ["辶", "斤"]) == ["⻌", "斤"])
+    check("辻 keeps two dots", review.road_dots("辻", ["⻌", "十"]) == ["辶", "十"])
+    check("縫, built from 逢, takes the jōyō one dot", review.road_dots("縫", ["糹", "辶", "夆"]) == ["糹", "⻌", "夆"])
+    check("a typed 辶 is written ⻌ too", review.validate("decomposition", "近", ["辶", "斤"]) == ["⻌", "斤"])
 
     print("backup")
     item = review.add_item("decomposition", "森", ["林", "木"], "ai:test")
