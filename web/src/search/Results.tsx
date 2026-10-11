@@ -395,6 +395,8 @@ interface SearchProps {
   words?: string
   /** Turns the search to every word with a kanji, by meaning, or (null) back to its results. */
   onWordsWith?: (char: string | null) => void
+  /** The rail shows a way back above the page (to the kanji the words were opened from): none of its own. */
+  railBack?: boolean
 }
 
 /** How many words a result shows before the rest are added. */
@@ -403,7 +405,7 @@ const FIRST_ROWS = 10
 const PAGE = 30
 const MOST = 1000
 
-export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith, railBack }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -478,7 +480,8 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
         common={common}
         onKanji={onKanji}
         back={
-          onWordsWith && (
+          onWordsWith &&
+          !railBack && (
             <button className="back-link words-with-back" onClick={() => onWordsWith(null)}>
               <span aria-hidden>←</span> {term ? t('backToResults', { q: term }) : t('backToSearch')}
             </button>

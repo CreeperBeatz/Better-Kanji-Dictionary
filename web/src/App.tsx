@@ -1049,6 +1049,7 @@ export function App() {
             onAsk={setAsked}
             onMap={browseMap}
             onWordsWith={showWords}
+            railBack={shownUnder !== null}
           />
         )
       case 'level':
@@ -1192,20 +1193,18 @@ export function App() {
       openOverSearch(p)
     })
   }
-  // "All words with 日": the search itself turns to them, by meaning, and the
-  // card stays where it is -- beside it, or on a phone, a tab away. Null turns
-  // it back to its results.
+  // "All words with 日". In the search -- its column beside the card, or the
+  // phone's Search tab -- the search turns to them, by meaning, and the card
+  // stays where it is. From a kanji's page with one page at a time (a phone,
+  // one column), they open over the page, so back, the rail's link or the
+  // browser's, comes to the kanji before the search. Null turns the search
+  // back to its results.
   const showWords = useStable((char: string | null) => {
     const page: Page = char ? { kind: 'search', q, words: char } : { kind: 'search', q }
     setHovered(null)
-    if (split || top.kind === 'search') return rebase(page)
-    if (mobile) {
-      rebase(page)
-      if (!searchShown) tapPhoneTab('search')
-      return
-    }
-    // One column and no tabs: the search is the page.
-    reset(page)
+    if (split || searchShown) return rebase(page)
+    if (top.kind === 'search') return replaceTop(page)
+    push(page)
   })
   const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
   const searchTabWord = useStable((w: Word) => openFromSearchTab(wordPage(w)))
