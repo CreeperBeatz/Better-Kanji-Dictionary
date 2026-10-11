@@ -49,16 +49,12 @@ const FIRST = 8
 const MORE = 20
 const REST = 'rest'
 
-/**
- * A meaning group's title bar, which folds it: a chevron, > when folded,
- * pointing down when open. The kanji page's few words by group fold the same way.
- */
-export function GroupToggle({
+/** A meaning group's title bar, which folds it: a chevron, > when folded, pointing down when open. */
+function GroupToggle({
   open,
   onToggle,
   label,
   n,
-  className,
   children,
 }: {
   open: boolean
@@ -66,12 +62,11 @@ export function GroupToggle({
   label: ReactNode
   /** How many words it holds. */
   n: number
-  className?: string
   /** After the count: a note, a hint. */
   children?: ReactNode
 }) {
   return (
-    <button className={className ? `meaning-group-toggle ${className}` : 'meaning-group-toggle'} aria-expanded={open} onClick={onToggle}>
+    <button className="meaning-group-toggle" aria-expanded={open} onClick={onToggle}>
       <svg className="meaning-group-caret" viewBox="0 0 12 12" aria-hidden>
         <path d="M4 2.5 7.5 6 4 9.5" />
       </svg>

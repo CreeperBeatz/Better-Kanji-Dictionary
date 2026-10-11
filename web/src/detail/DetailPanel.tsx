@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { api, onDataChanged, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
+import { api, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
+import { plainReading } from '../local/japanese'
 import { KanjiMeta } from './HeadMeta'
 import { realMeanings } from './meanings'
 import { KanjiEditButton } from '../review/PageEdit'
@@ -98,19 +99,6 @@ interface Props {
 // With no meaning groups, the page shows this many key words; the rest are a search away.
 const PAGE_WORDS = 8
 
-// The pages already fetched, the last few. A phone puts the panel away with
-// every other tab, and a page fetched afresh each time back came in late:
-// the overview at the top pushed everything under it down. A page kept here
-// is drawn at once, and fetched again behind it.
-const PAGES = 40
-const pages = new Map<string, KanjiPage>()
-onDataChanged(() => pages.clear())
-function keepPage(char: string, d: KanjiPage) {
-  pages.delete(char)
-  pages.set(char, d)
-  if (pages.size > PAGES) pages.delete(pages.keys().next().value!)
-}
-
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
   if (n.jlpt) return `JLPT N${n.jlpt}`
@@ -178,39 +166,37 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
 
-  // Words follow the focus, not the hover -- otherwise they would thrash as
-  // the cursor crosses the graph. The plain list is for a kanji with no meaning groups.
-  useEffect(() => {
-    let stale = false
-    setWords([])
-    api.wordsFor(data.focus.char).then(
-      (d) => !stale && setWords(d.words),
-      () => {},
-    )
-    return () => {
-      stale = true
-    }
-  }, [data.focus.char])
-
+  // Both follow the focus, not the hover -- otherwise they would thrash as the
+  // cursor crosses the graph. The plain list of words is for a kanji with no
+  // meaning groups, so it is asked for only then.
   useEffect(() => {
     let stale = false
     const char = data.focus.char
+    setWords([])
+    const plainWords = () =>
+      api.wordsFor(char).then(
+        (d) => !stale && setWords(d.words),
+        () => {},
+      )
     api.kanjiPage(char).then(
       (d) => {
-        keepPage(char, d)
-        if (!stale) setPage({ char, data: d, full: true })
+        if (stale) return
+        setPage({ char, data: d, full: true })
+        if (d.meanings.length === 0) plainWords()
       },
-      () =>
+      () => {
+        plainWords()
         api.readingWords(char).then(
           (d) => {
             if (stale) return
             const readings: Record<string, ReadingInfo> = {}
-            for (const [r, w] of Object.entries(d.words)) readings[r.replace(/^-+|-+$/g, '')] = { formed: w, common: 0, examples: [] }
+            for (const [r, w] of Object.entries(d.words)) readings[plainReading(r)] = { formed: w, common: 0, examples: [] }
             const empty = { meanings: [], link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
             setPage({ char, data: { char, readings, ...empty }, full: false })
           },
           () => {},
-        ),
+        )
+      },
     )
     return () => {
       stale = true
@@ -222,8 +208,10 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const n = hovered ?? data.focus
   const isPreview = hovered !== null && hovered.char !== data.focus.char
 
-  const kept = pages.get(n.char)
-  const here = page?.char === n.char ? page : kept ? { char: n.char, data: kept, full: true } : null
+  // A page already fetched is drawn at once: a phone puts the panel away with
+  // every other tab, and its overview coming in late pushed the page down.
+  const kept = api.kanjiPage.peek(n.char)
+  const here = kept ? { char: n.char, data: kept, full: true } : page?.char === n.char ? page : null
   const unit = !isPreview && here && here.data.meanings.length > 0 ? here.data : null
   const special = here?.data.special ?? []
   const vocabRow = (w: Word) => (

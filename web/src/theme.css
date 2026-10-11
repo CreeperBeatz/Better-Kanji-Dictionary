@@ -452,18 +452,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-variant-numeric: tabular-nums;
 }
 
-.facts dd .yomi {
-  font-family: var(--mincho);
-  font-size: calc(15px * var(--type));
-  color: var(--paper);
-}
-
-.facts dd.yomi {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 0.9em;
-}
-
 /* A reading that forms a word of its own -- あ.げる, 上げる -- opens it. */
 .yomi-link {
   padding: 0;
@@ -1795,61 +1783,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-/* On a kanji's page, a few words under each of its meaning groups, each
-   group a box of its own whose title bar folds it. */
-.vocab-group {
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  background: var(--sumi-sunk);
-}
-
-.vocab-group + .vocab-group {
-  margin-top: 6px;
-}
-
-.vocab-group h4 {
-  margin: 0;
-  font-size: calc(12.5px * var(--type));
-  font-weight: 400;
-  color: var(--paper-dim);
-}
-
-.vocab .vocab-group-toggle {
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 3px;
-}
-
-.vocab-group:not([data-shut]) .vocab-group-toggle {
-  border-bottom: 1px solid var(--rule);
-  border-radius: 3px 3px 0 0;
-}
-
-.vocab-group ul {
-  padding: 4px 10px 6px;
-}
-
-/* "147 hidden, see all words", small, under a group's few. */
-.vocab-group .vocab-hidden {
-  display: block;
-  margin: -2px 10px 7px;
-  font-size: calc(11.5px * var(--type));
-  color: var(--muted);
-  text-decoration: none;
-}
-
-/* Quiet until pointed at: a note, not a button. */
-.vocab-group .vocab-hidden:hover,
-.vocab-group .vocab-hidden:focus-visible {
-  color: var(--paper-dim);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.vocab-group .vocab-row {
-  width: calc(100% + 12px);
 }
 
 .vocab-row {

@@ -15,19 +15,18 @@
  * here: "all words" has them.
  */
 import { useEffect, type ReactNode } from 'react'
+import { reducedMotion } from '../media'
 import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
-import { ReadingKana, SpecialReadings } from './Readings'
+import { ReadingsLine, SpecialReadings } from './Readings'
 
 const S = strings(
   {
-    readings: 'Readings',
     meanings: 'Meanings',
     on: 'On',
     kun: 'Kun',
-    rare: 'Rare: no common word has this reading.',
     exceptions: 'Exceptions',
     exceptionsHint: 'read as one word, not kanji by kanji',
     similar: 'Synonyms',
@@ -43,11 +42,9 @@ const S = strings(
     soundHint: 'In these words the kanji brings no meaning.',
   },
   {
-    readings: 'Четения',
     meanings: 'Значения',
     on: 'Он',
     kun: 'Кун',
-    rare: 'Рядко: нито една честа дума няма това четене.',
     exceptions: 'Изключения',
     exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
     similar: 'Синоними',
@@ -63,8 +60,6 @@ const S = strings(
     soundHint: 'В тези думи канджито не внася значение.',
   },
 )
-
-const plain = (r: string) => r.replace(/^-+|-+$/g, '')
 
 export function Meanings({
   page,
@@ -89,8 +84,7 @@ export function Meanings({
     const id = takeMeaningFocus(page.char)
     const card = id && document.getElementById(meaningAnchor(id))
     if (!card) return
-    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    card.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'center' })
+    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
     card.classList.remove('meaning-flash')
     void card.offsetWidth // so the glow starts again on a second visit
     card.classList.add('meaning-flash')
@@ -98,31 +92,8 @@ export function Meanings({
 
   return (
     <div className="meanings">
-      <h3>{t('readings')}</h3>
-      <div className="meanings-readings">
-        {(
-          [
-            ['on', onYomi],
-            ['kun', kunYomi],
-          ] as const
-        ).map(
-          ([kind, list]) =>
-            list.length > 0 && (
-              <p key={kind}>
-                <span className="lane-kind">{t(kind)}</span>
-                {[...new Set(list.map(plain))].map((r) => {
-                  const rare = !page.readings[r]?.common
-                  return (
-                    <span key={r} className="reading-chip" lang="ja" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
-                      <ReadingKana r={r} on={kind === 'on'} />
-                    </span>
-                  )
-                })}
-              </p>
-            ),
-        )}
-      </div>
-      {/* How the meanings follow from each other opens the page, above the facts. */}
+      <ReadingsLine on={onYomi} kun={kunYomi} info={page.readings} />
+      {/* How they follow from each other opens the kanji's page, above its facts (DetailPanel). */}
       <h3 className="meanings-title">{t('meanings')}</h3>
 
       {page.meanings.map((m, i) => (
@@ -205,7 +176,7 @@ function Meaning({
       )}
       {more > 0 && onWordsWith && (
         <button className="clear meaning-more" onClick={onWordsWith}>
-          {t(more === 1 ? 'more_one' : 'more_other', { n: more })} →
+          {t.plural('more', more)} →
         </button>
       )}
       {(m.similar.length > 0 || m.mixups.length > 0) && (

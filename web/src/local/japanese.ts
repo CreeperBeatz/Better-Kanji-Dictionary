@@ -76,6 +76,11 @@ const ROMAJI: Record<string, string> = {
   rya: 'りゃ', ryu: 'りゅ', ryo: 'りょ',
 }
 
+/** A reading as the page keys it: the dashes that mark a prefix or suffix dropped (-あ.げる). */
+export function plainReading(r: string): string {
+  return r.replace(/^-+|-+$/g, '')
+}
+
 /** Python's str.strip(): whitespace, including the Unicode kinds. */
 export function pyStrip(s: string): string {
   return s.replace(/^[\s\x1c-\x1f\x85]+|[\s\x1c-\x1f\x85]+$/gu, '')

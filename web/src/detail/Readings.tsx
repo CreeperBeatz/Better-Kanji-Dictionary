@@ -11,7 +11,7 @@ import type { ReactNode } from 'react'
 import type { ReadingInfo, Word } from '../api'
 import { strings, useLang } from '../i18n'
 import { glossOf } from '../i18n/content'
-import { hiraganaToKatakana } from '../local/japanese'
+import { hiraganaToKatakana, plainReading as plain } from '../local/japanese'
 import { ValencyMark } from '../search/Valency'
 
 const S = strings(
@@ -35,9 +35,6 @@ const S = strings(
   },
 )
 
-/** A reading as the page keys it: the dashes that mark a prefix or suffix dropped. */
-const plain = (r: string) => r.replace(/^-+|-+$/g, '')
-
 /** A reading as printed: on in katakana, kun with its okurigana set apart (あ・げる). */
 export function ReadingKana({ r, on }: { r: string; on: boolean }) {
   if (on) return <>{hiraganaToKatakana(r)}</>
@@ -46,6 +43,42 @@ export function ReadingKana({ r, on }: { r: string; on: boolean }) {
     <>
       {stem}
       {okuri && <span className="okuri">{okuri}</span>}
+    </>
+  )
+}
+
+/**
+ * Every reading at a glance, one line each kind: on, then kun, a rare one
+ * faded. Above a kanji's meanings, which give the words.
+ */
+export function ReadingsLine({ on, kun, info }: { on: string[]; kun: string[]; info: Record<string, ReadingInfo> }) {
+  const t = S(useLang())
+  return (
+    <>
+      <h3>{t('title')}</h3>
+      <div className="meanings-readings">
+        {(
+          [
+            ['on', on],
+            ['kun', kun],
+          ] as const
+        ).map(
+          ([kind, list]) =>
+            list.length > 0 && (
+              <p key={kind}>
+                <span className="lane-kind">{t(kind)}</span>
+                {[...new Set(list.map(plain))].map((r) => {
+                  const rare = !info[r]?.common
+                  return (
+                    <span key={r} className="reading-chip" lang="ja" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
+                      <ReadingKana r={r} on={kind === 'on'} />
+                    </span>
+                  )
+                })}
+              </p>
+            ),
+        )}
+      </div>
     </>
   )
 }

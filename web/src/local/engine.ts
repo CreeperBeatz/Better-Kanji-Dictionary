@@ -22,7 +22,8 @@ import type {
 import { bestReading, hasCyrillic, isLatinQuery, spelling, terms as bgTerms } from './bulgarian'
 import { FtsIndex, phrasesOf, tokenize, type Phrase } from './fts'
 import {
-  deinflect, hasJapanese, isKana, katakanaToHiragana, posMatches, pySplit, pyStrip, romajiToKana, type Candidate,
+  deinflect, hasJapanese, isKana, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiToKana,
+  type Candidate,
 } from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
 import { compareCodePoints, readSections, SortedStrings, starts } from './sections'
@@ -138,7 +139,7 @@ function compareKeys(a: number[], b: number[]): number {
 
 /** The (written, kana) a word read this way would have, likeliest first: the server's `reading_forms`. */
 function readingForms(char: string, reading: string, on: boolean): [string, string][] {
-  const r = reading.replace(/^-+|-+$/g, '')
+  const r = plainReading(reading)
   if (!on) {
     const dot = r.indexOf('.')
     const [stem, okuri] = dot < 0 ? [r, ''] : [r.slice(0, dot), r.slice(dot + 1)]

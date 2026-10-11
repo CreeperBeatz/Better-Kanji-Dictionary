@@ -84,11 +84,11 @@ export const HoldCard = forwardRef<HTMLDivElement, Props>(function HoldCard(
         )}
       </dl>
       <div className="hold-card-actions">
-        <button className="see-components hold-card-open" onClick={onOpen}>
+        <button className="see-components" onClick={onOpen}>
           {openLabel}
         </button>
         {onRecentre && (
-          <button className="see-components hold-card-open" onClick={onRecentre}>
+          <button className="see-components" onClick={onRecentre}>
             {recentreLabel}
           </button>
         )}
