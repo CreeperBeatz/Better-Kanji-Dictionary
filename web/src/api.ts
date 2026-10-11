@@ -204,10 +204,9 @@ export interface KanjiLite {
   meaningsBg: string[] | null
 }
 
-/** A kanji close to one meaning of another: which of its own meanings that is, and a word of it. */
+/** A kanji close to one meaning of another, and which of its own meanings that is. */
 export interface CloseKanji extends KanjiLite {
   sense: { en: string | null; bg: string | null } | null
-  word: Word | null
 }
 
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */

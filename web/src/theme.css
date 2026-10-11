@@ -736,8 +736,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* Close in meaning: one row a kanji -- the kanji, the meaning of it that is
-   close, a word of that meaning. */
+/* Close in meaning: one row a kanji -- the kanji, its keyword, and the
+   meaning of it that is close. */
 .meaning-similar > .meaning-aside {
   margin: 2px 0;
 }
@@ -750,7 +750,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .close-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(5em, auto) 1fr;
   align-items: baseline;
   gap: 0 10px;
   padding: 2px 0;
@@ -771,34 +771,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--ai);
 }
 
+.close-keyword {
+  font-size: 12.5px;
+  color: var(--paper);
+}
+
 .close-sense {
   font-size: 12.5px;
   color: var(--paper-dim);
-}
-
-.close-word {
-  padding: 0;
-  font-size: 13px;
-  color: var(--paper);
-  background: none;
-  border: 0;
-  border-bottom: 1px dotted var(--faint);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.close-word [lang='ja'] {
-  font-family: var(--mincho);
-}
-
-.close-word-reading {
-  font-size: 11.5px;
-  color: var(--muted);
-}
-
-.close-word:hover,
-.close-word:focus-visible {
-  border-bottom-color: var(--ai);
 }
 
 /* A kanji named beside a meaning: close to it, or easy to mix up with it. */

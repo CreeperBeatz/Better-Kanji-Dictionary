@@ -939,15 +939,13 @@ def kanji_page(char: str) -> dict:
     def close(c: str, here: dict) -> dict:
         """A kanji close to this meaning, and which of its own meanings that is: the one
         that names this kanji back (昇's "rise, ascend" for 上's "go up"), else the
-        one worded most like this one; with a word of it (its first example)."""
+        one worded most like this one."""
         groups = [g for g in review.site_meanings(c)["senses"] or [] if g["id"] != review.CATCH_ALL]
         mine = _wording(here)
         g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
-        ex = (g.get("examples") or [None])[0] if g else None
-        word = _fetch_words([ex]).get(ex) if ex else None
-        return {**lite(c), "sense": {"en": g.get("en"), "bg": g.get("bg")} if g else None, "word": word}
+        return {**lite(c), "sense": {"en": g.get("en"), "bg": g.get("bg")} if g else None}
 
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,

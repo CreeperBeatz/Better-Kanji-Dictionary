@@ -66,7 +66,6 @@ export function Meanings({
   onYomi,
   kunYomi,
   onKanji,
-  onWord,
   onWordsWith,
   row,
 }: {
@@ -74,7 +73,6 @@ export function Meanings({
   onYomi: string[]
   kunYomi: string[]
   onKanji: (c: string) => void
-  onWord: (w: Word) => void
   onWordsWith?: () => void
   /** The page's word row, so words look the same everywhere on it. */
   row: (w: Word) => ReactNode
@@ -114,7 +112,7 @@ export function Meanings({
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
-        <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWord={onWord} onWordsWith={onWordsWith} row={row} />
+        <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -144,14 +142,12 @@ function Meaning({
   m,
   n,
   onKanji,
-  onWord,
   onWordsWith,
   row,
 }: {
   m: KanjiMeaning
   n: number
   onKanji: (c: string) => void
-  onWord: (w: Word) => void
   onWordsWith?: () => void
   row: (w: Word) => ReactNode
 }) {
@@ -205,7 +201,7 @@ function Meaning({
               <p className="meaning-aside">{t('similar')}</p>
               <ul>
                 {m.similar.map((k) => (
-                  <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} onWord={onWord} />
+                  <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
                 ))}
               </ul>
             </div>
@@ -219,20 +215,17 @@ function Meaning({
   )
 }
 
-/** 昇 · rise, ascend · 昇る のぼる: the kanji, the meaning of it that is close, and a word of that meaning. */
-function CloseRow({ k, lang, onKanji, onWord }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void; onWord: (w: Word) => void }) {
-  const sense = (k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)) || meaningsOf(k, lang).value[0]
+/** 典 · Code · ceremony: the kanji, its keyword, and the meaning of it that is close to this one. */
+function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void }) {
+  const keyword = meaningsOf(k, lang).value[0]
+  const sense = k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)
   return (
     <li className="close-row">
-      <button className="close-kanji" lang="ja" onClick={() => onKanji(k.char)} title={meaningsOf(k, lang).value[0]}>
+      <button className="close-kanji" lang="ja" onClick={() => onKanji(k.char)}>
         {k.char}
       </button>
+      <span className="close-keyword">{keyword}</span>
       <span className="close-sense">{sense}</span>
-      {k.word && (
-        <button className="close-word" onClick={() => onWord(k.word!)}>
-          <span lang="ja">{k.word.headword}</span> <span className="close-word-reading" lang="ja">{k.word.reading}</span>
-        </button>
-      )}
     </li>
   )
 }
