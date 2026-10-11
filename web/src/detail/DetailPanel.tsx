@@ -24,7 +24,6 @@ const S = strings(
     noMeaning: 'no recorded meaning',
     seeComponents: 'Components',
     seeComponentsTitle: 'Show what {char} is built from, and what it is part of',
-    statistics: 'Statistics',
     strokes: 'Strokes',
     frequency: 'Frequency',
     inNewspapers: 'rank {n} of 2,500 in newspapers',
@@ -52,7 +51,6 @@ const S = strings(
     noMeaning: 'няма записано значение',
     seeComponents: 'Компоненти',
     seeComponentsTitle: 'Покажете от какво е изграден {char} и в какво участва',
-    statistics: 'Статистика',
     strokes: 'Черти',
     frequency: 'Честота',
     inNewspapers: 'място {n} от 2500 във вестниците',
@@ -242,7 +240,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       )}
 
       {/* The numbers first, then how it looks in print and by hand, then how it is written. */}
-      <h3 className="facts-title">{t('statistics')}</h3>
       <dl className="facts">
         {n.strokes != null && (
           <>
