@@ -4447,6 +4447,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   outline: 2px solid var(--ai);
   outline-offset: 2px;
 }
+.account-install .hint {
+  margin: 6px 0 0;
+}
+
 .account-language {
   display: flex;
   align-items: center;
