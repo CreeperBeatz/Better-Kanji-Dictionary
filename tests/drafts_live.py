@@ -11,6 +11,7 @@ from __future__ import annotations
 from harness import Checks, Server, use_sandbox
 
 from server import review
+from server.routes import review as review_routes
 from server.routes import search
 
 check = Checks()
@@ -30,7 +31,7 @@ def placement(char: str, wid: int, sense: str, confidence: float, agree: bool = 
 
 
 def main() -> int:
-    srv = Server(search.router)
+    srv = Server(search.router, review_routes.router)
     use_sandbox(srv.tmp)
     review._flush_pack = lambda: None
     call = srv.call
@@ -64,6 +65,10 @@ def main() -> int:
         status, res = call("GET", "/api/search/words-with/%E6%B0%B4?common=true")
         check("the accepted groups, unmarked", [s["id"] for s in res["senses"]] == ["水.water"] and not res["draft"]["senses"],
               (res["senses"], res["draft"]))
+
+        print("anyone may see how much is checked")
+        status, res = call("GET", "/api/review/verified")
+        check("anonymous GET verified is 200", status == 200 and set(res.get("kanji", {})) == {"verified", "total"}, (status, res))
 
         print("no draft at all: as before")
         status, res = call("GET", "/api/search/words-with/%E7%94%9F?common=true")

@@ -2617,6 +2617,25 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-top: 1px solid var(--rule);
 }
 
+/* "Not everything here is checked yet", with the share of kanji checked. */
+.account-checked {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+
+.account-checked h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--paper-dim);
+}
+
+.account-checked .hint {
+  margin: 0;
+}
+
 /* ---------------------------------------------------------------- offline lookup */
 
 .offline {
@@ -8706,14 +8725,6 @@ button.review-part {
 .vocab-all {
   font-size: 12.5px;
   white-space: nowrap;
-}
-
-/* "Grouped by AI, not checked yet.": the groups are an unreviewed draft. */
-.draft-mark {
-  margin: -4px 0 8px;
-  font-size: 12px;
-  font-style: italic;
-  cursor: help;
 }
 
 .words-with-head {

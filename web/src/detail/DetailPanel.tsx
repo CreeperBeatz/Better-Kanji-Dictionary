@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, isDraft, type GraphResponse, type KanjiNode, type Word, type WordsWithResponse } from '../api'
+import { api, type GraphResponse, type KanjiNode, type Word, type WordsWithResponse } from '../api'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
@@ -33,8 +33,6 @@ const S = strings(
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
-    draft: 'Grouped by AI, not checked yet.',
-    draftHint: 'A reviewer will check these groups. Until then, some words can be in the wrong group.',
     notInGroup: 'Not in a group',
     catchAll: 'No meaning of its own',
     allWords: 'See all words with {char} →',
@@ -62,8 +60,6 @@ const S = strings(
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
-    draft: 'Групирано от ИИ, още непроверено.',
-    draftHint: 'Рецензент ще провери тези групи. Дотогава някои думи може да са в грешна група.',
     notInGroup: 'Извън групите',
     catchAll: 'Без собствено значение',
     allWords: 'Всички думи с {char} →',
@@ -335,11 +331,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
               </button>
             )}
           </div>
-          {groups.length > 0 && isDraft(groupedData) && (
-            <p className="hint draft-mark" title={t('draftHint')}>
-              {t('draft')}
-            </p>
-          )}
           {groups.length > 0 ? (
             <>
               {groups.map((g) =>

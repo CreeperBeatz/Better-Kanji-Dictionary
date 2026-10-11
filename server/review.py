@@ -2378,6 +2378,19 @@ def progress() -> dict:
     }
 
 
+_verified: tuple[dict | None, dict] = (None, {})
+
+
+def verified() -> dict:
+    """For everyone: how much of the dictionary reviewers have checked (`progress`'s share of
+    kanji verified), worked out once per change, since every visitor's account popup asks."""
+    global _verified
+    data = _read()
+    if _verified[0] is not data:
+        _verified = (data, {"kanji": progress()["kanji"]})
+    return _verified[1]
+
+
 def auto_accepted(limit: int = 200) -> dict:
     data = _read()
     rows = [d for d in reversed(data["decisions"]) if d["action"] == "auto"][:limit]

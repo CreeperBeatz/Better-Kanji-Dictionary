@@ -5,6 +5,7 @@ import { strings, useLang, type Lang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { LangSwitch } from '../i18n/LangSwitch'
 import { OfflineSetting } from '../local/OfflineSetting'
+import { CheckedNote } from '../review/Progress'
 import { Avatar, squareAvatar } from './Avatar'
 import { GoogleButton } from './GoogleButton'
 import { Overlay } from '../Overlay'
@@ -211,6 +212,7 @@ export function AccountDialog({
         <LangSwitch />
       </p>
       <OfflineSetting />
+      <CheckedNote />
       <Credits />
       {/* Last, on its own: leaving the account. */}
       {user && (

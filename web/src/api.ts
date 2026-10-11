@@ -778,9 +778,6 @@ export interface WordsWithResponse {
   draft?: { senses: boolean; words: number; extras: boolean }
 }
 
-/** Whether a kanji's groups, or any word in them, are the AI's unreviewed draft. */
-export const isDraft = (d: WordsWithResponse | null | undefined) => !!d?.draft && (d.draft.senses || d.draft.words > 0)
-
 /** One handwriting candidate. `score` is 0-100 agreement, not a probability. */
 export interface DrawCandidate {
   char: string
@@ -1218,6 +1215,8 @@ export const api = {
     }),
 
   reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
+  /** Public: the share of kanji reviewers have fully checked. */
+  reviewVerified: () => get<{ kanji: ReviewProgress['kanji'] }>('/api/review/verified'),
 
   /** What giving `char` these parts would change upstream, before anyone decides. */
   reviewImpact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),

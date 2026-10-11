@@ -33,6 +33,10 @@ const S = strings(
     meaningsCover: '{n} of {total} kanji have accepted meanings',
     wordsCover: '{n} of {total} drafted words placed in a group (decided with their kanji’s meanings)',
     loading: 'loading…',
+    checkedTitle: 'Not everything here is checked yet',
+    checkedHint:
+      'An AI made the first draft of the meaning groups, of which words go in them, and of some parts. Reviewers check each kanji by hand. Until a kanji is checked, some of its data can be wrong.',
+    checked: '{n} of {total} kanji checked',
   },
   {
     tasks: '{done} от {total} задачи за преглед са готови',
@@ -58,6 +62,10 @@ const S = strings(
     meaningsCover: '{n} от {total} канджи имат приети значения',
     wordsCover: '{n} от {total} чернови думи са разпределени в група (решават се със значенията на канджито си)',
     loading: 'зарежда се…',
+    checkedTitle: 'Още не всичко тук е проверено',
+    checkedHint:
+      'ИИ направи първата чернова на групите от значения, на думите в тях и на някои части. Рецензенти проверяват всяко канджи на ръка. Докато едно канджи не е проверено, някои от данните му може да са грешни.',
+    checked: '{n} от {total} канджи са проверени',
   },
 )
 
@@ -98,6 +106,37 @@ export function useProgress(version: number): ReviewProgress | null {
 function useNumber() {
   const lang = useLang()
   return (x: number) => x.toLocaleString(localeOf(lang))
+}
+
+/** For everyone, in the account popup: that not all of the dictionary is checked, and how much is. */
+export function CheckedNote() {
+  const t = S(useLang())
+  const n = useNumber()
+  const [kanji, setKanji] = useState<ReviewProgress['kanji'] | null>(null)
+  useEffect(() => {
+    let stale = false
+    api.reviewVerified().then(
+      (d) => !stale && setKanji(d.kanji),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [])
+  return (
+    <section className="account-checked">
+      <h3>{t('checkedTitle')}</h3>
+      <p className="hint">{t('checkedHint')}</p>
+      {kanji && (
+        <>
+          <Bar done={kanji.verified} total={kanji.total} />
+          <p className="hint">
+            {t('checked', { n: n(kanji.verified), total: n(kanji.total) })} · <b>{pct(kanji.verified, kanji.total)}</b>
+          </p>
+        </>
+      )}
+    </section>
+  )
 }
 
 /** The bar in the top bar; a click opens the Progress tab. */

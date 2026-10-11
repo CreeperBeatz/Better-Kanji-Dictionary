@@ -65,6 +65,12 @@ def progress(_: dict = Depends(reviewer)) -> dict:
     return review.progress()
 
 
+@router.get("/verified")
+def verified() -> dict:
+    """Public: the share of kanji reviewers have fully checked, for the account popup."""
+    return review.verified()
+
+
 @router.post("/edit")
 def edit(payload: dict = Body(...), me: dict = Depends(reviewer)) -> dict:
     """A reviewer's own change: live at once, logged."""
