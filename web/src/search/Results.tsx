@@ -24,6 +24,7 @@ import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
 import { Pitch } from './Pitch'
+import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
 
@@ -292,7 +293,13 @@ function WordRowView({
       <button className="word-card" onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
         <span className="word-head">
           <span className="word-forms">{w.headword}</span>
-          {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
+          {w.pitch ? (
+            <Pitch reading={w.reading} pitch={w.pitch} mark={w.mark} />
+          ) : (
+            <span className="word-reading">
+              <MarkedReading reading={w.reading} mark={w.mark} />
+            </span>
+          )}
           <Valency word={w} />
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}

@@ -11,6 +11,7 @@ import { StrokeOrder } from './StrokeOrder'
 import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency } from '../search/Valency'
+import { MarkedReading } from '../search/MarkedReading'
 import { Readings, SpecialReadings } from './Readings'
 import { Meanings } from './MeaningCards'
 
@@ -211,7 +212,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
         <span className="vocab-word">{w.headword}</span>
         <span className="vocab-reading">
-          <Reading w={w} />
+          <MarkedReading reading={w.reading} mark={w.mark} />
         </span>
         <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
         <Valency word={w} />
@@ -354,19 +355,6 @@ function keyWords(ws: Word[], special: Set<number>, max: number): Word[] {
   const left = ws.filter((w) => !special.has(w.id))
   const key = left.filter((w) => w.common && ((w.jlpt != null && w.jlpt >= 2) || (w.nf != null && w.nf <= 8)))
   return (key.length ? key : left.slice(0, 1)).slice(0, max)
-}
-
-/** A word's reading with the page's kanji's own kana marked: じょう in じょうしょう, あ in あげる. */
-function Reading({ w }: { w: Word }) {
-  if (!w.mark) return <>{w.reading}</>
-  const [from, to] = w.mark
-  return (
-    <>
-      {w.reading.slice(0, from)}
-      <span className="reading-here">{w.reading.slice(from, to)}</span>
-      {w.reading.slice(to)}
-    </>
-  )
 }
 
 /** KANJIDIC's grade: 1-6 the school year, 8 the rest of the jōyō, 9 and 10 name kanji. */

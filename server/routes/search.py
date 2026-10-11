@@ -642,6 +642,21 @@ def words_for_kanji(char: str, limit: int = Query(12, ge=1, le=60)) -> dict:
     }
 
 
+def _marked(char: str, words: dict[int, dict]) -> dict[int, dict]:
+    """The words, each with the kana of its reading that are `char`'s marked (`mark`,
+    [from, to)): じょう in じょうしょう. Left as they are on a database from before
+    the readings stage (pipeline/readings.py)."""
+    if not words or not query_one("SELECT 1 FROM sqlite_master WHERE name = 'word_reading'"):
+        return words
+    ids = list(words)
+    for r in query(
+        f"SELECT word_id, at, kana FROM word_reading WHERE char = ? AND main = 1 AND word_id IN ({','.join('?' * len(ids))})",
+        (char, *ids),
+    ):
+        words[r["word_id"]]["mark"] = [r["at"], r["at"] + len(r["kana"])]
+    return words
+
+
 @router.get("/words-with/{char}")
 def words_with(
     char: str,
@@ -680,14 +695,14 @@ def words_with(
         for wid in ids:
             if wid in placed:
                 in_group.setdefault(placed[wid], []).append(wid)
-        fetched = _fetch_words([w for ws in in_group.values() for w in ws])
+        fetched = _marked(char, _fetch_words([w for ws in in_group.values() for w in ws]))
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
             words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
             if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})
     rest = [w for w in ids if w not in placed]
     page = rest[offset:offset + limit]
-    fetched = _fetch_words(page)
+    fetched = _marked(char, _fetch_words(page))
     return {
         "char": char,
         "senses": senses,
