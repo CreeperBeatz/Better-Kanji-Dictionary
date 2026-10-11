@@ -2405,6 +2405,81 @@ def word_senses(char: str) -> dict[int, str]:
     return _placements(_read(), char)
 
 
+# A word's drafted group shows on the site only when both drafting runs put it there this sure;
+# the rest wait, ungrouped, for a later run or a reviewer.
+DRAFT_WORD_MIN = 0.8
+_drafts: tuple[dict | None, dict] = (None, {})
+
+
+def _open_drafts(data: dict) -> dict:
+    """The open drafts the site falls back on, indexed once per state: kanji_senses and
+    kanji_extras by kanji, and each kanji's sure word placements (word id -> group)."""
+    global _drafts
+    if _drafts[0] is data:
+        return _drafts[1]
+    latest: dict[tuple[str, str], dict] = {}
+    words: dict[str, dict[int, str]] = {}
+    for i in data["items"].values():
+        if i["status"] != "open" or i["origin"] != "proposal":
+            continue
+        if (i["type"] == "kanji_senses" and isinstance(i["proposed"], list)
+                or i["type"] == "kanji_extras" and isinstance(i["proposed"], dict)):
+            key = (i["type"], i["subject"])
+            if key not in latest or i["created"] > latest[key]["created"]:
+                latest[key] = i
+        elif i["type"] == "word_sense" and isinstance(i["proposed"], str):
+            ev = i.get("evidence") if isinstance(i.get("evidence"), dict) else {}
+            if ev.get("agree") and (ev.get("confidence") or 0) >= DRAFT_WORD_MIN:
+                char, wid = i["subject"].split("|")
+                words.setdefault(char, {})[int(wid)] = i["proposed"]
+    index = {"senses": {s: i["proposed"] for (t, s), i in latest.items() if t == "kanji_senses"},
+             "extras": {s: i["proposed"] for (t, s), i in latest.items() if t == "kanji_extras"},
+             "words": words}
+    _drafts = (data, index)
+    return index
+
+
+def _clean_draft(drafts: dict, type_: str, char: str, data: dict) -> Any:
+    """A kanji's open draft of `type_`, cleaned as an accepted value would be (once per state);
+    None when there is none or it doesn't pass."""
+    key = "senses" if type_ == "kanji_senses" else "extras"
+    clean = drafts.setdefault("clean", {})
+    if (type_, char) not in clean:
+        raw = drafts[key].get(char)
+        try:
+            clean[(type_, char)] = None if raw is None else validate(type_, char, raw, data)
+        except AppError:
+            clean[(type_, char)] = None
+    return clean[(type_, char)]
+
+
+def site_meanings(char: str) -> dict:
+    """A kanji's meaning groups, its words in them and its extras, as the site shows them.
+
+    What reviewers accepted, and where they haven't yet, the open AI drafts (Dani, 2026-10-11:
+    a dictionary that is 98% right with every feature beats one that is 100% right with half).
+    `draft` says which parts are unreviewed, for the page to mark. A drafted word is placed only
+    when it is sure (`DRAFT_WORD_MIN`, both runs agreeing) and its group is among the groups
+    shown; an accepted placement always wins.
+    """
+    with _lock:
+        data = _current()
+        drafts = _open_drafts(data)
+    senses = _senses(data, char)
+    draft_senses = senses is None and _clean_draft(drafts, "kanji_senses", char, data) is not None
+    if draft_senses:
+        senses = _clean_draft(drafts, "kanji_senses", char, data)
+    placed = _placements(data, char) if senses else {}
+    ids = {s["id"] for s in senses or []} | {CATCH_ALL}
+    drafted = {w: g for w, g in drafts["words"].get(char, {}).items() if senses and w not in placed and g in ids}
+    extras = extras_of(char, data)
+    draft_extras = extras is None and _clean_draft(drafts, "kanji_extras", char, data) is not None
+    if draft_extras:
+        extras = _clean_draft(drafts, "kanji_extras", char, data)
+    return {"senses": senses, "placed": {**drafted, **placed}, "extras": extras,
+            "draft": {"senses": draft_senses, "words": len(drafted), "extras": draft_extras}}
+
+
 def _form_link_rows(subject: str, v: dict) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
     """What an accepted form link does to the built ones: the (char, other) rows
     it adds -- none for "none", both ways round for a positional form, from b

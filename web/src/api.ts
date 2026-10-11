@@ -774,7 +774,12 @@ export interface WordsWithResponse {
   /** One per accepted group, the catch-all (`catch-all`) last when it has words. */
   groups: (MeaningGroup & { words: Word[] })[]
   rest: { total: number; offset: number; words: Word[] }
+  /** What is the AI's open draft, not reviewed yet: the groups, how many placed words, the extras. */
+  draft?: { senses: boolean; words: number; extras: boolean }
 }
+
+/** Whether a kanji's groups, or any word in them, are the AI's unreviewed draft. */
+export const isDraft = (d: WordsWithResponse | null | undefined) => !!d?.draft && (d.draft.senses || d.draft.words > 0)
 
 /** One handwriting candidate. `score` is 0-100 agreement, not a probability. */
 export interface DrawCandidate {

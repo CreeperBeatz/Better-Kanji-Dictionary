@@ -10,7 +10,7 @@
  * knows only the kanji's most common words, so those are shown, and said to be.
  */
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
+import { api, isDraft, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 import { toggled } from '../sets'
@@ -28,6 +28,8 @@ const S = strings(
     loading: 'looking',
     noMeaning: '{char} brings no meaning to these words',
     noMeaningHint: 'for sound-only spellings (ateji: 合羽 カッパ, 珈琲), whole-word spellings the separate kanji don’t explain (生姜, 百合, 生憎) and wordplay (米寿: 米 as 八十八)',
+    draft: 'Grouped by AI, not checked yet.',
+    draftHint: 'A reviewer will check these groups. Until then, some words can be in the wrong group. Words the AI was not sure about are not in a group.',
   },
   {
     title: 'Думи с {char}',
@@ -41,6 +43,8 @@ const S = strings(
     loading: 'търсене',
     noMeaning: '{char} не внася значение в тези думи',
     noMeaningHint: 'за изписвания само по звук (атеджи: 合羽 カッパ, 珈琲), изписвания на цяла дума, които отделните канджи не обясняват (生姜, 百合, 生憎), и игра на знаци (米寿: 米 като 八十八)',
+    draft: 'Групирано от ИИ, още непроверено.',
+    draftHint: 'Рецензент ще провери тези групи. Дотогава някои думи може да са в грешна група. Думите, за които ИИ не е бил сигурен, са извън групите.',
   },
 )
 
@@ -167,6 +171,11 @@ export function WordsWith({
           {data && (
             <p className="hint">
               {t('count', { n: total })} · {offline ? t('offline') : senses ? t('byMeaning', { char }) : t('notYet', { char })}
+            </p>
+          )}
+          {!offline && isDraft(data) && (
+            <p className="hint draft-mark" title={t('draftHint')}>
+              {t('draft')}
             </p>
           )}
 

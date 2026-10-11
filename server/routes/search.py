@@ -651,16 +651,18 @@ def words_with(
 ) -> dict:
     """Every word written with `char`, for the search's `*生*`.
 
-    Divided by the meaning of the kanji each word uses, once reviewers have
-    accepted the kanji's meaning groups and placed the word (server/review.py):
-    one list per group, the catch-all last, all at once since they are the
-    reviewed few. The words not placed yet follow, common first, a page at a
-    time. Before any group is accepted, that second list is all there is.
+    Divided by the meaning of the kanji each word uses: the groups reviewers
+    accepted, else the AI's draft of them, with the words placed in them
+    (accepted, or drafted and sure; server/review.py `site_meanings`). One list
+    per group, the catch-all last, all at once. The words not placed follow,
+    common first, a page at a time. With no groups at all, that list is all
+    there is. `draft` says what is unreviewed, for the page to mark it.
     """
     from .. import review
 
     if len(char) != 1:
-        return {"char": char, "senses": None, "groups": [], "rest": {"total": 0, "offset": 0, "words": []}}
+        return {"char": char, "senses": None, "groups": [], "rest": {"total": 0, "offset": 0, "words": []},
+                "draft": {"senses": False, "words": 0, "extras": False}}
     rows = query(
         "SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id "
         # Only words whose headword shows the kanji: 夫 is filed under 人 for its
@@ -670,8 +672,8 @@ def words_with(
         (char, char),
     )
     ids = [r["id"] for r in rows]
-    senses = review.senses_of(char)
-    placed = review.word_senses(char) if senses else {}
+    meanings = review.site_meanings(char)
+    senses, placed = meanings["senses"], meanings["placed"]
     groups = []
     if senses:
         in_group: dict[str, list[int]] = {}
@@ -689,8 +691,9 @@ def words_with(
     return {
         "char": char,
         "senses": senses,
-        # The kanji's reviewed origin, how its groups link, the kanji it is easy to mix up with.
-        "extras": review.extras_of(char),
+        # How its groups link, the kanji it is easy to mix up with.
+        "extras": meanings["extras"],
+        "draft": meanings["draft"],
         "kokuji": char in review.kokuji(),
         "groups": groups,
         "rest": {"total": len(rest), "offset": offset, "words": [fetched[w] for w in page if w in fetched]},

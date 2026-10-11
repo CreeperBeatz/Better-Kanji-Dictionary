@@ -8708,6 +8708,14 @@ button.review-part {
   white-space: nowrap;
 }
 
+/* "Grouped by AI, not checked yet.": the groups are an unreviewed draft. */
+.draft-mark {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  font-style: italic;
+  cursor: help;
+}
+
 .words-with-head {
   display: flex;
   align-items: center;
