@@ -26,6 +26,7 @@ UA = {"User-Agent": "BetterRTK-Explorer/0.1 (personal kanji study tool)"}
 # rather than pinning, so KRADFILE/KANJIDIC2 stay current.
 JMDICT_SIMPLIFIED_API = "https://api.github.com/repos/scriptin/jmdict-simplified/releases/latest"
 KANJIVG_API = "https://api.github.com/repos/KanjiVG/kanjivg/releases/latest"
+FURIGANA_API = "https://api.github.com/repos/Doublevil/JmdictFurigana/releases/latest"
 
 # name -> (filename, url or callable resolving to url, note)
 SOURCES = {
@@ -58,6 +59,9 @@ SOURCES = {
         "word dictionary, raw XML for nf01-nf48 ranks",
     ),
     "kanjivg": ("kanjivg.xml.gz", "@kanjivg:xml", "stroke paths + component->stroke mapping"),
+    # Which kana of a word's reading go over which kanji: 今日 is きょう over both,
+    # 上手 is じょう + ず. Same licence as JMdict (CC BY-SA 4.0).
+    "jmdict-furigana": ("furigana/JmdictFurigana.json.zip", "@jmdict-furigana:JmdictFurigana.json.zip", "a word's reading split over its kanji"),
     "kanjium": (
         "accents.txt",
         "https://raw.githubusercontent.com/mifunetoshiro/kanjium/master/data/source_files/raw/accents.txt",
@@ -180,7 +184,7 @@ def resolve(url: str) -> str:
     if not url.startswith("@"):
         return url
     repo, _, want = url[1:].partition(":")
-    api = {"jmdict-simplified": JMDICT_SIMPLIFIED_API, "kanjivg": KANJIVG_API}[repo]
+    api = {"jmdict-simplified": JMDICT_SIMPLIFIED_API, "kanjivg": KANJIVG_API, "jmdict-furigana": FURIGANA_API}[repo]
     if repo not in _release_cache:
         _release_cache[repo] = _get_json(api)
     release = _release_cache[repo]
@@ -189,6 +193,9 @@ def resolve(url: str) -> str:
         if repo == "kanjivg":
             # kanjivg-20260714.xml.gz -- the single-file form, not the SVG zips
             if name.endswith(".xml.gz"):
+                return asset["browser_download_url"]
+        elif repo == "jmdict-furigana":
+            if name == want:
                 return asset["browser_download_url"]
         elif name.startswith(want) and name.endswith(".json.zip"):
             return asset["browser_download_url"]

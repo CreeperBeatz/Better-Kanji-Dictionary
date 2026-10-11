@@ -185,6 +185,26 @@ export interface Word {
   inflection?: string[]
 }
 
+/** One of a kanji's readings on its page (server: search.kanji_readings). */
+export interface ReadingInfo {
+  /** The word the reading forms on its own: 上げる for あ.げる. */
+  formed: Word | null
+  /** How many common words read the kanji this way; none marks a rare reading. */
+  common: number
+  /** The commonest of them, JLPT words first, the formed word left out. */
+  examples: Word[]
+}
+
+export interface KanjiReadings {
+  char: string
+  /** By the reading with its dashes dropped: あ.げる, じょう. */
+  readings: Record<string, ReadingInfo>
+  /** Words that read it in a way of their own: 今日 きょう under 今. One word each. */
+  special: Word[]
+  /** KANJIDIC's classical radical, by its Kangxi number. */
+  radical: { char: string; number: number; meanings: string[]; meaningsBg: string[] | null } | null
+}
+
 export interface KanjiHit {
   char: string
   meanings: string[]
@@ -1002,6 +1022,9 @@ export const api = {
       ['offset', String(offset)],
       ['limit', String(limit)],
     ]),
+
+  /** What the kanji page shows of its readings: examples, special readings, the radical. Server only. */
+  kanjiReadings: (char: string) => get<KanjiReadings>(`/api/search/kanji-readings/${encodeURIComponent(char)}`),
 
   /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
   readingWords: (char: string) =>

@@ -472,6 +472,139 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-variant-numeric: tabular-nums;
 }
 
+/* A kanji's page: links to its parts, at its top. */
+.page-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 14px;
+  font-size: 12px;
+}
+
+.page-sections button {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.page-sections button:hover,
+.page-sections button:focus-visible {
+  color: var(--paper);
+}
+
+.see-components + .page-sections {
+  margin-top: 12px;
+}
+
+.page-sections + .facts {
+  margin-top: 14px;
+}
+
+.kanji-page [data-section] {
+  scroll-margin-top: 12px;
+}
+
+.facts-radical {
+  font-family: var(--mincho);
+  font-size: 15px;
+  color: var(--paper);
+}
+
+/* Its readings, one line each: the reading, what the word it forms means,
+   が or を, and the commonest words read that way. Each group's lines share
+   one grid, so the readings line up. */
+.readings {
+  margin-top: 18px;
+}
+
+.readings h3 {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.reading-group {
+  display: grid;
+  grid-template-columns: 2.4em 1fr;
+  gap: 0 10px;
+  align-items: baseline;
+}
+
+.reading-group + .reading-group {
+  margin-top: 8px;
+}
+
+.reading-kind {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.reading-group ul {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 14px;
+  align-items: baseline;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reading-row {
+  display: contents;
+}
+
+.reading-kana {
+  font-family: var(--mincho);
+  font-size: 15px;
+  color: var(--paper);
+  white-space: nowrap;
+}
+
+/* The okurigana: written in kana after the kanji, not read off it. */
+.reading-kana .okuri {
+  color: var(--muted);
+}
+
+.reading-about {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
+.reading-example {
+  padding: 0;
+  font-family: var(--mincho);
+  font-size: 14px;
+  color: var(--paper);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--faint);
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.reading-example:hover,
+.reading-example:focus-visible {
+  color: var(--ai);
+  border-bottom-color: var(--ai);
+}
+
+/* A reading no common word has: there, but quiet. */
+.reading-row[data-rare] .reading-kana,
+.reading-row[data-rare] .reading-kana .okuri,
+.reading-row[data-rare] .yomi-link,
+.reading-row[data-rare] .reading-about {
+  color: var(--faint);
+}
+
+.special-readings .hint {
+  margin: -4px 0 6px;
+}
+
 /* ---------------------------------------------------------------- graph */
 
 .graph-svg {

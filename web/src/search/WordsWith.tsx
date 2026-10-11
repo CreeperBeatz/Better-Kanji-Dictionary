@@ -45,7 +45,8 @@ const S = strings(
 )
 
 // Words shown per group at first, and how many more each "more" shows.
-const PAGE = 30
+const FIRST = 8
+const MORE = 20
 const REST = 'rest'
 
 /**
@@ -123,7 +124,7 @@ export function WordsWith({
     let stale = false
     setData(null)
     setOffline(false)
-    api.wordsWith(char, common, 0, PAGE).then(
+    api.wordsWith(char, common, 0, FIRST).then(
       (d) => !stale && setData(d),
       () =>
         // No server: the device's few most common words for the kanji, as one list.
@@ -145,7 +146,7 @@ export function WordsWith({
     if (!data) return
     setMore(true)
     try {
-      const next = await api.wordsWith(char, common, data.rest.words.length, PAGE)
+      const next = await api.wordsWith(char, common, data.rest.words.length, MORE)
       setData((d) => d && { ...d, rest: { ...next.rest, words: [...d.rest.words, ...next.rest.words] } })
     } finally {
       setMore(false)
@@ -176,7 +177,7 @@ export function WordsWith({
       {!data && <p className="hint">{t('loading')}</p>}
 
       {data?.groups.map((g) => {
-        const n = shown[g.id] ?? PAGE
+        const n = shown[g.id] ?? FIRST
         return (
           <div key={g.id} className="meaning-group" data-shut={shut.has(g.id) || undefined}>
             {head(
@@ -192,7 +193,7 @@ export function WordsWith({
               <>
                 <ol className="words">{g.words.slice(0, n).map((w) => row(w))}</ol>
                 {g.words.length > n && (
-                  <button className="clear words-more" onClick={() => setShown({ ...shown, [g.id]: n + PAGE })}>
+                  <button className="clear words-more" onClick={() => setShown({ ...shown, [g.id]: n + MORE })}>
                     {t('more')} ({g.words.length - n})
                   </button>
                 )}
