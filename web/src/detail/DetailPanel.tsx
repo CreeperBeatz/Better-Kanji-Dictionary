@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
+import { api, onDataChanged, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { KanjiMeta } from './HeadMeta'
@@ -98,6 +98,19 @@ interface Props {
 // With no meaning groups, the page shows this many key words; the rest are a search away.
 const PAGE_WORDS = 8
 
+// The pages already fetched, the last few. A phone puts the panel away with
+// every other tab, and a page fetched afresh each time back came in late:
+// the overview at the top pushed everything under it down. A page kept here
+// is drawn at once, and fetched again behind it.
+const PAGES = 40
+const pages = new Map<string, KanjiPage>()
+onDataChanged(() => pages.clear())
+function keepPage(char: string, d: KanjiPage) {
+  pages.delete(char)
+  pages.set(char, d)
+  if (pages.size > PAGES) pages.delete(pages.keys().next().value!)
+}
+
 export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
   const t = S(lang)
   if (n.jlpt) return `JLPT N${n.jlpt}`
@@ -183,7 +196,10 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
     let stale = false
     const char = data.focus.char
     api.kanjiPage(char).then(
-      (d) => !stale && setPage({ char, data: d, full: true }),
+      (d) => {
+        keepPage(char, d)
+        if (!stale) setPage({ char, data: d, full: true })
+      },
       () =>
         api.readingWords(char).then(
           (d) => {
@@ -206,7 +222,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const n = hovered ?? data.focus
   const isPreview = hovered !== null && hovered.char !== data.focus.char
 
-  const here = page?.char === n.char ? page : null
+  const kept = pages.get(n.char)
+  const here = page?.char === n.char ? page : kept ? { char: n.char, data: kept, full: true } : null
   const unit = !isPreview && here && here.data.meanings.length > 0 ? here.data : null
   const special = here?.data.special ?? []
   const vocabRow = (w: Word) => (
