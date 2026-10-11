@@ -790,6 +790,14 @@ def build_sources(db: sqlite3.Connection) -> None:
     decomp_sources.build(db)
 
 
+@stage("readings", "JmdictFurigana + KANJIDIC -> the reading each word gives its kanji, special readings, radicals")
+def build_readings(db: sqlite3.Connection) -> None:
+    """See pipeline/readings.py. Needs the graph and dict stages."""
+    import readings
+
+    readings.build(db)
+
+
 # ---------------------------------------------------------------- driver
 
 

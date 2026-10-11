@@ -2427,7 +2427,8 @@ _drafts: tuple[dict | None, dict] = (None, {})
 
 def _open_drafts(data: dict) -> dict:
     """The open drafts the site falls back on, indexed once per state: kanji_senses and
-    kanji_extras by kanji, and each kanji's sure word placements (word id -> group)."""
+    kanji_extras by kanji, usage cards by reading, and each kanji's sure word
+    placements (word id -> group)."""
     global _drafts
     if _drafts[0] is data:
         return _drafts[1]
@@ -2437,7 +2438,7 @@ def _open_drafts(data: dict) -> dict:
         if i["status"] != "open" or i["origin"] != "proposal":
             continue
         if (i["type"] == "kanji_senses" and isinstance(i["proposed"], list)
-                or i["type"] == "kanji_extras" and isinstance(i["proposed"], dict)):
+                or i["type"] in ("kanji_extras", "usage") and isinstance(i["proposed"], dict)):
             key = (i["type"], i["subject"])
             if key not in latest or i["created"] > latest[key]["created"]:
                 latest[key] = i
@@ -2448,6 +2449,7 @@ def _open_drafts(data: dict) -> dict:
                 words.setdefault(char, {})[int(wid)] = i["proposed"]
     index = {"senses": {s: i["proposed"] for (t, s), i in latest.items() if t == "kanji_senses"},
              "extras": {s: i["proposed"] for (t, s), i in latest.items() if t == "kanji_extras"},
+             "usage": {s: i["proposed"] for (t, s), i in latest.items() if t == "usage"},
              "words": words}
     _drafts = (data, index)
     return index
@@ -2492,6 +2494,16 @@ def site_meanings(char: str) -> dict:
         extras = _clean_draft(drafts, "kanji_extras", char, data)
     return {"senses": senses, "placed": {**drafted, **placed}, "extras": extras,
             "draft": {"senses": draft_senses, "words": len(drafted), "extras": draft_extras}}
+
+
+def site_usage(char: str) -> list[dict]:
+    """The usage cards with a spelling that uses `char` -- 異字同訓, which kanji to
+    write for a shared kun reading: 会う, 合う, 遭う -- as the site shows them:
+    what reviewers accepted, else the open draft."""
+    with _lock:
+        data = _current()
+        cards = {**_open_drafts(data)["usage"], **data["live"]["usage"]}
+    return [c for _, c in sorted(cards.items()) if any(char in s["kanji"] for s in c.get("spellings") or [])]
 
 
 def _form_link_rows(subject: str, v: dict) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:

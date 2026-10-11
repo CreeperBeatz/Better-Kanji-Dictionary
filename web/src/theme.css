@@ -36,6 +36,17 @@
 
   --rail: 384px;
   --ease: cubic-bezier(0.32, 0.72, 0.28, 1);
+
+  /* Every text size up to 26px is this many times its written size: about
+     one pixel up on a desktop; on a phone, a pixel short of Takoboto's. The big
+     glyphs above 26px are sized to their boxes and keep their size. */
+  --type: 1.08;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --type: 1.17;
+  }
 }
 
 *,
@@ -55,7 +66,7 @@ body {
   background: var(--sumi);
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
@@ -272,7 +283,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .rail-section h2 {
   margin: 0 0 12px;
   font-family: var(--gothic);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--paper-dim);
@@ -280,7 +291,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .hint {
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.5;
   margin: 0;
 }
@@ -294,7 +305,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .result {
   font-family: var(--mincho);
-  font-size: 22px;
+  font-size: calc(22px * var(--type));
   line-height: 1;
   width: 38px;
   height: 38px;
@@ -318,7 +329,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .tally {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-variant-numeric: tabular-nums;
 }
 
@@ -327,7 +338,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: none;
   color: var(--ai);
   font-family: var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   cursor: pointer;
   padding: 0;
 }
@@ -354,7 +365,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .detail-meanings {
   font-family: var(--mincho);
-  font-size: 19px;
+  font-size: calc(19px * var(--type));
   line-height: 1.35;
   margin: 2px 0 0;
   color: var(--paper);
@@ -362,13 +373,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .detail-meanings .rest {
   color: var(--paper-dim);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 /* A part's reviewed note: what a shape is in which kanji. */
 .detail-part-note {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.45;
   color: var(--paper-dim);
 }
@@ -397,7 +408,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--ai);
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease);
@@ -412,12 +423,23 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 14px;
 }
 
+.facts-title {
+  margin: 18px 0 0;
+  font-size: calc(12.5px * var(--type));
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.facts-title + .facts {
+  margin-top: 8px;
+}
+
 .facts {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 16px;
   margin: 18px 0 0;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
 }
 
 .facts dt {
@@ -428,18 +450,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 0;
   color: var(--paper-dim);
   font-variant-numeric: tabular-nums;
-}
-
-.facts dd .yomi {
-  font-family: var(--mincho);
-  font-size: 15px;
-  color: var(--paper);
-}
-
-.facts dd.yomi {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 0.9em;
 }
 
 /* A reading that forms a word of its own -- あ.げる, 上げる -- opens it. */
@@ -462,7 +472,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .fanout-line {
   margin: 16px 0 0;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -470,6 +480,441 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-weight: 500;
   color: var(--ai);
   font-variant-numeric: tabular-nums;
+}
+
+/* Its readings, one line each: the reading, what the word it forms means,
+   が or を, and the commonest words read that way. Each group's lines share
+   one grid, so the readings line up. */
+.readings {
+  margin-top: 18px;
+}
+
+.readings h3 {
+  margin: 0 0 8px;
+  font-size: calc(12.5px * var(--type));
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.reading-group {
+  display: grid;
+  grid-template-columns: 2.4em 1fr;
+  gap: 0 10px;
+  align-items: baseline;
+}
+
+.reading-group + .reading-group {
+  margin-top: 8px;
+}
+
+.reading-kind {
+  font-size: calc(12.5px * var(--type));
+  color: var(--muted);
+}
+
+.reading-group ul {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 3px 14px;
+  align-items: baseline;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reading-row {
+  display: contents;
+}
+
+.reading-kana {
+  font-family: var(--mincho);
+  font-size: calc(15px * var(--type));
+  color: var(--paper);
+  white-space: nowrap;
+}
+
+/* The okurigana: written in kana after the kanji, not read off it. */
+.reading-kana .okuri {
+  color: var(--muted);
+}
+
+.reading-about {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+  font-size: calc(12.5px * var(--type));
+  color: var(--paper-dim);
+}
+
+.reading-example {
+  padding: 0;
+  font-family: var(--mincho);
+  font-size: calc(14px * var(--type));
+  color: var(--paper);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--faint);
+  cursor: pointer;
+  transition: color 120ms var(--ease), border-color 120ms var(--ease);
+}
+
+.reading-example:hover,
+.reading-example:focus-visible {
+  color: var(--ai);
+  border-bottom-color: var(--ai);
+}
+
+/* A reading no common word has: there, but quiet. */
+.reading-row[data-rare] .reading-kana,
+.reading-row[data-rare] .reading-kana .okuri,
+.reading-row[data-rare] .yomi-link,
+.reading-row[data-rare] .reading-about {
+  color: var(--faint);
+}
+
+.special-readings .hint {
+  margin: -4px 0 6px;
+}
+
+/* ---------------------------------------------------------------- a kanji's meanings, as one unit */
+
+.meanings {
+  margin-top: 18px;
+}
+
+.meanings > h3 {
+  margin: 0 0 8px;
+  font-size: calc(12.5px * var(--type));
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Every reading at a glance: on, then kun; a rare one faded. */
+.meanings-readings p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin: 0 0 4px;
+}
+
+.meanings-readings .lane-kind {
+  min-width: 2.4em;
+  margin: 0;
+}
+
+.reading-chip {
+  font-family: var(--mincho);
+  font-size: calc(15px * var(--type));
+  color: var(--paper);
+}
+
+.reading-chip .okuri {
+  color: var(--muted);
+}
+
+.reading-chip[data-rare],
+.reading-chip[data-rare] .okuri {
+  color: var(--faint);
+}
+
+.meanings > .meanings-title {
+  margin-top: 18px;
+}
+
+/* In a word's reading, the kana that are this kanji's: じょう in じょうしょう. */
+.reading-here {
+  color: var(--paper);
+  text-decoration: underline;
+  text-decoration-color: var(--ai);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* How the meanings follow from each other: the story of the whole kanji, set
+   in the head's serif, apart from each meaning's own sans explanation. */
+.meanings-link {
+  margin: 4px 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ai);
+  font-family: var(--mincho);
+  font-size: calc(15px * var(--type));
+  line-height: 1.55;
+  color: var(--paper);
+}
+
+/* One meaning: what it is, its words by reading, what is close to it. */
+.meaning {
+  margin-top: 10px;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--sumi-sunk);
+}
+
+.meaning header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.meaning-n {
+  font-size: calc(11.5px * var(--type));
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.meaning h4 {
+  margin: 0;
+  font-size: calc(14px * var(--type));
+  font-weight: 500;
+  color: var(--paper);
+}
+
+.meaning-about {
+  margin: 4px 0 6px;
+  font-size: calc(12.5px * var(--type));
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+
+.meaning-words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A meaning's words by how they read the kanji: kun, then on. Each word
+   says its own reading, so the label names none. */
+.lane {
+  margin-top: 6px;
+}
+
+.lane-kind {
+  margin: 0 0 1px;
+  font-size: calc(11px * var(--type));
+  color: var(--muted);
+}
+
+/* On words of a reading the meaning has only now and then. */
+.lane-now {
+  opacity: 0.55;
+}
+
+.meaning-more {
+  display: block;
+  margin: 2px 0 0;
+  font-size: calc(11.5px * var(--type));
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.meaning-more:hover,
+.meaning-more:focus-visible {
+  color: var(--paper-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.meaning footer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+}
+
+.meaning footer p,
+.meaning-mixups p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 2px 0;
+}
+
+.meaning-aside {
+  font-size: calc(11.5px * var(--type));
+  color: var(--muted);
+}
+
+/* Synonyms: one row a kanji -- the kanji, its keyword, and the
+   meaning of it that is close. */
+.meaning-similar > .meaning-aside {
+  margin: 2px 0;
+}
+
+.meaning-similar ul {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+/* The whole row is one button: it opens the kanji at the shared meaning. */
+.close-row {
+  display: grid;
+  grid-template-columns: auto minmax(5em, auto) 1fr;
+  align-items: baseline;
+  gap: 0 10px;
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 3px 6px;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 120ms var(--ease);
+}
+
+.close-row:hover,
+.close-row:focus-visible {
+  background: var(--sumi-lift);
+}
+
+.close-kanji {
+  font-family: var(--mincho);
+  font-size: calc(17px * var(--type));
+  color: var(--paper);
+}
+
+.close-row:hover .close-kanji,
+.close-row:focus-visible .close-kanji {
+  color: var(--ai);
+}
+
+.close-keyword {
+  font-size: calc(12.5px * var(--type));
+  color: var(--paper);
+}
+
+.close-sense {
+  font-size: calc(12px * var(--type));
+  color: var(--paper-dim);
+}
+
+/* A meaning brought into view from another kanji's page glows a moment. */
+@keyframes meaning-flash {
+  0%,
+  35% {
+    background: color-mix(in srgb, var(--ai-wash) 45%, var(--sumi-sunk));
+    box-shadow: 0 0 0 1px var(--ai-deep);
+  }
+  100% {
+    background: var(--sumi-sunk);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.meaning-flash {
+  animation: meaning-flash 2.2s var(--ease) 0.25s both;
+}
+
+/* A kanji named beside a meaning: close to it, or easy to mix up with it. */
+.kanji-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  font-size: calc(12px * var(--type));
+  color: var(--paper-dim);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.kanji-chip [lang='ja'] {
+  font-family: var(--mincho);
+  font-size: calc(16px * var(--type));
+  color: var(--paper);
+}
+
+.kanji-chip:hover [lang='ja'],
+.kanji-chip:focus-visible [lang='ja'] {
+  color: var(--ai);
+}
+
+.mixup-reading {
+  font-family: var(--mincho);
+  font-size: calc(14px * var(--type));
+  color: var(--paper-dim);
+}
+
+/* Which one to write: the usage card, folded. */
+.usage summary {
+  margin: 2px 0;
+  font-size: calc(11.5px * var(--type));
+  color: var(--ai);
+  cursor: pointer;
+}
+
+.usage-spellings {
+  margin: 4px 0;
+}
+
+.usage-spellings > div {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0 12px;
+  padding: 4px 0;
+}
+
+.usage-spellings > div + div {
+  border-top: 1px dashed var(--rule);
+}
+
+.usage-spellings dt {
+  font-family: var(--mincho);
+  font-size: calc(16px * var(--type));
+  color: var(--paper);
+}
+
+.usage-spellings dd {
+  margin: 0;
+  font-size: calc(12.5px * var(--type));
+  color: var(--paper-dim);
+}
+
+.usage-spellings dd p {
+  margin: 0 0 2px;
+}
+
+.usage-example [lang='ja'] {
+  font-family: var(--mincho);
+  color: var(--paper);
+}
+
+.meaning-plain h4,
+.meaning-mixups h4 {
+  margin: 0;
+  font-size: calc(12.5px * var(--type));
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.meaning-mixups {
+  margin-top: 18px;
+}
+
+.meanings-all {
+  display: inline-block;
+  margin-top: 10px;
+}
+
+/* A kanji's page: each section's title is ruled off, the line across the column. */
+.kanji-page :is(.facts-title, .strokes h3, .readings h3, .meanings > h3, .special-readings > h3, .forms h3, .font-strip h3, .similar-rows h3),
+.kanji-page .vocab-head {
+  margin-bottom: 8px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.kanji-page .vocab-head h3 {
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 /* ---------------------------------------------------------------- graph */
@@ -568,7 +1013,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .node .fanout {
   font-family: var(--gothic);
-  font-size: 10px;
+  font-size: calc(10px * var(--type));
   fill: var(--faint);
   font-variant-numeric: tabular-nums;
 }
@@ -651,7 +1096,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   flex: none;
   min-width: 1.1em;
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
 }
 
 .recent-query-icon {
@@ -669,13 +1114,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
 }
 
 .recent-reading {
   flex: none;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .recent-gloss {
@@ -684,7 +1129,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--paper-dim);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .legend {
@@ -699,7 +1144,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 1px solid var(--rule-bright);
   border-radius: 4px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
   line-height: 1.7;
   pointer-events: none;
@@ -720,7 +1165,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   place-items: center;
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
 }
 
 /* ---------------------------------------------------------------- narrow */
@@ -806,7 +1251,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--type));
 }
 
 .search-input::placeholder {
@@ -858,13 +1303,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .kanji-hit-glyph {
   font-family: var(--mincho);
-  font-size: 25px;
+  font-size: calc(25px * var(--type));
   line-height: 1;
   color: var(--paper);
 }
 
 .kanji-hit-meaning {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
   max-width: 128px;
   overflow: hidden;
@@ -875,7 +1320,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .kanji-hit-fanout {
   display: block;
   color: var(--faint);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-variant-numeric: tabular-nums;
 }
 
@@ -895,7 +1340,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: baseline;
   gap: 4px 8px;
   margin: 0 0 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   letter-spacing: 0.01em;
   color: var(--ai);
@@ -910,7 +1355,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 14px;
   padding: 6px 10px;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   color: var(--ai);
   background: transparent;
   border: 1px solid var(--ai-deep);
@@ -925,7 +1370,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .semantic-ask kbd {
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
   padding: 0 5px;
   border: 1px solid var(--rule-bright);
@@ -939,7 +1384,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .semantic-mark {
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
 }
 
 .semantic-asking {
@@ -954,7 +1399,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .semantic-note {
   margin: 0 0 12px;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   line-height: 1.55;
   color: var(--paper-dim);
 }
@@ -980,7 +1425,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .semantic-why {
   margin: 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.45;
   color: var(--muted);
 }
@@ -1038,15 +1483,41 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .word-forms {
   font-family: var(--mincho);
-  font-size: 21px;
+  font-size: calc(21px * var(--type));
   color: var(--paper);
 }
 
 .word-reading,
 .pitch {
   font-family: var(--mincho);
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   color: var(--paper-dim);
+}
+
+/* The word and its reading, wrapping between them: a long word's reading
+   (アイスクリーム) goes under it whole, rather than squeezed beside it until
+   it stands one kana a line. The marks and "common" stay at the top right. */
+.word-spelling {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.word-spelling > :is(.word-reading, .pitch) {
+  white-space: nowrap;
+}
+
+/* In a result row it takes the room the marks leave, and they line up with
+   its first line -- not the word page's head (.word-head further down). */
+.word-card .word-head {
+  align-items: baseline;
+}
+
+.word-card .word-head > .word-spelling {
+  flex: 1 1 auto;
+  max-width: none;
 }
 
 /* Pitch contour: a high mora carries an overline, the drop closes it off. */
@@ -1066,7 +1537,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .word-common {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
   letter-spacing: 0.04em;
   color: var(--faint);
 }
@@ -1104,7 +1575,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* A noun that takes する: said, not boxed, so it is not read as a third particle. */
 .suru {
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
@@ -1116,7 +1587,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   height: 22px;
   box-sizing: border-box;
   font-family: var(--gothic);
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   font-weight: 700;
   line-height: 20px;
   text-align: center;
@@ -1142,7 +1613,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .valency-small > span {
   width: 16px;
   height: 16px;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
   line-height: 14px;
   border-width: 1px;
   border-radius: 3px;
@@ -1151,7 +1622,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .word-inflection {
   display: block;
   margin: 3px 0 0;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--shu);
   opacity: 0.85;
 }
@@ -1166,7 +1637,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .word-gloss {
   flex: 1;
   min-width: 0;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   color: var(--paper-dim);
   line-height: 1.5;
 }
@@ -1181,7 +1652,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .word-news {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1190,7 +1661,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* Plain text in its level's colour: easy to hard runs green to red. */
 .word-jlpt {
   --level: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-weight: 700;
   letter-spacing: 0.03em;
   color: var(--level);
@@ -1222,7 +1693,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 4px;
   padding: 2px 9px 2px 10px;
   font: inherit;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
   background: none;
   border: 1px solid var(--rule);
@@ -1239,7 +1710,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .sort-pill-caret {
-  font-size: 9px;
+  font-size: calc(9px * var(--type));
   color: var(--muted);
 }
 
@@ -1261,7 +1732,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .sort-menu button {
   padding: 5px 9px;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   text-align: left;
   color: var(--paper-dim);
   background: none;
@@ -1290,7 +1761,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .search-filter {
   padding: 2px 9px;
   font: inherit;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
   background: none;
   border: 1px solid var(--rule);
@@ -1316,7 +1787,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .sense b {
   color: var(--faint);
   font-weight: 400;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   margin-right: 3px;
   vertical-align: 1px;
 }
@@ -1329,7 +1800,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .vocab h3 {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -1338,61 +1809,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-
-/* On a kanji's page, a few words under each of its meaning groups, each
-   group a box of its own whose title bar folds it. */
-.vocab-group {
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  background: var(--sumi-sunk);
-}
-
-.vocab-group + .vocab-group {
-  margin-top: 6px;
-}
-
-.vocab-group h4 {
-  margin: 0;
-  font-size: 12.5px;
-  font-weight: 400;
-  color: var(--paper-dim);
-}
-
-.vocab .vocab-group-toggle {
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 3px;
-}
-
-.vocab-group:not([data-shut]) .vocab-group-toggle {
-  border-bottom: 1px solid var(--rule);
-  border-radius: 3px 3px 0 0;
-}
-
-.vocab-group ul {
-  padding: 4px 10px 6px;
-}
-
-/* "147 hidden, see all words", small, under a group's few. */
-.vocab-group .vocab-hidden {
-  display: block;
-  margin: -2px 10px 7px;
-  font-size: 11.5px;
-  color: var(--muted);
-  text-decoration: none;
-}
-
-/* Quiet until pointed at: a note, not a button. */
-.vocab-group .vocab-hidden:hover,
-.vocab-group .vocab-hidden:focus-visible {
-  color: var(--paper-dim);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.vocab-group .vocab-row {
-  width: calc(100% + 12px);
 }
 
 .vocab-row {
@@ -1404,7 +1820,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 0 -6px;
   padding: 3px 6px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   text-align: left;
   background: none;
   border: 0;
@@ -1419,7 +1835,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .vocab-word {
   font-family: var(--mincho);
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   color: var(--paper);
 }
 
@@ -1474,7 +1890,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   line-height: 1.55;
   padding: 9px 11px;
   resize: vertical;
@@ -1593,14 +2009,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* Markdown in notes: kept small and quiet so it reads as your own jotting,
    not a document dropped into the rail. */
 .md {
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   line-height: 1.6;
   color: var(--paper);
   overflow-wrap: anywhere;
 }
 
 .assoc-part .md {
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -1627,7 +2043,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .md h4 {
   margin: 0.9em 0 0.35em;
   font-family: var(--gothic);
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
@@ -1635,7 +2051,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .md h1 {
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
 }
 
 .md ul,
@@ -1656,7 +2072,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .md code {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   background: var(--sumi-sunk);
   border: 1px solid var(--rule);
   border-radius: 2px;
@@ -1691,7 +2107,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .md table {
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .md th,
@@ -1750,21 +2166,21 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .sketch-head h2 {
   margin: 0;
   margin-right: auto;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
 
 .sketch-char {
   font-family: var(--mincho);
-  font-size: 22px;
+  font-size: calc(22px * var(--type));
   color: var(--paper);
   vertical-align: -2px;
 }
 
 .sketch-done {
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   padding: 5px 16px;
   background: var(--ai-deep);
   color: var(--paper);
@@ -1807,7 +2223,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .assoc-parts h3 {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -1822,14 +2238,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .assoc-part p {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   color: var(--paper-dim);
   line-height: 1.5;
 }
 
 .assoc-part-glyph {
   font-family: var(--mincho);
-  font-size: 24px;
+  font-size: calc(24px * var(--type));
   line-height: 1;
   background: none;
   border: 0;
@@ -1843,7 +2259,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .assoc-author {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
 }
 
@@ -1855,7 +2271,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .strokes h3 {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -1906,7 +2322,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .font-strip h3 {
   margin: 18px 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -1918,6 +2334,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 6px;
   margin: 0;
   padding: 0;
+}
+
+/* The faces with no title of their own, on a kanji's page: the gap a title gave them. */
+.font-strip > ul:first-child {
+  margin-top: 18px;
 }
 
 .font-strip li {
@@ -1943,7 +2364,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .font-strip-label {
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
   text-align: center;
 }
@@ -1975,7 +2396,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .overlay-input {
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
   padding: 11px 13px;
 }
 
@@ -1992,7 +2413,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   padding: 4px 10px;
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease);
@@ -2030,7 +2451,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .bg-head {
   margin: 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -2038,7 +2459,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 8px 12px;
   border-left: 3px solid var(--ai);
   background: var(--sumi);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .bg-groups ul {
@@ -2072,7 +2493,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .bg-group-char {
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
 }
 
 .bg-senses {
@@ -2083,12 +2504,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .bg-en {
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
 }
 
 .bg-pos {
   display: block;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 
@@ -2102,13 +2523,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .bg-was {
   grid-column: 2;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .bg-latin {
   grid-column: 2;
   margin: 0;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .bg-meaning-tools {
@@ -2175,7 +2596,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .overlay-group {
   margin: 18px 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -2197,7 +2618,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   display: grid;
   place-items: center;
   font-family: var(--mincho);
-  font-size: 24px;
+  font-size: calc(24px * var(--type));
   line-height: 1;
   background: transparent;
   border: 1px solid var(--rule);
@@ -2249,7 +2670,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   -webkit-appearance: none;
   appearance: none;
   padding: 9px 34px 9px 12px;
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 .search-input::-webkit-search-cancel-button,
@@ -2276,7 +2697,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 50%;
   background: none;
   color: var(--muted);
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
   line-height: 1;
   cursor: pointer;
 }
@@ -2289,7 +2710,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .searchbar-kbd {
   right: 10px;
   font-family: var(--gothic);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--faint);
   border: 1px solid var(--rule-bright);
   border-radius: 2px;
@@ -2353,11 +2774,25 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   z-index: 20;
 }
 
+/* The page behind the draw pad, blurred and dimmed. Under the bar's own row
+   (z-index -1 in the bar's stacking context), so the box and the pen stay sharp. */
+.drawpop-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(8, 7, 6, 0.4);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  animation: sketch-in 180ms var(--ease);
+}
+
+/* As wide as the pad and its padding, under the pen at the bar's right end:
+   across a wide column it would be mostly empty. */
 .drawpop {
   position: absolute;
   top: calc(100% - 6px);
-  left: 16px;
   right: 16px;
+  width: min(calc(100% - 32px), 330px);
   padding: 10px 14px 12px;
   background: var(--sumi-lift);
   border: 1px solid var(--rule-bright);
@@ -2374,7 +2809,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .drawpop-head h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
@@ -2411,6 +2846,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   width: min(100%, 300px);
   justify-self: center;
   margin: 0;
+  /* Light enough to find in direct sunlight: where to draw. */
+  border: 2px solid var(--paper-dim);
 }
 
 .drawpop .drawpad-actions {
@@ -2440,7 +2877,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   padding: 5px 12px;
   cursor: pointer;
 }
@@ -2475,9 +2912,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
   /* 16px, or iOS zooms the page when the box is focused. */
   .searchbar .search-input {
-    font-size: 16px;
+    font-size: calc(16px * var(--type));
     padding-top: 10px;
     padding-bottom: 10px;
+  }
+
+  /* The hint stays at the old size, so all of it fits on a 360px phone. */
+  .searchbar .search-input::placeholder {
+    font-size: 16px;
   }
 
   .searchbar-tool {
@@ -2488,10 +2930,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   .drawpop {
     left: 10px;
     right: 10px;
+    width: auto;
   }
 
+  /* As wide as the popup; only a very short screen keeps it smaller. */
   .drawpop .drawpad {
-    width: min(100%, 34vh);
+    width: min(100%, 55vh);
   }
 
 }
@@ -2513,10 +2957,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   pointer-events: auto;
 }
 
+/* Short of room -- a phone -- the controls wrap onto a second line, at the
+   right like the first, rather than running off the screen's left edge. */
 .stage-corner {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 6px 12px;
+  min-width: 0;
 }
 
 .filter {
@@ -2531,7 +2980,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   padding: 3px 8px;
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease);
@@ -2571,7 +3020,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   position: relative;
   padding: 2px 5px 6px;
   font: inherit;
-  font-size: 26px;
+  font-size: calc(26px * var(--type));
   line-height: 1.1;
   color: var(--paper-dim);
   background: none;
@@ -2616,7 +3065,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: transparent;
   color: var(--muted);
   font-family: var(--mincho);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-style: italic;
   line-height: 1;
   cursor: pointer;
@@ -2651,7 +3100,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .account-checked h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
@@ -2671,7 +3120,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .offline h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
@@ -2682,7 +3131,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .offline-meta {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -2706,7 +3155,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 0;
   background: none;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
   cursor: pointer;
 }
@@ -2729,7 +3178,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .about-panel h2 {
   margin: 0 0 12px;
   padding-right: 28px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
@@ -2742,7 +3191,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .about-body h3 {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-weight: 400;
   color: var(--muted);
 }
@@ -2759,7 +3208,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 2px 14px;
   padding: 7px 0;
   border-top: 1px solid var(--rule);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .about-list a {
@@ -2787,7 +3236,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* The level replaces the fan-out under a node while it is hovered. */
 .node-level {
   font-family: var(--gothic);
-  font-size: 10px;
+  font-size: calc(10px * var(--type));
   fill: var(--paper-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -2806,7 +3255,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 3px;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   cursor: pointer;
   transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
 }
@@ -2845,17 +3294,18 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 /* For whoever is still wandering around: there, but quiet, at the row's end.
-   Short of room it wraps in place, rather than dropping below the map. */
+   Short of room it wraps in place, in even lines, rather than dropping below the map. */
 .search-help-link {
   min-width: 0;
   margin-left: auto;
   padding: 0;
   text-align: right;
+  text-wrap: balance;
   background: none;
   border: 0;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -2874,7 +3324,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.55;
 }
 
@@ -2890,7 +3340,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .help-feature h3 {
   margin: 0 0 2px;
   color: var(--paper);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   font-weight: 500;
 }
 
@@ -2913,7 +3363,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 999px;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   cursor: pointer;
 }
 
@@ -2957,7 +3407,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 2px !important;
   padding-left: 23px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .help-how-lead ~ .help-how-steps {
@@ -2978,7 +3428,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--sumi);
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .help-how-button {
@@ -2990,14 +3440,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 999px;
   background: var(--sumi);
   color: var(--ai);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   white-space: nowrap;
 }
 
 .help-also-title {
   margin: 18px 0 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-weight: 400;
 }
 
@@ -3045,7 +3495,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: none;
   border: 0;
   color: var(--muted);
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
   line-height: 1;
   cursor: pointer;
 }
@@ -3071,7 +3521,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .map-card-meaning {
   padding-top: 6px;
   font-family: var(--mincho);
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   color: var(--paper);
 }
 
@@ -3080,7 +3530,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   grid-template-columns: auto 1fr;
   gap: 3px 14px;
   margin: 12px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .map-card-facts dt {
@@ -3096,7 +3546,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .map-card-meta {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .map-card-open {
@@ -3157,14 +3607,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .map-tip span {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.3;
   color: var(--paper);
 }
 
 .map-tip em {
   font-style: normal;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 
@@ -3181,7 +3631,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   background: var(--sumi-sunk);
   border: 1px solid var(--rule);
   border-radius: 2px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--paper-dim);
   white-space: nowrap;
   z-index: 3;
@@ -3202,7 +3652,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .map-absent-glyph {
   font-family: var(--mincho);
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   color: var(--paper);
 }
 
@@ -3212,7 +3662,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   padding: 2px 9px;
   cursor: pointer;
 }
@@ -3240,7 +3690,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 0;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   line-height: 1;
   cursor: pointer;
 }
@@ -3352,7 +3802,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .peek-node .peek-meaning {
   font-family: var(--gothic);
-  font-size: 7.5px;
+  font-size: calc(7.5px * var(--type));
   fill: var(--muted);
 }
 
@@ -3399,7 +3849,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   cursor: pointer;
 }
 
@@ -3410,7 +3860,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .back-glyph {
   font-family: var(--mincho);
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   color: var(--paper);
 }
 
@@ -3448,12 +3898,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   gap: 4px 12px;
   margin: 8px 0 0;
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
   color: var(--paper-dim);
 }
 
 .entry-reading .pitch {
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
 }
 
 .entry-reading .verb-marks {
@@ -3462,7 +3912,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .entry-rank {
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
 }
 
@@ -3488,7 +3938,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: center;
   gap: 6px 10px;
   margin: 10px 0 0;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
 }
 
@@ -3522,11 +3972,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .entry-pair-word {
   font-family: var(--mincho);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 .entry-pair-reading {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -3536,7 +3986,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .entry-senses li {
   padding-left: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--faint);
 }
 
@@ -3546,13 +3996,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .entry-pos {
   margin: 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 
 .entry-gloss {
   margin: 1px 0 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   line-height: 1.5;
   color: var(--paper);
 }
@@ -3570,7 +4020,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0 4px;
   border: 1px solid var(--rule-bright);
   border-radius: 3px;
-  font-size: 9px;
+  font-size: calc(9px * var(--type));
   letter-spacing: 0.06em;
   color: var(--muted);
   vertical-align: 2px;
@@ -3579,20 +4029,20 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .entry-machine {
   margin: 10px 0 0;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 
 .entry-forms {
   margin: 16px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
 }
 
 .entry-form {
   margin-right: 10px;
   font-family: var(--mincho);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -3603,7 +4053,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .entry-kanji h3,
 .entry-examples h3 {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -3660,21 +4110,21 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .entry-kanji-meaning {
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   line-height: 1.35;
   color: var(--paper);
 }
 
 .entry-kanji-level {
   margin-left: 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 
 .entry-kanji-yomi {
   margin-top: 2px !important;
   font-family: var(--mincho);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   color: var(--paper-dim);
   white-space: pre;
 }
@@ -3687,7 +4137,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 5px 0;
   border-top: 1px solid var(--rule);
   font-family: var(--mincho);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   line-height: 1.65;
   color: var(--paper-dim);
 }
@@ -3739,7 +4189,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 50%;
   background: none;
   color: var(--muted);
-  font-size: 20px;
+  font-size: calc(20px * var(--type));
   line-height: 1;
   cursor: pointer;
 }
@@ -3756,7 +4206,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .account-panel h2 {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
   overflow-wrap: anywhere;
@@ -3765,7 +4215,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .account-form label {
   display: block;
   margin-bottom: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
 }
 
@@ -3787,7 +4237,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   padding: 0 12px;
   cursor: pointer;
 }
@@ -3806,7 +4256,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 16px;
   padding: 7px 12px;
   font: inherit;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--paper-dim);
   background: none;
   border: 1px solid var(--rule-bright);
@@ -3838,14 +4288,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .account-or {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
   text-align: center;
 }
 
 .account-problem {
   margin: 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--shu);
 }
 
@@ -3854,7 +4304,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 8px 10px;
   border: 1px dashed var(--rule-bright);
   border-radius: 2px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.5;
   color: var(--paper-dim);
 }
@@ -3876,7 +4326,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   padding: 1px 6px;
   cursor: pointer;
 }
@@ -3899,7 +4349,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   padding: 1px 6px;
   cursor: pointer;
 }
@@ -3931,13 +4381,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .assoc-local-note {
   margin: 10px 0 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   line-height: 1.5;
   color: var(--muted);
 }
 
 .assoc-local-note .clear {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .assoc-image-pending {
@@ -3997,6 +4447,10 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   outline: 2px solid var(--ai);
   outline-offset: 2px;
 }
+.account-install .hint {
+  margin: 6px 0 0;
+}
+
 .account-language {
   display: flex;
   align-items: center;
@@ -4060,7 +4514,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 3px 0 7px;
   background: rgba(12, 10, 9, 0.72);
   color: var(--paper);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   opacity: 0;
   transition: opacity 120ms var(--ease);
 }
@@ -4078,14 +4532,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .profile-who strong {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   font-weight: 500;
   color: var(--paper);
   overflow-wrap: anywhere;
 }
 
 .profile-who span {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -4122,7 +4576,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .profile-handle span {
   padding-left: 11px;
   color: var(--muted);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
 }
 
 .profile-handle .assoc-text {
@@ -4132,7 +4586,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .profile-rule {
   margin: 0;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--shu);
 }
 
@@ -4166,7 +4620,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -4186,7 +4640,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   padding: 1px 7px;
   cursor: pointer;
 }
@@ -4205,7 +4659,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0 6px;
   border: 1px solid var(--rule-bright);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }
@@ -4215,7 +4669,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 12px 14px;
   border: 1px dashed var(--rule);
   border-radius: 4px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.5;
   color: var(--muted);
 }
@@ -4234,7 +4688,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.3;
 }
 
@@ -4260,13 +4714,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 1px solid var(--ai-deep);
   border-radius: 2px;
   color: var(--ai);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
 }
 
 .comment-head time {
   flex: none;
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--faint);
 }
 
@@ -4297,7 +4751,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 999px;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
   cursor: pointer;
@@ -4346,7 +4800,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .reply .md {
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .discussion-more {
@@ -4357,7 +4811,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 3px;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   cursor: pointer;
   transition: color 120ms var(--ease), border-color 120ms var(--ease);
 }
@@ -4384,7 +4838,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .reply-form .assoc-text {
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   resize: none;
 }
 
@@ -4431,7 +4885,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 0;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   cursor: pointer;
   transition: color 120ms var(--ease);
 }
@@ -4478,7 +4932,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 1px solid var(--rule-bright);
   border-radius: 999px;
   color: var(--paper-dim);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }
@@ -4517,7 +4971,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border: 0;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   line-height: 1.55;
   resize: none;
 }
@@ -4581,7 +5035,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   cursor: pointer;
 }
 
@@ -4660,7 +5114,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   flex: 1;
   min-width: 0;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   padding: 5px 8px;
   background: var(--sumi);
   color: var(--paper);
@@ -4716,7 +5170,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .gifpicker-note {
   margin: 6px 2px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -4727,7 +5181,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .gifpicker-credit {
   margin: 0;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .gifpicker-credit a {
@@ -4751,7 +5205,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   bottom: 4px;
   padding: 0 4px;
   font-family: var(--gothic);
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--type));
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--paper);
@@ -4769,12 +5223,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .composer-local {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
 }
 
 .composer-local .clear {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .composer-post {
@@ -4784,7 +5238,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   cursor: pointer;
 }
 
@@ -4820,7 +5274,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   line-height: 1.6;
 }
 
@@ -4906,12 +5360,12 @@ html {
 }
 
 .page-head .detail-meanings {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   margin: 0;
 }
 
 .page-head .detail-meanings .rest {
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .page-head .rail-section .entry-head {
@@ -4932,6 +5386,28 @@ html {
 .word-head > :first-child {
   flex: none;
   max-width: 62%;
+}
+
+.word-head[data-long] {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  row-gap: 8px;
+}
+
+.word-head[data-long] > :first-child {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
+.word-head[data-long] .detail-meanings {
+  order: 1;
+  flex-basis: 100%;
+}
+
+/* Too long for a line, it breaks where Japanese breaks: never before ー or a small kana. */
+.entry-head {
+  line-break: strict;
 }
 
 .word-head .detail-meanings {
@@ -4970,7 +5446,7 @@ html {
   border: 0;
   color: var(--paper-dim);
   font-family: var(--gothic);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   cursor: pointer;
 }
 
@@ -5009,7 +5485,7 @@ html {
   left: 75%;
   padding: 0 5px;
   background: var(--sumi-sunk);
-  font-size: 10px;
+  font-size: calc(10px * var(--type));
 }
 
 /* The vermilion mark on the edge it faces the page from, over the tab that is
@@ -5083,11 +5559,15 @@ html {
   }
 }
 
-.hold-card-open {
+/* Side by side: to the dictionary, or make it the centre. */
+.hold-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
 }
 
-/* A right click on the graph, or a press and hold: what else a node does. */
+/* A right click on the graph: what else a node does. */
 .graph-menu {
   position: absolute;
   z-index: 6;
@@ -5116,7 +5596,7 @@ html {
   border-radius: 2px;
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   white-space: nowrap;
   cursor: pointer;
 }
@@ -5156,14 +5636,14 @@ html {
 .hold-card-head p {
   margin: 2px 0 0;
   font-family: var(--mincho);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   line-height: 1.35;
   color: var(--paper);
 }
 
 .hold-card-head p span {
   color: var(--paper-dim);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .hold-card dl {
@@ -5171,7 +5651,7 @@ html {
   grid-template-columns: auto 1fr;
   gap: 2px 12px;
   margin: 10px 0 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .hold-card dt {
@@ -5204,7 +5684,7 @@ html {
 
 .similar-rows h3 {
   margin: 0 0 8px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -5231,7 +5711,7 @@ html {
   border-radius: 3px;
   color: var(--paper);
   font-family: var(--mincho);
-  font-size: 22px;
+  font-size: calc(22px * var(--type));
   line-height: 1;
   cursor: pointer;
 }
@@ -5246,7 +5726,7 @@ html {
   width: 30px;
   height: 30px;
   margin-left: 4px;
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
   vertical-align: middle;
 }
 
@@ -5255,14 +5735,14 @@ html {
 }
 
 .similar-why {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
   white-space: nowrap;
 }
 
 .similar-why:lang(ja) {
   font-family: var(--mincho);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 /* ---------------------------------------------------------------- phone type and touch */
@@ -5279,7 +5759,7 @@ html {
   }
 
   body {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--type));
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -5308,13 +5788,13 @@ html {
   .assoc-parts h3,
   .overlay-group,
   .drawpop-head h2 {
-    font-size: 12px;
+    font-size: calc(12px * var(--type));
   }
 
   /* Search results. */
   .sort-pill-button,
   .search-filter {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
     padding-top: 4px;
     padding-bottom: 4px;
   }
@@ -5347,62 +5827,62 @@ html {
 
   .kanji-hit-meaning {
     max-width: 150px;
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--type));
   }
 
   .kanji-hit-fanout {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
   }
 
   .word-forms {
-    font-size: 19.5px;
+    font-size: calc(19.5px * var(--type));
   }
 
   .word-gloss {
-    font-size: 13px;
+    font-size: calc(13px * var(--type));
   }
 
   .sense b {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
   }
 
   .word-news,
   .word-common,
   .word-jlpt {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
   }
 
   .semantic-note {
-    font-size: 13px;
+    font-size: calc(13px * var(--type));
   }
 
   .level-links button {
     padding: 7px 14px;
-    font-size: 12px;
+    font-size: calc(12px * var(--type));
   }
 
   /* A kanji's page. */
   .page-head .detail-meanings {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--type));
   }
 
   .page-head .detail-meanings .rest {
-    font-size: 12px;
+    font-size: calc(12px * var(--type));
   }
 
   .facts,
   .fanout-line {
-    font-size: 13px;
+    font-size: calc(13px * var(--type));
   }
 
   .vocab-row {
     padding-top: 5px;
     padding-bottom: 5px;
-    font-size: 12px;
+    font-size: calc(12px * var(--type));
   }
 
   .vocab-word {
-    font-size: 15.5px;
+    font-size: calc(15.5px * var(--type));
   }
 
   .vocab-reading {
@@ -5410,53 +5890,53 @@ html {
   }
 
   .suru {
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--type));
   }
 
   .similar-why {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
   }
 
   .similar-why:lang(ja) {
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--type));
   }
 
   /* A word's page. */
   .entry-rank,
   .entry-pos {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
   }
 
   .entry-gloss {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--type));
   }
 
   .entry-senses li {
-    font-size: 11px;
+    font-size: calc(11px * var(--type));
     color: var(--muted);
   }
 
   .entry-kanji-meaning,
   .entry-kanji-yomi {
-    font-size: 13px;
+    font-size: calc(13px * var(--type));
   }
 
   .entry-examples li {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--type));
   }
 
   /* Associations. */
   .composer-text,
   .md {
-    font-size: 13px;
+    font-size: calc(13px * var(--type));
   }
 
   .comment-head {
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--type));
   }
 
   .assoc-part p {
-    font-size: 12px;
+    font-size: calc(12px * var(--type));
   }
 }
 
@@ -5654,7 +6134,7 @@ html {
   .map-zoom button {
     width: 42px;
     height: 42px;
-    font-size: 18px;
+    font-size: calc(18px * var(--type));
     animation: phone-rise 180ms var(--ease) backwards;
   }
 
@@ -5974,7 +6454,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .account-contribute summary,
 .account-contribute h3 {
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
   margin: 0;
@@ -6029,7 +6509,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border-radius: 2px;
   color: var(--paper);
   font: inherit;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   padding: 4px 14px;
   cursor: pointer;
 }
@@ -6052,7 +6532,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border-radius: 2px;
   color: var(--paper-dim);
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   white-space: nowrap;
   cursor: pointer;
 }
@@ -6110,7 +6590,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .progress-card h3 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
@@ -6123,12 +6603,12 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .progress-card .hint {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .progress-big {
   margin: 0;
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 .progress-big b {
@@ -6148,7 +6628,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   grid-template-columns: minmax(180px, 1fr) minmax(120px, 2fr) 230px;
   align-items: center;
   gap: 6px 16px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .progress-stage-name {
@@ -6157,7 +6637,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .progress-stage-name .hint {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .progress-stage > .progress-bar {
@@ -6187,7 +6667,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
 }
 
@@ -6197,7 +6677,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .history-count {
   margin-left: auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 /* Parts: the draw pad under the field, its pick added to the parts. */
@@ -6224,7 +6704,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   width: auto;
   height: auto;
   clip-path: none;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .review-draw {
@@ -6271,7 +6751,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .board-menu-title {
   margin: 2px 8px 4px;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
@@ -6286,7 +6766,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border-radius: 3px;
   color: var(--paper);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   text-align: left;
   cursor: pointer;
 }
@@ -6307,7 +6787,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .board-picked {
   margin-left: auto;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--ai);
   white-space: nowrap;
 }
@@ -6454,18 +6934,18 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border-radius: 50%;
   background: var(--ai-deep);
   color: var(--paper);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   font-weight: 600;
 }
 
 .review-step-title {
-  font-size: 19px;
+  font-size: calc(19px * var(--type));
   font-weight: 600;
 }
 
 .review-step-caret {
   color: var(--muted);
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
 }
 
 .review-step-body {
@@ -6477,7 +6957,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .review-step-done {
   display: block;
   margin: 12px auto 2px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--muted);
 }
 
@@ -6490,7 +6970,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 /* The board's heading outside a card's steps (the page's Edit dialog). */
 .board-top h4 {
   color: var(--paper);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   font-weight: 600;
 }
 
@@ -6679,7 +7159,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .meaning-group-hint {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .meaning-group-hint {
@@ -6687,7 +7167,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .board-count {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 /* Every word in the box confirmed. */
@@ -6707,7 +7187,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 /* The word's page, in a new tab: shown on hover (always on touch screens). */
 .board-open {
   margin-left: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
   text-decoration: none;
   visibility: hidden;
@@ -6741,7 +7221,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .board-skipped {
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
   color: var(--shu);
   white-space: nowrap;
 }
@@ -6752,7 +7232,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   padding: 6px 10px;
   border-left: 3px solid var(--shu);
   background: var(--sumi);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -6784,7 +7264,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border: 0;
   color: var(--muted);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -6849,11 +7329,11 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .board-head {
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
 }
 
 .board-reading {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6873,7 +7353,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .board-gloss {
   grid-column: 1 / -1;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -6881,7 +7361,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .board-empty {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   border: 0;
 }
 
@@ -6921,13 +7401,13 @@ html[data-nav]::view-transition-old(tabs):only-child {
   max-height: calc(100dvh - 120px);
   overflow-y: auto;
   padding: 6px 4px 12px 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   scrollbar-width: thin;
 }
 
 .handbook-toc-title {
   margin: 0 0 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -6968,7 +7448,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .handbook-toc-list ol a {
   padding-left: 20px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-weight: 400;
   color: var(--muted);
 }
@@ -6998,7 +7478,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border: 1px solid var(--rule);
   border-radius: 2px;
   background: var(--sumi-lift);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .handbook-fold summary {
@@ -7014,7 +7494,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .handbook {
   max-width: 720px;
   line-height: 1.7;
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--type));
   color: var(--paper);
 }
 
@@ -7025,7 +7505,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .handbook h1 {
-  font-size: 22px;
+  font-size: calc(22px * var(--type));
   font-weight: 500;
   margin: 4px 0 8px;
 }
@@ -7047,14 +7527,14 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .handbook h2 {
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
   font-weight: 500;
   color: var(--paper);
   margin: 0 0 12px;
 }
 
 .handbook h3 {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   font-weight: 500;
   color: var(--paper);
   margin: 26px 0 6px;
@@ -7095,7 +7575,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   border-collapse: collapse;
   margin: 12px 0 16px;
   width: 100%;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
 }
 
 .handbook th,
@@ -7109,7 +7589,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .handbook th {
   font-weight: 500;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
   border-bottom-color: var(--rule-bright);
 }
@@ -7119,7 +7599,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .handbook code {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   padding: 1px 5px;
   border: 1px solid var(--rule-bright);
   border-radius: 3px;
@@ -7160,13 +7640,13 @@ html[data-nav]::view-transition-old(tabs):only-child {
   flex: 1;
   display: grid;
   gap: 2px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.5;
   color: var(--paper-dim);
 }
 
 .handbook-guide-text b {
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--type));
   font-weight: 500;
   color: var(--paper);
 }
@@ -7269,7 +7749,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .onb-kicker,
 .onb-list h4 {
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-weight: 500;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -7282,7 +7762,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .onb-card h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: calc(24px * var(--type));
   font-weight: 500;
   color: var(--paper);
 }
@@ -7300,7 +7780,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .onb-lead {
   margin: 14px 0 0;
-  font-size: 15.5px;
+  font-size: calc(15.5px * var(--type));
   line-height: 1.65;
   color: var(--paper);
   max-width: 56ch;
@@ -7332,7 +7812,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .onb-list ul {
   margin: 0;
   padding-left: 18px;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   line-height: 1.6;
   color: #d9d1c4;
 }
@@ -7359,7 +7839,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   background: var(--sumi);
   color: var(--paper);
   font-family: var(--gothic);
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 /* The five stages on the overview card: each opens its card. */
@@ -7379,7 +7859,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   background: var(--sumi);
   color: var(--paper-dim);
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.45;
   text-align: left;
   cursor: pointer;
@@ -7389,7 +7869,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .onb-stage b {
   color: var(--paper);
   font-weight: 500;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
 }
 
 .onb-stage:hover,
@@ -7403,7 +7883,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   grid-template-columns: max-content 1fr;
   gap: 8px 16px;
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
 }
 
 .onb-keys dt {
@@ -7418,7 +7898,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .onb-more {
   margin-top: 18px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .onb-finish {
@@ -7512,7 +7992,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
 
   .onb-card h2 {
-    font-size: 20px;
+    font-size: calc(20px * var(--type));
   }
 
   .onb-glyph {
@@ -7538,7 +8018,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .workbench-section h3 {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
   margin: 0 0 8px;
@@ -7573,7 +8053,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 /* ---------------------------------------------------------------- forms */
@@ -7584,7 +8064,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .forms h3 {
   margin: 0 0 6px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -7599,7 +8079,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   gap: 8px;
   padding: 5px 0;
   border-top: 1px solid var(--rule);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .forms-row dt {
@@ -7709,12 +8189,12 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .queue-glyph {
   font-family: var(--mincho);
-  font-size: 19px;
+  font-size: calc(19px * var(--type));
   line-height: 1.2;
 }
 
 .queue-kind {
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 
@@ -7768,7 +8248,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .dict-open {
   display: inline-block;
   padding: 3px 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
   border: 1px solid var(--rule-bright);
   border-radius: 999px;
@@ -7788,7 +8268,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   align-items: baseline;
   justify-content: flex-end;
   gap: 6px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .dict-subject {
@@ -7810,7 +8290,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .queue-meta {
   margin: 4px 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -7824,7 +8304,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   grid-template-columns: max-content 1fr;
   gap: 4px 12px;
   margin: 12px 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .queue-compare dt {
@@ -7838,7 +8318,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .queue-evidence {
   border-top: 1px solid var(--rule);
   padding-top: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .queue-fonts {
@@ -7861,7 +8341,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .queue-side-meaning {
   margin: 4px 0;
   font-family: var(--mincho);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   color: var(--paper);
 }
 
@@ -7886,7 +8366,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .queue-used-was {
   font-family: var(--mincho);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   line-height: 1.3;
   color: var(--paper-dim);
 }
@@ -7917,7 +8397,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   padding: 8px 10px;
   border-left: 2px solid var(--ai);
   background: var(--ai-wash);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.5;
   color: var(--paper);
 }
@@ -7939,7 +8419,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .kinds-info thead th {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
 }
@@ -7990,14 +8470,14 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .book-head {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--muted);
 }
 
 .book-from {
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
 }
 
 .book-name {
@@ -8006,13 +8486,13 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .book-page {
   margin-left: 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .book-ja,
 .book-term .book-ja {
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
 }
 
 .book-term {
@@ -8027,11 +8507,11 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .book-add {
   margin-left: 4px;
   padding: 0 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .book-unsure {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 /* The entry: the book's frame, black on paper. */
@@ -8043,7 +8523,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   background: #f7f4ec;
   color: #111;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.35;
 }
 
@@ -8061,27 +8541,27 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .be-kw {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
   text-transform: uppercase;
 }
 
 .be-alt {
   font-style: italic;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .be-parts {
   margin-left: auto;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .be-pc {
   font-family: 'Klee One', 'UD Digi Kyokasho N-R', var(--mincho);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 .be-lvl {
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
 }
 
 .be-cols {
@@ -8099,7 +8579,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .be-desc {
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   line-height: 1.3;
 }
 
@@ -8139,17 +8619,17 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .be-ja {
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
   white-space: nowrap;
 }
 
 .be-jl {
-  font-size: 10px;
+  font-size: calc(10px * var(--type));
 }
 
 .be-note {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   text-align: justify;
 }
 
@@ -8164,7 +8644,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   background: #f7f4ec;
   color: #111;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.35;
 }
 
@@ -8174,7 +8654,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .bl-ja {
   font-family: 'Yu Gothic', 'Noto Sans JP', sans-serif;
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 @media (max-width: 640px) {
@@ -8233,7 +8713,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .dv-recent .search-filter {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 /* The box keeps the screen's height when zoomed: the page moves inside it. */
@@ -8286,7 +8766,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .book-popup-title {
   color: var(--muted);
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .book-turn,
@@ -8315,7 +8795,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .book-zoom .book-zoom-n {
   min-width: 96px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .book-scan {
@@ -8356,7 +8836,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .queue-word-head {
   font-family: var(--mincho);
-  font-size: 26px;
+  font-size: calc(26px * var(--type));
 }
 
 .queue-word ol {
@@ -8373,25 +8853,25 @@ html[data-nav]::view-transition-old(tabs):only-child {
 .queue-edit h4,
 .queue-evidence h4 {
   margin: 0 0 6px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
 
 .queue-keys {
   margin-left: auto;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
 }
 
 /* The reason field, behind "add a reason". */
 .queue-add-reason {
   justify-self: start;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 /* Why accept is greyed on a meanings card: words left to confirm. */
 .queue-blocked {
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -8400,7 +8880,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   flex-direction: column;
   gap: 4px;
   margin: 8px 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .review-field > span:first-child {
@@ -8421,7 +8901,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
   height: 28px;
   padding: 0 3px;
   font-family: var(--mincho);
-  font-size: 17px;
+  font-size: calc(17px * var(--type));
   color: var(--paper);
   background: var(--sumi);
   border: 1px solid var(--rule);
@@ -8460,7 +8940,7 @@ button.review-part {
 
 .review-parts-input {
   font-family: var(--mincho);
-  font-size: 22px;
+  font-size: calc(22px * var(--type));
   letter-spacing: 0.15em;
 }
 
@@ -8491,7 +8971,7 @@ button.review-part {
 
 .review-pick kbd {
   color: var(--muted);
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   margin-right: 4px;
 }
 
@@ -8499,7 +8979,7 @@ button.review-part {
   list-style: none;
   margin: 8px 0 0;
   padding: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .decisions li {
@@ -8517,7 +8997,7 @@ button.review-part {
 
 .decision-subject {
   font-family: var(--mincho);
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
 }
 
 .decision-change {
@@ -8540,7 +9020,7 @@ button.review-part {
 
 .page-edit-link {
   padding: 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .page-edit-panel {
@@ -8568,7 +9048,7 @@ button.review-part {
 
 .page-edit-section legend {
   padding: 0 4px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .page-edit-section legend label {
@@ -8603,7 +9083,7 @@ button.review-part {
   padding: 8px 10px;
   border-left: 2px solid var(--ai);
   background: var(--ai-wash);
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   line-height: 1.5;
 }
 
@@ -8621,7 +9101,7 @@ button.review-part {
 
 .page-edit-forms {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .page-edit-forms div {
@@ -8640,20 +9120,20 @@ button.review-part {
 
 .page-edit-english {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .page-edit-outcomes {
   margin: 0 0 10px;
   padding-left: 18px;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
 }
 
 .page-edit-groups,
 .page-edit-word-bg {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.7;
 }
 
@@ -8666,12 +9146,12 @@ button.review-part {
   align-items: baseline;
   gap: 12px;
   margin: 4px 0 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .page-edit-char {
   font-family: var(--mincho);
-  font-size: 22px;
+  font-size: calc(22px * var(--type));
   line-height: 1;
 }
 
@@ -8747,7 +9227,7 @@ button.review-part {
 }
 
 .vocab-all {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   white-space: nowrap;
 }
 
@@ -8760,7 +9240,7 @@ button.review-part {
 
 .words-with-head h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   font-weight: 500;
 }
 
@@ -8791,7 +9271,7 @@ button.review-part {
 /* A group's whole title bar folds it away. */
 .meaning-group h3 {
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   font-weight: 500;
   color: var(--paper-dim);
   border-bottom: 1px solid var(--rule);
@@ -8851,6 +9331,41 @@ button.review-part {
   margin-bottom: 0;
 }
 
+/* All words with a kanji: each meaning a box of its own, as on the kanji's
+   page, its title bar ruled off. The words in no group are boxed in dashes:
+   they are not a meaning. One list alone needs no box. */
+.words-with .meaning-group:not([data-rest='alone']) {
+  margin-top: 12px;
+  padding: 0 12px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--sumi-sunk);
+}
+
+.words-with .meaning-group[data-rest='after'] {
+  border-style: dashed;
+  background: none;
+}
+
+.words-with .meaning-group:not([data-rest='alone']) h3 {
+  margin: 0 -12px;
+  padding: 6px 12px 4px;
+  font-size: calc(14px * var(--type));
+  color: var(--paper);
+}
+
+.words-with .meaning-group[data-shut]:not([data-rest='alone']) {
+  padding-bottom: 0;
+}
+
+.words-with .meaning-group[data-shut] h3 {
+  border-bottom: 0;
+}
+
+.words-with .meaning-group .words {
+  margin-top: 10px;
+}
+
 /* Under a search's kanji, once one is open beside it: its words, by meaning. */
 .words-with-open {
   display: block;
@@ -8902,14 +9417,14 @@ button.review-part {
 
 .card-option-why {
   display: block;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   margin-top: 2px;
 }
 
 .card-draft {
   display: block;
   margin-top: 3px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   color: var(--paper-dim);
 }
 
@@ -8920,7 +9435,7 @@ button.review-part {
 /* "Edit": start your own answer from this one; the field opens under it. */
 .card-edit {
   flex: none;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   padding: 0 4px;
 }
 
@@ -8950,7 +9465,7 @@ button.review-part {
 }
 .card-root .card-root-pick {
   padding: 2px 10px;
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
 }
 
 .card-option-wrap > .review-field {
@@ -8959,7 +9474,7 @@ button.review-part {
 
 .card-flags {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .card-link + .card-link {
@@ -8971,7 +9486,7 @@ button.review-part {
 .card-changes h5,
 .card-summary h5 {
   margin: 8px 0 2px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
 }
@@ -8984,12 +9499,12 @@ button.review-part {
 .card-summary ul {
   margin: 2px 0 8px;
   padding-left: 20px;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 /* "Something else is wrong?" on every card (review/ReportButton.tsx). */
 .report-open {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
   padding: 0;
 }
 
@@ -9021,7 +9536,7 @@ button.review-part {
 }
 
 .source-chip {
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   line-height: 1.5;
   padding: 0 6px;
   border: 1px solid var(--rule-bright);
@@ -9039,7 +9554,7 @@ button.review-part {
 
 .source-notes {
   margin: 6px 0 10px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .source-notes > div {
@@ -9075,7 +9590,7 @@ button.review-part {
 
 .workbench-gate h2 {
   margin: 0 0 8px;
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
 }
 
 .workbench-gate-actions {
@@ -9102,7 +9617,7 @@ button.review-part {
   background: none;
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .research-icon {
@@ -9113,7 +9628,7 @@ button.review-part {
 .research-copied {
   flex-basis: 100%;
   text-align: right;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 /* An old form's source, beside the glyph (Unihan, or BKD's own). */
@@ -9127,7 +9642,7 @@ button.review-part {
 }
 
 .card-old-form span[lang] {
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
 }
 
 /* Other dictionaries on a meanings card (review/DictionariesPanel.tsx): each
@@ -9140,7 +9655,7 @@ button.review-part {
   border: 1px solid var(--rule-bright);
   border-radius: 3px;
   color: var(--paper-dim);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   text-align: center;
 }
 
@@ -9157,7 +9672,7 @@ button.review-part {
   border: 1px solid var(--rule);
   border-radius: 3px;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--type));
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -9197,7 +9712,7 @@ button.review-part {
 .dicts-head p {
   flex-basis: 100%;
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--type));
 }
 
 .dicts-away {
@@ -9252,7 +9767,7 @@ button.review-part {
   border: 1px solid #cfa25a;
   border-radius: 3px;
   color: #cfa25a;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
 }
 
 .dict > .book-entry {
@@ -9267,7 +9782,7 @@ button.review-part {
   background: #f7f4ec;
   color: #111;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
   line-height: 1.4;
 }
 
@@ -9276,7 +9791,7 @@ button.review-part {
   padding-bottom: 1px;
   border-bottom: 1px solid #111;
   color: #111;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -9306,12 +9821,12 @@ button.review-part {
   min-width: 2.2em;
   margin-right: 4px;
   color: #555;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .dict-kana {
   color: #555;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .dict-text b {
@@ -9323,7 +9838,7 @@ button.review-part {
   margin-left: 8px;
   color: #2d6a3e;
   font-family: var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   white-space: nowrap;
 }
 
@@ -9345,7 +9860,7 @@ button.review-part {
   border: 1px solid #b8321f;
   border-radius: 2px;
   color: #b8321f;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
 }
 
 
@@ -9366,7 +9881,7 @@ button.review-part {
   background: #fff;
   color: #111;
   font-family: 'Myriad Pro', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  font-size: 13.5px;
+  font-size: calc(13.5px * var(--type));
   line-height: 1.35;
 }
 
@@ -9387,17 +9902,17 @@ button.review-part {
 }
 
 .kd-no {
-  font-size: 20px;
+  font-size: calc(20px * var(--type));
   font-weight: 700;
 }
 
 .kd-skip {
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .kd-core {
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(14px * var(--type));
   letter-spacing: 0.02em;
 }
 
@@ -9405,13 +9920,13 @@ button.review-part {
   margin-top: 2px;
   font-family: 'Kozuka Gothic Pr6N', 'Yu Gothic', var(--gothic);
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(13px * var(--type));
 }
 
 .kd-facts {
   margin-top: 4px;
   color: #444;
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
 }
 
 .kd-box {
@@ -9419,7 +9934,7 @@ button.review-part {
   margin: 8px 0 3px;
   padding: 0 3px;
   border: 1px solid #111;
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
   line-height: 1.3;
   letter-spacing: 0.02em;
 }
@@ -9445,7 +9960,7 @@ button.review-part {
 }
 
 .kd-num {
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
   line-height: 1;
 }
 
@@ -9458,7 +9973,7 @@ button.review-part {
   border-radius: 50%;
   background: #111;
   color: #fff;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
   font-style: italic;
   font-weight: 700;
   line-height: 1.05em;
@@ -9471,7 +9986,7 @@ button.review-part {
 }
 
 .kd-entry .dict-chip {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--type));
 }
 
 .kd-w {
@@ -9488,12 +10003,12 @@ button.review-part {
 
 .kd-ja {
   font-family: 'Kozuka Mincho Pr6N', 'Yu Mincho', var(--mincho);
-  font-size: 16px;
+  font-size: calc(16px * var(--type));
 }
 
 .kd-kana {
   font-family: 'Kozuka Gothic Pr6N', 'Yu Gothic', var(--gothic);
-  font-size: 12px;
+  font-size: calc(12px * var(--type));
   font-weight: 600;
 }
 
@@ -9584,7 +10099,7 @@ button.review-part {
 
 .kd-more .kd-all {
   color: #6b6b6b;
-  font-size: 11px;
+  font-size: calc(11px * var(--type));
 }
 
 /* The books' entries in night colours (Dani, 2026-10-08): on a meanings card always, in the
@@ -9695,12 +10210,12 @@ button.review-part {
 }
 
 .bkd-meanings {
-  font-size: 18px;
+  font-size: calc(18px * var(--type));
   font-weight: 600;
 }
 
 .bkd-readings {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 .bkd-parts {
@@ -9715,7 +10230,7 @@ button.review-part {
 .bkd-entry h5 {
   margin: 14px 0 6px;
   color: var(--paper);
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 .bkd-group {
@@ -9734,7 +10249,7 @@ button.review-part {
 }
 
 .bkd-w {
-  font-size: 15px;
+  font-size: calc(15px * var(--type));
 }
 
 /* The shared card (review/Card.tsx): the dictionaries on top; the footer lets the buttons stick to the item's foot. */

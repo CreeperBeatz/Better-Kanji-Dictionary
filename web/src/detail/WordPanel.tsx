@@ -104,8 +104,9 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
   const lang = useLang()
   const t = S(lang)
   const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], lang).value.split(';').map((g) => g.trim()) : []
+  // From five characters (電子計算機, アイスクリーム) the word wants the row: its sense goes under it.
   return (
-    <div className="word-head">
+    <div className="word-head" data-long={[...w.headword].length >= 5 || undefined}>
       <div>
         <h2 className="entry-head">
           {[...w.headword].map((ch, i) =>

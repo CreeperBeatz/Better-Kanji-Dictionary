@@ -12,6 +12,7 @@ Latin letters -- before English. When romaji wins but the Bulgarian reading
 would have found words too, that reading comes back in `alternatives`.
 """
 
+import functools
 import json
 import re
 import threading
@@ -24,7 +25,7 @@ from .. import bg_overlay
 from .. import bulgarian as bg
 from .. import kanji_parts
 from .. import semantic as sem
-from ..db import get_db, query
+from ..db import get_db, query, query_one
 from ..errors import AppError
 from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_to_kana
 from .auth import require_user
@@ -88,13 +89,14 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
         if w:
             w["forms"].append({"text": r["text"], "kana": bool(r["kana"]), "rare": bool(r["rare"])})
 
+    # One query for every word's accent, not one each: a kanji's page fetches hundreds.
+    heads = sorted({w["headword"] for w in words.values()})
+    pitch = {
+        (r["word"], r["reading"]): r["pitch"]
+        for r in query(f"SELECT word, reading, pitch FROM accent WHERE word IN ({','.join('?' * len(heads))})", tuple(heads))
+    } if heads else {}
     for w in words.values():
-        row = query(
-            "SELECT pitch FROM accent WHERE word = ? AND reading = ? LIMIT 1",
-            (w["headword"], w["reading"]),
-        )
-        if row:
-            w["pitch"] = row[0]["pitch"]
+        w["pitch"] = pitch.get((w["headword"], w["reading"]))
     return words
 
 
@@ -642,6 +644,32 @@ def words_for_kanji(char: str, limit: int = Query(12, ge=1, le=60)) -> dict:
     }
 
 
+@functools.cache
+def _has_readings() -> bool:
+    """Whether the database has the readings stage (pipeline/readings.py): one
+    from before it has no word_reading or classical_radical."""
+    return query_one("SELECT 1 FROM sqlite_master WHERE name = 'word_reading'") is not None
+
+
+def _mark(r) -> list[int]:
+    """Where the kanji's kana are in a word_reading row's reading, [from, to): じょう in じょうしょう."""
+    return [r["at"], r["at"] + len(r["kana"])]
+
+
+def _marked(char: str, words: dict[int, dict]) -> dict[int, dict]:
+    """The words, each with the kana of its reading that are `char`'s marked (`mark`).
+    Left as they are on a database from before the readings stage."""
+    if not words or not _has_readings():
+        return words
+    ids = list(words)
+    for r in query(
+        f"SELECT word_id, at, kana FROM word_reading WHERE char = ? AND main = 1 AND word_id IN ({','.join('?' * len(ids))})",
+        (char, *ids),
+    ):
+        words[r["word_id"]]["mark"] = _mark(r)
+    return words
+
+
 @router.get("/words-with/{char}")
 def words_with(
     char: str,
@@ -680,14 +708,14 @@ def words_with(
         for wid in ids:
             if wid in placed:
                 in_group.setdefault(placed[wid], []).append(wid)
-        fetched = _fetch_words([w for ws in in_group.values() for w in ws])
+        fetched = _marked(char, _fetch_words([w for ws in in_group.values() for w in ws]))
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
             words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
             if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})
     rest = [w for w in ids if w not in placed]
     page = rest[offset:offset + limit]
-    fetched = _fetch_words(page)
+    fetched = _marked(char, _fetch_words(page))
     return {
         "char": char,
         "senses": senses,
@@ -765,6 +793,241 @@ def reading_words(char: str) -> dict:
 
     words = _fetch_words(list(set(best.values())))
     return {"char": char, "words": {r: words[i] for r, i in best.items() if i in words}}
+
+
+# At most: common words beside each reading, special readings, words in each
+# part of a meaning, and words beside a reading a meaning has only now and then.
+READING_EXAMPLES = 2
+SPECIAL_READINGS = 12
+LANE_WORDS = 5
+ALSO_WORDS = 2
+
+
+# Words too common in the meanings' wording to say two meanings are alike.
+_PLAIN = {"the", "and", "for", "with", "that", "this", "its", "from", "something", "thing", "things", "kanji",
+          "word", "words", "also", "can", "one", "are", "into", "out", "being", "more", "such", "has", "have",
+          "what", "who", "which", "when", "where", "used", "use", "says", "names", "covers", "means", "mean"}
+
+
+def _wording(g: dict) -> set[str]:
+    return set(re.findall(r"[a-z]{3,}", f"{g.get('en') or ''} {g.get('about') or ''}".lower())) - _PLAIN
+
+
+def _key_word(w: dict) -> bool:
+    """A word worth showing on a kanji's page: common, and on the N5-N2 lists or
+    among the 4,000 most frequent (nf08)."""
+    return w["common"] and ((w["jlpt"] or 0) >= 2 or (w["nf"] is not None and w["nf"] <= 8))
+
+
+@router.get("/kanji-page/{char}")
+def kanji_page(char: str) -> dict:
+    """A kanji's meanings, readings and words, as its page shows them: one unit.
+
+    `meanings`: each meaning group (review.site_meanings) with what it says and
+    its words by how they read the kanji (pipeline/readings.py): `kun`, the
+    words that read it in Japanese (上げる, 値上げ), and `on`, one part per
+    Chinese reading the meaning has (ジョウ: 上昇, 向上) -- key words, the
+    examples first. A reading the meaning has in only a word or two is `also`,
+    so it does not read as a rule; its special readings are `exceptions`
+    (上手 じょうず under "higher"). `total`: its common words. And the kanji
+    close to it in meaning, and `mixups`: kanji easy to mix up with on one of
+    its readings (挙げる and 揚げる beside 上げる), each with the usage card that
+    tells them apart. `link`: how the meanings follow from each other.
+    `mixups`: those on no meaning's reading. `soundOnly`: words where the kanji is there for its
+    sound (上海). `readings`, keyed by the reading with its dashes dropped
+    (あ.げる, じょう): the word it forms, how many common words read the kanji
+    so, and the commonest of them. `special`: its special readings, the kana
+    going over more than one kanji or matching none of its readings (今日 きょう
+    under 今), one word each. And its classical radical, which the page names only on the radical's own.
+    """
+    from .. import review
+    from .graph import _fetch
+
+    out: dict = {"char": char, "meanings": [], "link": None, "linkBg": None, "mixups": [], "soundOnly": None,
+                 "readings": {}, "special": [], "radical": None}
+    if len(char) != 1:
+        return out
+    formed = {r.strip("-"): w for r, w in reading_words(char)["words"].items()}
+    has_readings = _has_readings()
+    rows = query(
+        "SELECT r.word_id, r.reading, r.kana, r.span, r.written, r.whole, r.main, r.at FROM word_reading r "
+        "JOIN word w ON w.id = r.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
+        "WHERE r.char = ? AND w.common = 1 "
+        "ORDER BY j.level IS NULL, -j.level, w.nf IS NULL, w.nf, LENGTH(r.written), w.id",
+        (char,),
+    ) if has_readings else []
+
+    # --- readings: the words read each way, each as written and read where it
+    # reads the kanji so (一日 いちじつ under じつ); a word as its entry heads it
+    # first: 今日 is きょう before it is こんにち.
+    by_reading: dict[str, list] = {}
+    for r in sorted(rows, key=lambda r: not r["main"]):
+        if r["reading"] is not None:
+            by_reading.setdefault(r["reading"], []).append(r)
+    # The reading each word gives the kanji, as its entry reads it, for the meanings.
+    reading_of = {r["word_id"]: r["reading"] for r in rows if r["main"] and r["reading"] is not None}
+    # Which kana of a word's reading are the kanji's, for the page to mark: じょう in じょうしょう.
+    mark_of = {r["word_id"]: _mark(r) for r in rows if r["main"]}
+
+    # Special readings by the kanji they span and their kana, the commonest first,
+    # each word as its entry writes and reads it: not 良人 おっと, a spelling of 夫.
+    found: dict[tuple[str, str], list] = {}
+    for r in rows:
+        if r["reading"] is None and r["main"]:
+            found.setdefault((r["span"], r["kana"]), []).append(r)
+
+    # Each one once, by a word that is just the span (二十日 はつか, met in
+    # 二百二十日) or the span with okurigana (上手い うまい). One met only
+    # inside longer words (日本 にっぽん in 日本銀行) shows only if its span has nothing else.
+    def own(span: str, rs: list):
+        return next((r for r in rs if r["written"] == span), None) or next(
+            (r for r in rs if r["written"].startswith(span) and is_kana(r["written"][len(span):])), None
+        )
+
+    owned = {key: own(key[0], rs) for key, rs in found.items()}
+    covered = {span for (span, _), r in owned.items() if r}
+    special = []
+    for (span, kana), rs in found.items():
+        if owned[(span, kana)]:
+            special.append(owned[(span, kana)])
+        elif span not in covered:
+            covered.add(span)
+            special.append(min(rs, key=lambda r: (len(r["written"]), r["word_id"])))
+    examples = {
+        reading: [r for r in rs if r["word_id"] != (formed.get(reading) or {}).get("id")][:READING_EXAMPLES]
+        for reading, rs in by_reading.items()
+    }
+
+    # --- meanings: the groups and the common words placed in them.
+    site = review.site_meanings(char)
+    senses, placed, extras = site["senses"] or [], site["placed"], site["extras"] or {}
+    common = [
+        r["id"] for r in query(
+            "SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
+            "WHERE wc.char = ? AND instr(w.headword, ?) > 0 AND w.common = 1 "
+            "ORDER BY j.level IS NULL, -j.level, w.nf IS NULL, w.nf, LENGTH(w.headword), w.id",
+            (char, char),
+        )
+    ]
+    in_group: dict[str, list[int]] = {}
+    for wid in common:
+        if wid in placed:
+            in_group.setdefault(placed[wid], []).append(wid)
+    special_ids = {r["word_id"] for r in special}
+    words = _fetch_words(
+        list({*(w for ws in in_group.values() for w in ws), *special_ids,
+              *(r["word_id"] for rs in examples.values() for r in rs), *(w for s in senses for w in s.get("examples") or [])})
+    )
+    on_row = query_one("SELECT on_yomi FROM kanji WHERE char = ?", (char,))
+    on_readings = {r.strip("-") for r in json.loads((on_row and on_row["on_yomi"]) or "[]")}
+
+    def pick(ids: list[int], first: list[int], n: int = LANE_WORDS) -> list[int]:
+        """`first` that are among `ids`, then the key words; else the commonest. At most `n`."""
+        chosen = [w for w in dict.fromkeys(first) if w in ids]
+        chosen += [w for w in ids if w not in chosen and _key_word(words[w])]
+        return (chosen or ids[:1])[:n]
+
+    # Kanji easy to mix up, by the reading they share, each with the usage card
+    # (異字同訓) for that reading, where there is one; a card can cover two
+    # readings (あがる・あげる).
+    cards = review.site_usage(char)
+    card_of = {r: c for c in cards for r in c["reading"].split("・")}
+    mix: dict[str, list[str]] = {}
+    for m in extras.get("mixups") or []:
+        mix.setdefault(m["reading"], []).append(m["char"])
+    for card in cards:
+        if not any(r in mix for r in card["reading"].split("・")):
+            mix[card["reading"]] = [c for s in card["spellings"] for c in s["kanji"] if c != char and review._is_kanji(c)]
+    nodes = _fetch(sorted({c for cs in mix.values() for c in cs} | {c for s in senses for c in s.get("similar") or []}))
+
+    def lite(c: str) -> dict:
+        n = nodes.get(c) or {}
+        return {"char": c, "meanings": n.get("meanings") or [], "meaningsBg": n.get("meaningsBg")}
+
+    mixups = [
+        {"reading": r, "kanji": [lite(c) for c in dict.fromkeys(cs)], "usage": card_of.get(r.split("・")[0])}
+        for r, cs in mix.items() if cs
+    ]
+
+    def close(c: str, here: dict) -> dict:
+        """A kanji close to this meaning, and which of its own meanings that is: the one
+        that names this kanji back (昇's "rise, ascend" for 上's "go up"), else the
+        one worded most like this one."""
+        groups = [g for g in review.site_meanings(c)["senses"] or [] if g["id"] != review.CATCH_ALL]
+        mine = _wording(here)
+        g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
+            groups, key=lambda g: len(_wording(g) & mine), default=None
+        )
+        return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None}
+
+    def as_here(r) -> dict:
+        """The word as written and read here, which may not be how its entry heads it,
+        with the kanji's kana marked."""
+        return {**words[r["word_id"]], "headword": r["written"], "reading": r["whole"], "mark": _mark(r)}
+
+    def marked(w: int) -> dict:
+        """The word with the kanji's kana in its reading marked, where the readings stage knows them."""
+        return {**words[w], "mark": mark_of.get(w)}
+
+    claimed: set[str] = set()
+    placed_special: set[int] = set()
+    for s in senses:
+        if s["id"] == review.CATCH_ALL:
+            continue
+        ids = in_group.get(s["id"], [])
+        first = s.get("examples") or []
+        by: dict[str, list[int]] = {}
+        for w in ids:
+            if w not in special_ids and w in reading_of:
+                by.setdefault(reading_of[w], []).append(w)
+
+        def ruled(r: str) -> bool:
+            """Whether the meaning has this reading as a rule, not now and then: three
+            of its words or a fifth of them, or the word the reading forms."""
+            ws = by[r]
+            return len(ws) >= 3 or len(ws) * 5 >= len(ids) or (formed.get(r) or {}).get("id") in ws
+
+        kun = [r for r in by if r not in on_readings]
+        kun_ids = [w for w in ids if reading_of.get(w) in kun]
+        formed_here = [formed[r]["id"] for r in kun if formed.get(r)]
+        on = sorted((r for r in by if r in on_readings and ruled(r)), key=lambda r: -len(by[r]))
+        also = [r for r in by if r in on_readings and not ruled(r)]
+        exceptions = [r for r in special if r["word_id"] in ids]
+        placed_special |= {r["word_id"] for r in exceptions}
+        # A reading's kana as a word says it: あ.げる is あげる.
+        kana = {katakana_to_hiragana(r.replace(".", "")) for r in by}
+        here = [m for m in mixups if set(m["reading"].split("・")) & kana and m["reading"] not in claimed]
+        claimed |= {m["reading"] for m in here}
+        # A kanji easy to mix up with it here is not listed again as close in meaning.
+        mixed = {k["char"] for m in here for k in m["kanji"]}
+        out["meanings"].append({
+            "id": s["id"], "en": s.get("en"), "bg": s.get("bg"), "about": s.get("about"), "aboutBg": s.get("aboutBg"),
+            "total": len(ids),
+            "kun": {"words": [marked(w) for w in pick(kun_ids, [*formed_here, *first])]} if kun_ids else None,
+            "on": [{"reading": r, "words": [marked(w) for w in pick(by[r], first)]} for r in on],
+            "also": [{"reading": r, "words": [marked(w) for w in by[r][:ALSO_WORDS]]} for r in also],
+            "exceptions": [as_here(r) for r in exceptions],
+            "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
+            "mixups": here,
+        })
+    sound = [w for w in in_group.get(review.CATCH_ALL, []) if w not in special_ids]
+    if sound:
+        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [])]}
+    out["link"], out["linkBg"] = extras.get("link"), extras.get("linkBg")
+    out["mixups"] = [m for m in mixups if m["reading"] not in claimed]
+
+    for reading in set(by_reading) | set(formed):
+        out["readings"][reading] = {
+            "formed": formed.get(reading),
+            "common": len({r["word_id"] for r in by_reading.get(reading, [])}),
+            "examples": [as_here(r) for r in examples.get(reading, []) if r["word_id"] in words],
+        }
+    # Those no meaning has, at the end; a page with no meanings has them all there.
+    out["special"] = [as_here(r) for r in special if r["word_id"] not in placed_special][:SPECIAL_READINGS]
+    rad = query_one("SELECT number, radical FROM classical_radical WHERE char = ?", (char,)) if has_readings else None
+    if rad:
+        out["radical"] = {"char": rad["radical"], "number": rad["number"]}
+    return out
 
 
 @router.get("/examples/{headword}")

@@ -20,15 +20,19 @@ interface Props {
   below: boolean
   openLabel: string
   onOpen: () => void
+  recentreLabel: string
+  /** Makes it the graph's centre; left out for the centre itself. */
+  onRecentre?: () => void
 }
 
 /**
  * What a touch screen shows when a character is tapped: the same facts a
- * mouse gets by hovering, which on a wide screen land in the rail, and the
- * way to its page. Placed off the finger so the finger does not cover it.
+ * mouse gets by hovering, which on a wide screen land in the rail, the way
+ * to its page, and the way to make it the centre. Placed off the finger so
+ * the finger does not cover it.
  */
 export const HoldCard = forwardRef<HTMLDivElement, Props>(function HoldCard(
-  { node, x, y, width, below, openLabel, onOpen },
+  { node, x, y, width, below, openLabel, onOpen, recentreLabel, onRecentre },
   ref,
 ) {
   const lang = useLang()
@@ -79,9 +83,16 @@ export const HoldCard = forwardRef<HTMLDivElement, Props>(function HoldCard(
           </>
         )}
       </dl>
-      <button className="see-components hold-card-open" onClick={onOpen}>
-        {openLabel}
-      </button>
+      <div className="hold-card-actions">
+        <button className="see-components" onClick={onOpen}>
+          {openLabel}
+        </button>
+        {onRecentre && (
+          <button className="see-components" onClick={onRecentre}>
+            {recentreLabel}
+          </button>
+        )}
+      </div>
     </div>
   )
 })

@@ -198,6 +198,7 @@ CC BY-**NC**-SA unlike the rest of that file and are stripped during the build.
 | KanjiVG | stroke order, and the handwriting reference | CC BY-SA 3.0 |
 | kanjium | pitch accent; lookalike and near-synonym kanji | CC BY-SA 4.0 |
 | Tatoeba | example sentences | CC BY 2.0 FR |
+| JmdictFurigana | which reading a kanji has in each word; special readings | CC BY-SA 4.0 |
 | Kanji Alive | curated meanings | CC BY 4.0 |
 | Bulgarian glosses (machine-translated from JMdict/KANJIDIC) | Bulgarian meanings | CC BY-SA 4.0 |
 | English Wiktionary translation tables | hints for the Bulgarian | CC BY-SA 4.0 |

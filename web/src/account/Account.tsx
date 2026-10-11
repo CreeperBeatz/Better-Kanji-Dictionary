@@ -8,6 +8,7 @@ import { OfflineSetting } from '../local/OfflineSetting'
 import { CheckedNote } from '../review/Progress'
 import { Avatar, squareAvatar } from './Avatar'
 import { GoogleButton } from './GoogleButton'
+import { InstallApp } from './InstallApp'
 import { Overlay } from '../Overlay'
 
 const S = strings(
@@ -211,6 +212,7 @@ export function AccountDialog({
         <span>{t('language')}</span>
         <LangSwitch />
       </p>
+      <InstallApp />
       <OfflineSetting />
       <CheckedNote />
       <Credits />

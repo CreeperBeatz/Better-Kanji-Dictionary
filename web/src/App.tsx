@@ -199,14 +199,17 @@ function initialRailTab(): RailTab {
   }
 }
 
-const TITLE = document.title
+// The page's own name, from index.html. A hot reload runs this again with a
+// page's name already in front ("緑 · …"), so only what follows the last dot counts.
+const TITLE = document.title.split(' · ').pop()!
 
 /**
- * How far a quick flick goes sideways across a page to turn to the next tab.
- * Slower, it takes a third of the way across.
+ * How far a quick flick goes sideways across a page to turn to the next tab,
+ * or down a page at its top to go to the search. Slower, it takes a third of
+ * the way across, or PULL down.
  */
 const SWIPE = 40
-/** How far a page at its top is pulled down to go to the search. */
+/** How far a page at its top is pulled down, slowly, to go to the search. */
 const PULL = 80
 const HAN = /[㐀-䶿一-鿿]/
 
@@ -1049,6 +1052,7 @@ export function App() {
             onAsk={setAsked}
             onMap={browseMap}
             onWordsWith={showWords}
+            railBack={shownUnder !== null}
           />
         )
       case 'level':
@@ -1192,20 +1196,18 @@ export function App() {
       openOverSearch(p)
     })
   }
-  // "All words with 日": the search itself turns to them, by meaning, and the
-  // card stays where it is -- beside it, or on a phone, a tab away. Null turns
-  // it back to its results.
+  // "All words with 日". In the search -- its column beside the card, or the
+  // phone's Search tab -- the search turns to them, by meaning, and the card
+  // stays where it is. From a kanji's page with one page at a time (a phone,
+  // one column), they open over the page, so back, the rail's link or the
+  // browser's, comes to the kanji before the search. Null turns the search
+  // back to its results.
   const showWords = useStable((char: string | null) => {
     const page: Page = char ? { kind: 'search', q, words: char } : { kind: 'search', q }
     setHovered(null)
-    if (split || top.kind === 'search') return rebase(page)
-    if (mobile) {
-      rebase(page)
-      if (!searchShown) tapPhoneTab('search')
-      return
-    }
-    // One column and no tabs: the search is the page.
-    reset(page)
+    if (split || searchShown) return rebase(page)
+    if (top.kind === 'search') return replaceTop(page)
+    push(page)
   })
   const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
   const searchTabWord = useStable((w: Word) => openFromSearchTab(wordPage(w)))
@@ -1253,9 +1255,11 @@ export function App() {
     turns: boolean
     /** Whether the page was at its top, so a pull down is not a scroll. */
     atTop: boolean
-    last: { x: number; at: number }
+    last: { x: number; y: number; at: number }
     /** Sideways speed, px/ms. */
     v: number
+    /** Downward speed, px/ms: a quick flick down opens the search, as one across does. */
+    vy: number
     /** What follows the finger: the pane, or the whole page. */
     moved: HTMLElement | null
   } | null>(null)
@@ -1325,9 +1329,11 @@ export function App() {
       mode: null,
       turns: subject !== null || onSearchPage,
       // The tabs along the bottom turn too, but do not pull.
-      atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop <= 0,
-      last: { x: touch.clientX, at: e.timeStamp },
+      // Under a pixel: on a phone the top can rest at a fraction of one.
+      atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop < 1,
+      last: { x: touch.clientX, y: touch.clientY, at: e.timeStamp },
       v: 0,
+      vy: 0,
       moved: null,
     }
   }
@@ -1348,14 +1354,17 @@ export function App() {
         return
       }
     }
+    const dt = e.timeStamp - s.last.at
+    if (dt > 0) {
+      s.v = 0.7 * ((touch.clientX - s.last.x) / dt) + 0.3 * s.v
+      s.vy = 0.7 * ((touch.clientY - s.last.y) / dt) + 0.3 * s.vy
+    }
+    s.last = { x: touch.clientX, y: touch.clientY, at: e.timeStamp }
     if (s.mode === 'pull') {
       // The search lights up once letting go would open it.
       searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
       return
     }
-    const dt = e.timeStamp - s.last.at
-    if (dt > 0) s.v = 0.7 * ((touch.clientX - s.last.x) / dt) + 0.3 * s.v
-    s.last = { x: touch.clientX, at: e.timeStamp }
     // Past the last tab the page gives a little, and comes back.
     const next = besideTab(dx)
     const el = moverTo(next)
@@ -1372,7 +1381,8 @@ export function App() {
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     const el = s?.moved
     if (s?.mode === 'pull') {
-      if (e.changedTouches[0].clientY - s.y > PULL) typeOver()
+      const dy = e.changedTouches[0].clientY - s.y
+      if (dy > PULL || (s.vy > 0.4 && dy > SWIPE)) typeOver()
       return
     }
     if (s?.mode !== 'turn' || !el) return
@@ -1402,6 +1412,24 @@ export function App() {
     el.style.transform = ''
     slide(el, at, 0, 220)
   }
+  // A pull down at the top is the app's, not the browser's. Chrome would take
+  // it as a scroll with nowhere to go, and a touch that ends a scroll is no
+  // tap: the box is focused, but the keyboard stays down. A sideways swipe
+  // never scrolls (touch-action), which is why that one always worked. React's
+  // touch listeners are passive, so this one is the page's own.
+  useEffect(() => {
+    const el = scroller.current
+    if (!el || !mobile) return
+    function claimPull(e: TouchEvent) {
+      const s = swipe.current
+      const touch = e.touches[0]
+      if (!s?.atTop || s.mode === 'turn' || !touch || !e.cancelable) return
+      const dy = touch.clientY - s.y
+      if (dy > 0 && dy >= Math.abs(touch.clientX - s.x)) e.preventDefault()
+    }
+    el.addEventListener('touchmove', claimPull, { passive: false })
+    return () => el.removeEventListener('touchmove', claimPull)
+  }, [mobile])
   // Pulled down, the page brings up the search: the keyboard comes up with
   // what was searched last selected, so typing starts a new search, Enter
   // goes back to the old one, and putting the keyboard away leaves the page as

@@ -183,6 +183,80 @@ export interface Word {
   senses: Sense[]
   forms: { text: string; kana: boolean; rare: boolean }[]
   inflection?: string[]
+  /** On a kanji's page: which kana of `reading` are that kanji's, [from, to): じょう in じょうしょう. */
+  mark?: [number, number] | null
+}
+
+/** One of a kanji's readings on its page (server: search.kanji_readings). */
+export interface ReadingInfo {
+  /** The word the reading forms on its own: 上げる for あ.げる. */
+  formed: Word | null
+  /** How many common words read the kanji this way; none marks a rare reading. */
+  common: number
+  /** The commonest of them, JLPT words first, the formed word left out. */
+  examples: Word[]
+}
+
+/** A kanji named on another's page: easy to mix up with it, or close in meaning. */
+export interface KanjiLite {
+  char: string
+  meanings: string[]
+  meaningsBg: string[] | null
+}
+
+/** A kanji close to one meaning of another, and which of its own meanings that is. */
+export interface CloseKanji extends KanjiLite {
+  sense: { id: string; en: string | null; bg: string | null } | null
+}
+
+/** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */
+export interface MixUp {
+  /** As a word reads it: あげる; a usage card's may be two, あがる・あげる. */
+  reading: string
+  kanji: KanjiLite[]
+  usage: UsageCard | null
+}
+
+/** One meaning of a kanji on its page, with all that goes with it. */
+export interface KanjiMeaning {
+  id: string
+  en: string | null
+  bg: string | null
+  about: string | null
+  aboutBg: string | null
+  /** All its common words. */
+  total: number
+  /** Its words that read the kanji in Japanese: 上げる, 値上げ. */
+  kun: { words: Word[] } | null
+  /** One part per on reading it has as a rule, the most used first: ジョウ, 上昇 向上. */
+  on: { reading: string; words: Word[] }[]
+  /** On readings it has in only a word or two: 重 チョウ in 重複. */
+  also: { reading: string; words: Word[] }[]
+  /** Its special readings: 上手 じょうず under higher. */
+  exceptions: Word[]
+  /** Kanji close to it in meaning: 昇, 登 for "go up". */
+  similar: CloseKanji[]
+  /** Kanji easy to mix up on one of its readings: 挙げる, 揚げる beside 上げる. */
+  mixups: MixUp[]
+}
+
+/** A kanji's meanings, readings and words, as its page shows them (server: search.kanji_page). */
+export interface KanjiPage {
+  char: string
+  meanings: KanjiMeaning[]
+  /** How its meanings follow from each other. */
+  link: string | null
+  linkBg: string | null
+  /** Kanji easy to mix up on a reading no meaning has. */
+  mixups: MixUp[]
+  /** Words where it is there for its sound: 上海. */
+  soundOnly: { words: Word[] } | null
+  /** By the reading with its dashes dropped: あ.げる, じょう. */
+  readings: Record<string, ReadingInfo>
+  /** Words that read it in a way of their own: 今日 きょう under 今. One word each. */
+  special: Word[]
+  /** KANJIDIC's classical radical, by its Kangxi number. */
+  radical: { char: string; number: number } | null
 }
 
 export interface KanjiHit {
@@ -847,20 +921,31 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
  */
 const keptCaches: Map<unknown, unknown>[] = []
 
-function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): (k: K) => Promise<T> {
+function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): ((k: K) => Promise<T>) & { peek: (k: K) => T | undefined } {
   const answers = new Map<K, Promise<T>>()
-  keptCaches.push(answers)
-  return (k) => {
+  // The answers that have come, to draw at once: a promise is only read a render late.
+  const settled = new Map<K, T>()
+  keptCaches.push(answers, settled)
+  const ask_ = (k: K) => {
     let p = answers.get(k)
     if (p) answers.delete(k) // to the back of the queue, as used just now
     else {
-      p = ask(k)
-      p.catch(() => answers.get(k) === p && answers.delete(k))
+      const asked = ask(k)
+      asked.then(
+        (v) => answers.get(k) === asked && settled.set(k, v),
+        () => answers.get(k) === asked && answers.delete(k),
+      )
+      p = asked
     }
     answers.set(k, p)
-    if (answers.size > size) answers.delete(answers.keys().next().value!)
+    if (answers.size > size) {
+      const oldest = answers.keys().next().value!
+      answers.delete(oldest)
+      settled.delete(oldest)
+    }
     return p
   }
+  return Object.assign(ask_, { peek: (k: K) => settled.get(k) })
 }
 
 const changeListeners = new Set<() => void>()
@@ -1002,6 +1087,9 @@ export const api = {
       ['offset', String(offset)],
       ['limit', String(limit)],
     ]),
+
+  /** A kanji page's meanings, readings and words, and its radical. Server only. */
+  kanjiPage: kept((char: string) => get<KanjiPage>(`/api/search/kanji-page/${encodeURIComponent(char)}`)),
 
   /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
   readingWords: (char: string) =>

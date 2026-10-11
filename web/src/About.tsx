@@ -27,6 +27,7 @@ const S = strings(
     kanjidata: 'JLPT levels, frequency and school grade of kanji',
     kanjium: 'pitch accent; lookalike and near-synonym kanji',
     tatoeba: 'example sentences',
+    furigana: 'which reading a kanji has in each word, and special readings',
     kanjialive: 'curated meanings',
     jlpt: 'JLPT levels of words',
     bulgarian: 'Bulgarian glosses and kanji meanings, machine-translated by Claude from the English',
@@ -52,6 +53,7 @@ const S = strings(
     kanjidata: 'нива от JLPT, честота и учебна година на йероглифите',
     kanjium: 'тонално ударение; приличащи си и близки по значение йероглифи',
     tatoeba: 'примерни изречения',
+    furigana: 'кое четене има канджито във всяка дума, и особените четения',
     kanjialive: 'подбрани значения',
     jlpt: 'нива от JLPT на думите',
     bulgarian: 'българските значения на думи и йероглифи, машинно преведени от английски от Claude',
@@ -92,6 +94,7 @@ const SOURCES: { name: string; what: What; href: string; licence: string }[] = [
   { name: 'cjk-decomp', what: 'decomp', href: 'https://github.com/scriptin/topokanji', licence: 'via topokanji' },
   { name: 'kanjium', what: 'kanjium', href: 'https://github.com/mifunetoshiro/kanjium', licence: 'CC BY-SA 4.0' },
   { name: 'Tatoeba', what: 'tatoeba', href: 'https://tatoeba.org/', licence: 'CC BY 2.0 FR' },
+  { name: 'JmdictFurigana', what: 'furigana', href: 'https://github.com/Doublevil/JmdictFurigana', licence: 'CC BY-SA 4.0' },
   { name: 'Kanji Alive', what: 'kanjialive', href: 'https://github.com/kanjialive/kanji-data-media', licence: 'CC BY 4.0' },
   {
     name: 'JLPT vocabulary lists',

@@ -35,6 +35,16 @@ export function katakanaToHiragana(s: string): string {
   return out
 }
 
+/** On readings are printed in katakana, kun in hiragana: じょう as ジョウ. */
+export function hiraganaToKatakana(s: string): string {
+  let out = ''
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!
+    out += c >= 0x3041 && c <= 0x3096 ? String.fromCodePoint(c + 0x60) : ch
+  }
+  return out
+}
+
 // ---------------------------------------------------------------- romaji
 
 const ROMAJI: Record<string, string> = {
@@ -64,6 +74,11 @@ const ROMAJI: Record<string, string> = {
   pya: 'ぴゃ', pyu: 'ぴゅ', pyo: 'ぴょ',
   mya: 'みゃ', myu: 'みゅ', myo: 'みょ',
   rya: 'りゃ', ryu: 'りゅ', ryo: 'りょ',
+}
+
+/** A reading as the page keys it: the dashes that mark a prefix or suffix dropped (-あ.げる). */
+export function plainReading(r: string): string {
+  return r.replace(/^-+|-+$/g, '')
 }
 
 /** Python's str.strip(): whitespace, including the Unicode kinds. */

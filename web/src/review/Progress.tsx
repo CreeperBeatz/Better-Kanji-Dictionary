@@ -35,7 +35,7 @@ const S = strings(
     loading: 'loading…',
     checkedTitle: 'Not everything here is checked yet',
     checkedHint:
-      'An AI made the first draft of the meaning groups, of which words go in them, and of some parts. Reviewers check each kanji by hand. Until a kanji is checked, some of its data can be wrong.',
+      'Reviewers check each kanji by hand. Until a kanji is checked, some of its data can be wrong.',
     checked: '{n} of {total} kanji checked',
   },
   {
@@ -64,7 +64,7 @@ const S = strings(
     loading: 'зарежда се…',
     checkedTitle: 'Още не всичко тук е проверено',
     checkedHint:
-      'ИИ направи първата чернова на групите от значения, на думите в тях и на някои части. Рецензенти проверяват всяко канджи на ръка. Докато едно канджи не е проверено, някои от данните му може да са грешни.',
+      'Рецензенти проверяват всяко канджи на ръка. Докато едно канджи не е проверено, някои от данните му може да са грешни.',
     checked: '{n} от {total} канджи са проверени',
   },
 )

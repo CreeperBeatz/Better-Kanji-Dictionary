@@ -18,12 +18,14 @@ import {
 } from '../api'
 import { clearHistory, useHistory, type Visit } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
+import { isCommon } from '../similar/why'
 import { ToMap } from '../StageControls'
 import { SearchHelp } from './SearchHelp'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { inflectionLabel } from '../i18n/grammar'
 import type { Level } from '../nav'
 import { Pitch } from './Pitch'
+import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
 
@@ -34,8 +36,9 @@ const S = strings(
     common: 'common',
     commonTitle: 'JMdict marks this as a common word',
     uncommon: 'uncommon',
-    commonOnly: 'Common words only',
-    commonOnlyTitle: 'Leave out words JMdict does not mark as common',
+    commonOnly: 'Common only',
+    commonOnlyTitle:
+      'Leave out words JMdict does not mark as common, and kanji with no newspaper rank, no JLPT level and not jōyō. A kanji you typed stays.',
     sortBy: 'Sort by',
     sortNews: 'Newspaper rank',
     sortNewsTitle: 'Sort by how often newspapers use the word',
@@ -80,8 +83,9 @@ const S = strings(
     common: 'честа',
     commonTitle: 'JMdict отбелязва думата като честа',
     uncommon: 'рядка',
-    commonOnly: 'Само чести думи',
-    commonOnlyTitle: 'Без думите, които JMdict не отбелязва като чести',
+    commonOnly: 'Само чести',
+    commonOnlyTitle:
+      'Без думите, които JMdict не отбелязва като чести, и без канджи без място във вестниците, без ниво JLPT и извън джойо. Канджи, което сте написали, остава.',
     sortBy: 'Подреждане по',
     sortNews: 'Вестници',
     sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
@@ -233,7 +237,7 @@ function SortPill({
   )
 }
 
-// Common words only is the default, so what is stored is the choice to see them all.
+// Common only is the default, so what is stored is the choice to see everything.
 const ALL_WORDS_KEY = 'betterrtk:allWords'
 
 function useCommon(): [boolean, () => void] {
@@ -291,8 +295,16 @@ function WordRowView({
     <li className="word">
       <button className="word-card" onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
         <span className="word-head">
-          <span className="word-forms">{w.headword}</span>
-          {w.pitch ? <Pitch reading={w.reading} pitch={w.pitch} /> : <span className="word-reading">{w.reading}</span>}
+          <span className="word-spelling">
+            <span className="word-forms">{w.headword}</span>
+            {w.pitch ? (
+              <Pitch reading={w.reading} pitch={w.pitch} mark={w.mark} />
+            ) : (
+              <span className="word-reading">
+                <MarkedReading reading={w.reading} mark={w.mark} />
+              </span>
+            )}
+          </span>
           <Valency word={w} />
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
@@ -388,6 +400,8 @@ interface SearchProps {
   words?: string
   /** Turns the search to every word with a kanji, by meaning, or (null) back to its results. */
   onWordsWith?: (char: string | null) => void
+  /** The rail shows a way back above the page (to the kanji the words were opened from): none of its own. */
+  railBack?: boolean
 }
 
 /** How many words a result shows before the rest are added. */
@@ -396,7 +410,7 @@ const FIRST_ROWS = 10
 const PAGE = 30
 const MOST = 1000
 
-export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith }: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith, railBack }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -471,7 +485,8 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
         common={common}
         onKanji={onKanji}
         back={
-          onWordsWith && (
+          onWordsWith &&
+          !railBack && (
             <button className="back-link words-with-back" onClick={() => onWordsWith(null)}>
               <span aria-hidden>←</span> {term ? t('backToResults', { q: term }) : t('backToSearch')}
             </button>
@@ -495,15 +510,18 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       <CommonFilter on={common} onToggle={toggleCommon} t={t} />
     </div>
   )
+  // Common only leaves out rare kanji as the server leaves out rare words,
+  // but never one typed into the box: 翠 searched for is 翠 wanted.
+  const kanji = (result?.kanji ?? []).filter((k) => !common || isCommon(k) || term.includes(k.char))
   // The kanji open beside the list, if it is one this search found.
-  const openKanji = open?.kanji && result?.kanji.some((k) => k.char === open.kanji) ? open.kanji : null
+  const openKanji = open?.kanji && kanji.some((k) => k.char === open.kanji) ? open.kanji : null
 
   const reading = result?.interpretation?.reading
-  const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
+  const empty = !!result && !busy && result.words.length === 0 && kanji.length === 0
   // The query the dictionary answered with nothing -- the one on screen, not the
   // one being typed, so the model is only asked once the dictionary has had its
   // say, and its answer stays up while the next query is on its way.
-  const unmatched = result && result.words.length === 0 && result.kanji.length === 0 ? result.query : null
+  const unmatched = result && result.words.length === 0 && kanji.length === 0 ? result.query : null
   // A question has nothing to match word for word; it is for Search by meaning.
   const question = result?.interpretation?.kind === 'question'
   const nothing = question ? null : <p className="hint">{t('nothing', { q: term })}</p>
@@ -513,7 +531,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   // does not blink on every key.
   return (
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
-      {/* How to order what was found, and whether to show only common words. */}
+      {/* How to order what was found, and whether to show only common words and kanji. */}
       {tools}
       {(reading || alternatives.length > 0) && (
         <p className="hint reading-note">
@@ -528,9 +546,9 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
           ))}
         </p>
       )}
-      {result && result.kanji.length > 0 && (
+      {kanji.length > 0 && (
         <div className="kanji-hits">
-          {result.kanji.map((k) => (
+          {kanji.map((k) => (
             <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open?.kanji === k.char} />
           ))}
         </div>

@@ -4,6 +4,8 @@ import './theme.css'
 import { App } from './App'
 import { pinLang } from './i18n'
 import { startOffline } from './local/local'
+// Caught from the first moment: the browser's offer to install the app.
+import './account/install'
 
 // The dictionary tab (review/BookViewer.tsx), reviewers' second screen: a page of its own, not the app.
 const DictionaryTab = lazy(() => import('./review/BookViewer'))
