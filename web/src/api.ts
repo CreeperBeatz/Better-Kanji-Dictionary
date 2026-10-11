@@ -244,8 +244,8 @@ export interface KanjiPage {
   readings: Record<string, ReadingInfo>
   /** Words that read it in a way of their own: 今日 きょう under 今. One word each. */
   special: Word[]
-  /** KANJIDIC's classical radical, by its Kangxi number; `written` as the kanji has it: 犭 in 犯, of 犬. */
-  radical: { char: string; written: string; number: number; meanings: string[]; meaningsBg: string[] | null } | null
+  /** KANJIDIC's classical radical, by its Kangxi number. */
+  radical: { char: string; number: number } | null
 }
 
 export interface KanjiHit {

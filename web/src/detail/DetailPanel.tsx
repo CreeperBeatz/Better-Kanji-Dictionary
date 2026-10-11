@@ -221,8 +221,9 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   )
 
   const grade = gradeOf(n.grade, t)
-  const radical = here?.data.radical
-  const radicalMeaning = radical && meaningsOf({ meanings: realMeanings(radical.meanings), meaningsBg: radical.meaningsBg }, lang).value[0]
+  // A radical says so, with its number; a kanji that only contains one does not:
+  // its parts are on the graph.
+  const radical = here?.data.radical?.char === n.char ? here.data.radical : null
   // What the meanings already say is not said again below: kanji close in
   // meaning sit in their meaning, and kanji with the same reading under "easy to mix up".
   const saysSimilar = !!unit?.meanings.some((m) => m.similar.length > 0)
@@ -276,25 +277,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         {radical && (
           <>
             <dt>{t('radical')}</dt>
-            <dd>
-              {/* Its number says something only on the radical's own page: 犬 is no. 94. */}
-              {radical.char === n.char || radical.written === n.char ? (
-                t('isRadical', { n: radical.number })
-              ) : (
-                <>
-                  <button className="yomi-link facts-radical" lang="ja" onClick={() => onKanji(radical.written)}>
-                    {radical.written}
-                  </button>
-                  {/* Written as a form of it, as the graph circles a form's root: 犭 (犬). */}
-                  {radical.written !== radical.char && (
-                    <span className="facts-radical-root" lang="ja">
-                      {' '}({radical.char})
-                    </span>
-                  )}
-                  {radicalMeaning && `, ${radicalMeaning}`}
-                </>
-              )}
-            </dd>
+            <dd>{t('isRadical', { n: radical.number })}</dd>
           </>
         )}
       </dl>

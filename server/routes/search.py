@@ -795,7 +795,7 @@ def kanji_page(char: str) -> dict:
     (あ.げる, じょう): the word it forms, how many common words read the kanji
     so, and the commonest of them. `special`: its special readings, the kana
     going over more than one kanji or matching none of its readings (今日 きょう
-    under 今), one word each. And its classical radical.
+    under 今), one word each. And its classical radical, which the page names only on the radical's own.
     """
     from .. import review
     from .graph import _fetch
@@ -954,25 +954,7 @@ def kanji_page(char: str) -> dict:
     out["special"] = [as_here(r) for r in shown if r["word_id"] in words]
     rad = query_one("SELECT number, radical FROM classical_radical WHERE char = ?", (char,)) if has_readings else None
     if rad:
-        from .. import forms
-        from .graph import children_of
-
-        # The radical as the kanji writes it: 犯 has 犭, a form of 犬.
-        parts: set[str] = set()
-        frontier = [char]
-        while frontier:
-            frontier = [c for cs in children_of(frontier).values() for c in cs if c not in parts]
-            parts.update(frontier)
-        roots = forms.roots()
-        written = rad["radical"] if rad["radical"] in parts else next(
-            (c for c in sorted(parts) if roots.get(c) == rad["radical"]), rad["radical"]
-        )
-        node = _fetch([rad["radical"]]).get(rad["radical"])
-        out["radical"] = {
-            "char": rad["radical"], "written": written,
-            "number": rad["number"],
-            "meanings": node["meanings"] if node else [], "meaningsBg": node.get("meaningsBg") if node else None,
-        }
+        out["radical"] = {"char": rad["radical"], "number": rad["number"]}
     return out
 
 
