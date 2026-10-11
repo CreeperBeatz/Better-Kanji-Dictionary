@@ -7,7 +7,8 @@
  * the kanji close to it in meaning, and the kanji easy to mix up on one of
  * its readings, with the 異字同訓 card that tells them apart.
  *
- * Above the cards: how the meanings follow from each other. Below them:
+ * Above the cards: every reading at a glance (a rare one, in no common word,
+ * faded), and how the meanings follow from each other. Below them:
  * words where the kanji is there for its sound, the special readings, and
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
@@ -16,13 +17,14 @@ import type { ReactNode } from 'react'
 import type { KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
-import { SpecialReadings } from './Readings'
+import { ReadingKana, SpecialReadings } from './Readings'
 
 const S = strings(
   {
     title: 'Meanings and readings',
     on: 'On',
     kun: 'Kun',
+    rare: 'Rare: no common word has this reading.',
     exceptions: 'Exceptions',
     exceptionsHint: 'read as one word, not kanji by kanji',
     similar: 'Close in meaning',
@@ -39,6 +41,7 @@ const S = strings(
     title: 'Значения и четения',
     on: 'Он',
     kun: 'Кун',
+    rare: 'Рядко: нито една честа дума няма това четене.',
     exceptions: 'Изключения',
     exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
     similar: 'Близки по значение',
@@ -53,13 +56,19 @@ const S = strings(
   },
 )
 
+const plain = (r: string) => r.replace(/^-+|-+$/g, '')
+
 export function Meanings({
   page,
+  onYomi,
+  kunYomi,
   onKanji,
   onWordsWith,
   row,
 }: {
   page: KanjiPage
+  onYomi: string[]
+  kunYomi: string[]
   onKanji: (c: string) => void
   onWordsWith?: () => void
   /** The page's word row, so words look the same everywhere on it. */
@@ -72,6 +81,29 @@ export function Meanings({
   return (
     <div className="meanings">
       <h3>{t('title')}</h3>
+      <div className="meanings-readings">
+        {(
+          [
+            ['on', onYomi],
+            ['kun', kunYomi],
+          ] as const
+        ).map(
+          ([kind, list]) =>
+            list.length > 0 && (
+              <p key={kind}>
+                <span className="lane-kind">{t(kind)}</span>
+                {[...new Set(list.map(plain))].map((r) => {
+                  const rare = !page.readings[r]?.common
+                  return (
+                    <span key={r} className="reading-chip" lang="ja" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
+                      <ReadingKana r={r} on={kind === 'on'} />
+                    </span>
+                  )
+                })}
+              </p>
+            ),
+        )}
+      </div>
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (

@@ -112,9 +112,10 @@ def furigana() -> dict[tuple[str, str], list[dict]]:
 
 
 def word_readings(db: sqlite3.Connection) -> list[tuple]:
-    """(char, word_id, reading or None, kana, span, written, whole, main) for
-    every kanji in every way a word is written and read: `written`, `whole`.
-    `span` is the kanji the kana go over: the kanji itself, or 今日 for きょう.
+    """(char, word_id, reading or None, kana, span, written, whole, main, at)
+    for every kanji in every way a word is written and read: `written`,
+    `whole`. `span` is the kanji the kana go over: the kanji itself, or 今日
+    for きょう; `at`, where those kana start in `whole`: 2 for しょう in じょうしょう.
     `main`: the entry's first spelling without numerals, read its first way --
     一日 ついたち in the entry headed １日, but not 良人 in the one headed 夫."""
     readings = {
@@ -138,11 +139,13 @@ def word_readings(db: sqlite3.Connection) -> list[tuple]:
             continue
         if wid not in main and not any(c.isdigit() for c in written):
             main[wid] = (written, kana)
-        at = 0
+        at = 0  # in the written word
+        said = 0  # in its reading
         seen: set[str] = set()
         for part in parts:
             ruby, rt = part["ruby"], part.get("rt")
             at += len(ruby)
+            start, said = said, said + len(rt or ruby)
             if not rt:
                 continue
             for c in ruby:
@@ -153,7 +156,7 @@ def word_readings(db: sqlite3.Connection) -> list[tuple]:
                     reading = match(rt, written[at:], *readings[c])
                 else:
                     reading = None
-                out.append((c, wid, reading, rt, ruby, written, kana, main.get(wid) == (written, kana)))
+                out.append((c, wid, reading, rt, ruby, written, kana, main.get(wid) == (written, kana), start))
     return out
 
 
@@ -187,6 +190,7 @@ def build(db: sqlite3.Connection) -> None:
             written TEXT NOT NULL,   -- the word as written here: 二十日, an entry headed ２０日
             whole   TEXT NOT NULL,   -- the word's reading this is in: 一日 is いちにち, and ついたち
             main    INTEGER NOT NULL, -- 1: the entry's own spelling and reading (see word_readings)
+            at      INTEGER NOT NULL, -- where `kana` starts in `whole`
             PRIMARY KEY (char, word_id, kana)
         );
         DROP TABLE IF EXISTS classical_radical;
@@ -197,7 +201,7 @@ def build(db: sqlite3.Connection) -> None:
         );
     """)
     rows = word_readings(db)
-    db.executemany("INSERT OR IGNORE INTO word_reading VALUES (?,?,?,?,?,?,?,?)", rows)
+    db.executemany("INSERT OR IGNORE INTO word_reading VALUES (?,?,?,?,?,?,?,?,?)", rows)
     db.execute("CREATE INDEX word_reading_reading ON word_reading (char, reading)")
     special = sum(1 for r in rows if r[2] is None)
     print(f"  readings      {len(rows):>7,} kanji in words, {special:,} of them special readings")

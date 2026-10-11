@@ -581,6 +581,48 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
+/* Every reading at a glance: on, then kun; a rare one faded. */
+.meanings-readings p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin: 0 0 4px;
+}
+
+.meanings-readings .lane-kind {
+  min-width: 2.4em;
+  margin: 0;
+}
+
+.reading-chip {
+  font-family: var(--mincho);
+  font-size: 15px;
+  color: var(--paper);
+}
+
+.reading-chip .okuri {
+  color: var(--muted);
+}
+
+.reading-chip[data-rare],
+.reading-chip[data-rare] .okuri {
+  color: var(--faint);
+}
+
+.meanings-readings + .meanings-link {
+  margin-top: 8px;
+}
+
+/* In a word's reading, the kana that are this kanji's: じょう in じょうしょう. */
+.reading-here {
+  color: var(--paper);
+  text-decoration: underline;
+  text-decoration-color: var(--ai);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
 /* How the meanings follow from each other. */
 .meanings-link {
   margin: 0 0 10px;

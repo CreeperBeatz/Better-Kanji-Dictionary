@@ -183,6 +183,8 @@ export interface Word {
   senses: Sense[]
   forms: { text: string; kana: boolean; rare: boolean }[]
   inflection?: string[]
+  /** On a kanji's page: which kana of `reading` are that kanji's, [from, to): じょう in じょうしょう. */
+  mark?: [number, number] | null
 }
 
 /** One of a kanji's readings on its page (server: search.kanji_readings). */
