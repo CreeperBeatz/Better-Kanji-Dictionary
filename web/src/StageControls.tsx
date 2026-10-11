@@ -30,6 +30,11 @@ const S = strings(
     map: 'Map',
     browseMap: 'Kanji Map',
     mapTitle: 'Every character at this level, to wander around in (M)',
+    graphDetail: 'What the graph shows under a kanji',
+    simple: 'simple',
+    simpleTitle: 'Only the parts',
+    expanded: 'expanded',
+    expandedTitle: 'The parts, and also how a whole kanji looks, dashed: 土 as 十 + 一',
   },
   {
     all: 'всички',
@@ -55,6 +60,11 @@ const S = strings(
     map: 'Карта',
     browseMap: 'Йероглифна карта',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
+    graphDetail: 'Какво показва графът под канджи',
+    simple: 'опростен',
+    simpleTitle: 'Само частите',
+    expanded: 'разгърнат',
+    expandedTitle: 'Частите, а също как изглежда цяло канджи, с прекъсната линия: 土 като 十 + 一',
   },
 )
 
@@ -93,6 +103,21 @@ export function LevelFilter({
           {typeof f.value === 'number' ? f.label : t(f.label as Key)}
         </button>
       ))}
+    </div>
+  )
+}
+
+/** What the graph shows under a kanji: only its parts (simple), or its visual splits too (expanded). */
+export function GraphDetail({ simple, onSimple }: { simple: boolean; onSimple: (simple: boolean) => void }) {
+  const t = S(useLang())
+  return (
+    <div className="filter graph-detail" role="group" aria-label={t('graphDetail')}>
+      <button data-on={simple} title={t('simpleTitle')} onClick={() => onSimple(true)}>
+        {t('simple')}
+      </button>
+      <button data-on={!simple} title={t('expandedTitle')} onClick={() => onSimple(false)}>
+        {t('expanded')}
+      </button>
     </div>
   )
 }

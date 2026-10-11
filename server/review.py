@@ -74,6 +74,7 @@ from typing import Any
 from . import auth, bg_overlay, books, decomp_sources, forms, scope, store
 from .db import query, query_one
 from .errors import AppError
+from .routes import graph
 from .routes.graph import children_of, parents_map, parents_of
 from .routes.search import _fetch_words
 
@@ -2527,6 +2528,7 @@ def part_meaning_of(char: str) -> dict | None:
 
 
 forms.part_meaning = part_meaning_of
+graph.visual_splits = visual_splits
 
 
 # ---------------------------------------------------------------- the offline pack

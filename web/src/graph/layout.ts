@@ -39,6 +39,10 @@ export interface PositionedNode {
   via?: boolean
   /** The other form of the focus a container is built from: 糹 for 細 under 糸. */
   form?: string
+  /** A component that is a form of another kanji: that kanji, its root (水 for 氵). */
+  root?: KanjiNode
+  /** A piece found only through a visual split: 十 under 土. */
+  visual?: boolean
 }
 
 export interface PositionedEdge {
@@ -47,6 +51,8 @@ export interface PositionedEdge {
   to: { x: number; y: number }
   dim: boolean
   via?: boolean
+  /** From a character kept whole to a piece it looks like. */
+  visual?: boolean
 }
 
 export interface Layout {
@@ -169,6 +175,8 @@ function placeComponents(components: KanjiNode[]): PositionedNode[] {
         meanings: node.meanings,
         meaningsBg: node.meaningsBg ?? null,
         onYomi: node.onYomi,
+        root: node.root,
+        visual: node.visual,
       })
     })
   }
@@ -222,6 +230,7 @@ export function computeLayout(data: GraphResponse, via: Set<string> = new Set())
       from: { x: a.x, y: a.y },
       to: { x: b.x, y: b.y },
       dim: a.dim || b.dim,
+      visual: e.visual,
     })
   }
 

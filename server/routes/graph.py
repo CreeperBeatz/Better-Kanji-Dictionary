@@ -17,6 +17,7 @@ component float up above something it is actually a part of.
 """
 
 import json
+from typing import Callable
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -26,6 +27,9 @@ from ..db import query, query_one
 router = APIRouter(prefix="/api/kanji", tags=["graph"])
 
 MAX_DEPTH = 25
+
+# Set by server/review.py: each character kept whole and the pieces it looks like (土 → 十 一).
+visual_splits: Callable[[], dict[str, list[str]]] | None = None
 
 
 # --- user overrides are applied here, at query time.
@@ -345,6 +349,15 @@ def fonts_of(char: str) -> dict:
     }
 
 
+def _bare(c: str) -> dict:
+    """A character the kanji table does not have, with nothing known about it."""
+    return {
+        "char": c, "strokes": None, "grade": None, "freq": None, "jlpt": None,
+        "joyo": False, "inKanjidic": False, "meanings": [], "meaningsBg": None, "onYomi": [],
+        "kunYomi": [], "fanout": 0,
+    }
+
+
 @router.get("/{char}")
 def get_kanji(char: str) -> dict:
     if len(char) != 1:
@@ -399,14 +412,36 @@ def get_kanji(char: str) -> dict:
     nodes = _fetch(component_chars)
     components = []
     for c in component_chars:
-        n = nodes.get(c) or {
-            "char": c, "strokes": None, "grade": None, "freq": None, "jlpt": None,
-            "joyo": False, "inKanjidic": False, "meanings": [], "meaningsBg": None, "onYomi": [],
-            "kunYomi": [], "fanout": 0,
-        }
+        n = nodes.get(c) or _bare(c)
         n["depth"] = depth[c]
         components.append(n)
+    real_count = len(components)
+
+    # Visual splits: how a character kept whole looks (土 as 十 + 一). They are never parts, so
+    # their edges and the pieces found only through them are marked `visual`: the expanded view
+    # draws them dashed, the simple one leaves them out. One level only: a piece is not split.
+    splits = visual_splits() if visual_splits else {}
+    piece_depth: dict[str, int] = {}
+    for c in depth:
+        for p in splits.get(c, []):
+            edges.append({"parent": c, "child": p, "visual": True})
+            if p not in depth:
+                piece_depth[p] = max(piece_depth.get(p, 0), depth[c] + 1)
+    pieces = _fetch(sorted(piece_depth))
+    for p, d in piece_depth.items():
+        n = pieces.get(p) or _bare(p)
+        n["depth"] = d
+        n["visual"] = True
+        components.append(n)
+
     components.sort(key=lambda n: (n["depth"], -(n["fanout"] or 0), n["char"]))
+    # Each form among the parts with its root: 氵 shows 水 at its upper right.
+    roots = forms.roots()
+    rooted = {n["char"]: roots[n["char"]] for n in components if roots.get(n["char"], char) != char}
+    root_nodes = _fetch(sorted(set(rooted.values())))
+    for n in components:
+        if rooted.get(n["char"]) in root_nodes:
+            n["root"] = root_nodes[rooted[n["char"]]]
 
     stroke_row = query_one("SELECT paths FROM stroke WHERE char = ?", (char,))
 
@@ -420,7 +455,7 @@ def get_kanji(char: str) -> dict:
         "counts": {
             "containers": len(containers),
             "containersJoyo": sum(1 for c in containers if c["joyo"]),
-            "components": len(components),
+            "components": real_count,
             "maxDepth": max(depth.values()) if depth else 0,
         },
     }

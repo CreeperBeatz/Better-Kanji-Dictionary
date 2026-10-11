@@ -33,6 +33,10 @@ export interface KanjiNode {
   upJlpt?: number | null
   /** On containers: the other form of the focus it is built from -- 糹 for 細 under 糸. */
   form?: string
+  /** On components: the kanji this part is a form of, its root -- 水 for 氵. */
+  root?: KanjiNode
+  /** On components: a piece found only through a visual split (十 under 土), never a part. */
+  visual?: boolean
 }
 
 /** Where a decomposition comes from (server/decomp_sources.py); `bkd` is this dictionary's own. */
@@ -57,7 +61,8 @@ export interface GraphResponse {
   containers: KanjiNode[]
   components: {
     nodes: KanjiNode[]
-    edges: { parent: string; child: string }[]
+    /** `visual`: how a character kept whole looks (土 to 十), not what it is made of. */
+    edges: { parent: string; child: string; visual?: boolean }[]
   }
   /** Which sources split it the way it is split now; absent offline or with an older database. */
   partsFrom?: PartsFrom | null

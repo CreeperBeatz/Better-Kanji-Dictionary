@@ -27,6 +27,8 @@ interface Props {
    */
   locked?: boolean
   onLock?: (locked: boolean) => void
+  /** The simple view: only the parts, without the visual splits (土 as 十 + 一). */
+  simple?: boolean
 }
 
 const S = strings(
@@ -48,6 +50,8 @@ const S = strings(
     legendVia: 'dashed, not at this level itself, but inside characters that are',
     via: 'not at this level itself, but inside characters that are',
     form: 'built from {f}, another form of it',
+    formOf: 'a form of {r}',
+    visual: 'only how it looks: not a part',
   },
   {
     joyo: 'джойо',
@@ -67,6 +71,8 @@ const S = strings(
     legendVia: 'с прекъсната линия - не е от това ниво, но е част от йероглифи, които са',
     via: 'не е от това ниво, но е част от йероглифи, които са',
     form: 'съставен от {f}, друга негова форма',
+    formOf: 'форма на {r}',
+    visual: 'само как изглежда: не е част',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -206,15 +212,23 @@ interface Spot {
  */
 export const KanjiGraph = memo(KanjiGraphView)
 
-function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock }: Props) {
+function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock, simple = false }: Props) {
   const t = S(useLang())
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
   // A container outside the level stays if it leads up to something inside it.
   const { shown, via } = useMemo(() => sieve(data.containers, filter), [data.containers, filter])
+  // The simple view leaves out the visual splits: 土 stays whole, without 十 and 一 under it.
+  const components = useMemo(
+    () =>
+      simple
+        ? { nodes: data.components.nodes.filter((n) => !n.visual), edges: data.components.edges.filter((e) => !e.visual) }
+        : data.components,
+    [data.components, simple],
+  )
   const layout = useMemo(
-    () => computeLayout({ ...data, containers: shown }, via),
-    [data, shown, via],
+    () => computeLayout({ ...data, containers: shown, components }, via),
+    [data, shown, components, via],
   )
   const svgRef = useRef<SVGSVGElement>(null)
   // Where the graph stands. A drag, pinch or wheel moves the <g> directly,
@@ -672,6 +686,7 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
         data-kind={n.kind}
         data-dim={n.dim}
         data-via={n.via || undefined}
+        data-visual={n.visual || undefined}
         style={{
           transform: `translate(${n.x}px, ${n.y}px)`,
           opacity: extra ? 1 : n.weight === undefined ? 1 : 0.42 + n.weight * 0.58,
@@ -696,6 +711,10 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
           {titleMeanings(n, t)}
           {`
 ${levelOf(n, t)}`}
+          {n.root && `
+${t('formOf', { r: n.root.char })}`}
+          {n.visual && `
+${t('visual')}`}
           {n.via && `
 ${t('via')}`}
           {n.form && `
@@ -720,6 +739,13 @@ ${t('form', { f: n.form })}`}
         <text className="glyph" fontSize={n.radius * 1.28}>
           {n.char}
         </text>
+        {/* A form as written, with the kanji it is a form of in a small circle at its upper right. */}
+        {n.root && (
+          <g className="node-root" transform={`translate(${n.radius * 0.8} ${-n.radius * 0.8})`}>
+            <circle r={n.radius * 0.42} />
+            <text fontSize={n.radius * 0.5}>{n.root.char}</text>
+          </g>
+        )}
 
         {/* Hovering swaps the fan-out count for the level, which is the
             thing you want to know when deciding whether to learn it. */}
@@ -764,6 +790,7 @@ ${t('form', { f: n.form })}`}
                 data-down={e.id.startsWith('e:')}
                 data-dim={e.dim}
                 data-via={e.via || undefined}
+                data-visual={e.visual || undefined}
                 strokeWidth={e.id.startsWith('c:') ? 0.75 : 1.1}
               />
             ))}
