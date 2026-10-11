@@ -2815,11 +2815,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   z-index: 20;
 }
 
+/* As wide as the pad and its padding, under the pen at the bar's right end:
+   across a wide column it would be mostly empty. */
 .drawpop {
   position: absolute;
   top: calc(100% - 6px);
-  left: 16px;
   right: 16px;
+  width: min(calc(100% - 32px), 330px);
   padding: 10px 14px 12px;
   background: var(--sumi-lift);
   border: 1px solid var(--rule-bright);
@@ -2957,6 +2959,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   .drawpop {
     left: 10px;
     right: 10px;
+    width: auto;
   }
 
   /* As wide as the popup; only a very short screen keeps it smaller. */
