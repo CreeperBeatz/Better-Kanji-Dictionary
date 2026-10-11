@@ -18,6 +18,7 @@ import {
 } from '../api'
 import { clearHistory, useHistory, type Visit } from '../history'
 import { strings, useLang, type Lang } from '../i18n'
+import { isCommon } from '../similar/why'
 import { ToMap } from '../StageControls'
 import { SearchHelp } from './SearchHelp'
 import { glossOf, meaningsOf } from '../i18n/content'
@@ -35,8 +36,9 @@ const S = strings(
     common: 'common',
     commonTitle: 'JMdict marks this as a common word',
     uncommon: 'uncommon',
-    commonOnly: 'Common words only',
-    commonOnlyTitle: 'Leave out words JMdict does not mark as common',
+    commonOnly: 'Common only',
+    commonOnlyTitle:
+      'Leave out words JMdict does not mark as common, and kanji with no newspaper rank, no JLPT level and not jōyō. A kanji you typed stays.',
     sortBy: 'Sort by',
     sortNews: 'Newspaper rank',
     sortNewsTitle: 'Sort by how often newspapers use the word',
@@ -81,8 +83,9 @@ const S = strings(
     common: 'честа',
     commonTitle: 'JMdict отбелязва думата като честа',
     uncommon: 'рядка',
-    commonOnly: 'Само чести думи',
-    commonOnlyTitle: 'Без думите, които JMdict не отбелязва като чести',
+    commonOnly: 'Само чести',
+    commonOnlyTitle:
+      'Без думите, които JMdict не отбелязва като чести, и без канджи без място във вестниците, без ниво JLPT и извън джойо. Канджи, което сте написали, остава.',
     sortBy: 'Подреждане по',
     sortNews: 'Вестници',
     sortNewsTitle: 'Подреждане по това колко често думата се среща във вестниците',
@@ -234,7 +237,7 @@ function SortPill({
   )
 }
 
-// Common words only is the default, so what is stored is the choice to see them all.
+// Common only is the default, so what is stored is the choice to see everything.
 const ALL_WORDS_KEY = 'betterrtk:allWords'
 
 function useCommon(): [boolean, () => void] {
@@ -505,15 +508,18 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       <CommonFilter on={common} onToggle={toggleCommon} t={t} />
     </div>
   )
+  // Common only leaves out rare kanji as the server leaves out rare words,
+  // but never one typed into the box: 翠 searched for is 翠 wanted.
+  const kanji = (result?.kanji ?? []).filter((k) => !common || isCommon(k) || term.includes(k.char))
   // The kanji open beside the list, if it is one this search found.
-  const openKanji = open?.kanji && result?.kanji.some((k) => k.char === open.kanji) ? open.kanji : null
+  const openKanji = open?.kanji && kanji.some((k) => k.char === open.kanji) ? open.kanji : null
 
   const reading = result?.interpretation?.reading
-  const empty = !!result && !busy && result.words.length === 0 && result.kanji.length === 0
+  const empty = !!result && !busy && result.words.length === 0 && kanji.length === 0
   // The query the dictionary answered with nothing -- the one on screen, not the
   // one being typed, so the model is only asked once the dictionary has had its
   // say, and its answer stays up while the next query is on its way.
-  const unmatched = result && result.words.length === 0 && result.kanji.length === 0 ? result.query : null
+  const unmatched = result && result.words.length === 0 && kanji.length === 0 ? result.query : null
   // A question has nothing to match word for word; it is for Search by meaning.
   const question = result?.interpretation?.kind === 'question'
   const nothing = question ? null : <p className="hint">{t('nothing', { q: term })}</p>
@@ -523,7 +529,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   // does not blink on every key.
   return (
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
-      {/* How to order what was found, and whether to show only common words. */}
+      {/* How to order what was found, and whether to show only common words and kanji. */}
       {tools}
       {(reading || alternatives.length > 0) && (
         <p className="hint reading-note">
@@ -538,9 +544,9 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
           ))}
         </p>
       )}
-      {result && result.kanji.length > 0 && (
+      {kanji.length > 0 && (
         <div className="kanji-hits">
-          {result.kanji.map((k) => (
+          {kanji.map((k) => (
             <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open?.kanji === k.char} />
           ))}
         </div>
