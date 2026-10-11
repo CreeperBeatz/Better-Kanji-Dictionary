@@ -610,8 +610,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--faint);
 }
 
-.meanings-readings + .meanings-link {
-  margin-top: 8px;
+.meanings > .meanings-title {
+  margin-top: 18px;
 }
 
 /* In a word's reading, the kana that are this kanji's: じょう in じょうしょう. */

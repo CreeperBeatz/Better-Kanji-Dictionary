@@ -7,8 +7,9 @@
  * the kanji close to it in meaning, and the kanji easy to mix up on one of
  * its readings, with the 異字同訓 card that tells them apart.
  *
- * Above the cards: every reading at a glance (a rare one, in no common word,
- * faded), and how the meanings follow from each other. Below them:
+ * First its Readings, every one at a glance (a rare one, in no common word,
+ * faded). Then its Meanings, opening with how they follow from each other,
+ * then the cards. Below them:
  * words where the kanji is there for its sound, the special readings, and
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
@@ -21,7 +22,8 @@ import { ReadingKana, SpecialReadings } from './Readings'
 
 const S = strings(
   {
-    title: 'Meanings and readings',
+    readings: 'Readings',
+    meanings: 'Meanings',
     on: 'On',
     kun: 'Kun',
     rare: 'Rare: no common word has this reading.',
@@ -38,7 +40,8 @@ const S = strings(
     soundHint: 'In these words the kanji brings no meaning.',
   },
   {
-    title: 'Значения и четения',
+    readings: 'Четения',
+    meanings: 'Значения',
     on: 'Он',
     kun: 'Кун',
     rare: 'Рядко: нито една честа дума няма това четене.',
@@ -80,7 +83,7 @@ export function Meanings({
 
   return (
     <div className="meanings">
-      <h3>{t('title')}</h3>
+      <h3>{t('readings')}</h3>
       <div className="meanings-readings">
         {(
           [
@@ -104,6 +107,8 @@ export function Meanings({
             ),
         )}
       </div>
+      {/* The meanings, opening with how they follow from each other. */}
+      <h3 className="meanings-title">{t('meanings')}</h3>
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
