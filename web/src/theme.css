@@ -38,14 +38,14 @@
   --ease: cubic-bezier(0.32, 0.72, 0.28, 1);
 
   /* Every text size up to 26px is this many times its written size: about
-     one pixel up on a desktop; on a phone, as large as Takoboto's. The big
+     one pixel up on a desktop; on a phone, a pixel short of Takoboto's. The big
      glyphs above 26px are sized to their boxes and keep their size. */
   --type: 1.08;
 }
 
 @media (max-width: 640px) {
   :root {
-    --type: 1.25;
+    --type: 1.17;
   }
 }
 
