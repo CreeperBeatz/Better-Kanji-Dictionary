@@ -84,7 +84,6 @@ export function Meanings({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const link = (lang === 'bg' && page.linkBg) || page.link
   // Opened from a "synonyms" row: that meaning comes into view and glows a moment.
   useEffect(() => {
     const id = takeMeaningFocus(page.char)
@@ -123,9 +122,8 @@ export function Meanings({
             ),
         )}
       </div>
-      {/* The meanings, opening with how they follow from each other. */}
+      {/* How the meanings follow from each other opens the page, above the facts. */}
       <h3 className="meanings-title">{t('meanings')}</h3>
-      {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
         <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />

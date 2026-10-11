@@ -230,6 +230,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const saysMixups = !!unit && (unit.mixups.length > 0 || unit.meanings.some((m) => m.mixups.length > 0))
   const mean = similar && !saysSimilar ? similar.mean : []
   const read = similar && !saysMixups ? similar.read : []
+  const link = unit && ((lang === 'bg' && unit.linkBg) || unit.link)
 
   return (
     <section className="rail-section kanji-page">
@@ -239,7 +240,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </button>
       )}
 
-      {/* The numbers first, then how it looks in print and by hand, then how it is written. */}
+      {/* What the kanji means as a whole, then the numbers, then how it looks in print and by hand, then how it is written. */}
+      {link && <p className="meanings-link">{link}</p>}
       <dl className="facts">
         {n.strokes != null && (
           <>
