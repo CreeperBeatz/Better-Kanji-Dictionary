@@ -729,7 +729,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* Close in meaning: one row a kanji -- the kanji, its keyword, and the
+/* Synonyms: one row a kanji -- the kanji, its keyword, and the
    meaning of it that is close. */
 .meaning-similar > .meaning-aside {
   margin: 2px 0;

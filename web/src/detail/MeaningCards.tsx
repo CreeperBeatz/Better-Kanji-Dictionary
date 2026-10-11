@@ -30,7 +30,7 @@ const S = strings(
     rare: 'Rare: no common word has this reading.',
     exceptions: 'Exceptions',
     exceptionsHint: 'read as one word, not kanji by kanji',
-    similar: 'Close in meaning',
+    similar: 'Synonyms',
     withMeaning: 'With the meaning: {m}',
     openAt: 'Open {char} at this meaning',
     mixups: 'Easy to mix up',
@@ -50,7 +50,7 @@ const S = strings(
     rare: 'Рядко: нито една честа дума няма това четене.',
     exceptions: 'Изключения',
     exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
-    similar: 'Близки по значение',
+    similar: 'Синоними',
     withMeaning: 'Със значение: {m}',
     openAt: 'Отворете {char} на това значение',
     mixups: 'Лесно се бъркат',
@@ -85,7 +85,7 @@ export function Meanings({
   const lang = useLang()
   const t = S(lang)
   const link = (lang === 'bg' && page.linkBg) || page.link
-  // Opened from a "close in meaning" row: that meaning comes into view and glows a moment.
+  // Opened from a "synonyms" row: that meaning comes into view and glows a moment.
   useEffect(() => {
     const id = takeMeaningFocus(page.char)
     const card = id && document.getElementById(meaningAnchor(id))
