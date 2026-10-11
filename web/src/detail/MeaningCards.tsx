@@ -31,7 +31,7 @@ const S = strings(
     exceptions: 'Exceptions',
     exceptionsHint: 'read as one word, not kanji by kanji',
     similar: 'Close in meaning',
-    similarHint: 'The box shows the meaning they share.',
+    withMeaning: 'With the meaning: {m}',
     openAt: 'Open {char} at this meaning',
     mixups: 'Easy to mix up',
     mixupsHint: 'Other kanji with the same kun reading.',
@@ -51,7 +51,7 @@ const S = strings(
     exceptions: 'Изключения',
     exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
     similar: 'Близки по значение',
-    similarHint: 'В рамката е общото значение.',
+    withMeaning: 'Със значение: {m}',
     openAt: 'Отворете {char} на това значение',
     mixups: 'Лесно се бъркат',
     mixupsHint: 'Други канджи със същото кун четене.',
@@ -214,9 +214,7 @@ function Meaning({
         <footer>
           {m.similar.length > 0 && (
             <div className="meaning-similar">
-              <p className="meaning-aside">
-                {t('similar')} <span className="hint">{t('similarHint')}</span>
-              </p>
+              <p className="meaning-aside">{t('similar')}</p>
               <ul>
                 {m.similar.map((k) => (
                   <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
@@ -234,8 +232,8 @@ function Meaning({
 }
 
 /**
- * 典 · Code · [ceremony]: the kanji, its keyword, and in a box the meaning of
- * it that is close to this one. The row opens the kanji at that meaning.
+ * 典 · Code · With the meaning: ceremony -- the kanji, its keyword, and the
+ * meaning of it that is close to this one. The row opens the kanji at that meaning.
  */
 function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void }) {
   const t = S(lang)
@@ -255,7 +253,7 @@ function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c
           {k.char}
         </span>
         <span className="close-keyword">{keyword}</span>
-        {sense && <span className="close-sense">{sense}</span>}
+        {sense && <span className="close-sense">{t('withMeaning', { m: sense })}</span>}
       </button>
     </li>
   )

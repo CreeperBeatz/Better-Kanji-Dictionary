@@ -787,22 +787,17 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-/* The meaning they share, boxed so it reads as that and not as more of the keyword. */
 .close-sense {
-  justify-self: start;
-  padding: 0 7px;
   font-size: 12px;
-  color: var(--paper);
-  border: 1px solid var(--rule-bright);
-  border-radius: 9px;
+  color: var(--paper-dim);
 }
 
 /* A meaning brought into view from another kanji's page glows a moment. */
 @keyframes meaning-flash {
   0%,
   35% {
-    background: var(--ai-wash);
-    box-shadow: 0 0 0 2px var(--ai);
+    background: color-mix(in srgb, var(--ai-wash) 45%, var(--sumi-sunk));
+    box-shadow: 0 0 0 1px var(--ai-deep);
   }
   100% {
     background: var(--sumi-sunk);
