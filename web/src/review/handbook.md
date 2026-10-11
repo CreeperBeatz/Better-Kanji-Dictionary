@@ -272,11 +272,12 @@ Take the split of today's writing that is easiest to remember:
    its top stroke slants. Pieces may be woven into each other: 乗 = 禾 + 龷,
    制 = 牛 + 巾 + 刂. A recurring piece is a good part even if it is rare as
    a kanji (龷 in 共 昔 黄).
-3. **Keep middle pieces. Don't go straight to atoms.** It is easier to tie
-   two pieces into one story than three. 職 識 織 all share 戠, so 織 is
-   糹 + 戠, and 戠 is split into 音 + 戈 one level down. This holds even for
-   a middle piece no other kanji uses: 築 = 筑 + 木. The middle piece must
-   be a real block of the shape, not any group of strokes.
+3. **Keep a middle piece only if two or more jōyō kanji use it.** It is
+   easier to tie two pieces into one story than three, but only a piece
+   you meet again is worth learning. 職 識 織 all share 戠, so 織 is
+   糹 + 戠, and 戠 is split into 音 + 戈 one level down. 筑 is in 築 alone,
+   so 築 is ⺮ + 巩 + 木. A jōyō kanji is never noise: 音 stays a part. The
+   middle piece must be a real block of the shape, not any group of strokes.
 4. **The same shape is the same part everywhere.** The tops of 色 and 角
    are both ⺈.
 5. **Your own split** when no source gives one a learner can use (兼). It
