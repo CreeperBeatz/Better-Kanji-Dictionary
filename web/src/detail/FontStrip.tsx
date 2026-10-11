@@ -93,7 +93,12 @@ function useFontReady(family: string, char: string, wanted: boolean): boolean {
   return ready
 }
 
-export function FontStrip({ char }: { char: string }) {
+/**
+ * The kanji in today's faces, then the shapes old JIS printed. A kanji's page
+ * splits them: `fonts` at its top, with no title of its own, `old` lower
+ * down with the forms. The review cards show both.
+ */
+export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old' }) {
   const t = S(useLang())
   const ref = useRef<HTMLDivElement>(null)
   const [seen, setSeen] = useState(false)
@@ -145,9 +150,9 @@ export function FontStrip({ char }: { char: string }) {
 
   return (
     <div className="font-strip" ref={ref}>
-      {shown.length > 1 && (
+      {part !== 'old' && shown.length > 1 && (
         <>
-          <h3>{t('title')}</h3>
+          {!part && <h3>{t('title')}</h3>}
           <ul>
             {shown.map((f) => (
               <li key={f} title={t(`${f}Tip`)}>
@@ -160,7 +165,7 @@ export function FontStrip({ char }: { char: string }) {
           </ul>
         </>
       )}
-      {old.length > 0 && (
+      {part !== 'fonts' && old.length > 0 && (
         <>
           <h3 title={t('oldHint')}>{t('oldTitle')}</h3>
           <ul>

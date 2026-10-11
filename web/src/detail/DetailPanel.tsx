@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
@@ -33,10 +33,6 @@ const S = strings(
     gradeNames: 'name kanji (jinmeiyō)',
     radical: 'Radical',
     isRadical: 'one of the 214 radicals, no. {n}',
-    onThisPage: 'On this page',
-    meanings: 'Meanings',
-    forms: 'Forms and look-alikes',
-    similar: 'Similar',
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
     wordsUsing: 'Words using {char}',
@@ -64,10 +60,6 @@ const S = strings(
     gradeNames: 'канджи за имена (джинмейо)',
     radical: 'Ключ',
     isRadical: 'един от 214-те ключа, № {n}',
-    onThisPage: 'На тази страница',
-    meanings: 'Значения',
-    forms: 'Форми и прилики',
-    similar: 'Подобни',
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
     wordsUsing: 'Думи с {char}',
@@ -169,7 +161,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
-  const root = useRef<HTMLElement>(null)
 
   // Words follow the focus, not the hover -- otherwise they would thrash as
   // the cursor crosses the graph. The plain list is for a kanji with no meaning groups.
@@ -196,7 +187,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             if (stale) return
             const readings: Record<string, ReadingInfo> = {}
             for (const [r, w] of Object.entries(d.words)) readings[r.replace(/^-+|-+$/g, '')] = { formed: w, common: 0, examples: [] }
-            const empty = { meanings: [], link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
+            const empty = { meanings: [], map: {}, link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
             setPage({ char, data: { char, readings, ...empty }, full: false })
           },
           () => {},
@@ -236,41 +227,19 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const saysMixups = !!unit && (unit.mixups.length > 0 || unit.meanings.some((m) => m.mixups.length > 0))
   const mean = similar && !saysSimilar ? similar.mean : []
   const read = similar && !saysMixups ? similar.read : []
-  // The page's parts, for the links at its top: only those it has.
-  const sections: [Section, boolean][] = [
-    ['meanings', n.onYomi.length + n.kunYomi.length > 0 || words.length > 0],
-    ['forms', !!forms || !!similar?.look.length],
-    ['similar', mean.length + read.length > 0],
-  ]
-  const goTo = (id: Section) => {
-    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    root.current?.querySelector(`[data-section="${id}"]`)?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
-  }
 
   return (
-    <section className="rail-section kanji-page" ref={root}>
+    <section className="rail-section kanji-page">
       {onComponents && !isPreview && (
         <button className="see-components" onClick={onComponents} title={t('seeComponentsTitle', { char: n.char })}>
           {t('seeComponents')}
         </button>
       )}
 
-      {!isPreview && (
-        <nav className="page-sections" aria-label={t('onThisPage')}>
-          {sections
-            .filter(([, shown]) => shown)
-            .map(([id]) => (
-              <button key={id} className="clear" onClick={() => goTo(id)}>
-                {t(id)}
-              </button>
-            ))}
-        </nav>
-      )}
-
       {/* How it looks first: in print and by hand, then how it is written, then the numbers. */}
       {!isPreview && (
         <>
-          <FontStrip char={data.focus.char} />
+          <FontStrip char={data.focus.char} part="fonts" />
           <StrokeOrder char={data.focus.char} strokes={data.strokes} />
         </>
       )}
@@ -314,7 +283,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </p>
       )}
 
-      <div data-section="meanings">
+      <div>
         {unit ? (
           <Meanings
             page={unit}
@@ -353,17 +322,18 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         )}
       </div>
 
-      {!isPreview && (forms || (similar && similar.look.length > 0)) && (
-        <div data-section="forms">
+      {!isPreview && (
+        <>
           {forms && <Forms data={forms} onKanji={onKanji} />}
+          <FontStrip char={data.focus.char} part="old" />
           {similar && <LooksLike items={similar.look} onKanji={onKanji} />}
-        </div>
+        </>
       )}
 
       {/* What the meanings did not say already: kanji of similar meaning, then
           of the same reading, which is the rarest question to have. */}
       {!isPreview && mean.length + read.length > 0 && (
-        <div data-section="similar">
+        <div>
           <Related kind="mean" items={mean} onKanji={onKanji} />
           <Related kind="read" items={read} onKanji={onKanji} />
         </div>
@@ -373,8 +343,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
     </section>
   )
 }
-
-type Section = 'meanings' | 'forms' | 'similar'
 
 /**
  * The words worth showing on the page, at most `max`: common, and either on

@@ -472,37 +472,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-variant-numeric: tabular-nums;
 }
 
-/* A kanji's page: links to its parts, at its top. */
-.page-sections {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: 14px;
-  font-size: 12px;
-}
-
-.page-sections button {
-  color: var(--muted);
-  text-decoration: none;
-}
-
-.page-sections button:hover,
-.page-sections button:focus-visible {
-  color: var(--paper);
-}
-
-.see-components + .page-sections {
-  margin-top: 12px;
-}
-
-.page-sections + .facts {
-  margin-top: 14px;
-}
-
-.kanji-page [data-section] {
-  scroll-margin-top: 12px;
-}
-
 /* Its readings, one line each: the reading, what the word it forms means,
    が or を, and the commonest words read that way. Each group's lines share
    one grid, so the readings line up. */
@@ -620,7 +589,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper-dim);
 }
 
-/* Every reading at a glance; one leads to the meaning that uses it most. */
+/* Every reading at a glance, with the numbers of the meanings it is a rule in. */
 .reading-index p {
   display: flex;
   flex-wrap: wrap;
@@ -633,24 +602,33 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   width: 2.4em;
 }
 
+.reading-entry {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
 .reading-chip {
-  padding: 0;
   font-family: var(--mincho);
   font-size: 15px;
   color: var(--paper);
-  background: none;
-  border: 0;
 }
 
-button.reading-chip {
-  border-bottom: 1px dotted var(--faint);
+/* A meaning's number beside a reading: it goes to that meaning. */
+.reading-to {
+  padding: 0 1px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ai);
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted var(--ai-deep);
   cursor: pointer;
 }
 
-button.reading-chip:hover,
-button.reading-chip:focus-visible {
-  color: var(--ai);
-  border-bottom-color: var(--ai);
+.reading-to:hover,
+.reading-to:focus-visible {
+  color: var(--paper);
 }
 
 .reading-chip .okuri,
@@ -658,7 +636,8 @@ button.reading-chip:focus-visible {
   color: var(--muted);
 }
 
-.reading-chip[data-rare] {
+.reading-entry[data-rare] .reading-chip,
+.reading-entry[data-rare] .okuri {
   color: var(--faint);
 }
 
@@ -692,16 +671,6 @@ button.reading-chip:focus-visible {
   color: var(--paper);
 }
 
-.meaning-readings {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 10px;
-  margin-left: auto;
-  font-family: var(--mincho);
-  font-size: 14px;
-  color: var(--paper-dim);
-}
-
 .meaning-reading {
   white-space: nowrap;
 }
@@ -717,6 +686,47 @@ button.reading-chip:focus-visible {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* A meaning's words by how they read the kanji: kun, then each on reading. */
+.lane {
+  margin-top: 6px;
+}
+
+.lane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  margin: 0 0 1px;
+}
+
+.lane-kind {
+  min-width: 2.4em;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.lane-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  font-family: var(--mincho);
+  font-size: 14px;
+  color: var(--paper);
+}
+
+/* A reading the meaning has now and then, not as a rule. */
+.lane-also {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.lane-also [lang='ja'],
+.lane-also .reading-example {
+  font-size: 13px;
+  color: var(--paper-dim);
 }
 
 .meaning-more {

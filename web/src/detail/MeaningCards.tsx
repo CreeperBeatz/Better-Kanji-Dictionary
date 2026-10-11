@@ -1,12 +1,15 @@
 /**
  * A kanji's meanings, readings and words as one unit. Each meaning is a card:
- * what it is, the readings its words give the kanji (on in katakana, kun in
- * hiragana with its okurigana set apart and が or を), its key words, the
+ * what it is, then its words by how they read the kanji -- the kun words (its
+ * kun readings with okurigana set apart and が or を), then one part per on
+ * reading it has as a rule, in katakana. A reading it has in only a word or
+ * two is a faded "also"; its special readings are its exceptions. Then the
  * kanji close to it in meaning, and the kanji easy to mix up on one of its
  * readings, with the 異字同訓 card that tells them apart.
  *
  * Above the cards: how the meanings follow from each other, and every reading
- * at a glance; a reading leads to the meaning that uses it most. Below them:
+ * with the numbers of the meanings it is a rule in (ガク 1, ラク 2 3), which
+ * lead to them. A rare reading, in no common word, is faded. Below them:
  * words where the kanji is there for its sound, the special readings, and
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
@@ -24,7 +27,10 @@ const S = strings(
     on: 'On',
     kun: 'Kun',
     rare: 'Rare: no common word has this reading.',
-    toMeaning: 'Go to the meaning that uses it most',
+    toMeaning: 'Go to meaning {n}',
+    also: 'Also',
+    exception: 'Exception',
+    exceptionHint: 'read as one word, not kanji by kanji',
     similar: 'Close in meaning',
     mixups: 'Easy to mix up',
     mixupsHint: 'Other kanji with the same kun reading.',
@@ -40,7 +46,10 @@ const S = strings(
     on: 'Он',
     kun: 'Кун',
     rare: 'Рядко: нито една честа дума няма това четене.',
-    toMeaning: 'Към значението, което го използва най-много',
+    toMeaning: 'Към значение {n}',
+    also: 'Също',
+    exception: 'Изключение',
+    exceptionHint: 'чете се като цяла дума, не канджи по канджи',
     similar: 'Близки по значение',
     mixups: 'Лесно се бъркат',
     mixupsHint: 'Други канджи със същото кун четене.',
@@ -79,9 +88,7 @@ export function Meanings({
   const t = S(lang)
   const on = new Set(onYomi.map(plain))
   const link = (lang === 'bg' && page.linkBg) || page.link
-  // Each reading leads to the meaning that lists it first.
-  const home = new Map<string, string>()
-  for (const m of page.meanings) for (const r of m.readings) if (!home.has(r)) home.set(r, m.id)
+  const number = new Map(page.meanings.map((m, i) => [m.id, i + 1]))
 
   return (
     <div className="meanings">
@@ -99,22 +106,18 @@ export function Meanings({
                 <span className="reading-kind">{t(kind as 'on' | 'kun')}</span>
                 {[...new Set((list as string[]).map(plain))].map((r) => {
                   const rare = !info[r]?.common
-                  const to = home.get(r)
-                  const kana = <ReadingKana r={r} on={kind === 'on'} />
-                  return to ? (
-                    <button
-                      key={r}
-                      className="reading-chip"
-                      lang="ja"
-                      data-rare={rare || undefined}
-                      title={t('toMeaning')}
-                      onClick={() => scrollToMeaning(to)}
-                    >
-                      {kana}
-                    </button>
-                  ) : (
-                    <span key={r} className="reading-chip" lang="ja" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
-                      {kana}
+                  // The meanings it is a rule in, by their numbers: ガク 1, ラク 2 3.
+                  const where = page.map[r] ?? []
+                  return (
+                    <span key={r} className="reading-entry" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
+                      <span className="reading-chip" lang="ja">
+                        <ReadingKana r={r} on={kind === 'on'} />
+                      </span>
+                      {where.map((id) => (
+                        <button key={id} className="reading-to" title={t('toMeaning', { n: number.get(id) ?? 0 })} onClick={() => scrollToMeaning(id)}>
+                          {number.get(id)}
+                        </button>
+                      ))}
                     </span>
                   )
                 })}
@@ -180,32 +183,80 @@ function Meaning({
   const t = S(lang)
   const label = (lang === 'bg' && m.bg) || m.en
   const about = (lang === 'bg' && m.aboutBg) || m.about
-  const more = m.total - m.words.length
+  const shown = (m.kun?.words.length ?? 0) + m.on.reduce((k, o) => k + o.words.length, 0)
+  const more = m.total - shown - m.exceptions.length
   return (
     <article className="meaning" id={meaningAnchor(m.id)}>
       <header>
         <span className="meaning-n">{n}</span>
         <h4>{label}</h4>
-        <span className="meaning-readings" lang="ja">
-          {m.readings.map((r) => {
-            const formed = info[r]?.formed
-            return (
-              <span key={r} className="meaning-reading">
-                {formed && !on.has(r) ? (
-                  <button className="yomi-link" onClick={() => onWord(formed)}>
-                    <ReadingKana r={r} on={false} />
-                  </button>
-                ) : (
-                  <ReadingKana r={r} on={on.has(r)} />
-                )}
-                {formed && !on.has(r) && <ValencyMark word={formed} />}
-              </span>
-            )
-          })}
-        </span>
       </header>
       {about && <p className="meaning-about">{about}</p>}
-      <ul className="meaning-words">{m.words.map(row)}</ul>
+
+      {/* Its words by how they read the kanji: in Japanese, then each Chinese reading it has as a rule. */}
+      {m.kun && (
+        <div className="lane">
+          <p className="lane-head">
+            <span className="lane-kind">{t('kun')}</span>
+            <span className="lane-readings" lang="ja">
+              {m.kun.readings.map((r) => {
+                const formed = info[r]?.formed
+                return (
+                  <span key={r} className="meaning-reading">
+                    {formed ? (
+                      <button className="yomi-link" onClick={() => onWord(formed)}>
+                        <ReadingKana r={r} on={false} />
+                      </button>
+                    ) : (
+                      <ReadingKana r={r} on={false} />
+                    )}
+                    {formed && <ValencyMark word={formed} />}
+                  </span>
+                )
+              })}
+            </span>
+          </p>
+          <ul className="meaning-words">{m.kun.words.map(row)}</ul>
+        </div>
+      )}
+      {m.on.map((o) => (
+        <div key={o.reading} className="lane">
+          <p className="lane-head">
+            <span className="lane-kind">{t('on')}</span>
+            <span className="lane-readings" lang="ja">
+              <ReadingKana r={o.reading} on={on.has(o.reading)} />
+            </span>
+          </p>
+          <ul className="meaning-words">{o.words.map(row)}</ul>
+        </div>
+      ))}
+      {/* Now and then, not as a rule: faded, so it does not read as one. */}
+      {m.also.map((a) => (
+        <p key={a.reading} className="lane-also">
+          {t('also')}{' '}
+          <span lang="ja">
+            <ReadingKana r={a.reading} on={on.has(a.reading)} />
+          </span>
+          {': '}
+          {a.words.map((w, i) => (
+            <span key={w.id}>
+              {i > 0 && ', '}
+              <button className="reading-example" lang="ja" onClick={() => onWord(w)} title={w.reading}>
+                {w.headword}
+              </button>
+            </span>
+          ))}
+        </p>
+      ))}
+      {m.exceptions.length > 0 && (
+        <div className="lane lane-exceptions">
+          <p className="lane-head">
+            <span className="lane-kind">{t('exception')}</span>
+            <span className="hint">{t('exceptionHint')}</span>
+          </p>
+          <ul className="meaning-words">{m.exceptions.map(row)}</ul>
+        </div>
+      )}
       {more > 0 && onWordsWith && (
         <button className="clear meaning-more" onClick={onWordsWith}>
           {t(more === 1 ? 'more_one' : 'more_other', { n: more })} →
