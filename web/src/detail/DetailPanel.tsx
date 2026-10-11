@@ -35,7 +35,7 @@ const S = strings(
     isRadical: 'one of the 214 radicals, no. {n}',
     onThisPage: 'On this page',
     meanings: 'Meanings',
-    writing: 'Writing',
+    forms: 'Forms and look-alikes',
     similar: 'Similar',
     appearsInside_one: 'Appears inside {b} jōyō character.',
     appearsInside_other: 'Appears inside {b} jōyō characters.',
@@ -66,7 +66,7 @@ const S = strings(
     isRadical: 'един от 214-те ключа, № {n}',
     onThisPage: 'На тази страница',
     meanings: 'Значения',
-    writing: 'Писане',
+    forms: 'Форми и прилики',
     similar: 'Подобни',
     appearsInside_one: 'Среща се в {b} йероглиф джойо.',
     appearsInside_other: 'Среща се в {b} йероглифа джойо.',
@@ -239,7 +239,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   // The page's parts, for the links at its top: only those it has.
   const sections: [Section, boolean][] = [
     ['meanings', n.onYomi.length + n.kunYomi.length > 0 || words.length > 0],
-    ['writing', true],
+    ['forms', !!forms || !!similar?.look.length],
     ['similar', mean.length + read.length > 0],
   ]
   const goTo = (id: Section) => {
@@ -265,6 +265,14 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
               </button>
             ))}
         </nav>
+      )}
+
+      {/* How it looks first: in print and by hand, then how it is written, then the numbers. */}
+      {!isPreview && (
+        <>
+          <FontStrip char={data.focus.char} />
+          <StrokeOrder char={data.focus.char} strokes={data.strokes} />
+        </>
       )}
 
       <dl className="facts">
@@ -345,10 +353,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         )}
       </div>
 
-      {!isPreview && (
-        <div data-section="writing">
-          <StrokeOrder char={data.focus.char} strokes={data.strokes} />
-          <FontStrip char={data.focus.char} />
+      {!isPreview && (forms || (similar && similar.look.length > 0)) && (
+        <div data-section="forms">
           {forms && <Forms data={forms} onKanji={onKanji} />}
           {similar && <LooksLike items={similar.look} onKanji={onKanji} />}
         </div>
@@ -368,7 +374,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   )
 }
 
-type Section = 'meanings' | 'writing' | 'similar'
+type Section = 'meanings' | 'forms' | 'similar'
 
 /**
  * The words worth showing on the page, at most `max`: common, and either on
