@@ -596,7 +596,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .edge[data-via],
-.peek-edge[data-via] {
+.peek-edge[data-via],
+.edge[data-visual] {
   stroke-dasharray: 3 4;
 }
 
@@ -604,10 +605,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
    十 + 一), never its parts. Dashed, as a way of seeing it. */
 .node[data-visual] .plate {
   stroke-dasharray: 2.5 2.5;
-}
-
-.edge[data-visual] {
-  stroke-dasharray: 3 4;
 }
 
 /* ---------------------------------------------------------------- recents (the empty search) */

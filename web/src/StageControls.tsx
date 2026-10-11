@@ -30,7 +30,7 @@ const S = strings(
     map: 'Map',
     browseMap: 'Kanji Map',
     mapTitle: 'Every character at this level, to wander around in (M)',
-    splitView: 'What the graph shows under a kanji',
+    graphDetail: 'What the graph shows under a kanji',
     simple: 'simple',
     simpleTitle: 'Only the parts',
     expanded: 'expanded',
@@ -60,7 +60,7 @@ const S = strings(
     map: 'Карта',
     browseMap: 'Йероглифна карта',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
-    splitView: 'Какво показва графът под канджи',
+    graphDetail: 'Какво показва графът под канджи',
     simple: 'опростен',
     simpleTitle: 'Само частите',
     expanded: 'разгърнат',
@@ -108,10 +108,10 @@ export function LevelFilter({
 }
 
 /** What the graph shows under a kanji: only its parts (simple), or its visual splits too (expanded). */
-export function SplitView({ simple, onSimple }: { simple: boolean; onSimple: (simple: boolean) => void }) {
+export function GraphDetail({ simple, onSimple }: { simple: boolean; onSimple: (simple: boolean) => void }) {
   const t = S(useLang())
   return (
-    <div className="filter split-view" role="group" aria-label={t('splitView')}>
+    <div className="filter graph-detail" role="group" aria-label={t('graphDetail')}>
       <button data-on={simple} title={t('simpleTitle')} onClick={() => onSimple(true)}>
         {t('simple')}
       </button>

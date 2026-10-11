@@ -14,7 +14,7 @@ import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
-import { LevelFilter, SplitView, type StageView } from './StageControls'
+import { GraphDetail, LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
@@ -96,6 +96,30 @@ function useWindowWidth(): number {
   )
 }
 
+/** A setting that is on unless turned off; off is remembered as '0' under `key`. */
+function useOnUnlessOff(key: string): [boolean, (on: boolean) => void] {
+  const [on, setOn] = useState(() => {
+    try {
+      return localStorage.getItem(key) !== '0'
+    } catch {
+      return true
+    }
+  })
+  const choose = useCallback(
+    (next: boolean) => {
+      setOn(next)
+      try {
+        if (next) localStorage.removeItem(key)
+        else localStorage.setItem(key, '0')
+      } catch {
+        // not remembered, which is fine
+      }
+    },
+    [key],
+  )
+  return [on, choose]
+}
+
 /**
  * A function whose identity never changes but which always does what the
  * latest render says. Children that are memoised keep still while the App
@@ -141,7 +165,7 @@ const RAIL_TAB_KEY = 'betterrtk:railTab'
 // rail's edge resizes the two together; the edge between them moves the split.
 const SPLIT_KEY = 'betterrtk:searchBeside'
 // '0' when the graph shows visual splits too (expanded); only the parts (simple) otherwise.
-const SPLIT_VIEW_KEY = 'betterrtk:graphSimple'
+const GRAPH_SIMPLE_KEY = 'betterrtk:graphSimple'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
@@ -470,22 +494,7 @@ export function App() {
   // A sign-in link that did not work says why, where you would try again.
   const accountShown = accountOpen || authError !== null
   const [filter, setFilter] = useState<ContainerFilter>('common')
-  const [simpleGraph, setSimpleGraph] = useState(() => {
-    try {
-      return localStorage.getItem(SPLIT_VIEW_KEY) !== '0'
-    } catch {
-      return true
-    }
-  })
-  const chooseSimple = useCallback((on: boolean) => {
-    setSimpleGraph(on)
-    try {
-      if (on) localStorage.removeItem(SPLIT_VIEW_KEY)
-      else localStorage.setItem(SPLIT_VIEW_KEY, '0')
-    } catch {
-      // not remembered, which is fine
-    }
-  }, [])
+  const [simpleGraph, chooseSimple] = useOnUnlessOff(GRAPH_SIMPLE_KEY)
   const [view, setViewState] = useState<StageView>(initialView)
   // The map is expensive to lay out, so once opened it stays mounted and keeps
   // its camera while the focus view is showing.
@@ -527,13 +536,7 @@ export function App() {
   }, [mobile, onStage])
 
   const windowWidth = useWindowWidth()
-  const [splitPref, setSplitPref] = useState(() => {
-    try {
-      return localStorage.getItem(SPLIT_KEY) !== '0'
-    } catch {
-      return true
-    }
-  })
+  const [splitPref, rememberSplit] = useOnUnlessOff(SPLIT_KEY)
   const room = !mobile && windowWidth >= SPLIT_ROOM
   // The map wants the room the search column takes, so while it is up the
   // column is folded away -- not as a choice, just for the map -- and is back
@@ -543,16 +546,13 @@ export function App() {
     if (view !== 'map') setMapFolded(false)
   }, [view])
   const split = room && splitPref && !mapFolded
-  const chooseSplit = useCallback((on: boolean) => {
-    setMapFolded(false)
-    setSplitPref(on)
-    try {
-      if (on) localStorage.removeItem(SPLIT_KEY)
-      else localStorage.setItem(SPLIT_KEY, '0')
-    } catch {
-      // not remembered, which is fine
-    }
-  }, [])
+  const chooseSplit = useCallback(
+    (on: boolean) => {
+      setMapFolded(false)
+      rememberSplit(on)
+    },
+    [rememberSplit],
+  )
   // Split, the rail's width is kept as the two columns' average, so it means
   // the same either way; the columns give way before the stage does.
   const railShown = split ? Math.round(Math.min(railWidth, (windowWidth - STAGE_MIN) / 2)) : railWidth
@@ -1820,7 +1820,7 @@ export function App() {
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
               )}
-              {!error && view === 'focus' && <SplitView simple={simpleGraph} onSimple={chooseSimple} />}
+              {!error && view === 'focus' && <GraphDetail simple={simpleGraph} onSimple={chooseSimple} />}
               {/* On a phone it sits at the end of the search bar instead, always on screen. */}
               {!mobile && <ProfileButton onOpen={signIn} />}
             </div>

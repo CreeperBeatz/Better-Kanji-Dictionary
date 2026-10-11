@@ -422,7 +422,7 @@ def get_kanji(char: str) -> dict:
     # draws them dashed, the simple one leaves them out. One level only: a piece is not split.
     splits = visual_splits() if visual_splits else {}
     piece_depth: dict[str, int] = {}
-    for c in list(depth):
+    for c in depth:
         for p in splits.get(c, []):
             edges.append({"parent": c, "child": p, "visual": True})
             if p not in depth:
@@ -436,11 +436,11 @@ def get_kanji(char: str) -> dict:
 
     components.sort(key=lambda n: (n["depth"], -(n["fanout"] or 0), n["char"]))
     # Each form among the parts with its root: 氵 shows 水 at its upper right.
-    shown = {n["char"] for n in components}
-    rooted = {c: r for c, r in forms.roots().items() if c in shown and r != char}
+    roots = forms.roots()
+    rooted = {n["char"]: roots[n["char"]] for n in components if roots.get(n["char"], char) != char}
     root_nodes = _fetch(sorted(set(rooted.values())))
     for n in components:
-        if n["char"] in rooted and rooted[n["char"]] in root_nodes:
+        if rooted.get(n["char"]) in root_nodes:
             n["root"] = root_nodes[rooted[n["char"]]]
 
     stroke_row = query_one("SELECT paths FROM stroke WHERE char = ?", (char,))
