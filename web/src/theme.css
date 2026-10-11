@@ -524,12 +524,21 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   fill: var(--muted);
 }
 
-/* The expanded graph: a form's root kanji, small at its upper right (氵 with 水). */
+/* A form's root kanji, in a small circle at its upper right (氵 with 水). */
 .node .node-root {
+  pointer-events: none;
+}
+
+.node .node-root circle {
+  fill: var(--sumi);
+  stroke: var(--rule-bright);
+  stroke-width: 0.75;
+}
+
+.node .node-root text {
   fill: var(--paper-dim);
   text-anchor: middle;
   dominant-baseline: central;
-  pointer-events: none;
 }
 
 .node[data-kind='focus'] .glyph {
@@ -588,6 +597,16 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .edge[data-via],
 .peek-edge[data-via] {
+  stroke-dasharray: 3 4;
+}
+
+/* The expanded view's visual splits: how a character kept whole looks (土 as
+   十 + 一), never its parts. Dashed, as a way of seeing it. */
+.node[data-visual] .plate {
+  stroke-dasharray: 2.5 2.5;
+}
+
+.edge[data-visual] {
   stroke-dasharray: 3 4;
 }
 

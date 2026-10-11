@@ -30,11 +30,11 @@ const S = strings(
     map: 'Map',
     browseMap: 'Kanji Map',
     mapTitle: 'Every character at this level, to wander around in (M)',
-    formsView: 'How the graph draws a form of a kanji',
+    splitView: 'What the graph shows under a kanji',
     simple: 'simple',
-    simpleTitle: 'Each form drawn as its kanji: 水 where 氵 is written',
+    simpleTitle: 'Only the parts',
     expanded: 'expanded',
-    expandedTitle: 'Each part as written, with the kanji it is a form of beside it',
+    expandedTitle: 'The parts, and also how a whole kanji looks, dashed: 土 as 十 + 一',
   },
   {
     all: 'всички',
@@ -60,11 +60,11 @@ const S = strings(
     map: 'Карта',
     browseMap: 'Йероглифна карта',
     mapTitle: 'Всички йероглифи от това ниво, за разходка (M)',
-    formsView: 'Как графът показва формата на канджи',
+    splitView: 'Какво показва графът под канджи',
     simple: 'опростен',
-    simpleTitle: 'Всяка форма като своето канджи: 水 там, където е написано 氵',
+    simpleTitle: 'Само частите',
     expanded: 'разгърнат',
-    expandedTitle: 'Всяка част както е написана, с канджито, чиято форма е, до нея',
+    expandedTitle: 'Частите, а също как изглежда цяло канджи, с прекъсната линия: 土 като 十 + 一',
   },
 )
 
@@ -107,11 +107,11 @@ export function LevelFilter({
   )
 }
 
-/** How the graph draws a part that is a form of another kanji: as that kanji (simple), or as written (expanded). */
-export function FormsView({ simple, onSimple }: { simple: boolean; onSimple: (simple: boolean) => void }) {
+/** What the graph shows under a kanji: only its parts (simple), or its visual splits too (expanded). */
+export function SplitView({ simple, onSimple }: { simple: boolean; onSimple: (simple: boolean) => void }) {
   const t = S(useLang())
   return (
-    <div className="filter forms-view" role="group" aria-label={t('formsView')}>
+    <div className="filter split-view" role="group" aria-label={t('splitView')}>
       <button data-on={simple} title={t('simpleTitle')} onClick={() => onSimple(true)}>
         {t('simple')}
       </button>

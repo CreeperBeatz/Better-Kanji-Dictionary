@@ -228,9 +228,8 @@ built from its root, so it has **no parts of its own**, and it takes its
 root's meaning. When step 1 makes the character a form, steps 2 and 3 are
 not asked, and saving gives it no parts.
 
-The graph shows the relation without a parts line. Its *simple* view draws
-each form as its root (海 as 水 + 毎); its *expanded* view draws the form as
-written, with its root small beside it.
+The graph shows the relation without a parts line: each form is drawn as
+written, with its root in a small circle at its upper right (氵 with 水).
 
 #### Judge it by the kanji
 
@@ -312,7 +311,8 @@ A visual split is for a kanji that stays whole: pieces a learner knows that
 can be seen in it, but that don't make it up. 土 looks like 十 over 一. 為
 ends in 灬, and 出 looks like 山, but neither piece covers the whole kanji.
 Pick or type the pieces, then tick **Only how it looks**. The kanji stays
-whole for the graph and the study order.
+whole for the graph and the study order. The graph's *expanded* view shows
+the pieces under it, dashed; its *simple* view leaves them out.
 
 - **If the pieces cover the whole kanji and help, they are its parts.**
   Don't tick *Only how it looks*. 更 = 丈 + 日 and 成 = 万 + 戈 are parts,

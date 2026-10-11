@@ -14,7 +14,7 @@ import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local } from './local/local'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
-import { FormsView, LevelFilter, type StageView } from './StageControls'
+import { LevelFilter, SplitView, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
@@ -140,8 +140,8 @@ const RAIL_TAB_KEY = 'betterrtk:railTab'
 // dictionary, so its results stay in view while one of them is open. The
 // rail's edge resizes the two together; the edge between them moves the split.
 const SPLIT_KEY = 'betterrtk:searchBeside'
-// '0' when the graph draws forms as written (expanded); simple, each as its kanji, otherwise.
-const FORMS_KEY = 'betterrtk:graphSimple'
+// '0' when the graph shows visual splits too (expanded); only the parts (simple) otherwise.
+const SPLIT_VIEW_KEY = 'betterrtk:graphSimple'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
@@ -472,7 +472,7 @@ export function App() {
   const [filter, setFilter] = useState<ContainerFilter>('common')
   const [simpleGraph, setSimpleGraph] = useState(() => {
     try {
-      return localStorage.getItem(FORMS_KEY) !== '0'
+      return localStorage.getItem(SPLIT_VIEW_KEY) !== '0'
     } catch {
       return true
     }
@@ -480,8 +480,8 @@ export function App() {
   const chooseSimple = useCallback((on: boolean) => {
     setSimpleGraph(on)
     try {
-      if (on) localStorage.removeItem(FORMS_KEY)
-      else localStorage.setItem(FORMS_KEY, '0')
+      if (on) localStorage.removeItem(SPLIT_VIEW_KEY)
+      else localStorage.setItem(SPLIT_VIEW_KEY, '0')
     } catch {
       // not remembered, which is fine
     }
@@ -1820,7 +1820,7 @@ export function App() {
               {!error && (
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
               )}
-              {!error && view === 'focus' && <FormsView simple={simpleGraph} onSimple={chooseSimple} />}
+              {!error && view === 'focus' && <SplitView simple={simpleGraph} onSimple={chooseSimple} />}
               {/* On a phone it sits at the end of the search bar instead, always on screen. */}
               {!mobile && <ProfileButton onOpen={signIn} />}
             </div>
