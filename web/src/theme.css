@@ -1494,6 +1494,32 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper-dim);
 }
 
+/* The word and its reading, wrapping between them: a long word's reading
+   (アイスクリーム) goes under it whole, rather than squeezed beside it until
+   it stands one kana a line. The marks and "common" stay at the top right. */
+.word-spelling {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.word-spelling > :is(.word-reading, .pitch) {
+  white-space: nowrap;
+}
+
+/* In a result row it takes the room the marks leave, and they line up with
+   its first line -- not the word page's head (.word-head further down). */
+.word-card .word-head {
+  align-items: baseline;
+}
+
+.word-card .word-head > .word-spelling {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
 /* Pitch contour: a high mora carries an overline, the drop closes it off. */
 .mora {
   border-top: 1px solid transparent;

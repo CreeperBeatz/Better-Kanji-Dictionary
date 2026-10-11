@@ -295,14 +295,16 @@ function WordRowView({
     <li className="word">
       <button className="word-card" onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
         <span className="word-head">
-          <span className="word-forms">{w.headword}</span>
-          {w.pitch ? (
-            <Pitch reading={w.reading} pitch={w.pitch} mark={w.mark} />
-          ) : (
-            <span className="word-reading">
-              <MarkedReading reading={w.reading} mark={w.mark} />
-            </span>
-          )}
+          <span className="word-spelling">
+            <span className="word-forms">{w.headword}</span>
+            {w.pitch ? (
+              <Pitch reading={w.reading} pitch={w.pitch} mark={w.mark} />
+            ) : (
+              <span className="word-reading">
+                <MarkedReading reading={w.reading} mark={w.mark} />
+              </span>
+            )}
+          </span>
           <Valency word={w} />
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
