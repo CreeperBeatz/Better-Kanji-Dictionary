@@ -89,8 +89,8 @@ name: Цалта's kanji book (by entry number) and Иванов's Bulgarian–J
 dictionary.
 
 - **A second opinion, not the answer.** The books were made by people, but
-  they were transcribed by an AI. The kanji book also splits kanji the way a
-  mnemonic course would, not always by today's shape.
+  they were transcribed by an AI. The kanji book splits kanji the way a
+  mnemonic course would, which is often what we want.
 - **The entry is drawn as the book prints it**, from the transcription:
   number, keyword, parts, level, the kanji, its readings and words, the note.
 - **The printed page is the last resort.** If something in the drawn entry
@@ -254,26 +254,32 @@ The same table is behind the (i) next to *Relation* on every forms card.
 
 #### Which split to take
 
-There is no official decomposition of Japanese kanji. Each answer on the
-card shows which sources give it (KanjiVG, IDS, Цалта's book, cjk-decomp);
-press a label for what each source is and how each splits the character.
-Take them in this order:
+The parts are there to help a learner remember the kanji as it is written
+today. History doesn't decide them: if a kanji's history doesn't help a
+learner see today's shape, leave it out. Learners who want the story get it
+later, in its own place. There is no official decomposition of Japanese
+kanji, so a split is not wrong because a source or the history splits it
+differently. Each answer on the card shows which sources give it (KanjiVG,
+IDS, Цалта's book, cjk-decomp); press a label for what each source is.
+
+Take the split of today's writing that is easiest to remember:
 
 1. **Base kanji stay whole.** 日 木 土 田 大 王 白 are learned as pictures.
-   A split into lookalikes or strokes (日 = 口, 木 = 八 + 十) is neither a
-   source's analysis nor a help: pick *no parts*.
-2. **The split the sources give, if it matches today's shape.** KanjiVG
-   first (it is drawn for Japanese), then IDS and Цалта's book. 春 is 𡗗 +
-   日, as they all say, not 三 + 人 + 日. When a source splits by history,
-   into pieces that no longer look like what is written (段's left half 𠩵,
-   岡's 网), don't take it: keep the character whole, with a visual split of
-   what you can see. History gets its own pass, once the base is done.
-3. **History, when no source helps.** The old form decides between two
-   groupings visible today (従, below). It never adds a part that is gone.
-4. **Your own split** only when none of the above gives one a learner can
-   use (兼). It shows on the page as *BKD*, this dictionary's own. An easier
-   way to see a shape that a source already splits (𡗗 as 三 + 人) goes in
-   the associations, not in the parts.
+   A split into strokes or lookalikes (日 = 口, 木 = 八 + 十) doesn't help
+   anyone: pick *no parts*.
+2. **Pieces a learner knows or meets often.** Take a known kanji over a rare
+   code point: 首 = 䒑 + 自, not 丷 + 𦣻. 延 = 正 + 廴 is fine, even though
+   its top stroke slants. Pieces may be woven into each other: 乗 = 禾 + 龷,
+   制 = 牛 + 巾 + 刂. A recurring piece is a good part even if it is rare as
+   a kanji (龷 in 共 昔 黄).
+3. **Keep middle pieces. Don't go straight to atoms.** It is easier to tie
+   two pieces into one story than three. 職 識 織 all share 戠, so 織 is
+   糹 + 戠, and 戠 is split into 音 + 戈 one level down. Break a middle piece
+   into its pieces only when it appears in this kanji alone.
+4. **The same shape is the same part everywhere.** The tops of 色 and 角
+   are both ⺈.
+5. **Your own split** when no source gives one a learner can use (兼). It
+   shows on the page as *BKD*, this dictionary's own.
 
 What each part *does* (meaning, sound) is not judged here for now.
 
@@ -282,35 +288,30 @@ What each part *does* (meaning, sound) is not judged here for now.
 - **Bare strokes are not parts.** Data sources chop real parts into strokes
   (口 → 丨一); those splits are refused outright. A stroke can still be a
   part after a confirmation, where it plainly is one.
-- **A lookalike is not a part.** 午 visibly contains 干, but no source
-  splits it so. Lookalikes go in *Similar → looks*, where a learner sees
-  them side by side.
+- **A lookalike inside a base kanji is not a part.** 午 visibly contains
+  干, but 午 is learned whole. The likeness goes in *Similar → looks*, where
+  a learner sees them side by side.
 - **Nothing lost.** A split covers the whole shape: 皮 is not just 又.
 
-#### Today's shape, and when the old form decides
+#### When two splits use the same strokes
 
-- **Judge by today's shape.** 青 contains 月, even though the old form 靑 had
-  丹 there. The 丹 belongs in a form note, not in the parts.
-- **Two groupings of the same strokes: the old form decides.** Sometimes
-  today's shape allows two splits that use exactly the same strokes, and only
-  the grouping differs. Look at the old form and group the strokes the way it
-  does. The old form only chooses between splits that are visible today. It
-  never adds a part that is no longer visible.
+- **Take the one with better-known pieces.**
+- **Still a tie? The old form decides.** Group the strokes the way the old
+  form does (従, below). The old form only chooses between splits you can see
+  today. It never adds a part that is no longer visible.
 
 #### A visual split
 
-Some base kanji are learned whole but read as pieces a learner knows: 土
-looks like 十 over 一. That is not what 土 is made from (it is a clod of
-earth on the ground). So give it no parts, and keep the look as a visual
-split: pick or type the pieces, then tick **Only how it looks**. The
-character stays whole for the graph and the study order; the split is kept
-apart from its parts.
+A visual split is for a kanji that stays whole: pieces a learner knows that
+can be seen in it, but that don't make it up. 土 looks like 十 over 一. 為
+ends in 灬, and 出 looks like 山, but neither piece covers the whole kanji.
+Pick or type the pieces, then tick **Only how it looks**. The kanji stays
+whole for the graph and the study order.
 
-- **Only pieces a learner already knows and can see in it.** 土 = 十 + 一.
-  主 looks like 丶 + 王, though it is a lamp with its flame: whole, with that
-  visual split. A piece may cover only part of the shape: 為 ends in 灬, so
-  its visual split is 灬 alone.
-- **Not a stroke split.** 木 = 八 + 十 cuts strokes apart; it is not a way
+- **If the pieces cover the whole kanji and help, they are its parts.**
+  Don't tick *Only how it looks*. 更 = 丈 + 日 and 成 = 万 + 戈 are parts,
+  even though the history is different.
+- **Not a stroke split.** 木 = 八 + 十 cuts strokes apart. It is not a way
   to read 木.
 
 #### A form has no parts here
