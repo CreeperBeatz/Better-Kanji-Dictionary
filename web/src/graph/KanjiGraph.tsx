@@ -38,6 +38,7 @@ const S = strings(
     rare: 'rare',
     zoom: 'Zoom',
     recentre: 'Recentre on {c}',
+    recentreShort: 'Recentre',
     open: 'See in Dictionary',
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
@@ -59,6 +60,7 @@ const S = strings(
     rare: 'рядък',
     zoom: 'Мащаб',
     recentre: 'Центрирайте върху {c}',
+    recentreShort: 'Центрирайте',
     open: 'Вижте в речника',
     zoomIn: 'Приближете',
     zoomOut: 'Отдалечете',
@@ -162,8 +164,6 @@ const PREFETCH = 64
 /** Hover this long before the peek opens, so sweeping across the graph is quiet. */
 const OPEN_DELAY = 120
 const CLOSE_DELAY = 200
-/** Press this long on a touch screen for the menu a right click opens. */
-const HOLD_DELAY = 450
 /** Two taps this close in time and place are a double tap. */
 const DOUBLE_TAP_MS = 300
 const DOUBLE_TAP_PX = 40
@@ -277,11 +277,10 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   const tapZoom = useRef<{ y: number; px: number; py: number; from: View; moved: boolean } | null>(null)
   // The click that ends the second tap must not open a card.
   const zoomTapped = useRef(false)
-  // Touch has no hover or right click: a tap shows a character's card, and
-  // pressing and holding opens the menu a right click does.
+  // Touch has no hover or right click: a tap shows a character's card, with
+  // both what a click does and what the right-click menu does.
   const [card, setCard] = useState<Spot | null>(null)
   const [menu, setMenu] = useState<Spot | null>(null)
-  const hold = useRef<{ timer?: number; shown: boolean }>({ shown: false })
   // What the last press was made with, which decides what its click does.
   const pointer = useRef('mouse')
   const popRef = useRef<HTMLDivElement>(null)
@@ -467,9 +466,8 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     drag.current = { x: e.clientX, y: e.clientY, vx: viewRef.current.x, vy: viewRef.current.y, moved: false }
   }
 
-  /** A gesture has begun: no hold, peek, card or menu outlasts it. */
+  /** A gesture has begun: no peek, card or menu outlasts it. */
   function interrupt() {
-    clearTimeout(hold.current.timer)
     setPeek(null)
     unpop()
   }
@@ -483,9 +481,9 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     pointer.current = e.pointerType
     if (e.button !== 0) return
     if (locked) {
-      // Locked, a finger neither drags nor pinches; it only taps and holds,
-      // and a swipe is the page's, to turn its tab. The press is still
-      // followed, so a moving finger does not count as a hold.
+      // Locked, a finger neither drags nor pinches; it only taps, and a
+      // swipe is the page's, to turn its tab. The press is still followed,
+      // so a moving finger does not count as a tap.
       pinched.current = false
       startDrag(e)
       return
@@ -528,27 +526,6 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     return { char, via, x: e.clientX - rect.left, y: e.clientY - rect.top, width: rect.width, height: rect.height }
   }
 
-  // Letting go leaves the menu up, for the finger to pick from.
-  function startHold(e: React.PointerEvent, char: string, via?: string) {
-    hold.current.shown = false
-    clearTimeout(hold.current.timer)
-    // The one in the middle is the centre already.
-    if (e.pointerType !== 'touch' || char === data.focus.char) return
-    const spot = spotOf(e, char, via)
-    if (!spot) return
-    hold.current.timer = window.setTimeout(() => {
-      hold.current.shown = true
-      drag.current = null
-      setPeek(null)
-      setCard(null)
-      setMenu(spot)
-    }, HOLD_DELAY)
-  }
-
-  function endHold() {
-    clearTimeout(hold.current.timer)
-  }
-
   function onPointerMove(e: React.PointerEvent) {
     const z = tapZoom.current
     if (z) {
@@ -575,9 +552,8 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     const dy = e.clientY - d.y
     if (!d.moved && Math.abs(dx) + Math.abs(dy) > 4) {
       d.moved = true
-      // Locked, the finger moving is no hold, and the rest is the page's.
-      if (locked) clearTimeout(hold.current.timer)
-      else {
+      // Locked, the rest is the page's.
+      if (!locked) {
         // Capture only once it is really a drag, or the click lands on the
         // svg instead of the node under the pointer.
         svgRef.current?.setPointerCapture?.(e.pointerId)
@@ -603,18 +579,12 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     touches.current.delete(e.pointerId)
     if (touches.current.size < 2) pinch.current = null
     drag.current = null
-    endHold()
   }
 
   // A click opens the character's page and leaves the graph as it is; a
   // double click, or the menu, makes it the centre. On a touch screen, where
   // the page is not beside the graph, a tap shows its card instead.
   function activate(e: React.MouseEvent | React.KeyboardEvent, char: string, via?: string) {
-    // The click that ends a press-and-hold only leaves the menu up.
-    if (hold.current.shown) {
-      hold.current.shown = false
-      return
-    }
     if (pinched.current) return
     if (zoomTapped.current) {
       zoomTapped.current = false
@@ -650,12 +620,11 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       onContextMenu: (e: React.MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
-        // Some phones say a long press is one too; the hold has that covered.
+        // Some phones say a long press is one too: on touch, the card has it.
         if (pointer.current === 'touch' || char === data.focus.char) return
         setCard(null)
         setMenu(spotOf(e, char, via))
       },
-      onPointerDown: (e: React.PointerEvent) => startHold(e, char, via),
       onKeyDown: (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
@@ -861,6 +830,9 @@ ${t('form', { f: n.form })}`}
             setCard(null)
             onOpen(card.char, card.via)
           }}
+          recentreLabel={t('recentreShort')}
+          // The one in the middle is the centre already.
+          onRecentre={card.char === data.focus.char ? undefined : () => recentreOn(card.char, card.via)}
         />
       )}
 
