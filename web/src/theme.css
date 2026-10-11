@@ -2980,10 +2980,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   pointer-events: auto;
 }
 
+/* Short of room -- a phone -- the controls wrap onto a second line, at the
+   right like the first, rather than running off the screen's left edge. */
 .stage-corner {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 6px 12px;
+  min-width: 0;
 }
 
 .filter {
