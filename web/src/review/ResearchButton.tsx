@@ -75,12 +75,12 @@ export function researchPrompt(card: CharacterCard, sentence: Sentence): string 
     const from = (who: string[]) => (who.length ? ` (given by ${who.join(', ')})` : '')
     const draft = draftOf(parts)
     lines.push(`${++n}. Parts. Which components is ${c} built from, as it is written in Japan today? Skip this if ${c} is a form of another kanji: a form has no parts of its own.`)
-    lines.push('   Rules: a basic pictograph stays one piece. Otherwise prefer the split the standard sources give for today’s shape. Use the old form only when the sources do not decide. A shape that only looks like a part is not a part. Every part must be a real character or component, and together they must cover the whole shape.')
+    lines.push('   Rules: a basic pictograph stays one piece. Otherwise pick the split of today’s shape that is easiest to remember: pieces a learner knows, and middle pieces kept whole (築 = 筑 + 木, not four pieces). History does not decide. Every part must be a real character or component, and together they must cover the whole shape.')
     const opts = partsOptions(parts, card.context.parts, draft).map((o) => {
       if (o.key === 'now') return `Keep it as it is: ${list(o.parts)}${from(by(o.parts))}`
       if (o.key === 'atomic') return 'No parts: it is learned as one piece'
       if (o.key === 'draft' && draft)
-        return `Use the AI draft: ${list(o.parts)}${from(['an AI draft (Claude Sonnet)', ...by(o.parts)])}. The draft’s reason: ${draft.why}`
+        return `Use the AI draft: ${list(o.parts)}${from([`an AI draft (Claude ${draft.model === 'opus' ? 'Opus' : 'Sonnet'})`, ...by(o.parts)])}. The draft’s reason: ${draft.why}`
       return `Use the proposal: ${list(o.parts)}${from(by(o.parts).length ? by(o.parts) : [o.item?.source ?? 'a source'])}`
     })
     answers([...opts, 'Something else: a split of your own'])

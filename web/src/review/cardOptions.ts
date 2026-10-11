@@ -13,6 +13,8 @@ export interface Draft {
   confidence: number
   lookalikes?: string[]
   flags?: string[]
+  /** Which model drafted it; Sonnet when absent (the first drafts). */
+  model?: 'sonnet' | 'opus'
 }
 
 export interface PartsOption {
