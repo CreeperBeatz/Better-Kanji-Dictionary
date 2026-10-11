@@ -623,12 +623,16 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-underline-offset: 3px;
 }
 
-/* How the meanings follow from each other. */
+/* How the meanings follow from each other: the story of the whole kanji, set
+   in the head's serif, apart from each meaning's own sans explanation. */
 .meanings-link {
-  margin: 0 0 10px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--paper-dim);
+  margin: 4px 0 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ai);
+  font-family: var(--mincho);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--paper);
 }
 
 /* One meaning: what it is, its words by reading, what is close to it. */
