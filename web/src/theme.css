@@ -509,6 +509,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
+.facts-radical-root {
+  font-family: var(--mincho);
+  color: var(--muted);
+}
+
 /* Its readings, one line each: the reading, what the word it forms means,
    が or を, and the commonest words read that way. Each group's lines share
    one grid, so the readings line up. */

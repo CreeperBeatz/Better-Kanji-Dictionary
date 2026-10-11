@@ -954,9 +954,23 @@ def kanji_page(char: str) -> dict:
     out["special"] = [as_here(r) for r in shown if r["word_id"] in words]
     rad = query_one("SELECT number, radical FROM classical_radical WHERE char = ?", (char,)) if has_readings else None
     if rad:
+        from .. import forms
+        from .graph import children_of
+
+        # The radical as the kanji writes it: 犯 has 犭, a form of 犬.
+        parts: set[str] = set()
+        frontier = [char]
+        while frontier:
+            frontier = [c for cs in children_of(frontier).values() for c in cs if c not in parts]
+            parts.update(frontier)
+        roots = forms.roots()
+        written = rad["radical"] if rad["radical"] in parts else next(
+            (c for c in sorted(parts) if roots.get(c) == rad["radical"]), rad["radical"]
+        )
         node = _fetch([rad["radical"]]).get(rad["radical"])
         out["radical"] = {
-            "char": rad["radical"], "number": rad["number"],
+            "char": rad["radical"], "written": written,
+            "number": rad["number"],
             "meanings": node["meanings"] if node else [], "meaningsBg": node.get("meaningsBg") if node else None,
         }
     return out

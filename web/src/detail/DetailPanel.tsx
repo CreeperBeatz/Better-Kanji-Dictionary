@@ -29,7 +29,7 @@ const S = strings(
     gradeSecondary: 'secondary school',
     gradeNames: 'name kanji (jinmeiyō)',
     radical: 'Radical',
-    radicalNo: 'no. {n}',
+    isRadical: 'one of the 214 radicals, no. {n}',
     onThisPage: 'On this page',
     meanings: 'Meanings',
     writing: 'Writing',
@@ -57,7 +57,7 @@ const S = strings(
     gradeSecondary: 'средно училище',
     gradeNames: 'канджи за имена (джинмейо)',
     radical: 'Ключ',
-    radicalNo: '№ {n}',
+    isRadical: 'един от 214-те ключа, № {n}',
     onThisPage: 'На тази страница',
     meanings: 'Значения',
     writing: 'Писане',
@@ -277,17 +277,23 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <>
             <dt>{t('radical')}</dt>
             <dd>
-              {radical.char === n.char ? (
-                <span className="facts-radical" lang="ja">
-                  {radical.char}
-                </span>
+              {/* Its number says something only on the radical's own page: 犬 is no. 94. */}
+              {radical.char === n.char || radical.written === n.char ? (
+                t('isRadical', { n: radical.number })
               ) : (
-                <button className="yomi-link facts-radical" lang="ja" onClick={() => onKanji(radical.char)}>
-                  {radical.char}
-                </button>
-              )}{' '}
-              {t('radicalNo', { n: radical.number })}
-              {radicalMeaning && `, ${radicalMeaning}`}
+                <>
+                  <button className="yomi-link facts-radical" lang="ja" onClick={() => onKanji(radical.written)}>
+                    {radical.written}
+                  </button>
+                  {/* Written as a form of it, as the graph circles a form's root: 犭 (犬). */}
+                  {radical.written !== radical.char && (
+                    <span className="facts-radical-root" lang="ja">
+                      {' '}({radical.char})
+                    </span>
+                  )}
+                  {radicalMeaning && `, ${radicalMeaning}`}
+                </>
+              )}
             </dd>
           </>
         )}
