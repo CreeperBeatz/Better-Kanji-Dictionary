@@ -626,6 +626,26 @@ on the site changes, whatever you decide.
 Decisions that took thought. When you meet one, write your reasoning in the
 reason field and tell the admin, so it can be added here.
 
+### 不 and 非: two ways to say "not"
+
+*Noted 2026-10-11, before their cards were reviewed.* Both kanji put "not"
+in front of a word. The drafts explain each one alone and don't say how
+they differ: 不's *same meaning* list has only 無, and 非's has only 未.
+
+- **不 negates an action or a state.** The thing is not done, or not so:
+  不快 *uncomfortable*, 不安 *uneasy*, 不便 *inconvenient*, 不足 *not
+  enough*.
+- **非 negates a category or an identity.** The thing is not one of a kind:
+  非人間的 *inhuman*, 非金属 *nonmetal*, 非公式 *unofficial*.
+
+> **Decision:** in the *not* group of each card, the line on what the kanji
+> does says the difference, with one example of each. In step 2, put each
+> kanji in the other's *not* group. They share no kun reading, so step 3
+> doesn't ask about them.
+
+> **Lesson:** when two kanji share a meaning, the line on what the kanji
+> does should tell a learner which one to pick.
+
 ### 丷: a shape, not a form of 从 or 八
 
 *Seen 2026-10-06.* 丷 had two *is a form of* proposals waiting: 从 (from
