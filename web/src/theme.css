@@ -637,8 +637,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
    in the head's serif, apart from each meaning's own sans explanation. */
 .meanings-link {
   margin: 4px 0 12px;
-  padding-left: 12px;
-  border-left: 2px solid var(--ai);
   font-family: var(--mincho);
   font-size: calc(15px * var(--type));
   line-height: 1.55;
