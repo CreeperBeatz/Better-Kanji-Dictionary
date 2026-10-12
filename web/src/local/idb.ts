@@ -2,21 +2,20 @@
  * The offline pack's home in IndexedDB.
  *
  *   meta     'pack' -> the installed pack; 'progress' -> a download underway
- *   files    '<version>/<name>' -> index.bin (ArrayBuffer), kanji.json (text)
+ *   files    '<version>/<name>' -> index.bin (ArrayBuffer), kanji.json (text);
+ *            '<version>/page/<char>' -> the kanji's page, its words by id
  *   words    JMdict id -> RawWord
  *   strokes  char -> SVG paths
- *   pages    '<version>/<char>' -> the kanji's page, its words by id
  *
  * Entries and strokes are not versioned: ids are stable across JMdict
  * releases, so a new pack overwrites them in place while the old index keeps
  * answering, and a word that has since left the dictionary just goes unused.
- * Pages are versioned, as their meanings change with every review.
  */
 
 import type { EntryStore, RawWord } from './engine'
 
 const NAME = 'bkd-offline'
-const STORES = ['meta', 'files', 'words', 'strokes', 'pages'] as const
+const STORES = ['meta', 'files', 'words', 'strokes'] as const
 type StoreName = (typeof STORES)[number]
 
 export interface InstalledPack {
@@ -25,6 +24,8 @@ export interface InstalledPack {
   /** What was downloaded, compressed. */
   gz: number
   installed: string
+  /** Each file's hash: what an update need not fetch again. Absent before packs had them. */
+  files?: Record<string, string>
 }
 
 export interface Progress {
@@ -57,8 +58,7 @@ export class Db {
   }
 
   static async open(): Promise<Db> {
-    // 2: the pages store.
-    const req = indexedDB.open(NAME, 2)
+    const req = indexedDB.open(NAME, 1)
     req.onupgradeneeded = () => {
       for (const s of STORES) if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s)
     }
@@ -98,8 +98,14 @@ export class Db {
     await finished(tx)
   }
 
-  async keys(store: StoreName): Promise<IDBValidKey[]> {
-    return promised(this.db.transaction(store).objectStore(store).getAllKeys())
+  /** The records with keys starting `from`, again under `to` in their place. */
+  async copyPrefix(store: StoreName, from: string, to: string): Promise<void> {
+    const tx = this.db.transaction(store, 'readwrite')
+    const os = tx.objectStore(store)
+    const range = IDBKeyRange.bound(from, from + String.fromCharCode(0xffff))
+    const [keys, values] = await Promise.all([promised(os.getAllKeys(range)), promised(os.getAll(range))])
+    keys.forEach((k, i) => os.put(values[i], to + String(k).slice(from.length)))
+    await finished(tx)
   }
 
   /** Many records in one transaction, which is what makes 218,000 of them affordable. */
@@ -129,7 +135,7 @@ export class Db {
     return {
       words: (ids) => this.getMany<RawWord>('words', ids) as Promise<Map<number, RawWord>>,
       strokes: (char) => this.get<string[]>('strokes', char).then((v) => v ?? null),
-      page: (char) => this.get<unknown>('pages', `${version}/${char}`).then((v) => v ?? null),
+      page: (char) => this.get<unknown>('files', `${version}/page/${char}`).then((v) => v ?? null),
     }
   }
 }

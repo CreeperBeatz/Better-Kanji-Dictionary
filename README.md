@@ -106,6 +106,8 @@ server answered it when the pack was built, its words by id. A page opens from
 the device at once and the server's copy, which may be newer, replaces it when
 it comes. So the pack also follows the reviewed meanings: like decompositions
 and the Bulgarian, they rebuild it once they have been left alone for ten minutes.
+The manifest has each file's hash, and a device fetches only the files that
+changed: after a reviewed meaning, that is pages.json, 1.4 MB.
 
 The device has to find what the server finds, so `web/src/local/` ports the
 server's search, deinflection and handwriting matcher line for line, and

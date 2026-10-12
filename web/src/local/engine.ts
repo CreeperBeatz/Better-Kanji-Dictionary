@@ -64,7 +64,7 @@ export type RawWord = [
 export interface EntryStore {
   words(ids: number[]): Promise<Map<number, RawWord>>
   strokes(char: string): Promise<string[] | null>
-  /** A kanji's page from pages.json, its words as {"$w": id, "m": mark, "h": headword, "r": reading}. Null before packs had pages. */
+  /** A kanji's page from pages.json, each word as {"$w": id} plus what the page changed in it. Null before packs had pages. */
   page(char: string): Promise<unknown>
 }
 
@@ -683,12 +683,8 @@ export class Engine {
       if (Array.isArray(v)) return v.map(fill)
       if (!v || typeof v !== 'object') return v
       if ('$w' in v) {
-        // The spelling the page shows it in, where that is not the entry's own.
-        const { $w, m, h, r } = v as { $w: number; m?: [number, number] | null; h?: string; r?: string }
-        const word: Word = toWord(words.get($w)!)
-        if (h !== undefined) word.headword = h
-        if (r !== undefined) word.reading = r
-        return m !== undefined ? { ...word, mark: m } : word
+        const { $w, ...changed } = v as { $w: number }
+        return { ...toWord(words.get($w)!), ...changed }
       }
       return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]))
     }

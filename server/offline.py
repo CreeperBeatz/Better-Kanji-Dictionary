@@ -25,6 +25,9 @@ objects, so the pack is split in two:
                words by id (the client has them in the words store), so a
                page opens before the server answers, and offline too.
 
+Each file's hash is in the manifest, and a client fetches only the files that
+changed: a reviewed meaning changes pages.json alone, 1.4 MB of 26.
+
 The full-text indexes are read back out of the database's own FTS5 tables
 through fts5vocab rather than re-tokenised here, so the client's index is
 exactly the one the server searches.
@@ -44,7 +47,7 @@ import time
 from array import array
 from pathlib import Path
 
-from . import bg_overlay
+from . import bg_overlay, scope
 from .db import DB_PATH
 
 # Bump when the pack's layout changes, so every client fetches a new one.
@@ -52,7 +55,7 @@ from .db import DB_PATH
 # 3: the English index one row per gloss, with n and place; word levels.
 # 4: no radicals (the radical picker is gone).
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
-# 6: the kanji pages (pages.json).
+# 6: the kanji pages (pages.json); each file's hash in the manifest.
 FORMAT = 6
 
 OUT = DB_PATH.parent / "offline"
@@ -522,43 +525,41 @@ def build(force: bool = False) -> dict:
 
 
 def _pages(conn: sqlite3.Connection) -> dict:
-    """The kanji pages worth having: every kanji with a level, a frequency, a grade or a
-    common word, unless its page would be empty."""
-    from .routes.search import kanji_page
+    """The page of every kanji review covers (server/scope.py), as the server renders it."""
+    from .routes.search import _fetch_words, kanji_page
 
-    chars = [r[0] for r in conn.execute(
-        "SELECT char FROM kanji WHERE jlpt IS NOT NULL OR freq IS NOT NULL OR grade IS NOT NULL "
-        "OR char IN (SELECT wc.char FROM word_char wc JOIN word w ON w.id = wc.word_id WHERE w.common = 1) "
-        "ORDER BY char"
-    )]
-    spelled = {r[0]: (r[1], r[2]) for r in conn.execute("SELECT id, headword, reading FROM word")}
     out = {}
-    for char in chars:
+    for char in scope.kanji(conn):
         page = kanji_page(char)
-        if any(page[k] for k in ("meanings", "link", "readings", "special", "soundOnly", "mixups")):
-            out[char] = _word_ids(page, spelled)
+        ids: set[int] = set()
+        _words_in(page, ids)
+        out[char] = _word_refs(page, _fetch_words(sorted(ids)))
     return out
 
 
-def _word_ids(value, spelled: dict[int, tuple[str, str]]):
-    """`value` with every dictionary entry in it as {"$w": id, "m": mark}: the client fills
-    the entry back in from its words store, which holds exactly what the server sends. A page
-    shows a word in the spelling with its kanji (今一つ for 今ひとつ under 今): that spelling
-    is "h" and "r", where it is not the entry's own."""
+def _is_word(value) -> bool:
+    return isinstance(value, dict) and isinstance(value.get("id"), int) and "headword" in value and "senses" in value
+
+
+def _words_in(value, ids: set[int]) -> None:
+    if _is_word(value):
+        ids.add(value["id"])
+    elif isinstance(value, dict | list):
+        for v in value.values() if isinstance(value, dict) else value:
+            _words_in(v, ids)
+
+
+def _word_refs(value, entries: dict[int, dict]):
+    """`value` with every dictionary entry in it as {"$w": id} plus what the page changed
+    in it (its mark, the spelling with the kanji: 今一つ for 今ひとつ). The client fills in
+    the rest from its words store, which holds the entries as `_fetch_words` gives them."""
+    if _is_word(value):
+        entry = entries.get(value["id"], {})
+        return {"$w": value["id"], **{k: v for k, v in value.items() if k not in entry or entry[k] != v}}
     if isinstance(value, dict):
-        if isinstance(value.get("id"), int) and "headword" in value and "senses" in value:
-            ref = {"$w": value["id"]}
-            if "mark" in value:
-                ref["m"] = value["mark"]
-            own = spelled.get(value["id"], (None, None))
-            if value["headword"] != own[0]:
-                ref["h"] = value["headword"]
-            if value["reading"] != own[1]:
-                ref["r"] = value["reading"]
-            return ref
-        return {k: _word_ids(v, spelled) for k, v in value.items()}
+        return {k: _word_refs(v, entries) for k, v in value.items()}
     if isinstance(value, list):
-        return [_word_ids(v, spelled) for v in value]
+        return [_word_refs(v, entries) for v in value]
     return value
 
 
@@ -581,7 +582,9 @@ def _publish(key: str, files: dict[str, bytes], started: float) -> dict:
     for name in sorted(files):
         packed = gzip.compress(files[name], compresslevel=9, mtime=0)
         (tmp / f"{name}.gz").write_bytes(packed)
-        listed.append({"name": name, "bytes": len(files[name]), "gz": len(packed)})
+        # A client that has this file from the last pack keeps it rather than fetching it again.
+        sha = hashlib.sha256(files[name]).hexdigest()[:16]
+        listed.append({"name": name, "bytes": len(files[name]), "gz": len(packed), "sha": sha})
 
     final = OUT / version
     shutil.rmtree(final, ignore_errors=True)

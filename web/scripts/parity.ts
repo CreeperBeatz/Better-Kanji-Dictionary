@@ -151,17 +151,15 @@ function firstDiff(a: unknown, b: unknown, at = ''): [string, unknown, unknown] 
   return [at || '.', a, b]
 }
 
-// A page the pack lacks must be one with nothing on it: the device answers null and the server is asked.
+// A kanji outside review's scope has no page in the pack: the device answers null and the server is asked.
 let kpOk = 0
 let kpNone = 0
 let kpMs = 0
-const empty = (p: KanjiPage) =>
-  !p.meanings.length && !p.link && !Object.keys(p.readings).length && !p.special.length && !p.soundOnly && !p.mixups.length
 for (const { char, out } of golden.kanjiPage) {
   const s = performance.now()
   const got = await engine.kanjiPage(char)
   kpMs += performance.now() - s
-  if (got === null && empty(out)) kpNone++
+  if (got === null && !(char in pages)) kpNone++
   else if (same(out, got)) kpOk++
   else {
     const [where, want, have] = firstDiff(canonical(out), canonical(got))
@@ -169,7 +167,7 @@ for (const { char, out } of golden.kanjiPage) {
   }
 }
 console.log(
-  `kanji-page: ${kpOk}/${golden.kanjiPage.length} identical, ${kpNone} empty and not in the pack, ` +
+  `kanji-page: ${kpOk}/${golden.kanjiPage.length} identical, ${kpNone} out of scope and not in the pack, ` +
     `${(kpMs / golden.kanjiPage.length).toFixed(1)} ms per page`,
 )
 

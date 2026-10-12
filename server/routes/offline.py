@@ -29,7 +29,7 @@ def manifest():
         {
             "version": m["version"],
             "built": m["built"],
-            "files": [{"name": f["name"], "bytes": f["bytes"], "gz": f["gz"]} for f in m["files"]],
+            "files": [{"name": f["name"], "bytes": f["bytes"], "gz": f["gz"], "sha": f.get("sha")} for f in m["files"]],
         },
         headers=NO_STORE,
     )

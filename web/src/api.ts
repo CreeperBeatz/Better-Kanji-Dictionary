@@ -1091,10 +1091,6 @@ export const api = {
   /** A kanji page's meanings, readings and words, and its radical. */
   kanjiPage: kept((char: string) => get<KanjiPage>(`/api/search/kanji-page/${encodeURIComponent(char)}`)),
 
-  /** The same page as the offline pack has it: at once, but as of the pack's build. Null without one. */
-  kanjiPageOnDevice: (char: string): Promise<KanjiPage | null> =>
-    (local.kanjiPage(char) ?? Promise.resolve(null)).catch(() => null),
-
   /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */
   readingWords: (char: string) =>
     localFirst(local.readingWords(char), () =>
