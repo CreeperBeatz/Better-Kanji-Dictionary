@@ -1088,7 +1088,7 @@ export const api = {
       ['limit', String(limit)],
     ]),
 
-  /** A kanji page's meanings, readings and words, and its radical. Server only. */
+  /** A kanji page's meanings, readings and words, and its radical. */
   kanjiPage: kept((char: string) => get<KanjiPage>(`/api/search/kanji-page/${encodeURIComponent(char)}`)),
 
   /** For each of a character's readings, the word it forms -- 上げる for あ.げる on 上. */

@@ -21,6 +21,12 @@ objects, so the pack is split in two:
   kanji.json   the character table, the handwriting references, levels
                and each kanji's common words. Small enough to hold.
   strokes.json stroke paths, for the stroke-order diagram.
+  pages.json   each kanji's page as /api/search/kanji-page answers it, its
+               words by id (the client has them in the words store), so a
+               page opens before the server answers, and offline too.
+
+Each file's hash is in the manifest, and a client fetches only the files that
+changed: a reviewed meaning changes pages.json alone, 1.4 MB of 26.
 
 The full-text indexes are read back out of the database's own FTS5 tables
 through fts5vocab rather than re-tokenised here, so the client's index is
@@ -41,7 +47,7 @@ import time
 from array import array
 from pathlib import Path
 
-from . import bg_overlay
+from . import bg_overlay, scope
 from .db import DB_PATH
 
 # Bump when the pack's layout changes, so every client fetches a new one.
@@ -49,7 +55,8 @@ from .db import DB_PATH
 # 3: the English index one row per gloss, with n and place; word levels.
 # 4: no radicals (the radical picker is gone).
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
-FORMAT = 5
+# 6: the kanji pages (pages.json); each file's hash in the manifest.
+FORMAT = 6
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -511,9 +518,49 @@ def build(force: bool = False) -> dict:
         }
     )
     files["strokes.json"] = _json(strokes)
+    files["pages.json"] = _json(_pages(conn))
     conn.close()
 
     return _publish(key, files, started)
+
+
+def _pages(conn: sqlite3.Connection) -> dict:
+    """The page of every kanji review covers (server/scope.py), as the server renders it."""
+    from .routes.search import _fetch_words, kanji_page
+
+    out = {}
+    for char in scope.kanji(conn):
+        page = kanji_page(char)
+        ids: set[int] = set()
+        _words_in(page, ids)
+        out[char] = _word_refs(page, _fetch_words(sorted(ids)))
+    return out
+
+
+def _is_word(value) -> bool:
+    return isinstance(value, dict) and isinstance(value.get("id"), int) and "headword" in value and "senses" in value
+
+
+def _words_in(value, ids: set[int]) -> None:
+    if _is_word(value):
+        ids.add(value["id"])
+    elif isinstance(value, dict | list):
+        for v in value.values() if isinstance(value, dict) else value:
+            _words_in(v, ids)
+
+
+def _word_refs(value, entries: dict[int, dict]):
+    """`value` with every dictionary entry in it as {"$w": id} plus what the page changed
+    in it (its mark, the spelling with the kanji: 今一つ for 今ひとつ). The client fills in
+    the rest from its words store, which holds the entries as `_fetch_words` gives them."""
+    if _is_word(value):
+        entry = entries.get(value["id"], {})
+        return {"$w": value["id"], **{k: v for k, v in value.items() if k not in entry or entry[k] != v}}
+    if isinstance(value, dict):
+        return {k: _word_refs(v, entries) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_word_refs(v, entries) for v in value]
+    return value
 
 
 def _json(value) -> bytes:
@@ -535,7 +582,9 @@ def _publish(key: str, files: dict[str, bytes], started: float) -> dict:
     for name in sorted(files):
         packed = gzip.compress(files[name], compresslevel=9, mtime=0)
         (tmp / f"{name}.gz").write_bytes(packed)
-        listed.append({"name": name, "bytes": len(files[name]), "gz": len(packed)})
+        # A client that has this file from the last pack keeps it rather than fetching it again.
+        sha = hashlib.sha256(files[name]).hexdigest()[:16]
+        listed.append({"name": name, "bytes": len(files[name]), "gz": len(packed), "sha": sha})
 
     final = OUT / version
     shutil.rmtree(final, ignore_errors=True)
@@ -567,6 +616,11 @@ def _publish(key: str, files: dict[str, bytes], started: float) -> dict:
 
 
 if __name__ == "__main__":
+    from .review import load_bg_overlay, refresh_pack_key
+
+    # As the server would build it: with the reviewed Bulgarian, and the meanings as they are now.
+    load_bg_overlay()
+    refresh_pack_key()
     force = "--force" in sys.argv
     m = build(force=force)
     total = sum(f["gz"] for f in m["files"])

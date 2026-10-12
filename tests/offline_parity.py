@@ -5,7 +5,7 @@
     python tests/offline_parity.py --keep DIR # and leave the answers in DIR
 
 Asks the server's own route functions -- search, recognise, words-for,
-reading-words -- then has web/scripts/parity.ts put the same questions to
+reading-words, kanji-page -- then has web/scripts/parity.ts put the same questions to
 the TypeScript engine over the built offline pack, and lists every answer
 that differs. Queries are the hand-picked hard cases below plus a seeded
 random sample of real headwords, readings, glosses and their prefixes, each
@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT))
 from server import bulgarian, offline, recognize  # noqa: E402
 from server.db import query  # noqa: E402
 from server.japanese import katakana_to_hiragana  # noqa: E402
-from server.routes.search import reading_words, search, words_for_kanji  # noqa: E402
+from server.routes.search import kanji_page, reading_words, search, words_for_kanji  # noqa: E402
 from server import review  # noqa: E402
 
 # The reviewed Bulgarian, as the app loads it at startup (server/app.py); the
@@ -170,6 +170,8 @@ def jittered(char: str, rng: random.Random) -> list[list[list[float]]] | None:
 def main() -> int:
     quick = "--quick" in sys.argv
     rng = random.Random(20260923)
+    # The pack carries the kanji pages as the meanings are now, not as of the last quiet moment.
+    review.refresh_pack_key()
     m = offline.build()
     pack_dir = offline.OUT / m["version"]
 
@@ -185,7 +187,7 @@ def main() -> int:
         asked += [(q, "en", True, how) for q in HARD + queries[: 50 if quick else 300]]
         asked += [(q, "bg", False, how) for q in HARD_BG]
     print(f"asking the server {len(asked)} searches")
-    golden: dict = {"search": [], "bulgarian": [], "draw": [], "wordsFor": [], "readingWords": []}
+    golden: dict = {"search": [], "bulgarian": [], "draw": [], "wordsFor": [], "readingWords": [], "kanjiPage": []}
     for q, lang, common, (sort, order) in asked:
         out = search(q=q[:64], limit=30, lang=lang, common=common, sort=sort, order=order)
         golden["search"].append({"q": q[:64], "lang": lang, "common": common, "sort": sort, "order": order, "out": out})
@@ -217,6 +219,11 @@ def main() -> int:
         golden["wordsFor"].append({"char": char, "out": [w["id"] for w in words_for_kanji(char, limit=12)["words"]]})
         out = {r: w["id"] for r, w in reading_words(char)["words"].items()}
         golden["readingWords"].append({"char": char, "out": out})
+
+    # Kanji pages: a few with everything on them, then a sample. A character with no
+    # page in the pack (a rare one, kana) is null on the device; the server answers it.
+    for char in list("上今生行日人々") + rng.sample(common, 60 if quick else 400) + ["𩸽", "あ", "x"]:
+        golden["kanjiPage"].append({"char": char, "out": kanji_page(char)})
 
     web = ROOT / "web"
     keep = sys.argv[sys.argv.index("--keep") + 1] if "--keep" in sys.argv else None

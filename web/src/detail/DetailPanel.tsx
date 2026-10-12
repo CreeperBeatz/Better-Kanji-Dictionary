@@ -3,6 +3,7 @@ import { api, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingIn
 import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { plainReading } from '../local/japanese'
+import { local } from '../local/local'
 import { KanjiMeta } from './HeadMeta'
 import { realMeanings } from './meanings'
 import { KanjiEditButton } from '../review/PageEdit'
@@ -163,6 +164,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   // Its meanings with their readings and words, special readings and radical.
   // Offline, only the word each reading forms, from the device: `full` false.
   const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(null)
+  // The same page from the offline pack: at once, but as of the pack's build.
+  const [onDevice, setOnDevice] = useState<KanjiPage | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
 
@@ -178,6 +181,10 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         (d) => !stale && setWords(d.words),
         () => {},
       )
+    local.kanjiPage(char)?.then(
+      (d) => !stale && setOnDevice(d),
+      () => {},
+    )
     api.kanjiPage(char).then(
       (d) => {
         if (stale) return
@@ -210,8 +217,16 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
 
   // A page already fetched is drawn at once: a phone puts the panel away with
   // every other tab, and its overview coming in late pushed the page down.
+  // The server's page, else the device's, else the readings alone.
   const kept = api.kanjiPage.peek(n.char)
-  const here = kept ? { char: n.char, data: kept, full: true } : page?.char === n.char ? page : null
+  const mine = page?.char === n.char ? page : null
+  const here = kept
+    ? { char: n.char, data: kept, full: true }
+    : mine?.full
+      ? mine
+      : onDevice?.char === n.char
+        ? { char: n.char, data: onDevice, full: true }
+        : mine
   const unit = !isPreview && here && here.data.meanings.length > 0 ? here.data : null
   const special = here?.data.special ?? []
   const vocabRow = (w: Word) => (

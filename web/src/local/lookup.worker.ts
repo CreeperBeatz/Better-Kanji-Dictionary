@@ -12,7 +12,7 @@ import { INITIAL, type FromWorker, type Method, type OfflineStatus, type ToWorke
 interface Manifest {
   version: string
   built: string
-  files: { name: string; bytes: number; gz: number }[]
+  files: { name: string; bytes: number; gz: number; sha?: string }[]
 }
 
 const ctx = self as unknown as {
@@ -51,7 +51,7 @@ async function load(version: string): Promise<Engine> {
   const index = await db!.get<ArrayBuffer>('files', `${version}/index.bin`)
   const kanji = await db!.get<string>('files', `${version}/kanji.json`)
   if (!index || !kanji) throw new Error('the pack on this device is incomplete')
-  return new Engine(index, JSON.parse(kanji) as KanjiPack, db!.entries())
+  return new Engine(index, JSON.parse(kanji) as KanjiPack, db!.entries(version))
 }
 
 async function init(auto: boolean): Promise<void> {
@@ -130,10 +130,22 @@ async function fetchFile(m: Manifest, name: string, signal: AbortSignal, onBytes
   } else if (name === 'strokes.json') {
     const strokes = Object.entries(JSON.parse(text) as Record<string, string[]>)
     for (let i = 0; i < strokes.length; i += 2000) await db!.putMany('strokes', strokes.slice(i, i + 2000))
+  } else if (name === 'pages.json') {
+    const pages = Object.entries(JSON.parse(text) as Record<string, unknown>)
+    for (let i = 0; i < pages.length; i += 1000) {
+      await db!.putMany('files', pages.slice(i, i + 1000).map(([c, p]) => [`${m.version}/page/${c}`, p]))
+    }
   } else if (name.startsWith('words-')) {
     const words = JSON.parse(text) as [number, ...unknown[]][]
     await db!.putMany('words', words.map((w) => [w[0], w]))
   }
+}
+
+/** A file the installed pack has as it is: kept under the new version, not fetched again. */
+async function keep(from: string, to: string, name: string): Promise<void> {
+  if (name.startsWith('words-') || name === 'strokes.json') return // not versioned: already there
+  const key = name === 'pages.json' ? 'page/' : name
+  await db!.copyPrefix('files', `${from}/${key}`, `${to}/${key}`)
 }
 
 // What makes search work goes first, stroke diagrams last.
@@ -192,23 +204,31 @@ async function run(signal: AbortSignal, retried = false): Promise<void> {
       setStatus({ progress: p })
     }
 
+    const have = installed?.files ?? {}
     for (const f of [...m.files].sort((a, b) => rank(a.name) - rank(b.name))) {
       if (progress.done.includes(f.name)) continue
       if (signal.aborted) throw new DOMException('stopped', 'AbortError')
-      await fetchFile(m, f.name, signal, report)
+      if (installed && f.sha && have[f.name] === f.sha) await keep(installed.version, m.version, f.name)
+      else {
+        if (installed && have[f.name]) {
+          // Words and strokes are overwritten in place: the installed pack's copy is not that file any more.
+          delete have[f.name]
+          await db!.put('meta', 'pack', installed)
+        }
+        await fetchFile(m, f.name, signal, report)
+      }
       done += f.bytes
       progress.done.push(f.name)
       await db!.put('meta', 'progress', progress)
     }
 
-    const pack: InstalledPack = { version: m.version, built: m.built, gz, installed: new Date().toISOString() }
+    const files = Object.fromEntries(m.files.flatMap((f) => (f.sha ? [[f.name, f.sha]] : [])))
+    const pack: InstalledPack = { version: m.version, built: m.built, gz, installed: new Date().toISOString(), files }
     const next = await load(m.version)
     await db!.put('meta', 'pack', pack)
     await db!.delete('meta', 'progress')
     engine = next
-    for (const key of await db!.keys('files')) {
-      if (!String(key).startsWith(`${m.version}/`)) await db!.delete('files', key)
-    }
+    await db!.deleteAllBut('files', `${m.version}/`)
     setStatus({ state: 'ready', updating: false, progress: null, version: m.version, built: m.built, gz, error: null })
   } catch (e) {
     if (e instanceof PackChanged && !retried) return run(signal, true)
@@ -275,6 +295,8 @@ async function call(method: Method, args: unknown[]): Promise<unknown> {
       return e.wordsFor(args[0] as string)
     case 'kanji':
       return e.kanji(args[0] as string)
+    case 'kanjiPage':
+      return e.kanjiPage(args[0] as string)
     case 'wordEntry':
       return e.wordEntry(args[0] as number)
   }

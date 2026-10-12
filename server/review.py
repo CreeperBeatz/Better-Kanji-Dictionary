@@ -49,9 +49,10 @@ data/meaning_groups.json, data/part_meanings.json); nothing writes those files o
 `git reset --hard` on deploy can never lose a reviewer's work.
 
 An accepted decomposition changes the offline pack, which takes over a
-minute and hundreds of MB to rebuild on the Pi. So the pack's version key
-only moves when decompositions have been left alone for PACK_DELAY: twenty
-accepts in a row cause one rebuild, not twenty.
+minute and hundreds of MB to rebuild on the Pi; so do the Bulgarian and the
+kanji pages' meanings, which the pack carries too. So the pack's version key
+only moves when they have been left alone for PACK_DELAY: twenty accepts in
+a row cause one rebuild, not twenty.
 """
 
 from __future__ import annotations
@@ -141,7 +142,11 @@ CHANGES = ("accept", "edit", "direct", "auto", "revert", "reopen")
 
 MAX_OPEN_SUGGESTIONS = 20
 MAX_TEXT = 500
-PACK_DELAY = 600.0  # seconds of quiet after a decomposition before the offline pack rebuilds
+PACK_DELAY = 600.0  # seconds of quiet after a change to the pack's data before the offline pack rebuilds
+# What the kanji pages in the offline pack are made of (search.kanji_page, through site_meanings and site_usage).
+PAGE_TYPES = ("kanji_senses", "kanji_extras", "word_sense", "usage")
+# A change to any of these, decided or (for the pages) drafted, changes the offline pack.
+PACK_TYPES = ("decomposition", "bg", *PAGE_TYPES)
 
 STROKES = set("一丨丶丿乙亅乚㇒㇏")
 SENSE_ID = re.compile(r"^[a-z0-9-]{1,24}$")
@@ -299,6 +304,10 @@ def _change():
                 "_undo": undo,
             }
             yield work
+            dirty = work["_dirty"]
+            # What was decided, and the drafts the kanji pages fall back on.
+            touched = ({t for t, _ in dirty["live"]} | {d["type"] for d in work["decisions"][len(base["decisions"]):]}
+                       | ({work["items"][i]["type"] for i in dirty["items"]} & set(PAGE_TYPES)))
             _write(conn, base, work)
             conn.execute("COMMIT")
         except BaseException:
@@ -313,6 +322,8 @@ def _change():
             raise
         work.pop("_undo")
         _state = work
+        if touched & set(PACK_TYPES):
+            _schedule_pack()
 
 
 def _write(conn: sqlite3.Connection, base: dict, work: dict) -> None:
@@ -966,14 +977,12 @@ def _apply(data: dict, type_: str, subject: str, value: Any, decision: str, word
         prev = live_value(type_, subject, data)
         _store_decomposition(subject, value)
         data["_undo"].append(lambda: _store_decomposition(subject, prev))
-        _schedule_pack()
         return
     if type_ == "bg":
         prev = live_value("bg", subject, data)
         _set_live(data, "bg", subject, None if value is None else {"value": value, "decision": decision})
         _bg_live(subject, value)
         data["_undo"].append(lambda: _bg_live(subject, prev))
-        _schedule_pack()
         return
     if value is None:
         _set_live(data, type_, subject, None)
@@ -2517,10 +2526,20 @@ def site_usage(char: str) -> list[dict]:
     """The usage cards with a spelling that uses `char` -- 異字同訓, which kanji to
     write for a shared kun reading: 会う, 合う, 遭う -- as the site shows them:
     what reviewers accepted, else the open draft."""
+    global _usage_cards
     with _lock:
         data = _current()
-        cards = {**_open_drafts(data)["usage"], **data["live"]["usage"]}
-    return [c for _, c in sorted(cards.items()) if any(char in s["kanji"] for s in c.get("spellings") or [])]
+        if _usage_cards[0] is not data:
+            # By kanji, once per state: the offline pack asks for thousands.
+            by_char: dict[str, list[dict]] = {}
+            for _, c in sorted({**_open_drafts(data)["usage"], **data["live"]["usage"]}.items()):
+                for k in {k for s in c.get("spellings") or [] for k in s["kanji"]}:
+                    by_char.setdefault(k, []).append(c)
+            _usage_cards = (data, by_char)
+        return list(_usage_cards[1].get(char, []))
+
+
+_usage_cards: tuple[dict | None, dict[str, list[dict]]] = (None, {})
 
 
 def _form_link_rows(subject: str, v: dict) -> tuple[list[tuple[str, str]], list[tuple[str, str, str]]]:
@@ -2563,34 +2582,47 @@ graph.visual_splits = visual_splits
 # ---------------------------------------------------------------- the offline pack
 
 
-def _overrides_key() -> str:
+def _pack_data_key() -> str:
+    """A hash of what the pack is built from out of the review store."""
     ov = store.decomposition_overrides()
-    blob = json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key()
+    with _lock:
+        data = _current()
+        drafts = _open_drafts(data)
+        # What the site shows on kanji pages: the accepted values, and the open drafts it falls
+        # back on (not the whole index: its "clean" is a cache).
+        pages = [{t: data["live"][t] for t in PAGE_TYPES}, [drafts[k] for k in ("senses", "extras", "usage", "words")]]
+    blob = (json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key()
+            + json.dumps(pages, ensure_ascii=False, sort_keys=True, default=str))
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+def refresh_pack_key() -> None:
+    """Move the pack's key to what the data is now, without waiting for quiet (a build by hand does)."""
+    key = _pack_data_key()  # before the write transaction: serialising the meanings takes a while
+    with _change() as data:
+        data["pack_key"] = key
+
+
 def pack_key() -> str:
-    """What the offline pack's version follows: the decompositions as of the last quiet moment."""
-    key = _read().get("pack_key")
-    if key is None:
-        key = _overrides_key()
-        with _change() as data:
-            data["pack_key"] = key
-    return key
+    """What the offline pack's version follows: the decompositions, the Bulgarian and the
+    kanji pages' meanings as of the last quiet moment."""
+    if _read().get("pack_key") is None:
+        refresh_pack_key()
+    return _read()["pack_key"]
 
 
 def _flush_pack() -> None:
     global _pack_timer
-    with _change() as data:
+    with _lock:
         _pack_timer = None
-        data["pack_key"] = _overrides_key()
+    refresh_pack_key()
     from . import offline
 
     offline.ensure_async()
 
 
 def _schedule_pack() -> None:
-    """Rebuild the offline pack once decompositions have been left alone a while."""
+    """Rebuild the offline pack once its data has been left alone a while."""
     global _pack_timer
     with _lock:
         if _pack_timer is not None:

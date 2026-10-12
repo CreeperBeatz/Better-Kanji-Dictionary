@@ -10,6 +10,7 @@
  */
 
 import type {
+  KanjiPage,
   SearchOrder,
   SearchSort,
   DrawCandidate,
@@ -63,6 +64,8 @@ export type RawWord = [
 export interface EntryStore {
   words(ids: number[]): Promise<Map<number, RawWord>>
   strokes(char: string): Promise<string[] | null>
+  /** A kanji's page from pages.json, each word as {"$w": id} plus what the page changed in it. Null before packs had pages. */
+  page(char: string): Promise<unknown>
 }
 
 const NO_INDEX = 0xffffffff
@@ -655,6 +658,37 @@ export class Engine {
     const r = this.row(char)
     if (!r) return null
     return { focus: toNode(r), strokes: (await this.store.strokes(char)) ?? [] }
+  }
+
+  /**
+   * The kanji's page as the server's `kanji_page` answered it when the pack was
+   * built, with its words filled back in. Null when the pack has none for it.
+   */
+  async kanjiPage(char: string): Promise<KanjiPage | null> {
+    const page = await this.store.page(char)
+    if (!page) return null
+    const ids = new Set<number>()
+    const collect = (v: unknown): void => {
+      if (Array.isArray(v)) v.forEach(collect)
+      else if (v && typeof v === 'object') {
+        if ('$w' in v) ids.add((v as { $w: number }).$w)
+        else Object.values(v).forEach(collect)
+      }
+    }
+    collect(page)
+    const words = await this.store.words([...ids])
+    // A word the store lacks would leave a hole in the page: the server's, then.
+    if (words.size < ids.size) return null
+    const fill = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.map(fill)
+      if (!v || typeof v !== 'object') return v
+      if ('$w' in v) {
+        const { $w, ...changed } = v as { $w: number }
+        return { ...toWord(words.get($w)!), ...changed }
+      }
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fill(x)]))
+    }
+    return fill(page) as KanjiPage
   }
 
   /** A dictionary entry without its example sentences, which stay on the server. */
