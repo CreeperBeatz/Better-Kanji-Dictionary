@@ -50,7 +50,8 @@ data/meaning_groups.json, data/part_meanings.json); nothing writes those files o
 
 An accepted decomposition changes the offline pack, which takes over a
 minute and hundreds of MB to rebuild on the Pi; so do the Bulgarian and the
-kanji pages' meanings, which the pack carries too. So the pack's version key
+kanji pages' meanings, which the pack carries too (meanings rebuild only
+its pages.json, which is quicker). So the pack's version key
 only moves when they have been left alone for PACK_DELAY: twenty accepts in
 a row cause one rebuild, not twenty.
 """
@@ -2583,7 +2584,9 @@ graph.visual_splits = visual_splits
 
 
 def _pack_data_key() -> str:
-    """A hash of what the pack is built from out of the review store."""
+    """A hash of what the pack is built from out of the review store, in two parts:
+    `<the whole pack's>.<the kanji pages' alone>`. When only the second moves, only
+    pages.json is built again (server/offline.py)."""
     ov = store.decomposition_overrides()
     with _lock:
         data = _current()
@@ -2591,16 +2594,18 @@ def _pack_data_key() -> str:
         # What the site shows on kanji pages: the accepted values, and the open drafts it falls
         # back on (not the whole index: its "clean" is a cache).
         pages = [{t: data["live"][t] for t in PAGE_TYPES}, [drafts[k] for k in ("senses", "extras", "usage", "words")]]
-    blob = (json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key()
-            + json.dumps(pages, ensure_ascii=False, sort_keys=True, default=str))
-    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+    parts = (json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key(),
+             json.dumps(pages, ensure_ascii=False, sort_keys=True, default=str))
+    return ".".join(hashlib.sha256(b.encode()).hexdigest()[:16] for b in parts)
 
 
 def refresh_pack_key() -> None:
-    """Move the pack's key to what the data is now, without waiting for quiet (a build by hand does)."""
+    """Move the pack's key to what the data is now, without waiting for quiet: on startup,
+    for changes still waiting when the server stopped."""
     key = _pack_data_key()  # before the write transaction: serialising the meanings takes a while
-    with _change() as data:
-        data["pack_key"] = key
+    if key != _read().get("pack_key"):
+        with _change() as data:
+            data["pack_key"] = key
 
 
 def pack_key() -> str:

@@ -1,7 +1,7 @@
 """The offline lookup pack: what search and drawing need,
 built from the database for an installed app to keep on the device.
 
-    python -m server.offline          # build now, if the database changed
+    python -m server.offline          # build now, if anything it is built from changed
 
 The server builds it by itself on startup when the database is newer than the
 last pack, so deploying new data needs nothing extra. Files are written
@@ -26,7 +26,9 @@ objects, so the pack is split in two:
                page opens before the server answers, and offline too.
 
 Each file's hash is in the manifest, and a client fetches only the files that
-changed: a reviewed meaning changes pages.json alone, 1.4 MB of 26.
+changed: a reviewed meaning changes pages.json alone, 1.4 MB of 26. Nor does
+the server build the rest again then: the new pack links the other files from
+the last one.
 
 The full-text indexes are read back out of the database's own FTS5 tables
 through fts5vocab rather than re-tokenised here, so the client's index is
@@ -38,6 +40,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -45,6 +48,7 @@ import sys
 import threading
 import time
 from array import array
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import bg_overlay, scope
@@ -63,6 +67,8 @@ CURRENT = OUT / "current.json"
 
 WORD_CHUNK = 10_000
 WORDS_FOR = 12  # what /api/search/words-for returns by default
+# Threads rendering kanji pages: half of a page's time is SQLite's, which lets go of the GIL.
+PAGE_THREADS = 4
 
 VERSION = re.compile(r"^[0-9a-f]{12}$")
 NAME = re.compile(r"^[a-z0-9-]+\.(json|bin)$")
@@ -83,27 +89,39 @@ def _stamp(p: Path) -> str:
         return "-"
 
 
-def source_key() -> str:
+def source_key(fresh: bool = False) -> str:
     """Changes whenever anything the pack is built from does.
 
-    Decompositions count as of the last quiet moment (server/review.py
-    pack_key), so a reviewer accepting twenty in a row causes one rebuild.
+    What comes from the review store counts as of the last quiet moment
+    (server/review.py pack_key), so a reviewer accepting twenty in a row causes
+    one rebuild; `fresh`: as it is now. Its last part moves alone when only
+    the kanji pages changed.
     """
-    from .review import pack_key
+    from .review import _pack_data_key, pack_key
 
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{pack_key()}"
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{_pack_data_key() if fresh else pack_key()}"
 
 
-def current() -> dict | None:
-    """The manifest of the pack on disk, if it matches the database."""
+def _pages_only(old: str, new: str) -> bool:
+    """Whether two keys differ in the kanji pages' part alone."""
+    head, dot, _ = old.rpartition(".")
+    return bool(dot) and new.rpartition(".")[0] == head
+
+
+def _on_disk() -> dict | None:
+    """The manifest of the last pack built, if its files are still there."""
     try:
         m = json.loads(CURRENT.read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return None
-    if m.get("key") != source_key() or not (OUT / m["version"]).is_dir():
-        return None
-    return m
+    return m if (OUT / m["version"]).is_dir() else None
+
+
+def current() -> dict | None:
+    """The manifest of the pack on disk, if it matches what it is built from."""
+    m = _on_disk()
+    return m if m is not None and m.get("key") == source_key() else None
 
 
 def status() -> dict:
@@ -321,18 +339,24 @@ def _kanji_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-def build(force: bool = False) -> dict:
-    """Write a new pack if the sources changed, and return its manifest."""
-    if not force:
-        m = current()
-        if m is not None:
-            return m
+def build(force: bool = False, fresh: bool = False) -> dict:
+    """Write a new pack if the sources changed, and return its manifest.
+    `fresh`: with the review store as it is now, not as of its last quiet moment."""
+    started = time.time()
+    key = source_key(fresh)
+    last = _on_disk()
+    if last is not None and not force:
+        if last["key"] == key:
+            return last
+        if _pages_only(last["key"], key):
+            conn = _connect()
+            pages = _pages(conn)
+            conn.close()
+            return _publish(key, {"pages.json": _json(pages)}, started, last)
 
     from . import recognize
     from .routes.graph import by_level
 
-    started = time.time()
-    key = source_key()
     conn = _connect()
     files: dict[str, bytes] = {}
 
@@ -528,13 +552,16 @@ def _pages(conn: sqlite3.Connection) -> dict:
     """The page of every kanji review covers (server/scope.py), as the server renders it."""
     from .routes.search import _fetch_words, kanji_page
 
-    out = {}
-    for char in scope.kanji(conn):
-        page = kanji_page(char)
-        ids: set[int] = set()
-        _words_in(page, ids)
-        out[char] = _word_refs(page, _fetch_words(sorted(ids)))
-    return out
+    chars = scope.kanji(conn)
+    with ThreadPoolExecutor(PAGE_THREADS) as pool:
+        pages = dict(zip(chars, pool.map(kanji_page, chars)))
+    ids: set[int] = set()
+    _words_in(pages, ids)
+    every = sorted(ids)
+    entries: dict[int, dict] = {}
+    for lo in range(0, len(every), 5000):  # well under SQLite's limit on bound values
+        entries.update(_fetch_words(every[lo : lo + 5000]))
+    return _word_refs(pages, entries)
 
 
 def _is_word(value) -> bool:
@@ -567,28 +594,31 @@ def _json(value) -> bytes:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
-def _publish(key: str, files: dict[str, bytes], started: float) -> dict:
-    digest = hashlib.sha256()
-    for name in sorted(files):
-        digest.update(name.encode())
-        digest.update(files[name])
-    version = digest.hexdigest()[:12]
-
-    OUT.mkdir(parents=True, exist_ok=True)
-    tmp = OUT / f".{version}.tmp"
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir()
-    listed = []
-    for name in sorted(files):
-        packed = gzip.compress(files[name], compresslevel=9, mtime=0)
-        (tmp / f"{name}.gz").write_bytes(packed)
-        # A client that has this file from the last pack keeps it rather than fetching it again.
-        sha = hashlib.sha256(files[name]).hexdigest()[:16]
-        listed.append({"name": name, "bytes": len(files[name]), "gz": len(packed), "sha": sha})
+def _publish(key: str, files: dict[str, bytes], started: float, last: dict | None = None) -> dict:
+    """Write `files` as a pack, with the rest of `last`'s files where it is given."""
+    # A client that has a file from the last pack keeps it rather than fetching it again.
+    sha = {name: hashlib.sha256(data).hexdigest()[:16] for name, data in files.items()}
+    kept = [f for f in last["files"] if f["name"] not in files] if last else []
+    named = sorted([*sha.items(), *((f["name"], f["sha"]) for f in kept)])
+    version = hashlib.sha256(repr(named).encode()).hexdigest()[:12]
 
     final = OUT / version
-    shutil.rmtree(final, ignore_errors=True)
-    tmp.rename(final)
+    listed = list(kept)
+    tmp = OUT / f".{version}.tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    for name, data in files.items():
+        packed = gzip.compress(data, compresslevel=9, mtime=0)
+        (tmp / f"{name}.gz").write_bytes(packed)
+        listed.append({"name": name, "bytes": len(data), "gz": len(packed), "sha": sha[name]})
+    for f in kept:  # the same file, not a copy: a pack's files never change
+        os.link(OUT / last["version"] / f"{f['name']}.gz", tmp / f"{f['name']}.gz")
+    listed.sort(key=lambda f: f["name"])
+    # The same files as a pack already there (a change that changed no page): that one stays.
+    if final.is_dir():
+        shutil.rmtree(tmp)
+    else:
+        tmp.rename(final)
 
     manifest = {
         "format": FORMAT,
@@ -616,13 +646,11 @@ def _publish(key: str, files: dict[str, bytes], started: float) -> dict:
 
 
 if __name__ == "__main__":
-    from .review import load_bg_overlay, refresh_pack_key
+    from .review import load_bg_overlay
 
     # As the server would build it: with the reviewed Bulgarian, and the meanings as they are now.
     load_bg_overlay()
-    refresh_pack_key()
-    force = "--force" in sys.argv
-    m = build(force=force)
+    m = build(force="--force" in sys.argv, fresh=True)
     total = sum(f["gz"] for f in m["files"])
     print(f"pack {m['version']}: {len(m['files'])} files, {total / 1e6:.1f} MB gzipped, built in {m['seconds']}s")
     for f in m["files"]:

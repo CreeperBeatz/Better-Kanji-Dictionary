@@ -171,8 +171,7 @@ def main() -> int:
     quick = "--quick" in sys.argv
     rng = random.Random(20260923)
     # The pack carries the kanji pages as the meanings are now, not as of the last quiet moment.
-    review.refresh_pack_key()
-    m = offline.build()
+    m = offline.build(fresh=True)
     pack_dir = offline.OUT / m["version"]
 
     queries = list(dict.fromkeys(HARD + sample(300 if quick else 2500, rng)))
