@@ -27,8 +27,9 @@ objects, so the pack is split in two:
 
 Each file's hash is in the manifest, and a client fetches only the files that
 changed: a reviewed meaning changes pages.json alone, 1.4 MB of 26. Nor does
-the server build the rest again then: the new pack links the other files from
-the last one.
+the server compress again a file that came out the same: the new pack links
+it from the last one. And when only the kanji pages' meanings changed, it
+builds pages.json alone.
 
 The full-text indexes are read back out of the database's own FTS5 tables
 through fts5vocab rather than re-tokenised here, so the client's index is
@@ -89,24 +90,20 @@ def _stamp(p: Path) -> str:
         return "-"
 
 
-def source_key(fresh: bool = False) -> str:
-    """Changes whenever anything the pack is built from does.
+def source_key(fresh: bool = False) -> tuple[str, str]:
+    """(key, pages): each changes whenever what it covers does, `pages` the kanji
+    pages' meanings and `key` everything else. `pages` alone moving rebuilds
+    only pages.json.
 
     What comes from the review store counts as of the last quiet moment
     (server/review.py pack_key), so a reviewer accepting twenty in a row causes
-    one rebuild; `fresh`: as it is now. Its last part moves alone when only
-    the kanji pages changed.
+    one rebuild; `fresh`: as it is now.
     """
-    from .review import _pack_data_key, pack_key
+    from .review import pack_key
 
+    whole, pages = pack_key(fresh)
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{_pack_data_key() if fresh else pack_key()}"
-
-
-def _pages_only(old: str, new: str) -> bool:
-    """Whether two keys differ in the kanji pages' part alone."""
-    head, dot, _ = old.rpartition(".")
-    return bool(dot) and new.rpartition(".")[0] == head
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", pages
 
 
 def _on_disk() -> dict | None:
@@ -121,7 +118,7 @@ def _on_disk() -> dict | None:
 def current() -> dict | None:
     """The manifest of the pack on disk, if it matches what it is built from."""
     m = _on_disk()
-    return m if m is not None and m.get("key") == source_key() else None
+    return m if m is not None and (m.get("key"), m.get("pages")) == source_key() else None
 
 
 def status() -> dict:
@@ -343,21 +340,24 @@ def build(force: bool = False, fresh: bool = False) -> dict:
     """Write a new pack if the sources changed, and return its manifest.
     `fresh`: with the review store as it is now, not as of its last quiet moment."""
     started = time.time()
-    key = source_key(fresh)
+    key, pages = source_key(fresh)
     last = _on_disk()
-    if last is not None and not force:
-        if last["key"] == key:
-            return last
-        if _pages_only(last["key"], key):
-            conn = _connect()
-            pages = _pages(conn)
-            conn.close()
-            return _publish(key, {"pages.json": _json(pages)}, started, last)
+    if last is not None and not force and (last["key"], last.get("pages")) == (key, pages):
+        return last
+    # Only the kanji pages changed: every other file is the last pack's.
+    keep = [f["name"] for f in last["files"] if f["name"] != "pages.json"] if last and not force and last["key"] == key else []
+    conn = _connect()
+    files = {} if keep else _whole(conn)
+    files["pages.json"] = _json(_pages(conn))
+    conn.close()
+    return _publish(key, pages, files, started, last, keep)
 
+
+def _whole(conn: sqlite3.Connection) -> dict[str, bytes]:
+    """Every file of the pack but the kanji pages."""
     from . import recognize
     from .routes.graph import by_level
 
-    conn = _connect()
     files: dict[str, bytes] = {}
 
     # --- words, ordered by id so the client can binary-search an id
@@ -542,26 +542,25 @@ def build(force: bool = False, fresh: bool = False) -> dict:
         }
     )
     files["strokes.json"] = _json(strokes)
-    files["pages.json"] = _json(_pages(conn))
-    conn.close()
-
-    return _publish(key, files, started)
+    return files
 
 
 def _pages(conn: sqlite3.Connection) -> dict:
     """The page of every kanji review covers (server/scope.py), as the server renders it."""
     from .routes.search import _fetch_words, kanji_page
 
+    def render(char: str) -> tuple[dict, set[int]]:
+        page = kanji_page(char)
+        ids: set[int] = set()
+        _words_in(page, ids)
+        return page, ids
+
     chars = scope.kanji(conn)
     with ThreadPoolExecutor(PAGE_THREADS) as pool:
-        pages = dict(zip(chars, pool.map(kanji_page, chars)))
-    ids: set[int] = set()
-    _words_in(pages, ids)
-    every = sorted(ids)
-    entries: dict[int, dict] = {}
-    for lo in range(0, len(every), 5000):  # well under SQLite's limit on bound values
-        entries.update(_fetch_words(every[lo : lo + 5000]))
-    return _word_refs(pages, entries)
+        rendered = dict(zip(chars, pool.map(render, chars)))
+    entries = _fetch_words(sorted(set().union(*(ids for _, ids in rendered.values()))))
+    # Popped: each page lets go of its full entries as it is converted.
+    return {char: _word_refs(rendered.pop(char)[0], entries) for char in chars}
 
 
 def _is_word(value) -> bool:
@@ -594,35 +593,41 @@ def _json(value) -> bytes:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
-def _publish(key: str, files: dict[str, bytes], started: float, last: dict | None = None) -> dict:
-    """Write `files` as a pack, with the rest of `last`'s files where it is given."""
+def _publish(key: str, pages: str, files: dict[str, bytes], started: float,
+             last: dict | None = None, keep: list[str] = ()) -> dict:
+    """Write `files` as a pack, and the files of `last` named in `keep` as they are.
+    A file the same as `last`'s is linked from it rather than compressed again."""
     # A client that has a file from the last pack keeps it rather than fetching it again.
     sha = {name: hashlib.sha256(data).hexdigest()[:16] for name, data in files.items()}
-    kept = [f for f in last["files"] if f["name"] not in files] if last else []
-    named = sorted([*sha.items(), *((f["name"], f["sha"]) for f in kept)])
+    old = {f["name"]: f for f in last["files"]} if last else {}
+    linked = [old[n] for n in keep] + [old[n] for n in files if old.get(n, {}).get("sha") == sha[n]]
+    new = [n for n in files if old.get(n, {}).get("sha") != sha[n]]
+    named = sorted([*((f["name"], f["sha"]) for f in linked), *((n, sha[n]) for n in new)])
     version = hashlib.sha256(repr(named).encode()).hexdigest()[:12]
 
     final = OUT / version
-    listed = list(kept)
-    tmp = OUT / f".{version}.tmp"
-    shutil.rmtree(tmp, ignore_errors=True)
-    tmp.mkdir(parents=True)
-    for name, data in files.items():
-        packed = gzip.compress(data, compresslevel=9, mtime=0)
-        (tmp / f"{name}.gz").write_bytes(packed)
-        listed.append({"name": name, "bytes": len(data), "gz": len(packed), "sha": sha[name]})
-    for f in kept:  # the same file, not a copy: a pack's files never change
-        os.link(OUT / last["version"] / f"{f['name']}.gz", tmp / f"{f['name']}.gz")
-    listed.sort(key=lambda f: f["name"])
-    # The same files as a pack already there (a change that changed no page): that one stays.
     if final.is_dir():
-        shutil.rmtree(tmp)
+        # The same files as a pack already there (a change that changed no page): that one
+        # stays, and counts as the newest when the old ones are cleared away below.
+        os.utime(final)
     else:
+        tmp = OUT / f".{version}.tmp"
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        for name in new:
+            (tmp / f"{name}.gz").write_bytes(gzip.compress(files[name], compresslevel=9, mtime=0))
+        for f in linked:  # the same file, not a copy: a pack's files never change
+            os.link(OUT / last["version"] / f"{f['name']}.gz", tmp / f"{f['name']}.gz")
         tmp.rename(final)
+    listed = sorted(
+        linked + [{"name": n, "bytes": len(files[n]), "gz": (final / f"{n}.gz").stat().st_size, "sha": sha[n]} for n in new],
+        key=lambda f: f["name"],
+    )
 
     manifest = {
         "format": FORMAT,
         "key": key,
+        "pages": pages,
         "version": version,
         "built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "seconds": round(time.time() - started, 1),

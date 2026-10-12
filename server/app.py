@@ -10,6 +10,7 @@ off untrusted networks until real mail is configured.
 """
 
 import mimetypes
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -87,11 +88,14 @@ def reviewed_bulgarian() -> None:
 def build_offline_pack() -> None:
     from . import review as review_store
 
-    # Changes that were still waiting for quiet when the server stopped (a deploy) go in now.
-    review_store.refresh_pack_key()
+    def start() -> None:
+        # Changes that were still waiting for quiet when the server stopped (a deploy) go in now.
+        review_store.refresh_pack_key()
+        offline_pack.ensure_async()
+
     # In the background: a changed database means a new pack, which takes a
     # while on the Pi, and nothing else should wait for it.
-    offline_pack.ensure_async()
+    threading.Thread(target=start, name="offline-pack-key", daemon=True).start()
 
 
 @app.get("/api/health")

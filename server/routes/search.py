@@ -43,9 +43,18 @@ def is_question(q: str) -> bool:
     return has_japanese(q) and len(_WORD.findall(q)) >= 2
 
 
+# Ids per query in _fetch_words: well under SQLite's limit on bound values.
+FETCH_CHUNK = 5000
+
+
 def _fetch_words(ids: list[int]) -> dict[int, dict]:
     if not ids:
         return {}
+    if len(ids) > FETCH_CHUNK:
+        out: dict[int, dict] = {}
+        for lo in range(0, len(ids), FETCH_CHUNK):
+            out.update(_fetch_words(ids[lo : lo + FETCH_CHUNK]))
+        return out
     ph = ",".join("?" * len(ids))
     words = {
         r["id"]: {

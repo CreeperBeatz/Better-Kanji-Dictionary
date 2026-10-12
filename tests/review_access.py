@@ -105,10 +105,9 @@ def main() -> int:
         call("DELETE", "/api/decomp/%E9%9D%92", "reviewer")
         check("DELETE through decomp clears the override", "青" not in store.decomposition_overrides())
         check("DELETE by a user is 403", call("DELETE", "/api/decomp/%E9%9D%92", "user")[0] == 403)
-        key_before = review._pack_data_key()
+        key_before = review.pack_key(fresh=True)
         check("PUT by a reviewer works", call("PUT", "/api/decomp/%E9%9D%92", "reviewer", {"components": ["龶", "月"]})[0] == 200)
-        check("a decomposition moves the whole pack's part of its key",
-              review._pack_data_key().split(".")[0] != key_before.split(".")[0])
+        check("a decomposition moves the whole pack's part of its key", review.pack_key(fresh=True)[0] != key_before[0])
         import time
 
         time.sleep(0.3)
@@ -135,7 +134,7 @@ def main() -> int:
         print("meanings: senses, then words, and reopening")
         time.sleep(0.3)
         flushes = len(flushed)
-        key_before = review._pack_data_key()
+        key_before = review.pack_key(fresh=True)
         senses = [{"id": "life", "en": "life, birth"}, {"id": "raw", "en": "raw, fresh"}]
         check("no senses is too few", call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": []})[0] == 400)
         no_ety = review.validate("kanji_senses", "生", [{**senses[0], "original": True}])
@@ -155,9 +154,9 @@ def main() -> int:
         check("the word's meaning is accepted", status == 200 and review.word_senses("生") == {wid: "生.life"}, (status, res))
         time.sleep(0.3)
         check("meanings rebuild the offline pack too (its kanji pages)", len(flushed) > flushes, (flushes, flushed))
-        key_after = review._pack_data_key()
+        key_after = review.pack_key(fresh=True)
         check("meanings move only the pages' part of its key, so only pages.json is built again",
-              key_after.split(".")[0] == key_before.split(".")[0] and key_after != key_before, (key_before, key_after))
+              key_after[0] == key_before[0] and key_after[1] != key_before[1], (key_before, key_after))
         bad = call("POST", "/api/review/edit", "reviewer", {"type": "word_sense", "subject": subj, "value": "生.nope"})
         check("an unknown sense is refused", bad[0] == 400, bad)
         call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": [{"id": "birth", "en": "birth"}, senses[1]]})

@@ -2585,8 +2585,7 @@ graph.visual_splits = visual_splits
 
 def _pack_data_key() -> str:
     """A hash of what the pack is built from out of the review store, in two parts:
-    `<the whole pack's>.<the kanji pages' alone>`. When only the second moves, only
-    pages.json is built again (server/offline.py)."""
+    `<the whole pack's>.<the kanji pages' alone>` (pack_key splits it)."""
     ov = store.decomposition_overrides()
     with _lock:
         data = _current()
@@ -2608,12 +2607,17 @@ def refresh_pack_key() -> None:
             data["pack_key"] = key
 
 
-def pack_key() -> str:
-    """What the offline pack's version follows: the decompositions, the Bulgarian and the
-    kanji pages' meanings as of the last quiet moment."""
-    if _read().get("pack_key") is None:
-        refresh_pack_key()
-    return _read()["pack_key"]
+def pack_key(fresh: bool = False) -> tuple[str, str]:
+    """What the offline pack's version follows, as of the last quiet moment or, `fresh`,
+    as it is now: (the decompositions and the Bulgarian, the kanji pages' meanings)."""
+    if fresh:
+        key = _pack_data_key()
+    else:
+        if _read().get("pack_key") is None:
+            refresh_pack_key()
+        key = _read()["pack_key"]
+    whole, _, pages = key.partition(".")
+    return whole, pages
 
 
 def _flush_pack() -> None:
