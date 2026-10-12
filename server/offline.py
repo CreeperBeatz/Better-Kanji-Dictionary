@@ -21,6 +21,9 @@ objects, so the pack is split in two:
   kanji.json   the character table, the handwriting references, levels
                and each kanji's common words. Small enough to hold.
   strokes.json stroke paths, for the stroke-order diagram.
+  pages.json   each kanji's page as /api/search/kanji-page answers it, its
+               words by id (the client has them in the words store), so a
+               page opens before the server answers, and offline too.
 
 The full-text indexes are read back out of the database's own FTS5 tables
 through fts5vocab rather than re-tokenised here, so the client's index is
@@ -49,7 +52,8 @@ from .db import DB_PATH
 # 3: the English index one row per gloss, with n and place; word levels.
 # 4: no radicals (the radical picker is gone).
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
-FORMAT = 5
+# 6: the kanji pages (pages.json).
+FORMAT = 6
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -511,9 +515,51 @@ def build(force: bool = False) -> dict:
         }
     )
     files["strokes.json"] = _json(strokes)
+    files["pages.json"] = _json(_pages(conn))
     conn.close()
 
     return _publish(key, files, started)
+
+
+def _pages(conn: sqlite3.Connection) -> dict:
+    """The kanji pages worth having: every kanji with a level, a frequency, a grade or a
+    common word, unless its page would be empty."""
+    from .routes.search import kanji_page
+
+    chars = [r[0] for r in conn.execute(
+        "SELECT char FROM kanji WHERE jlpt IS NOT NULL OR freq IS NOT NULL OR grade IS NOT NULL "
+        "OR char IN (SELECT wc.char FROM word_char wc JOIN word w ON w.id = wc.word_id WHERE w.common = 1) "
+        "ORDER BY char"
+    )]
+    spelled = {r[0]: (r[1], r[2]) for r in conn.execute("SELECT id, headword, reading FROM word")}
+    out = {}
+    for char in chars:
+        page = kanji_page(char)
+        if any(page[k] for k in ("meanings", "link", "readings", "special", "soundOnly", "mixups")):
+            out[char] = _word_ids(page, spelled)
+    return out
+
+
+def _word_ids(value, spelled: dict[int, tuple[str, str]]):
+    """`value` with every dictionary entry in it as {"$w": id, "m": mark}: the client fills
+    the entry back in from its words store, which holds exactly what the server sends. A page
+    shows a word in the spelling with its kanji (今一つ for 今ひとつ under 今): that spelling
+    is "h" and "r", where it is not the entry's own."""
+    if isinstance(value, dict):
+        if isinstance(value.get("id"), int) and "headword" in value and "senses" in value:
+            ref = {"$w": value["id"]}
+            if "mark" in value:
+                ref["m"] = value["mark"]
+            own = spelled.get(value["id"], (None, None))
+            if value["headword"] != own[0]:
+                ref["h"] = value["headword"]
+            if value["reading"] != own[1]:
+                ref["r"] = value["reading"]
+            return ref
+        return {k: _word_ids(v, spelled) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_word_ids(v, spelled) for v in value]
+    return value
 
 
 def _json(value) -> bytes:
@@ -567,6 +613,11 @@ def _publish(key: str, files: dict[str, bytes], started: float) -> dict:
 
 
 if __name__ == "__main__":
+    from .review import load_bg_overlay, refresh_pack_key
+
+    # As the server would build it: with the reviewed Bulgarian, and the meanings as they are now.
+    load_bg_overlay()
+    refresh_pack_key()
     force = "--force" in sys.argv
     m = build(force=force)
     total = sum(f["gz"] for f in m["files"])

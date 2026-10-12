@@ -5,16 +5,18 @@
  *   files    '<version>/<name>' -> index.bin (ArrayBuffer), kanji.json (text)
  *   words    JMdict id -> RawWord
  *   strokes  char -> SVG paths
+ *   pages    '<version>/<char>' -> the kanji's page, its words by id
  *
  * Entries and strokes are not versioned: ids are stable across JMdict
  * releases, so a new pack overwrites them in place while the old index keeps
  * answering, and a word that has since left the dictionary just goes unused.
+ * Pages are versioned, as their meanings change with every review.
  */
 
 import type { EntryStore, RawWord } from './engine'
 
 const NAME = 'bkd-offline'
-const STORES = ['meta', 'files', 'words', 'strokes'] as const
+const STORES = ['meta', 'files', 'words', 'strokes', 'pages'] as const
 type StoreName = (typeof STORES)[number]
 
 export interface InstalledPack {
@@ -55,7 +57,8 @@ export class Db {
   }
 
   static async open(): Promise<Db> {
-    const req = indexedDB.open(NAME, 1)
+    // 2: the pages store.
+    const req = indexedDB.open(NAME, 2)
     req.onupgradeneeded = () => {
       for (const s of STORES) if (!req.result.objectStoreNames.contains(s)) req.result.createObjectStore(s)
     }
@@ -86,6 +89,15 @@ export class Db {
     await finished(tx)
   }
 
+  /** Every record but those with keys starting `prefix`. */
+  async deleteAllBut(store: StoreName, prefix: string): Promise<void> {
+    const tx = this.db.transaction(store, 'readwrite')
+    const os = tx.objectStore(store)
+    os.delete(IDBKeyRange.upperBound(prefix, true))
+    os.delete(IDBKeyRange.lowerBound(prefix + String.fromCharCode(0xffff), true))
+    await finished(tx)
+  }
+
   async keys(store: StoreName): Promise<IDBValidKey[]> {
     return promised(this.db.transaction(store).objectStore(store).getAllKeys())
   }
@@ -113,10 +125,11 @@ export class Db {
     return out
   }
 
-  entries(): EntryStore {
+  entries(version: string): EntryStore {
     return {
       words: (ids) => this.getMany<RawWord>('words', ids) as Promise<Map<number, RawWord>>,
       strokes: (char) => this.get<string[]>('strokes', char).then((v) => v ?? null),
+      page: (char) => this.get<unknown>('pages', `${version}/${char}`).then((v) => v ?? null),
     }
   }
 }

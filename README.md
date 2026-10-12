@@ -84,7 +84,7 @@ text every frame.
 | **Similar kanji** | Under the words on each kanji's page: *Similar meaning* (near-synonyms: 家 → 宅 邸 室), *Looks like* (未 → 末 朱 来), *Same reading* (早 → 速, with 早い・速い as the reason), and other forms (会 → 會). All from open data, no language model: the lookalikes are what the handwriting model DaKanji confuses each glyph with when it is drawn from KanjiVG and in Noto Sans and Serif JP, fused with pixel and shared-part measures; readings and meanings come from JMdict words spelled with either kanji, Bunkacho's 異字同訓 list, Japanese WordNet and KANJIDIC, with Unihan's variant tables kept apart. Human lists (Yencken's, kanjium's) always show. Built by the `similar` stage (`pipeline/similar.py`, which needs numpy, pillow, onnx, onnxruntime and pyyaml); `tests/similar_eval.py` scores it against those human lists. |
 | **Stroke order** | A static diagram from KanjiVG: one small glyph per stroke, each adding the next, so the whole order reads at a glance. |
 | **Decomposition** | Fix a bad split from the graph and it redraws immediately. A review queue ranks what is worth fixing by how much a bad split actually costs. |
-| **Offline lookup** | Installed to a home screen or as a desktop app, it downloads the dictionary once (about 21 MB) and from then on search, drawing, levels and each character's details answer on the device, with or without a connection. See below. |
+| **Offline lookup** | Installed to a home screen or as a desktop app, it downloads the dictionary once (about 26 MB) and from then on search, drawing, levels, each character's details and its kanji page answer on the device, with or without a connection. See below. |
 
 ## Offline
 
@@ -101,10 +101,16 @@ in the account dialog. It lives in IndexedDB, and a Web Worker
 the server when the pack is not there. The graph, notes, comments and example
 sentences stay on the server.
 
+Kanji pages are not ported but rendered: the pack carries each page as the
+server answered it when the pack was built, its words by id. A page opens from
+the device at once and the server's copy, which may be newer, replaces it when
+it comes. So the pack also follows the reviewed meanings: like decompositions
+and the Bulgarian, they rebuild it once they have been left alone for ten minutes.
+
 The device has to find what the server finds, so `web/src/local/` ports the
 server's search, deinflection and handwriting matcher line for line, and
 `tests/offline_parity.py` checks that they agree: a few thousand searches,
-drawings and word lists, put to both.
+drawings, word lists and kanji pages, put to both.
 
     python tests/offline_parity.py            # ~2 minutes
     python tests/offline_parity.py --quick

@@ -49,9 +49,10 @@ data/meaning_groups.json, data/part_meanings.json); nothing writes those files o
 `git reset --hard` on deploy can never lose a reviewer's work.
 
 An accepted decomposition changes the offline pack, which takes over a
-minute and hundreds of MB to rebuild on the Pi. So the pack's version key
-only moves when decompositions have been left alone for PACK_DELAY: twenty
-accepts in a row cause one rebuild, not twenty.
+minute and hundreds of MB to rebuild on the Pi; so do the Bulgarian and the
+kanji pages' meanings, which the pack carries too. So the pack's version key
+only moves when they have been left alone for PACK_DELAY: twenty accepts in
+a row cause one rebuild, not twenty.
 """
 
 from __future__ import annotations
@@ -142,6 +143,8 @@ CHANGES = ("accept", "edit", "direct", "auto", "revert", "reopen")
 MAX_OPEN_SUGGESTIONS = 20
 MAX_TEXT = 500
 PACK_DELAY = 600.0  # seconds of quiet after a decomposition before the offline pack rebuilds
+# What the kanji pages in the offline pack are made of (search.kanji_page, through site_meanings and site_usage).
+PAGE_TYPES = ("kanji_senses", "kanji_extras", "word_sense", "usage")
 
 STROKES = set("一丨丶丿乙亅乚㇒㇏")
 SENSE_ID = re.compile(r"^[a-z0-9-]{1,24}$")
@@ -299,6 +302,9 @@ def _change():
                 "_undo": undo,
             }
             yield work
+            dirty = work["_dirty"]
+            pages = (any(t in PAGE_TYPES for t, _ in dirty["live"])
+                     or any(work["items"][i]["type"] in PAGE_TYPES for i in dirty["items"]))
             _write(conn, base, work)
             conn.execute("COMMIT")
         except BaseException:
@@ -313,6 +319,8 @@ def _change():
             raise
         work.pop("_undo")
         _state = work
+        if pages:
+            _schedule_pack()
 
 
 def _write(conn: sqlite3.Connection, base: dict, work: dict) -> None:
@@ -2548,12 +2556,25 @@ graph.visual_splits = visual_splits
 
 def _overrides_key() -> str:
     ov = store.decomposition_overrides()
-    blob = json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key()
+    with _lock:
+        data = _current()
+        drafts = _open_drafts(data)
+        # What the site shows on kanji pages: the accepted values, and the open drafts it falls back on.
+        pages = [{t: data["live"][t] for t in PAGE_TYPES}, [drafts[k] for k in ("senses", "extras", "usage", "words")]]
+    blob = (json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key()
+            + json.dumps(pages, ensure_ascii=False, sort_keys=True, default=str))
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+def refresh_pack_key() -> None:
+    """Move the pack's key to what the data is now, without waiting for quiet: for a build by hand."""
+    with _change() as data:
+        data["pack_key"] = _overrides_key()
+
+
 def pack_key() -> str:
-    """What the offline pack's version follows: the decompositions as of the last quiet moment."""
+    """What the offline pack's version follows: the decompositions, the Bulgarian and the
+    kanji pages' meanings as of the last quiet moment."""
     key = _read().get("pack_key")
     if key is None:
         key = _overrides_key()

@@ -130,6 +130,8 @@ def main() -> int:
         check("a report needs what it is about", call("POST", "/api/review/suggest", "user", {"type": "report", "subject": "kanji:合", "value": {"about": "taste", "text": "nope"}, "reason": "x"})[0] == 400)
 
         print("meanings: senses, then words, and reopening")
+        time.sleep(0.3)
+        flushes = len(flushed)
         senses = [{"id": "life", "en": "life, birth"}, {"id": "raw", "en": "raw, fresh"}]
         check("no senses is too few", call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": []})[0] == 400)
         no_ety = review.validate("kanji_senses", "生", [{**senses[0], "original": True}])
@@ -147,6 +149,8 @@ def main() -> int:
         check("now the word is in the queue", any(i["subject"] == subj for i in call("GET", "/api/review/queue", "reviewer")[1]["items"]))
         status, res = call("POST", f"/api/review/items/{item['id']}/decide", "reviewer", {"action": "accept"})
         check("the word's meaning is accepted", status == 200 and review.word_senses("生") == {wid: "生.life"}, (status, res))
+        time.sleep(0.3)
+        check("meanings rebuild the offline pack too (its kanji pages)", len(flushed) > flushes, (flushes, flushed))
         bad = call("POST", "/api/review/edit", "reviewer", {"type": "word_sense", "subject": subj, "value": "生.nope"})
         check("an unknown sense is refused", bad[0] == 400, bad)
         call("POST", "/api/review/edit", "reviewer", {"type": "kanji_senses", "subject": "生", "value": [{"id": "birth", "en": "birth"}, senses[1]]})

@@ -160,8 +160,9 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
-  // Its meanings with their readings and words, special readings and radical.
-  // Offline, only the word each reading forms, from the device: `full` false.
+  // Its meanings with their readings and words, special readings and radical:
+  // the device's copy first, if it has one, then the server's, which is newer.
+  // With neither, only the word each reading forms, from the device: `full` false.
   const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
   const forms = useForms(data.focus.char)
@@ -178,13 +179,25 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         (d) => !stale && setWords(d.words),
         () => {},
       )
+    let answered = false
+    const show = (d: KanjiPage) => {
+      setPage({ char, data: d, full: true })
+      if (d.meanings.length === 0) plainWords()
+    }
+    const onDevice = api.kanjiPageOnDevice(char)
+    onDevice.then((d) => {
+      if (!stale && !answered && d) show(d)
+    })
     api.kanjiPage(char).then(
       (d) => {
-        if (stale) return
-        setPage({ char, data: d, full: true })
-        if (d.meanings.length === 0) plainWords()
+        answered = true
+        if (!stale) show(d)
       },
-      () => {
+      async () => {
+        answered = true
+        const d = await onDevice
+        if (stale) return
+        if (d) return show(d)
         plainWords()
         api.readingWords(char).then(
           (d) => {

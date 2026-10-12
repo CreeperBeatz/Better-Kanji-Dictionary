@@ -12,7 +12,7 @@ import { gunzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import { Engine, type EntryStore, type KanjiPack, type RawWord } from '../src/local/engine'
 import { normalize, shlyokavitsa, spelling, terms } from '../src/local/bulgarian'
-import type { SearchOrder, SearchResponse, SearchSort } from '../src/api'
+import type { KanjiPage, SearchOrder, SearchResponse, SearchSort } from '../src/api'
 
 interface Golden {
   search: { q: string; lang: string; common: boolean; sort: SearchSort; order: SearchOrder; out: SearchResponse }[]
@@ -20,6 +20,7 @@ interface Golden {
   draw: { char: string; strokes: number[][][]; out: { char: string }[] }[]
   wordsFor: { char: string; out: number[] }[]
   readingWords: { char: string; out: Record<string, number> }[]
+  kanjiPage: { char: string; out: KanjiPage }[]
   describe: { chars: string[]; out: unknown[] }
 }
 
@@ -33,9 +34,11 @@ for (const f of manifest.files) {
   for (const w of JSON.parse(read(f.name).toString('utf8')) as RawWord[]) words.set(w[0], w)
 }
 const strokes = JSON.parse(read('strokes.json').toString('utf8')) as Record<string, string[]>
+const pages = JSON.parse(read('pages.json').toString('utf8')) as Record<string, unknown>
 const store: EntryStore = {
   words: async (ids) => new Map(ids.flatMap((id) => (words.has(id) ? [[id, words.get(id)!]] : []))),
   strokes: async (c) => strokes[c] ?? null,
+  page: async (c) => pages[c] ?? null,
 }
 const index = read('index.bin')
 const buf = index.buffer.slice(index.byteOffset, index.byteOffset + index.byteLength)
@@ -134,6 +137,41 @@ for (const { char, out } of golden.readingWords) {
   else note('reading-words', char, out, got)
 }
 console.log(`reading-words: ${rwOk}/${golden.readingWords.length} identical`)
+
+/** Where two answers first part: the path, and each side's value there. */
+function firstDiff(a: unknown, b: unknown, at = ''): [string, unknown, unknown] {
+  if (JSON.stringify(a) === JSON.stringify(b)) return ['', a, b]
+  if (a && b && typeof a === 'object' && typeof b === 'object' && Array.isArray(a) === Array.isArray(b)) {
+    const x = a as Record<string, unknown>
+    const y = b as Record<string, unknown>
+    for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) {
+      if (JSON.stringify(x[k]) !== JSON.stringify(y[k])) return firstDiff(x[k], y[k], `${at}.${k}`)
+    }
+  }
+  return [at || '.', a, b]
+}
+
+// A page the pack lacks must be one with nothing on it: the device answers null and the server is asked.
+let kpOk = 0
+let kpNone = 0
+let kpMs = 0
+const empty = (p: KanjiPage) =>
+  !p.meanings.length && !p.link && !Object.keys(p.readings).length && !p.special.length && !p.soundOnly && !p.mixups.length
+for (const { char, out } of golden.kanjiPage) {
+  const s = performance.now()
+  const got = await engine.kanjiPage(char)
+  kpMs += performance.now() - s
+  if (got === null && empty(out)) kpNone++
+  else if (same(out, got)) kpOk++
+  else {
+    const [where, want, have] = firstDiff(canonical(out), canonical(got))
+    note('kanji-page', `${char} at ${where}`, want, have)
+  }
+}
+console.log(
+  `kanji-page: ${kpOk}/${golden.kanjiPage.length} identical, ${kpNone} empty and not in the pack, ` +
+    `${(kpMs / golden.kanjiPage.length).toFixed(1)} ms per page`,
+)
 
 for (const f of failures.slice(0, 40)) console.log(f)
 if (failures.length > 40) console.log(`... and ${failures.length - 40} more`)

@@ -45,6 +45,7 @@ export type Method =
   | 'wordsFor'
   | 'readingWords'
   | 'kanji'
+  | 'kanjiPage'
   | 'wordEntry'
 
 export type ToWorker =
