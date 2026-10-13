@@ -162,7 +162,7 @@ export function BgCard({
           <BgLabels groups={c.senses} labels={labels} onLabels={onLabels} hint={t('groupsHint')} marks />
         </Stage>
       )}
-      {c.senses && (c.senses.some((g) => g.about) || extras?.link) && (
+      {c.senses && (c.senses.some((g) => g.about) || extras?.hero || extras?.link) && (
         <Stage n={3} title={t('linesStep')}>
           <BgExtras groups={c.senses} aboutBg={aboutBg} onAboutBg={onAboutBg} extras={extras} onExtras={onExtras} />
         </Stage>

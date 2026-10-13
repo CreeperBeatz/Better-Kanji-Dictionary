@@ -29,6 +29,8 @@ import { Stage } from './Stage'
 const S = strings(
   {
     kokuji: 'Made in Japan (kokuji): Chinese has no such character.',
+    hero: 'The gist',
+    heroHint: 'One sentence, two or three at most, on what the kanji is about. It opens the kanji page, under the kanji: do not write the kanji again.',
     overall: 'The meanings together',
     overallHint: 'One sentence on how the groups connect, in their order. Empty when they do not.',
     mixups: 'Kanji easy to mix up with {char}',
@@ -55,6 +57,7 @@ const S = strings(
     addSynonym: 'Add a kanji Kodansha does not list:',
     unnamed: '(unnamed group)',
     bgAbout: 'In Bulgarian: what the kanji does in each group',
+    bgHero: 'The gist, in Bulgarian',
     bgLink: 'How its meanings connect, in Bulgarian',
     usageHint: 'Check each English line against the Japanese beside it. Fix what is wrong or unnatural. Keep the examples that show the difference best.',
     kana: 'reading',
@@ -70,6 +73,8 @@ const S = strings(
   },
   {
     kokuji: 'Създадено в Япония (кокуджи): в китайския няма такъв знак.',
+    hero: 'Същината',
+    heroHint: 'Едно изречение, най-много две или три, за това какво е канджито. То открива страницата му, под самото канджи: не пишете канджито отново.',
     overall: 'Значенията заедно',
     overallHint: 'Едно изречение за това как се свързват групите, по техния ред. Празно, когато не се свързват.',
     mixups: 'Канджи, които лесно се бъркат с {char}',
@@ -96,6 +101,7 @@ const S = strings(
     addSynonym: 'Добавете канджи, което Kodansha не дава:',
     unnamed: '(група без име)',
     bgAbout: 'На български: какво прави канджито във всяка група',
+    bgHero: 'Същината, на български',
     bgLink: 'Как се свързват значенията, на български',
     usageHint: 'Сверете всеки английски ред с японския до него. Поправете грешното или неестественото. Оставете примерите, които показват разликата най-добре.',
     kana: 'четене',
@@ -362,11 +368,22 @@ export function SynonymsStep({
   )
 }
 
-/** Step 1's overall box, above the groups: how the kanji's meanings connect, and whether it was made in Japan. */
+/** Step 1's overall box, above the groups: the kanji's gist, how its meanings connect, and whether it was made in Japan. */
 export function OverallMeaning({ value, onChange, kokuji }: { value: KanjiExtras; onChange: (v: KanjiExtras) => void; kokuji: boolean }) {
   const t = S(useLang())
   return (
     <section className="board-overall">
+      <label className="board-extras-field">
+        <b>{t('hero')}</b>
+        <textarea
+          className="assoc-text"
+          rows={2}
+          maxLength={600}
+          placeholder={t('heroHint')}
+          value={value.hero ?? ''}
+          onChange={(e) => onChange({ ...value, hero: e.target.value || null })}
+        />
+      </label>
       <label className="board-extras-field">
         <b>{t('overall')}</b>
         <textarea
@@ -492,7 +509,7 @@ export function MixupsStep({
   )
 }
 
-/** The Bulgarian of a kanji's extras, on its Bulgarian card: each group's about, and the link. */
+/** The Bulgarian of a kanji's extras, on its Bulgarian card: its gist, each group's about, and the link. */
 export function BgExtras({
   groups,
   aboutBg,
@@ -510,6 +527,13 @@ export function BgExtras({
   const withAbout = groups.filter((g) => g.about)
   return (
     <div className="bg-groups bg-extras">
+      {extras?.hero && (
+        <label className="review-field">
+          <span>{t('bgHero')}</span>
+          <span className="hint">{extras.hero}</span>
+          <textarea className="assoc-text" lang="bg" rows={2} maxLength={600} value={extras.heroBg ?? ''} onChange={(e) => onExtras({ ...extras, heroBg: e.target.value || null })} />
+        </label>
+      )}
       {withAbout.length > 0 && (
         <>
           <span>{t('bgAbout')}</span>

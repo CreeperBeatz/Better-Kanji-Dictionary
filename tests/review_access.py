@@ -262,9 +262,10 @@ def main() -> int:
         check("nor counted as a stage", "kanji_extras" not in call("GET", "/api/review/queue", "reviewer")[1]["types"])
         status, d = call("GET", f"/api/review/items/{g['id']}", "reviewer")
         check("the meanings card carries them", status == 200 and d["context"]["extras"]["item"] == x["id"] and d["context"]["extras"]["value"]["link"] == "Water, then rivers.", d.get("context", {}).get("extras"))
-        edited = {**note, "link": "One meaning only."}
+        edited = {**note, "hero": "What flows and fills a glass.", "link": "One meaning only."}
         status, _ = call("POST", f"/api/review/items/{g['id']}/decide", "reviewer", {"action": "accept", "words": {}, "extras": edited})
         check("deciding the card decides them", status == 200 and review.extras_of("水")["link"] == "One meaning only.", review.extras_of("水"))
+        check("and the hero sentence with them", review.extras_of("水")["hero"] == "What flows and fills a glass.", review.extras_of("水"))
         check("as an edit of their item", review._read()["items"][x["id"]]["status"] == "edited")
         check("the site's groups carry the extras", review.senses_of("水")[0].get("about") == "The liquid.")
         bad = call("POST", "/api/review/edit", "reviewer", {"type": "kanji_extras", "subject": "水", "value": {"mixups": [{"char": "水", "reading": "みず"}]}})
@@ -273,9 +274,10 @@ def main() -> int:
         status, d = call("GET", f"/api/review/items/{b['id']}", "reviewer")
         check("the Bulgarian card carries the extras too", status == 200 and d["context"]["extras"]["value"]["link"] == "One meaning only.", d.get("context", {}).get("extras"))
         status, _ = call("POST", f"/api/review/items/{b['id']}/decide", "reviewer", {
-            "action": "accept", "aboutBg": {"水.water": "Течността."}, "extras": {**edited, "linkBg": "Само едно значение."}})
+            "action": "accept", "aboutBg": {"水.water": "Течността."}, "extras": {**edited, "heroBg": "Каквото тече и пълни чаша.", "linkBg": "Само едно значение."}})
         check("it sets each group's about in Bulgarian", status == 200 and review.senses_of("水")[0].get("aboutBg") == "Течността.", review.senses_of("水"))
         check("and the link's", review.extras_of("水")["linkBg"] == "Само едно значение.", review.extras_of("水"))
+        check("and the hero's", review.extras_of("水")["heroBg"] == "Каквото тече и пълни чаша.", review.extras_of("水"))
 
         print("usage cards")
         card = {"reading": "はやい", "spellings": [

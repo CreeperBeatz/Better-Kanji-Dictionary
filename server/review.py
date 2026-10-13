@@ -7,7 +7,7 @@ The task types (TASK-forms-review.md §5, and more since):
     part_meaning   subject 丷            value: {"kind": meaning | shape, "en", "bg", "note", "noteBg"}
     kanji_senses   subject 生            value: [{"id": "生.life", "en": "life", "bg": "живот",
                                                   "about", "aboutBg", "examples": [word ids], "similar": ["命"]}]
-    kanji_extras   subject 生            value: {"origin", "originBg", "originSure", "link", "linkBg",
+    kanji_extras   subject 生            value: {"origin", "originBg", "originSure", "hero", "heroBg", "link", "linkBg",
                                                  "mixups": [{"char": "産", "reading": "うまれる"}]}
     usage          subject はやい・…      value: {"reading", "no", "spellings": [{"kanji", "def", "defEn", "defBg",
                                                  "examples": [{"ja", "kana", "en", "bg"}]}], "notes": [{"ja", "en", "bg"}]}
@@ -678,9 +678,10 @@ def validate(type_: str, subject: str, value: Any, data: dict | None = None, pen
         if value is None:
             return None
         if not isinstance(value, dict):
-            raise _bad("extras_invalid", "extras are a link and kanji to mix up")
+            raise _bad("extras_invalid", "extras are a hero sentence, a link and kanji to mix up")
         # How the kanji was built is not decided here (Dani, 2026-10-08): etymology gets a queue of its own.
-        out = {k: _prose(value.get(k), 600) for k in ("link", "linkBg")}
+        # The hero sentence opens the kanji's page (its gist); the link ties its meanings together.
+        out = {k: _prose(value.get(k), 600) for k in ("hero", "heroBg", "link", "linkBg")}
         mix, seen = [], set()
         for m in value.get("mixups") or []:
             c = m.get("char") if isinstance(m, dict) else None

@@ -244,6 +244,9 @@ export interface KanjiMeaning {
 export interface KanjiPage {
   char: string
   meanings: KanjiMeaning[]
+  /** Its gist, the line the page opens with. */
+  hero: string | null
+  heroBg: string | null
   /** How its meanings follow from each other. */
   link: string | null
   linkBg: string | null
@@ -490,6 +493,9 @@ export interface Mixup {
 
 /** A kanji's extras (server/review.py kanji_extras): decided on its meanings card, their Bulgarian on its Bulgarian card. */
 export interface KanjiExtras {
+  /** Its gist, the line its page opens with. */
+  hero?: string | null
+  heroBg?: string | null
   /** How its groups connect. */
   link: string | null
   linkBg: string | null

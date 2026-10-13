@@ -198,7 +198,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             if (stale) return
             const readings: Record<string, ReadingInfo> = {}
             for (const [r, w] of Object.entries(d.words)) readings[plainReading(r)] = { formed: w, common: 0, examples: [] }
-            const empty = { meanings: [], link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
+            const empty = { meanings: [], hero: null, heroBg: null, link: null, linkBg: null, mixups: [], soundOnly: null, special: [], radical: null }
             setPage({ char, data: { char, readings, ...empty }, full: false })
           },
           () => {},
@@ -252,7 +252,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const saysMixups = !!unit && (unit.mixups.length > 0 || unit.meanings.some((m) => m.mixups.length > 0))
   const mean = similar && !saysSimilar ? similar.mean : []
   const read = similar && !saysMixups ? similar.read : []
-  const link = unit && ((lang === 'bg' && unit.linkBg) || unit.link)
+  const hero = unit && ((lang === 'bg' && unit.heroBg) || unit.hero)
 
   return (
     <section className="rail-section kanji-page">
@@ -262,8 +262,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </button>
       )}
 
-      {/* What the kanji means as a whole, then the numbers, then how it looks in print and by hand, then how it is written. */}
-      {link && <p className="meanings-link">{link}</p>}
+      {/* The kanji's gist, then the numbers, then how it looks in print and by hand, then how it is written. */}
+      {hero && <p className="kanji-hero">{hero}</p>}
       <h3 className="facts-title">{t('statistics')}</h3>
       <dl className="facts">
         {n.strokes != null && (

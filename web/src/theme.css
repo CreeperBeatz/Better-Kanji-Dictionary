@@ -641,14 +641,22 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-underline-offset: 3px;
 }
 
-/* How the meanings follow from each other: the story of the whole kanji, set
-   in the head's serif, apart from each meaning's own sans explanation. */
-.meanings-link {
+/* The kanji's gist, the line its page opens with: set in the head's serif,
+   apart from each meaning's own sans explanation. */
+.kanji-hero {
   margin: 4px 0 12px;
   font-family: var(--mincho);
-  font-size: calc(15px * var(--type));
+  font-size: calc(16px * var(--type));
   line-height: 1.55;
   color: var(--paper);
+}
+
+/* How the meanings follow from each other, above them. */
+.meanings-link {
+  margin: 2px 0 8px;
+  font-size: calc(13px * var(--type));
+  line-height: 1.5;
+  color: var(--paper-dim);
 }
 
 /* One meaning: what it is, its words by reading, what is close to it. */
