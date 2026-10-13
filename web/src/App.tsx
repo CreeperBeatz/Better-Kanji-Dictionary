@@ -20,7 +20,7 @@ import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
-import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
+import { MOBILE, isIOS, matches, reducedMotion, useMediaQuery } from './media'
 
 // Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -219,48 +219,20 @@ const PULL = 80
 const HAN = /[㐀-䶿一-鿿]/
 
 /**
- * In a browser tab, not the installed app. There the screen's edges are the
- * browser's: Safari takes a swipe in from the left for back and from the right
- * for forward, slides the page itself, and no page can stop it. So the app's
- * own swipes start away from the edges, and it gives no keyboard unasked.
+ * In a browser tab, not the installed app. There the keyboard comes up only
+ * when the search box is tapped.
  */
 const IN_TAB = !runningInstalled()
-/** How near the screen's side a touch starts for the browser to take it. */
+/**
+ * Whether the screen's edges are the system's: on an iPhone, in Safari and
+ * installed alike, a swipe in from the left goes back and from the right
+ * forward, the page sliding as it goes, and the app leaves them be. Elsewhere
+ * only a browser tab gives them away. The app's own swipes start clear of them.
+ */
+const EDGES_TAKEN = IN_TAB || isIOS()
+/** How near the screen's side a touch starts for the system to take it. */
 const EDGE = 24
 const nearEdge = (x: number) => x < EDGE || x > window.innerWidth - EDGE
-
-// A touch from the screen's edge, followed to tell the browser's swipe from a
-// tap: the swipe goes across, or the browser takes it off the page.
-let edgeTouch: { x: number; swiped: boolean } | null = null
-let edgeSwipedAt = -Infinity
-if (IN_TAB) {
-  const on = { capture: true, passive: true }
-  const ended = () => {
-    if (edgeTouch?.swiped) edgeSwipedAt = performance.now()
-    edgeTouch = null
-  }
-  window.addEventListener('touchstart', (e) => {
-    const x = e.touches[0].clientX
-    edgeTouch = e.touches.length === 1 && nearEdge(x) ? { x, swiped: false } : null
-  }, on)
-  window.addEventListener('touchmove', (e) => {
-    if (edgeTouch && Math.abs(e.touches[0].clientX - edgeTouch.x) > 30) edgeTouch.swiped = true
-  }, on)
-  window.addEventListener('touchcancel', () => {
-    if (edgeTouch) edgeTouch.swiped = true
-    ended()
-  }, on)
-  window.addEventListener('touchend', ended, on)
-}
-
-/**
- * Whether back or forward came from the browser's own swipe, which has slid
- * the page already. Chrome says so; Safari is read from the touch.
- */
-function browserSlid(e: PopStateEvent): boolean {
-  if ((e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition) return true
-  return IN_TAB && (edgeTouch?.swiped === true || performance.now() - edgeSwipedAt < 1000)
-}
 
 /**
  * Whether a touch starting here is the element's own to use sideways: typing,
@@ -467,7 +439,7 @@ export function App() {
   const scroller = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // Filled in below: what to do as back or forward arrives, before the page changes.
-  const beforePop = useRef<((e: PopStateEvent, apply: () => void) => boolean) | null>(null)
+  const beforePop = useRef<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>(null)
   const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
     scroller,
     beforePop,
@@ -1365,7 +1337,7 @@ export function App() {
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
     if (!mobile || e.touches.length !== 1) return
-    if (IN_TAB && nearEdge(e.touches[0].clientX)) return
+    if (EDGES_TAKEN && nearEdge(e.touches[0].clientX)) return
     // On the graph only while it is locked: free, a finger moves the graph.
     if (e.currentTarget === stageRef.current && (view !== 'focus' || !graphLocked)) return
     if (movesItself(e.target as Element, e.currentTarget)) return
@@ -1620,15 +1592,15 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top, pane, onStage])
 
-  // Back and forward slide the page as the app's own steps do: a tab turn
-  // away from the graph as that turn, anything else the way history went.
-  beforePop.current = (e: PopStateEvent, apply: () => void) => {
+  // The app's own steps back slide the page: a tab turn away from the graph
+  // as that turn, anything else the way history went. The browser's own back
+  // and forward do not (see `stepBack` in nav.ts).
+  beforePop.current = (e: PopStateEvent, apply: () => void, byApp: boolean) => {
     cameBack.current = performance.now()
     if (turning.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
-    // The browser has slid the page itself: a second slide would repeat it.
-    if (browserSlid(e)) return false
+    if (!byApp) return false
     const n = (e.state as { n?: number } | null)?.n
     const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
     if (turn) animateNav(turn.kind, apply, turn.scope)

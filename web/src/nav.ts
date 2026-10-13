@@ -179,14 +179,28 @@ function restoreScroll(el: HTMLElement | null, to: number) {
 }
 
 /**
+ * When the app last stepped back through history itself -- its back link, a
+ * tab turned away from the graph -- rather than the browser. A back or forward
+ * of the browser's own is not slid by the app: on an iPhone the system's edge
+ * swipe has slid the page already, and in Safari and installed alike there is
+ * no telling that swipe from anything else.
+ */
+let appStepAt = -Infinity
+function stepBack(n: number) {
+  appStepAt = performance.now()
+  window.history.go(-n)
+}
+
+/**
  * `beforePop` is told of back and forward before the page changes for
  * them, while what is on the screen is still the page being left. It is
  * given `apply`, the change itself, and answers true to make it at a time
- * of its own choosing -- inside a view transition, say.
+ * of its own choosing -- inside a view transition, say. `byApp` is whether
+ * the app asked for the step (see `stepBack`).
  */
 export function useNav(
   scroller: React.RefObject<HTMLElement | null>,
-  beforePop?: React.RefObject<((e: PopStateEvent, apply: () => void) => boolean) | null>,
+  beforePop?: React.RefObject<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>,
 ) {
   const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
@@ -298,7 +312,7 @@ export function useNav(
       flush()
       if (depth >= k) {
         // A twin has this same stack behind it, to step over too.
-        window.history.go(twin ? -k - 1 : -k)
+        stepBack(twin ? k + 1 : k)
         return
       }
       const next = { stack: stack.slice(0, -k), depth: 0, n: current.current.n }
@@ -344,7 +358,7 @@ export function useNav(
       if (!now.stage) return
       flush()
       if (how === 'back' && now.twin) {
-        window.history.back()
+        stepBack(1)
         return
       }
       const next = { ...now, stage: undefined }
@@ -358,6 +372,8 @@ export function useNav(
   // Back and forward, from the app or the browser.
   useEffect(() => {
     function onPop(e: PopStateEvent) {
+      const byApp = performance.now() - appStepAt < 1000
+      appStepAt = -Infinity
       if (pendingReplace.current !== null) {
         clearTimeout(pendingReplace.current)
         pendingReplace.current = null
@@ -378,6 +394,7 @@ export function useNav(
       const was = current.current
       const behind = was.n !== undefined && next.n === was.n - 1
       if (was.twin && !was.stage && !next.stage && behind) {
+        if (byApp) appStepAt = performance.now()
         window.history.back()
         return
       }
@@ -386,7 +403,7 @@ export function useNav(
         setEntry(next)
         restoreScroll(scroller.current, next.scroll ?? 0)
       }
-      if (!beforePop?.current?.(e, apply)) apply()
+      if (!beforePop?.current?.(e, apply, byApp)) apply()
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
