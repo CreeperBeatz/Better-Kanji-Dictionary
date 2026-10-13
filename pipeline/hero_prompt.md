@@ -1,8 +1,10 @@
 # The hero sentence of a kanji (instructions for one batch)
 
 You write the first line a learner reads on a kanji's page in Better Kanji
-Dictionary: the **hero sentence**. It gives the gist of the kanji, the idea
-behind it, so that its meanings feel natural afterwards. Write it in
+Dictionary: the **hero sentence**. It explains the gist of the kanji, the
+idea behind it, so that its meanings make sense afterwards. Learners build
+their own memory stories (associations) on it, so it is a clear
+explanation they can hold on to, not a poem. Write it in
 **English** and in **Bulgarian**. You do not need the web or any other file.
 
 The page shows the kanji in large print right above your sentence, and its
@@ -32,8 +34,12 @@ the kanji and does not list its meanings: the meanings section does that.
   a hill, a mine, a temple, a heap"): the meanings section lists them.
 - **Vary the shape.** Not every sentence is "picture: meanings". Some can
   open with the idea, some with the picture, some with what the kanji does.
-- **Flow first, simple second.** It should read aloud well: one clear
-  image or idea, carried through. Use everyday words and concrete things.
+- **Explain, do not decorate.** Plain, explanatory and easy to follow,
+  like a good teacher saying it in one breath. Flow matters, then
+  simplicity. A concrete handle beats an image: "the way -er turns read
+  into reader" is better than "the hand behind every deed". No lyrical
+  touches ("breaking out", "stirs in the heart", "a drop of perfume").
+  Use everyday words.
   No jargon (no "semantic", "phonetic", "radical", "component", "glyph").
 - **Never write the kanji itself.** Do not write any Japanese at all:
   no kanji, no kana, no romaji. Describe the parts in words ("a person
@@ -47,7 +53,10 @@ the kanji and does not list its meanings: the meanings section does that.
   from today's meanings, or when it would need explaining. Never invent
   an origin, and use only the one given.
 - **Nothing that is not in the input.** No history, no claims about how
-  common or important the kanji is, no advice to the learner.
+  common or important the kanji is, no advice to the learner, nothing on
+  how it is written next to other parts. Name a part only as the origin
+  names it (if it says the part stands for a seated person, write "a
+  seated person", not what the part looks like).
 - `kokuji`: you may say it was made in Japan, if that helps.
 - A kanji used mostly as a grammatical ending or helper: say what job it
   does in a sentence.
@@ -56,27 +65,35 @@ the kanji and does not list its meanings: the meanings section does that.
 
 ## The Bulgarian
 
-- Write it as a Bulgarian writer would, not as a translation: the same
-  idea and picture, in natural, flowing Bulgarian.
+- Write it as a Bulgarian teacher would say it, not as a translation: the
+  same explanation, in natural, plain Bulgarian.
 - **Japanese kanji are «канджи»** (канджито, канджитата), never «кандзи».
 - Use the groups' Bulgarian labels and `tsalta` as hints for the words.
 - The same rules: no Japanese, do not start with «Канджито».
 
-## Examples (kanji not in your batch)
+## Examples
+
+These show the tone. If your batch has one of these kanji, write it fresh
+from its input.
 
 休, origin "a person 亻 resting against a tree 木":
 
-- "A person leaning against a tree to catch their breath, putting the
-  work down for a while."
-- "Човек, облегнат на дърво, за да си поеме дъх и да остави работата за
-  малко."
+- "A person leaning against a tree: stopping work for a while to rest."
+- "Човек, облегнат на дърво: спираш работа за малко, за да си починеш."
 
 事, no origin:
 
-- "Whatever is going on or waiting to be done, the plain stuff a day is
-  made of."
-- "Всичко, което се случва или чака да бъде свършено, обикновените неща,
-  от които е направен денят."
+- "Anything that happens or has to be done; the everyday word for a
+  matter or a thing to deal with."
+- "Всичко, което се случва или трябва да се свърши; обикновената дума за
+  въпрос или нещо, с което трябва да се заемеш."
+
+者, no picture worth using:
+
+- "Whoever does the thing, the person behind an action, the way -er turns
+  read into reader."
+- "Който върши нещото, човекът зад действието, както -тел прави от «чета»
+  «читател»."
 
 ## Output
 

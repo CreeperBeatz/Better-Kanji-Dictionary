@@ -5,6 +5,7 @@
     # one subagent per data/drafts/hero/in/H-*.json (pipeline/hero_prompt.md)
     python pipeline/hero.py check [--out DIR]
     python pipeline/hero.py compare DIR DIR              # the sample, both runs, as Markdown
+    python pipeline/hero.py load [--dry-run] [--review-dir DIR]
 
 One to three sentences that flow and stick: the gist of the kanji, not a list of
 its meanings. How the meanings connect stays `link`, in the meanings section.
@@ -18,6 +19,7 @@ origin when the drafts are sure of it.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -28,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import proposals  # noqa: E402
 from meaning_redraft import DRAFTS as MEANINGS, read_extras  # noqa: E402
 
-from server import scope  # noqa: E402
+from server import review, scope  # noqa: E402
 from server.routes.search import kanji_page  # noqa: E402
 
 HERO = proposals.DRAFTS / "hero"
@@ -37,6 +39,8 @@ BATCH = 40  # kanji per batch
 WORDS = 4  # words per group
 MAX_LEN = 320
 KOKUJI = proposals.ROOT / "data" / "kokuji.txt"
+SOURCE = "hero: Opus 5.5, pipeline/hero_prompt.md"
+BOT = "u-3280c437d36a"  # Claude Opus 5.5, the reviewer account the drafts go live under
 JAPANESE = re.compile(r"[぀-ヿ㐀-鿿豈-﫿\U00020000-\U0003ffff]")
 
 
@@ -137,6 +141,42 @@ def compare(a: Path, b: Path) -> None:
     print(HERO / "compare.md")
 
 
+def load(dry_run: bool, review_dir: Path | None) -> None:
+    """Each kanji's hero onto its open kanji_extras draft, or a new draft where it has none.
+    A kanji whose extras are already accepted gets it as a direct change by the bot."""
+    good, problems = read(OUT, "H")
+    print(f"{len(good)} kanji, {len(problems)} problems")
+    for p in problems[:20]:
+        print("  " + p)
+    proposals.use_review_dir(review_dir)
+    updated = added = 0
+    live: list[str] = []
+    # A dry run reads the store and changes nothing.
+    with contextlib.nullcontext(review._read()) if dry_run else review._change() as data:
+        open_item = {i["subject"]: i for i in data["items"].values() if i["type"] == "kanji_extras" and i["status"] == "open"}
+        for c, h in good.items():
+            item = open_item.get(c)
+            if item is None and c in data["live"]["kanji_extras"]:
+                live.append(c)
+                continue
+            base = (item or {}).get("proposed") or {"link": None, "linkBg": None, "mixups": []}
+            note = review.validate("kanji_extras", c, {**base, **h}, data, machine=True)
+            if dry_run:
+                pass
+            elif item:
+                review._update(data, item, proposed=note)
+            else:
+                review._new_item(data, "kanji_extras", c, note, SOURCE, "proposal", None, None, "system", 0.0)
+            updated += bool(item)
+            added += not item
+    for c in live:
+        if not dry_run:
+            review.direct("kanji_extras", c, {**review.extras_of(c), **good[c]}, BOT,
+                          "Hero sentence drafted by Opus 5.5 (2026-10-14), at Dani's go-ahead.")
+    print(f"{updated} drafts updated, {added} new drafts, {len(live)} accepted extras changed directly"
+          + (" (dry run)" if dry_run else ""))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -148,6 +188,9 @@ def main() -> None:
     m = sub.add_parser("compare")
     m.add_argument("a", type=Path)
     m.add_argument("b", type=Path)
+    ld = sub.add_parser("load")
+    ld.add_argument("--dry-run", action="store_true")
+    ld.add_argument("--review-dir", type=Path)
     args = ap.parse_args()
     if args.cmd == "prepare":
         prepare(args.sample)
@@ -156,8 +199,10 @@ def main() -> None:
         print(f"{len(good)} kanji good, {len(problems)} problems")
         for p in problems:
             print("  " + p)
-    else:
+    elif args.cmd == "compare":
         compare(args.a, args.b)
+    else:
+        load(args.dry_run, args.review_dir)
 
 
 if __name__ == "__main__":
