@@ -2,7 +2,7 @@
  * On an iPhone or iPad, in a browser: how to put the app on the Home Screen,
  * step by step, for the browser in use -- Safari with its own screens,
  * Chrome, or any other in general terms. It opens by itself on the first
- * visit, and from the search home's link after that. Installed, the app has
+ * visit, and from the search home's note and the account dialog after that. Installed, the app has
  * the whole screen, and the swipes from the screen's edges are the only ones
  * that are not its own.
  */
@@ -39,7 +39,10 @@ const S = strings(
     o3: 'Tap Add.',
     done: 'Then open Better Kanji from your Home Screen.',
     later: 'Not now',
-    link: 'Install the app',
+    noteLead: 'Use it as an app.',
+    noteWhy: 'It opens on the full screen, and every swipe is the app’s.',
+    noteHow: 'Show me how',
+    noteClose: 'Close',
   },
   {
     label: 'Инсталиране на приложението',
@@ -61,7 +64,10 @@ const S = strings(
     o3: 'Натиснете „Добави“.',
     done: 'После отворете Better Kanji от началния екран.',
     later: 'Не сега',
-    link: 'Инсталирайте приложението',
+    noteLead: 'Използвайте го като приложение.',
+    noteWhy: 'Отваря се на целия екран и всяко плъзгане е за приложението.',
+    noteHow: 'Покажи как',
+    noteClose: 'Затвори',
   },
 )
 
@@ -154,18 +160,42 @@ export function InstallGuide() {
   )
 }
 
-/** On the search home, in a browser on an iPhone: the guide again. */
-export function InstallLink() {
+const NOTE_KEY = 'betterrtk:installHintSeen'
+
+/**
+ * On the search home, in a browser on an iPhone: that the app does more
+ * installed, with the guide a tap away, until it is closed.
+ */
+export function InstallNote() {
   const t = S(useLang())
-  const [shown] = useState(installable)
+  const [shown, setShown] = useState(() => {
+    try {
+      return installable() && !localStorage.getItem(NOTE_KEY)
+    } catch {
+      return false
+    }
+  })
   if (!shown) return null
+  function close() {
+    try {
+      localStorage.setItem(NOTE_KEY, '1')
+    } catch {
+      // storage blocked: it goes for this visit only
+    }
+    setShown(false)
+  }
   return (
-    <button className="install-link" onClick={openInstallGuide}>
-      <svg viewBox="0 0 16 16" aria-hidden>
-        <rect x="2.5" y="2.5" width="11" height="11" rx="2.5" />
-        <path d="M8 5.5v5M5.5 8h5" />
-      </svg>
-      {t('link')}
-    </button>
+    <aside className="install-hint">
+      <p>
+        <strong>{t('noteLead')}</strong> {t('noteWhy')}
+        <br />
+        <button className="install-hint-show" onClick={openInstallGuide}>
+          {t('noteHow')}
+        </button>
+      </p>
+      <button className="install-hint-close" onClick={close} aria-label={t('noteClose')}>
+        ×
+      </button>
+    </aside>
   )
 }
