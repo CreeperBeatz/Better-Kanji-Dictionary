@@ -1,8 +1,10 @@
 /**
- * On an iPhone in Safari: how to put the app on the Home Screen, step by step,
- * with Safari's own screens. It opens by itself on the first visit, and from
- * the search home's link after that. Installed, the app has the whole screen,
- * and the swipes from the screen's edges are the only ones that are not its own.
+ * On an iPhone or iPad, in a browser: how to put the app on the Home Screen,
+ * step by step, for the browser in use -- Safari with its own screens,
+ * Chrome, or any other in general terms. It opens by itself on the first
+ * visit, and from the search home's link after that. Installed, the app has
+ * the whole screen, and the swipes from the screen's edges are the only ones
+ * that are not its own.
  */
 
 import { useState, useSyncExternalStore } from 'react'
@@ -27,6 +29,14 @@ const S = strings(
     s3: 'Tap View More.',
     s4: 'Tap Add to Home Screen.',
     s5: 'Keep Open as Web App on. Tap Add.',
+    c1: 'Tap Share, at the right end of the address bar.',
+    c2: 'Tap Add to Home Screen.',
+    c2b: 'Not in the list? Tap View More, or scroll down.',
+    c3: 'If you see Open as Web App, keep it on. Tap Add.',
+    o1: 'Tap Share in your browser.',
+    o1b: 'No Share, or no Add to Home Screen after it? Open this page in Safari.',
+    o2: 'Tap Add to Home Screen.',
+    o3: 'Tap Add.',
     done: 'Then open Better Kanji from your Home Screen.',
     later: 'Not now',
     link: 'Install the app',
@@ -41,23 +51,47 @@ const S = strings(
     s3: 'Натиснете „Покажи още“.',
     s4: 'Натиснете „Добавяне към начален екран“.',
     s5: 'Оставете „Отваряне като уеб приложение“ включено. Натиснете „Добави“.',
+    c1: 'Натиснете „Споделяне“ вдясно в адресната лента.',
+    c2: 'Натиснете „Добавяне към начален екран“.',
+    c2b: 'Не е в списъка? Натиснете „Покажи още“ или превъртете надолу.',
+    c3: 'Ако виждате „Отваряне като уеб приложение“, оставете го включено. Натиснете „Добави“.',
+    o1: 'Натиснете „Споделяне“ в браузъра.',
+    o1b: 'Няма „Споделяне“ или „Добавяне към начален екран“? Отворете страницата в Safari.',
+    o2: 'Натиснете „Добавяне към начален екран“.',
+    o3: 'Натиснете „Добави“.',
     done: 'После отворете Better Kanji от началния екран.',
     later: 'Не сега',
     link: 'Инсталирайте приложението',
   },
 )
 
-const STEPS = [
-  { text: 's1', note: 's1b', img: step1, h: 234 },
-  { text: 's2', img: step2, h: 748 },
-  { text: 's3', img: step3, h: 573 },
-  { text: 's4', img: step4, h: 403 },
-  { text: 's5', img: step5, h: 488 },
-] as const
+type Key = Parameters<ReturnType<typeof S>>[0]
+type Step = { text: Key; note?: Key; img?: string; h?: number }
+
+/** The browser the steps are for: they differ in where Share is. */
+function browser(): 'safari' | 'chrome' | 'other' {
+  const ua = navigator.userAgent
+  if (/CriOS\//.test(ua)) return 'chrome'
+  // Every iOS browser says Safari; the others add a name of their own.
+  if (/Safari\//.test(ua) && !/(FxiOS|EdgiOS|OPiOS|DuckDuckGo|GSA|YaBrowser|Brave)\//.test(ua)) return 'safari'
+  return 'other'
+}
+
+const STEPS: Record<ReturnType<typeof browser>, Step[]> = {
+  safari: [
+    { text: 's1', note: 's1b', img: step1, h: 234 },
+    { text: 's2', img: step2, h: 748 },
+    { text: 's3', img: step3, h: 573 },
+    { text: 's4', img: step4, h: 403 },
+    { text: 's5', img: step5, h: 488 },
+  ],
+  chrome: [{ text: 'c1' }, { text: 'c2', note: 'c2b' }, { text: 'c3' }],
+  other: [{ text: 'o1', note: 'o1b' }, { text: 'o2' }, { text: 'o3' }],
+}
 
 const SEEN_KEY = 'betterrtk:installGuideSeen'
 
-/** Safari on an iPhone or iPad, not the app from the Home Screen. */
+/** A browser on an iPhone or iPad, not the app from the Home Screen. */
 export const installable = () => isIOS() && !runningInstalled()
 
 function seen(): boolean {
@@ -101,14 +135,14 @@ export function InstallGuide() {
       <h2 className="install-title">{t('title')}</h2>
       <p className="install-why">{t('why')}</p>
       <ol className="install-steps">
-        {STEPS.map((s, i) => (
+        {STEPS[browser()].map((s, i) => (
           <li key={s.text}>
             <p>
               <span className="install-n">{i + 1}</span>
               {t(s.text)}
             </p>
-            {'note' in s && <p className="hint install-note">{t(s.note)}</p>}
-            <img src={s.img} width={600} height={s.h} alt="" loading={i < 2 ? 'eager' : 'lazy'} />
+            {s.note && <p className="hint install-note">{t(s.note)}</p>}
+            {s.img && <img src={s.img} width={600} height={s.h} alt="" loading={i < 2 ? 'eager' : 'lazy'} />}
           </li>
         ))}
       </ol>
@@ -120,7 +154,7 @@ export function InstallGuide() {
   )
 }
 
-/** On the search home, in Safari on an iPhone: the guide again. */
+/** On the search home, in a browser on an iPhone: the guide again. */
 export function InstallLink() {
   const t = S(useLang())
   const [shown] = useState(installable)
