@@ -252,6 +252,24 @@ queued the 2 new form links. On the graph, ⻌ is radical 162 like 辶.
 Left: a middle piece keeps its own dots. 随 髄 (one dot) get theirs through 迶
 (two). 謎 (two) gets its dots through 迷 (one). The one note on 辶 stays on 辶.
 
+### D-023 · Kanji made in Japan that our list misses
+*Found 2026-10-14* (hero-sentence drafts). data/kokuji.txt has 24 kanji,
+the ones Kodansha marks. Our own meaning notes or KANJIDIC's keywords say
+these six were also made in Japan, but the list does not: 俣 簗 樫 噺 桝 椙.
+So their pages do not say "made in Japan", and the drafts were told they
+were not (most hero sentences left the claim out; 桝 椙 kept it).
+Source: data/kokuji.txt (Kodansha only).
+**Status: open.** Check against a second source before adding them.
+
+### D-024 · Bulgarian group labels that name the wrong thing
+*Found 2026-10-14* (hero-sentence drafts, Bulgarian side).
+麹 «кожи, мая»: «кожи» reads as "skins"; koji is «коджи».
+梧 «павловния, платан»: both are other trees; 梧 is the Chinese parasol
+tree (*Firmiana*). 鯛 «платика»: a freshwater bream; 鯛 is a sea bream.
+Source: the Bulgarian meaning labels (`mt:claude-sonnet-5`).
+**Status: in review.** The labels are on the Bulgarian cards. The hero
+sentences used the right words.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

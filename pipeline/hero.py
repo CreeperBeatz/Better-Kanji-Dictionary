@@ -2,6 +2,7 @@
 
     python pipeline/hero.py prepare --sample 生上気...   # batches for a side-by-side sample
     python pipeline/hero.py prepare                      # every kanji in scope
+    python pipeline/hero.py prepare --redo 奈仮津...      # a second pass (R-*), which wins over H-*
     # one subagent per data/drafts/hero/in/H-*.json (pipeline/hero_prompt.md)
     python pipeline/hero.py check [--out DIR]
     python pipeline/hero.py compare DIR DIR              # the sample, both runs, as Markdown
@@ -41,6 +42,15 @@ MAX_LEN = 320
 KOKUJI = proposals.ROOT / "data" / "kokuji.txt"
 SOURCE = "hero: Opus 5.5, pipeline/hero_prompt.md"
 BOT = "u-3280c437d36a"  # Claude Opus 5.5, the reviewer account the drafts go live under
+# Kanji that are another way of writing a kanji in everyday use: the hero may
+# name that one (渕 is 淵 written another way). Old forms (萬 for 万) and
+# variants; the database's char_form has only some of them.
+FORMS = {
+    "煕": "熙", "渕": "淵", "嶋": "島", "嶌": "島", "冨": "富", "聯": "連", "翫": "玩", "苅": "刈",
+    "舘": "館", "銕": "鉄", "礒": "磯", "簑": "蓑", "舩": "船", "頚": "頸",
+    "讃": "賛", "萬": "万", "嶽": "岳", "廣": "広", "搜": "捜", "澤": "沢", "燈": "灯",
+    "眞": "真", "龍": "竜", "藝": "芸", "藏": "蔵",
+}
 JAPANESE = re.compile(r"[぀-ヿ㐀-鿿豈-﫿\U00020000-\U0003ffff]")
 
 
@@ -78,15 +88,18 @@ def _row(c: str, conn, extras: dict, tsalta: dict, kokuji: set[str]) -> dict:
     }
 
 
-def prepare(sample: str | None) -> None:
+def prepare(sample: str | None, redo: str | None = None) -> None:
     conn = proposals.connect()
     extras, _ = read_extras()
     tsalta = _tsalta()
     kokuji = set(KOKUJI.read_text(encoding="utf-8").split()) if KOKUJI.exists() else set()
-    chars = list(dict.fromkeys(sample)) if sample else scope.kanji(conn)
+    chars = list(dict.fromkeys(sample or redo or "")) or scope.kanji(conn)
     rows = [_row(c, conn, extras, tsalta, kokuji) for c in chars]
+    for r in rows:
+        if r["char"] in FORMS:
+            r["formOf"] = FORMS[r["char"]]
     IN.mkdir(parents=True, exist_ok=True)
-    prefix = "S" if sample else "H"
+    prefix = "S" if sample else "R" if redo else "H"
     for old in IN.glob(f"{prefix}-*.json"):
         old.unlink()
     for i in range(0, len(rows), BATCH):
@@ -100,7 +113,9 @@ def read(out: Path, prefix: str = "*") -> tuple[dict[str, dict], list[str]]:
     """char -> {"hero", "heroBg"}, checked against the input."""
     good, problems = {}, []
     for inp in sorted(IN.glob(f"{prefix}-*.json")):
-        want = [k["char"] for k in json.loads(inp.read_text(encoding="utf-8"))["kanji"]]
+        rows = json.loads(inp.read_text(encoding="utf-8"))["kanji"]
+        want = [k["char"] for k in rows]
+        form = {k["char"]: k.get("formOf") or "" for k in rows}
         f = out / inp.name
         if not f.exists():
             problems.append(f"{inp.name}: no output")
@@ -114,7 +129,7 @@ def read(out: Path, prefix: str = "*") -> tuple[dict[str, dict], list[str]]:
                     problems.append(f"{c}: no {key}")
                 elif c in s:
                     problems.append(f"{c}: {key} writes the kanji itself")
-                elif JAPANESE.search(s):
+                elif JAPANESE.search(s.replace(form[c], "") if form[c] else s):
                     problems.append(f"{c}: {key} has Japanese in it")
                 elif len(s) > MAX_LEN:
                     problems.append(f"{c}: {key} is {len(s)} characters")
@@ -145,6 +160,9 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     """Each kanji's hero onto its open kanji_extras draft, or a new draft where it has none.
     A kanji whose extras are already accepted gets it as a direct change by the bot."""
     good, problems = read(OUT, "H")
+    redone, more = read(OUT, "R")  # the second pass wins
+    good.update(redone)
+    problems += more
     print(f"{len(good)} kanji, {len(problems)} problems")
     for p in problems[:20]:
         print("  " + p)
@@ -182,6 +200,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--sample")
+    p.add_argument("--redo")
     c = sub.add_parser("check")
     c.add_argument("--out", type=Path, default=OUT)
     c.add_argument("--prefix", default="*")
@@ -193,7 +212,7 @@ def main() -> None:
     ld.add_argument("--review-dir", type=Path)
     args = ap.parse_args()
     if args.cmd == "prepare":
-        prepare(args.sample)
+        prepare(args.sample, args.redo)
     elif args.cmd == "check":
         good, problems = read(args.out, args.prefix)
         print(f"{len(good)} kanji good, {len(problems)} problems")

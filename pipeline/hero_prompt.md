@@ -22,6 +22,8 @@ the kanji and does not list its meanings: the meanings section does that.
 - `groups`: its meaning groups, in order of importance: `en` and `bg`
   labels, `about` (what the kanji does in those words), and a few words.
 - `soundOnly`: words where the kanji only gives its sound.
+- `formOf`, only on some: the kanji is another way of writing this
+  kanji, the one in everyday use (an old form or a variant).
 
 ## How to write
 
@@ -42,7 +44,9 @@ the kanji and does not list its meanings: the meanings section does that.
   Use everyday words.
   No jargon (no "semantic", "phonetic", "radical", "component", "glyph").
 - **Never write the kanji itself.** Do not write any Japanese at all:
-  no kanji, no kana, no romaji. Describe the parts in words ("a person
+  no kanji, no kana, no romaji. Place names as English writes them
+  (Tokyo, Osaka, Nara) and words English has taken from Japanese (kana,
+  tsunami, sumo, samurai) are fine. Describe the parts in words ("a person
   leaning on a tree"), and endings by what they do ("the ending that turns
   a noun into an adjective, like -ic in English").
 - **Do not start with "This kanji", "The kanji" or "A kanji".** Go straight
@@ -57,6 +61,9 @@ the kanji and does not list its meanings: the meanings section does that.
   how it is written next to other parts. Name a part only as the origin
   names it (if it says the part stands for a seated person, write "a
   seated person", not what the part looks like).
+- `formOf`: say that the kanji is another way of writing that one, and
+  write that one kanji (the only kanji you may write). Then give the
+  gist as usual.
 - `kokuji`: you may say it was made in Japan, if that helps.
 - A kanji used mostly as a grammatical ending or helper: say what job it
   does in a sentence.
