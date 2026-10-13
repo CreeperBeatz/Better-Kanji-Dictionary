@@ -10,7 +10,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import { strings, useLang } from '../i18n'
 import { runningInstalled } from '../local/local'
-import { isIOS } from '../media'
+import { isIOS } from '../account/install'
 import { Overlay } from '../Overlay'
 import step1 from './step1.webp'
 import step2 from './step2.webp'
@@ -92,7 +92,7 @@ const STEPS: Record<ReturnType<typeof browser>, Step[]> = {
 const SEEN_KEY = 'betterrtk:installGuideSeen'
 
 /** A browser on an iPhone or iPad, not the app from the Home Screen. */
-export const installable = () => isIOS() && !runningInstalled()
+export const installable = () => isIOS && !runningInstalled()
 
 function seen(): boolean {
   try {

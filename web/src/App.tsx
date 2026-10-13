@@ -21,7 +21,8 @@ import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
-import { MOBILE, isIOS, matches, reducedMotion, useMediaQuery } from './media'
+import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
+import { isIOS } from './account/install'
 
 // Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -230,8 +231,7 @@ const IN_TAB = !runningInstalled()
  * forward, the page sliding as it goes, and the app leaves them be. Elsewhere
  * only a browser tab gives them away. The app's own swipes start clear of them.
  */
-const IOS = isIOS()
-const EDGES_TAKEN = IN_TAB || IOS
+const EDGES_TAKEN = IN_TAB || isIOS
 /** How near the screen's side a touch starts for the system to take it. */
 const EDGE = 24
 const nearEdge = (x: number) => x < EDGE || x > window.innerWidth - EDGE
@@ -1609,7 +1609,7 @@ export function App() {
     const turn = pendingTurn.current
     pendingTurn.current = null
     const slidAlready = (e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true
-    if (!byApp && (IOS || slidAlready)) return false
+    if (!byApp && (isIOS || slidAlready)) return false
     const n = (e.state as { n?: number } | null)?.n
     const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
     if (turn) animateNav(turn.kind, apply, turn.scope)
