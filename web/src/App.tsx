@@ -11,7 +11,7 @@ import { Workbench } from './review/Workbench'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
-import { local } from './local/local'
+import { local, runningInstalled } from './local/local'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { GraphDetail, LevelFilter, type StageView } from './StageControls'
@@ -146,6 +146,10 @@ function useVisibleHeight(enabled: boolean) {
       if (!vv || Math.abs(vv.scale - 1) > 0.01) return
       root.style.setProperty('--app-h', `${vv.height}px`)
       root.style.setProperty('--app-top', `${vv.offsetTop}px`)
+      // The keyboard is up: iOS keeps the page's height and covers it. The
+      // tabs then go, as in an iPhone's own apps, and do not ride up and down
+      // on the keyboard's suggestion strip as it changes.
+      root.toggleAttribute('data-keyboard', root.clientHeight - vv.height > 150)
     }
     fit()
     vv.addEventListener('resize', fit)
@@ -155,6 +159,7 @@ function useVisibleHeight(enabled: boolean) {
       vv.removeEventListener('scroll', fit)
       root.style.removeProperty('--app-h')
       root.style.removeProperty('--app-top')
+      root.removeAttribute('data-keyboard')
     }
   }, [enabled])
 }
@@ -212,6 +217,50 @@ const SWIPE = 40
 /** How far a page at its top is pulled down, slowly, to go to the search. */
 const PULL = 80
 const HAN = /[㐀-䶿一-鿿]/
+
+/**
+ * In a browser tab, not the installed app. There the screen's edges are the
+ * browser's: Safari takes a swipe in from the left for back and from the right
+ * for forward, slides the page itself, and no page can stop it. So the app's
+ * own swipes start away from the edges, and it gives no keyboard unasked.
+ */
+const IN_TAB = !runningInstalled()
+/** How near the screen's side a touch starts for the browser to take it. */
+const EDGE = 24
+const nearEdge = (x: number) => x < EDGE || x > window.innerWidth - EDGE
+
+// A touch from the screen's edge, followed to tell the browser's swipe from a
+// tap: the swipe goes across, or the browser takes it off the page.
+let edgeTouch: { x: number; swiped: boolean } | null = null
+let edgeSwipedAt = -Infinity
+if (IN_TAB) {
+  const on = { capture: true, passive: true }
+  const ended = () => {
+    if (edgeTouch?.swiped) edgeSwipedAt = performance.now()
+    edgeTouch = null
+  }
+  window.addEventListener('touchstart', (e) => {
+    const x = e.touches[0].clientX
+    edgeTouch = e.touches.length === 1 && nearEdge(x) ? { x, swiped: false } : null
+  }, on)
+  window.addEventListener('touchmove', (e) => {
+    if (edgeTouch && Math.abs(e.touches[0].clientX - edgeTouch.x) > 30) edgeTouch.swiped = true
+  }, on)
+  window.addEventListener('touchcancel', () => {
+    if (edgeTouch) edgeTouch.swiped = true
+    ended()
+  }, on)
+  window.addEventListener('touchend', ended, on)
+}
+
+/**
+ * Whether back or forward came from the browser's own swipe, which has slid
+ * the page already. Chrome says so; Safari is read from the touch.
+ */
+function browserSlid(e: PopStateEvent): boolean {
+  if ((e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition) return true
+  return IN_TAB && (edgeTouch?.swiped === true || performance.now() - edgeSwipedAt < 1000)
+}
 
 /**
  * Whether a touch starting here is the element's own to use sideways: typing,
@@ -1311,11 +1360,12 @@ export function App() {
   // The search has nothing to its left: a swipe that way opens the box, as a
   // pull down does.
   function swipeOpensSearch(dx: number) {
-    return dx > 0 && (onSearchPage || phoneTab === 'search')
+    return !IN_TAB && dx > 0 && (onSearchPage || phoneTab === 'search')
   }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
     if (!mobile || e.touches.length !== 1) return
+    if (IN_TAB && nearEdge(e.touches[0].clientX)) return
     // On the graph only while it is locked: free, a finger moves the graph.
     if (e.currentTarget === stageRef.current && (view !== 'focus' || !graphLocked)) return
     if (movesItself(e.target as Element, e.currentTarget)) return
@@ -1347,7 +1397,7 @@ export function App() {
     if (s.mode === null) {
       if (Math.hypot(dx, dy) < 10) return
       if (Math.abs(dx) > 1.5 * Math.abs(dy)) s.mode = s.turns ? 'turn' : null
-      else if (dy > 0 && s.atTop) s.mode = 'pull'
+      else if (dy > 0 && s.atTop && !IN_TAB) s.mode = 'pull'
       // Anything else is the page scrolling, which is the browser's.
       if (s.mode === null) {
         swipe.current = null
@@ -1577,6 +1627,8 @@ export function App() {
     if (turning.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
+    // The browser has slid the page itself: a second slide would repeat it.
+    if (browserSlid(e)) return false
     const n = (e.state as { n?: number } | null)?.n
     const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
     if (turn) animateNav(turn.kind, apply, turn.scope)
@@ -1587,7 +1639,7 @@ export function App() {
   useEffect(() => {
     if (!cameBack.current || performance.now() - cameBack.current > 400) return
     cameBack.current = 0
-    if (mobile && !onStage && top.kind === 'search' && inputRef.current) raiseKeyboard(inputRef.current)
+    if (mobile && !IN_TAB && !onStage && top.kind === 'search' && inputRef.current) raiseKeyboard(inputRef.current)
   }, [top, onStage, mobile])
 
   const searchBar = (

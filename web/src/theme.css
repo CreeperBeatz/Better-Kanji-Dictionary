@@ -1228,6 +1228,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     grid-area: tabs;
   }
 
+  /* Under the keyboard, as an iPhone's own apps have it (App.tsx). */
+  html[data-keyboard] .phone-tabs {
+    display: none;
+  }
+
   /* The pane not showing is moved off the screen, not made invisible:
      visibility and pointer-events are inherited, so switching them restyles
      every element under the pane -- 750 of them for a big graph -- on each
@@ -3285,6 +3290,40 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .stage-link svg.solid {
   fill: currentColor;
   stroke: none;
+}
+
+/* Safari on an iPhone: once, that the app does more from the Home Screen. */
+.install-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 6px 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sumi-sunk);
+  color: var(--paper-dim);
+}
+
+.install-hint p {
+  flex: 1;
+  margin: 0;
+}
+
+.install-hint strong {
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.install-hint-close {
+  flex: none;
+  padding: 0 8px;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-size: 1.3em;
+  line-height: 1.2;
+  cursor: pointer;
 }
 
 .search-home-top {

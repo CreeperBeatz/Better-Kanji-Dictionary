@@ -28,5 +28,9 @@ export function useMediaQuery(query: string): boolean {
   )
 }
 
+/** An iPhone or iPad. iPadOS calls itself a Mac, but a Mac has no touch screen. */
+export const isIOS = () =>
+  /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1)
+
 /** Whether the system asks for less motion: what would slide is put in place. */
 export const reducedMotion = () => matches('(prefers-reduced-motion: reduce)')
