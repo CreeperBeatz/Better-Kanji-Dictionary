@@ -272,11 +272,13 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   const pinched = useRef(false)
   // One-handed zoom, as on a map: tap twice, keep the finger down the second
   // time, and drag down to zoom in, up to zoom out, about where it tapped. A
-  // plain double tap zooms in a step. Locked or not: the lock keeps a finger
-  // from moving the graph by chance, and this is never by chance. `lastTap`
-  // is the first tap, for the second to be told from a fresh press.
+  // plain double tap zooms in a step. On a locked graph a double tap unlocks
+  // it instead -- the lock keeps a finger from moving the graph by chance,
+  // and a double tap is never by chance -- and a drag from it zooms as on an
+  // unlocked one. `lastTap` is the first tap, for the second to be told from
+  // a fresh press.
   const lastTap = useRef<{ x: number; y: number; at: number } | null>(null)
-  const tapZoom = useRef<{ y: number; px: number; py: number; from: View; moved: boolean } | null>(null)
+  const tapZoom = useRef<{ y: number; px: number; py: number; from: View; moved: boolean; unlocked: boolean } | null>(null)
   // The click that ends the second tap must not open a card.
   const zoomTapped = useRef(false)
   // Touch has no hover or right click: a tap shows a character's card, with
@@ -494,7 +496,8 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     if (!locked) touches.current.set(e.pointerId, at)
     pinched.current = false
     interrupt()
-    tapZoom.current = { y: e.clientY, px: at.x, py: at.y, from: viewRef.current, moved: false }
+    tapZoom.current = { y: e.clientY, px: at.x, py: at.y, from: viewRef.current, moved: false, unlocked: locked }
+    if (locked) onLock?.(false)
     svgRef.current?.setPointerCapture?.(e.pointerId)
     return true
   }
@@ -577,8 +580,9 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     if (z) {
       tapZoom.current = null
       zoomTapped.current = true
-      // Tapped twice and let go: a step in, about the taps.
-      if (!z.moved) zoomAt(1.6, z.px, z.py)
+      // Tapped twice and let go: a step in, about the taps -- unless the taps
+      // were to unlock the graph.
+      if (!z.moved && !z.unlocked) zoomAt(1.6, z.px, z.py)
     } else if (e.pointerType === 'touch' && e.type !== 'pointercancel') {
       // A tap -- a press that did not move -- may be the first of two.
       const d = drag.current
