@@ -759,7 +759,10 @@ ${t('form', { f: n.form })}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerLeave={onPointerUp}
+        // A mouse that leaves ends its drag. A finger does not: iOS says one
+        // has left a node the moment its drag is handed from the node to the
+        // graph, which would stop the graph dead under it.
+        onPointerLeave={(e) => e.pointerType !== 'touch' && onPointerUp(e)}
         onPointerCancel={onPointerUp}
         // A zoom by double tap is the graph's: the page does not turn its tab
         // under it, as it would for a sideways move on a locked graph.
