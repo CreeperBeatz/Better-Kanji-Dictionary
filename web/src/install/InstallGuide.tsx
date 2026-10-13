@@ -10,7 +10,7 @@
 import { useState, useSyncExternalStore } from 'react'
 import { strings, useLang } from '../i18n'
 import { runningInstalled } from '../local/local'
-import { isIOS } from '../account/install'
+import { install, isIOS, onPhone, useInstall } from '../account/install'
 import { Overlay } from '../Overlay'
 import step1 from './step1.webp'
 import step2 from './step2.webp'
@@ -48,6 +48,7 @@ const S = strings(
     later: 'Not now',
     noteLead: 'This dictionary works better as an app.',
     noteHow: 'Show me how',
+    noteInstall: 'Install the app',
     noteClose: 'Close',
   },
   {
@@ -75,6 +76,7 @@ const S = strings(
     later: 'Не сега',
     noteLead: 'Речникът работи по-добре като приложение.',
     noteHow: 'Покажи как',
+    noteInstall: 'Инсталирайте приложението',
     noteClose: 'Затвори',
   },
 )
@@ -220,24 +222,27 @@ export function InstallGuide() {
 let noteClosed = false
 
 /**
- * On the search home, in a browser on an iPhone: that the app does more
- * installed, with the guide a tap away. It comes back on every visit.
+ * On the search home, in a phone's browser: that the app does more installed.
+ * On an iPhone it opens the guide; on Android, once the browser offers to
+ * install the app, the browser's own install dialog. It comes back on every
+ * visit, and goes once the app is installed.
  */
 export function InstallNote() {
   const t = S(useLang())
-  const [shown, setShown] = useState(() => installable() && !noteClosed)
-  if (!shown) return null
+  const how = useInstall()
+  const [closed, setClosed] = useState(noteClosed)
+  if (closed || !(how === 'ios' || (how === 'prompt' && onPhone))) return null
   function close() {
     noteClosed = true
-    setShown(false)
+    setClosed(true)
   }
   return (
     <aside className="install-hint">
       <p>
         <strong>{t('noteLead')}</strong>
         <br />
-        <button className="install-hint-show" onClick={openInstallGuide}>
-          {t('noteHow')}
+        <button className="install-hint-show" onClick={() => (how === 'ios' ? openInstallGuide() : install())}>
+          {t(how === 'ios' ? 'noteHow' : 'noteInstall')}
         </button>
       </p>
       <button className="install-hint-close" onClick={close} aria-label={t('noteClose')}>
