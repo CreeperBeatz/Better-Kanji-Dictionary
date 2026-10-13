@@ -651,11 +651,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-/* Under the hero: that AI wrote it, and whether a person has checked it. */
+/* Under the hero, quietly: that AI wrote it. */
 .kanji-hero-note {
   margin: 0 0 12px;
-  font-size: calc(11.5px * var(--type));
-  color: var(--paper-dim);
+  font-size: calc(10.5px * var(--type));
+  color: var(--muted);
 }
 
 /* How the meanings follow from each other, above them. */

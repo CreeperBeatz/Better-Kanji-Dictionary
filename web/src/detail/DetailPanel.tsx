@@ -25,8 +25,7 @@ const S = strings(
     outside: 'outside the jōyō list',
     noMeaning: 'no recorded meaning',
     seeComponents: 'Components',
-    heroAi: 'Summary written by AI.',
-    heroAiDraft: 'Summary written by AI. A person has not checked it yet.',
+    heroAi: 'AI summary',
     seeComponentsTitle: 'Show what {char} is built from, and what it is part of',
     statistics: 'Statistics',
     strokes: 'Strokes',
@@ -55,8 +54,7 @@ const S = strings(
     outside: 'извън списъка джойо',
     noMeaning: 'няма записано значение',
     seeComponents: 'Компоненти',
-    heroAi: 'Обобщение, написано от ИИ.',
-    heroAiDraft: 'Обобщение, написано от ИИ. Още не е проверено от човек.',
+    heroAi: 'Обобщение от ИИ',
     seeComponentsTitle: 'Покажете от какво е изграден {char} и в какво участва',
     statistics: 'Статистика',
     strokes: 'Черти',
@@ -270,7 +268,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       {hero && (
         <>
           <p className="kanji-hero">{hero}</p>
-          <p className="kanji-hero-note">{t(unit?.heroDraft ? 'heroAiDraft' : 'heroAi')}</p>
+          <p className="kanji-hero-note">{t('heroAi')}</p>
         </>
       )}
       <h3 className="facts-title">{t('statistics')}</h3>

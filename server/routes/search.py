@@ -841,8 +841,7 @@ def kanji_page(char: str) -> dict:
     (上手 じょうず under "higher"). `total`: its common words. And the kanji
     close to it in meaning, and `mixups`: kanji easy to mix up with on one of
     its readings (挙げる and 揚げる beside 上げる), each with the usage card that
-    tells them apart. `hero`: the kanji's gist, the line its page opens with;
-    `heroDraft`: it is the AI's draft, not yet checked by a reviewer.
+    tells them apart. `hero`: the kanji's gist, the line its page opens with.
     `link`: how the meanings follow from each other.
     `mixups`: those on no meaning's reading. `soundOnly`: words where the kanji is there for its
     sound (上海). `readings`, keyed by the reading with its dashes dropped
@@ -854,7 +853,7 @@ def kanji_page(char: str) -> dict:
     from .. import review
     from .graph import _fetch
 
-    out: dict = {"char": char, "meanings": [], "hero": None, "heroBg": None, "heroDraft": False, "link": None, "linkBg": None, "mixups": [], "soundOnly": None,
+    out: dict = {"char": char, "meanings": [], "hero": None, "heroBg": None, "link": None, "linkBg": None, "mixups": [], "soundOnly": None,
                  "readings": {}, "special": [], "radical": None}
     if len(char) != 1:
         return out
@@ -1025,7 +1024,6 @@ def kanji_page(char: str) -> dict:
     if sound:
         out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [])]}
     out["hero"], out["heroBg"] = extras.get("hero"), extras.get("heroBg")
-    out["heroDraft"] = bool(out["hero"]) and site["draft"]["extras"]
     out["link"], out["linkBg"] = extras.get("link"), extras.get("linkBg")
     out["mixups"] = [m for m in mixups if m["reading"] not in claimed]
 
