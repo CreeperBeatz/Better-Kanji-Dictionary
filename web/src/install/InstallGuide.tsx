@@ -39,8 +39,7 @@ const S = strings(
     o3: 'Tap Add.',
     done: 'Then open Better Kanji from your Home Screen.',
     later: 'Not now',
-    noteLead: 'Use it as an app.',
-    noteWhy: 'It opens on the full screen, and every swipe is the app’s.',
+    noteLead: 'This dictionary works better as an app.',
     noteHow: 'Show me how',
     noteClose: 'Close',
   },
@@ -64,8 +63,7 @@ const S = strings(
     o3: 'Натиснете „Добави“.',
     done: 'После отворете Better Kanji от началния екран.',
     later: 'Не сега',
-    noteLead: 'Използвайте го като приложение.',
-    noteWhy: 'Отваря се на целия екран и всяко плъзгане е за приложението.',
+    noteLead: 'Речникът работи по-добре като приложение.',
     noteHow: 'Покажи как',
     noteClose: 'Затвори',
   },
@@ -187,7 +185,7 @@ export function InstallNote() {
   return (
     <aside className="install-hint">
       <p>
-        <strong>{t('noteLead')}</strong> {t('noteWhy')}
+        <strong>{t('noteLead')}</strong>
         <br />
         <button className="install-hint-show" onClick={openInstallGuide}>
           {t('noteHow')}
