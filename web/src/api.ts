@@ -247,6 +247,8 @@ export interface KanjiPage {
   /** Its gist, the line the page opens with. */
   hero: string | null
   heroBg: string | null
+  /** The hero is the AI's draft, not yet checked by a reviewer. */
+  heroDraft?: boolean
   /** How its meanings follow from each other. */
   link: string | null
   linkBg: string | null
