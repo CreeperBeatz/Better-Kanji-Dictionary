@@ -38,6 +38,12 @@ const S = strings(
     o1b: 'No Share, or no Add to Home Screen after it? Open this page in Safari.',
     o2: 'Tap Add to Home Screen.',
     o3: 'Tap Add.',
+    f1: 'Open the menu (☰), then tap Share.',
+    brave: 'Brave cannot put apps on the Home Screen. Open this page in Safari to install it.',
+    inApp: 'This page is open inside another app, which cannot install it. Open it in Safari: look for Open in Safari or Open in browser in the app’s menu.',
+    handoff: 'Or copy the link and paste it into Safari.',
+    copy: 'Copy link',
+    copied: 'Copied',
     done: 'Then open Better Kanji from your Home Screen.',
     later: 'Not now',
     noteLead: 'This dictionary works better as an app.',
@@ -59,6 +65,12 @@ const S = strings(
     o1b: 'Няма „Споделяне“ или „Добавяне към начален екран“? Отворете страницата в Safari.',
     o2: 'Натиснете „Добавяне към начален екран“.',
     o3: 'Натиснете „Добави“.',
+    f1: 'Отворете менюто (☰) и натиснете „Споделяне“.',
+    brave: 'Brave не може да добавя приложения към началния екран. Отворете страницата в Safari, за да го инсталирате.',
+    inApp: 'Страницата е отворена в друго приложение, което не може да я инсталира. Отворете я в Safari: потърсете „Отвори в Safari“ или „Отвори в браузъра“ в менюто на приложението.',
+    handoff: 'Или копирайте връзката и я поставете в Safari.',
+    copy: 'Копирай връзката',
+    copied: 'Копирано',
     done: 'После отворете Better Kanji от началния екран.',
     later: 'Не сега',
     noteLead: 'Речникът работи по-добре като приложение.',
@@ -70,16 +82,29 @@ const S = strings(
 type Key = Parameters<ReturnType<typeof S>>[0]
 type Step = { text: Key; note?: Key; img?: string; h?: number }
 
-/** The browser the steps are for: they differ in where Share is. */
-function browser(): 'safari' | 'chrome' | 'other' {
+/**
+ * The browser the steps are for: they differ in where Share is. On an iPhone
+ * every browser is Safari's engine under its own buttons, and most can put the
+ * app on the Home Screen (iOS 16.4 on). Two cannot: Brave chose not to, and
+ * the browsers inside other apps -- Messenger, Instagram -- have no Share at
+ * all. Those are sent to Safari: the app installed is the same app whichever
+ * browser put it there.
+ */
+type Browser = 'safari' | 'chrome' | 'firefox' | 'other' | 'brave' | 'inApp'
+function browser(): Browser {
   const ua = navigator.userAgent
+  // Brave says it is Safari, word for word; only this gives it away.
+  if ('brave' in navigator) return 'brave'
+  // The apps that say so. Viber, Telegram and Gmail do not, and pass for Safari.
+  if (/FBAN|FBAV|FB_IAB|Instagram|LinkedInApp|Snapchat|musical_ly|TikTok|Line\//.test(ua)) return 'inApp'
   if (/CriOS\//.test(ua)) return 'chrome'
+  if (/FxiOS\//.test(ua)) return 'firefox'
   // Every iOS browser says Safari; the others add a name of their own.
-  if (/Safari\//.test(ua) && !/(FxiOS|EdgiOS|OPiOS|DuckDuckGo|GSA|YaBrowser|Brave)\//.test(ua)) return 'safari'
+  if (/Safari\//.test(ua) && !/(EdgiOS|OPiOS|OPT|DuckDuckGo|GSA|YaBrowser)\//.test(ua)) return 'safari'
   return 'other'
 }
 
-const STEPS: Record<ReturnType<typeof browser>, Step[]> = {
+const STEPS: Record<Exclude<Browser, 'brave' | 'inApp'>, Step[]> = {
   safari: [
     { text: 's1', note: 's1b', img: step1, h: 234 },
     { text: 's2', img: step2, h: 748 },
@@ -94,7 +119,28 @@ const STEPS: Record<ReturnType<typeof browser>, Step[]> = {
     { text: 's4', img: chrome3, h: 452 },
     { text: 's5', img: chrome4, h: 488 },
   ],
+  firefox: [{ text: 'f1', note: 'o1b' }, { text: 'o2' }, { text: 'o3' }],
   other: [{ text: 'o1', note: 'o1b' }, { text: 'o2' }, { text: 'o3' }],
+}
+
+/** Where the browser cannot install: the way to Safari, and the link to take there. */
+function ToSafari({ t, why }: { t: ReturnType<typeof S>; why: 'brave' | 'inApp' }) {
+  const [copied, setCopied] = useState(false)
+  function copy() {
+    navigator.clipboard
+      .writeText(`${location.origin}/`)
+      .then(() => setCopied(true))
+      .catch(() => {})
+  }
+  return (
+    <div className="install-handoff">
+      <p>{t(why)}</p>
+      <p className="hint">{t('handoff')}</p>
+      <button className="install-copy" onClick={copy}>
+        {t(copied ? 'copied' : 'copy')}
+      </button>
+    </div>
+  )
 }
 
 const SEEN_KEY = 'betterrtk:installGuideSeen'
@@ -130,6 +176,8 @@ export function InstallGuide() {
     () => open,
   )
   if (!shown) return null
+  const b = browser()
+  const steps = b === 'brave' || b === 'inApp' ? null : STEPS[b]
   function close() {
     try {
       localStorage.setItem(SEEN_KEY, '1')
@@ -142,19 +190,25 @@ export function InstallGuide() {
     <Overlay className="install-overlay" panel="account-panel install-panel" label={t('label')} onClose={close}>
       <h2 className="install-title">{t('title')}</h2>
       <p className="install-why">{t('why')}</p>
-      <ol className="install-steps">
-        {STEPS[browser()].map((s, i) => (
-          <li key={s.text}>
-            <p>
-              <span className="install-n">{i + 1}</span>
-              {t(s.text)}
-            </p>
-            {s.note && <p className="hint install-note">{t(s.note)}</p>}
-            {s.img && <img src={s.img} width={600} height={s.h} alt="" loading={i < 2 ? 'eager' : 'lazy'} />}
-          </li>
-        ))}
-      </ol>
-      <p className="install-done">{t('done')}</p>
+      {steps ? (
+        <>
+          <ol className="install-steps">
+            {steps.map((s, i) => (
+              <li key={s.text}>
+                <p>
+                  <span className="install-n">{i + 1}</span>
+                  {t(s.text)}
+                </p>
+                {s.note && <p className="hint install-note">{t(s.note)}</p>}
+                {s.img && <img src={s.img} width={600} height={s.h} alt="" loading={i < 2 ? 'eager' : 'lazy'} />}
+              </li>
+            ))}
+          </ol>
+          <p className="install-done">{t('done')}</p>
+        </>
+      ) : (
+        <ToSafari t={t} why={b as 'brave' | 'inApp'} />
+      )}
       <button className="install-later" onClick={close}>
         {t('later')}
       </button>
@@ -162,28 +216,19 @@ export function InstallGuide() {
   )
 }
 
-const NOTE_KEY = 'betterrtk:installHintSeen'
+// Closed, the note stays closed for the rest of the visit, and is back on the next.
+let noteClosed = false
 
 /**
  * On the search home, in a browser on an iPhone: that the app does more
- * installed, with the guide a tap away, until it is closed.
+ * installed, with the guide a tap away. It comes back on every visit.
  */
 export function InstallNote() {
   const t = S(useLang())
-  const [shown, setShown] = useState(() => {
-    try {
-      return installable() && !localStorage.getItem(NOTE_KEY)
-    } catch {
-      return false
-    }
-  })
+  const [shown, setShown] = useState(() => installable() && !noteClosed)
   if (!shown) return null
   function close() {
-    try {
-      localStorage.setItem(NOTE_KEY, '1')
-    } catch {
-      // storage blocked: it goes for this visit only
-    }
+    noteClosed = true
     setShown(false)
   }
   return (
