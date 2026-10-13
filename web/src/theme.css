@@ -1190,9 +1190,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   /* Clear of the screen's rounded corners, the notch and the home bar
      (viewport-fit=cover in index.html is what makes these known). The tabs
      pad themselves at the bottom, so their colour runs under the home bar,
-     as an iPhone's own tab bars do; without them, the page is lifted. */
+     as an iPhone's own tab bars do; without them, the page is lifted. The
+     search bar's own top padding sits under the status bar's lower edge, as
+     the clock does not reach it. */
   .shell {
-    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+    padding: max(0px, calc(env(safe-area-inset-top, 0px) - 10px)) env(safe-area-inset-right, 0px) 0
+      env(safe-area-inset-left, 0px);
   }
 
   .shell:not(:has(.phone-tabs)) {
@@ -5602,7 +5605,9 @@ html {
 .phone-tabs {
   position: relative;
   display: flex;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Not all of the home bar's room: the bar is lifted clear of it, but no
+     more, as an iPhone's own tab bars are. */
+  padding-bottom: max(0px, calc(env(safe-area-inset-bottom, 0px) - 16px));
   background: var(--sumi-sunk);
   border-top: 1px solid var(--rule);
 }
