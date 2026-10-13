@@ -62,6 +62,14 @@ body,
   margin: 0;
 }
 
+/* The window never scrolls, only the panes inside it. Without this, iOS Safari
+   drags the whole app when a pane hits its end or a touch starts on the bars,
+   and Android Chrome pulls to refresh. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--sumi);
   color: var(--paper);
