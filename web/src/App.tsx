@@ -12,6 +12,7 @@ import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { local, runningInstalled } from './local/local'
+import { InstallGuide } from './install/InstallGuide'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { GraphDetail, LevelFilter, type StageView } from './StageControls'
@@ -229,7 +230,8 @@ const IN_TAB = !runningInstalled()
  * forward, the page sliding as it goes, and the app leaves them be. Elsewhere
  * only a browser tab gives them away. The app's own swipes start clear of them.
  */
-const EDGES_TAKEN = IN_TAB || isIOS()
+const IOS = isIOS()
+const EDGES_TAKEN = IN_TAB || IOS
 /** How near the screen's side a touch starts for the system to take it. */
 const EDGE = 24
 const nearEdge = (x: number) => x < EDGE || x > window.innerWidth - EDGE
@@ -1598,13 +1600,16 @@ export function App() {
 
   // The app's own steps back slide the page: a tab turn away from the graph
   // as that turn, anything else the way history went. The browser's own back
-  // and forward do not (see `stepBack` in nav.ts).
+  // and forward slide too, unless the browser has slid the page itself: Chrome
+  // says when it has; an iPhone never says, and always has (see `stepBack` in
+  // nav.ts), so there they never do.
   beforePop.current = (e: PopStateEvent, apply: () => void, byApp: boolean) => {
     cameBack.current = performance.now()
     if (turning.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
-    if (!byApp) return false
+    const slidAlready = (e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true
+    if (!byApp && (IOS || slidAlready)) return false
     const n = (e.state as { n?: number } | null)?.n
     const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
     if (turn) animateNav(turn.kind, apply, turn.scope)
@@ -1907,6 +1912,7 @@ export function App() {
       )}
       {/* After the review screen, so signing in from its gate opens above it. */}
       {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
+      <InstallGuide />
     </div>
   )
 }

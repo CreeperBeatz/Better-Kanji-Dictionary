@@ -180,10 +180,10 @@ function restoreScroll(el: HTMLElement | null, to: number) {
 
 /**
  * When the app last stepped back through history itself -- its back link, a
- * tab turned away from the graph -- rather than the browser. A back or forward
- * of the browser's own is not slid by the app: on an iPhone the system's edge
- * swipe has slid the page already, and in Safari and installed alike there is
- * no telling that swipe from anything else.
+ * tab turned away from the graph -- rather than the browser. On an iPhone a
+ * back or forward of the browser's own is not slid by the app: the system's
+ * edge swipe has slid the page already, and in Safari and installed alike
+ * there is no telling that swipe from anything else.
  */
 let appStepAt = -Infinity
 function stepBack(n: number) {

@@ -28,7 +28,7 @@ import { Pitch } from './Pitch'
 import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
-import { InstallHint } from './InstallHint'
+import { InstallLink } from '../install/InstallGuide'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -845,11 +845,11 @@ function HomePage({
 
   return (
     <section className="rail-section search-home">
-      <InstallHint />
       <div className="search-home-top">
         <ToMap onClick={onMap} />
         <SearchHelp onTry={onSearch} />
       </div>
+      <InstallLink />
       <h3 className="overlay-group">{t('browse')}</h3>
       <div className="level-links">
         {LEVELS.map((n) => (

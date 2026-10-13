@@ -1,0 +1,137 @@
+/**
+ * On an iPhone in Safari: how to put the app on the Home Screen, step by step,
+ * with Safari's own screens. It opens by itself on the first visit, and from
+ * the search home's link after that. Installed, the app has the whole screen,
+ * and the swipes from the screen's edges are the only ones that are not its own.
+ */
+
+import { useState, useSyncExternalStore } from 'react'
+import { strings, useLang } from '../i18n'
+import { runningInstalled } from '../local/local'
+import { isIOS } from '../media'
+import { Overlay } from '../Overlay'
+import step1 from './step1.webp'
+import step2 from './step2.webp'
+import step3 from './step3.webp'
+import step4 from './step4.webp'
+import step5 from './step5.webp'
+
+const S = strings(
+  {
+    label: 'Install the app',
+    title: 'This app is designed to work from your Home Screen.',
+    why: 'In the browser, you might see some bugs or glitches.',
+    s1: 'Tap ••• at the bottom right.',
+    s1b: 'No ••• button? Tap Share, then go to step 3.',
+    s2: 'Tap Share.',
+    s3: 'Tap View More.',
+    s4: 'Tap Add to Home Screen.',
+    s5: 'Keep Open as Web App on. Tap Add.',
+    done: 'Then open Better Kanji from your Home Screen.',
+    later: 'Not now',
+    link: 'Install the app',
+  },
+  {
+    label: 'Инсталиране на приложението',
+    title: 'Приложението е направено за работа от началния екран.',
+    why: 'В браузъра може да видите грешки и проблеми.',
+    s1: 'Натиснете ••• долу вдясно.',
+    s1b: 'Няма бутон •••? Натиснете „Споделяне“ и продължете от стъпка 3.',
+    s2: 'Натиснете „Споделяне“.',
+    s3: 'Натиснете „Покажи още“.',
+    s4: 'Натиснете „Добавяне към начален екран“.',
+    s5: 'Оставете „Отваряне като уеб приложение“ включено. Натиснете „Добави“.',
+    done: 'После отворете Better Kanji от началния екран.',
+    later: 'Не сега',
+    link: 'Инсталирайте приложението',
+  },
+)
+
+const STEPS = [
+  { text: 's1', note: 's1b', img: step1, h: 234 },
+  { text: 's2', img: step2, h: 748 },
+  { text: 's3', img: step3, h: 573 },
+  { text: 's4', img: step4, h: 403 },
+  { text: 's5', img: step5, h: 488 },
+] as const
+
+const SEEN_KEY = 'betterrtk:installGuideSeen'
+
+/** Safari on an iPhone or iPad, not the app from the Home Screen. */
+export const installable = () => isIOS() && !runningInstalled()
+
+function seen(): boolean {
+  try {
+    return localStorage.getItem(SEEN_KEY) !== null
+  } catch {
+    return true
+  }
+}
+
+// Open or shut, for the link on the search home to open it from anywhere.
+let open = installable() && !seen()
+const listeners = new Set<() => void>()
+function setOpen(next: boolean) {
+  open = next
+  listeners.forEach((l) => l())
+}
+export const openInstallGuide = () => setOpen(true)
+
+/** The guide itself, mounted once by the app. */
+export function InstallGuide() {
+  const t = S(useLang())
+  const shown = useSyncExternalStore(
+    (l) => {
+      listeners.add(l)
+      return () => listeners.delete(l)
+    },
+    () => open,
+  )
+  if (!shown) return null
+  function close() {
+    try {
+      localStorage.setItem(SEEN_KEY, '1')
+    } catch {
+      // storage blocked: it opens again next visit
+    }
+    setOpen(false)
+  }
+  return (
+    <Overlay className="install-overlay" panel="account-panel install-panel" label={t('label')} onClose={close}>
+      <h2 className="install-title">{t('title')}</h2>
+      <p className="install-why">{t('why')}</p>
+      <ol className="install-steps">
+        {STEPS.map((s, i) => (
+          <li key={s.text}>
+            <p>
+              <span className="install-n">{i + 1}</span>
+              {t(s.text)}
+            </p>
+            {'note' in s && <p className="hint install-note">{t(s.note)}</p>}
+            <img src={s.img} width={600} height={s.h} alt="" loading={i < 2 ? 'eager' : 'lazy'} />
+          </li>
+        ))}
+      </ol>
+      <p className="install-done">{t('done')}</p>
+      <button className="install-later" onClick={close}>
+        {t('later')}
+      </button>
+    </Overlay>
+  )
+}
+
+/** On the search home, in Safari on an iPhone: the guide again. */
+export function InstallLink() {
+  const t = S(useLang())
+  const [shown] = useState(installable)
+  if (!shown) return null
+  return (
+    <button className="install-link" onClick={openInstallGuide}>
+      <svg viewBox="0 0 16 16" aria-hidden>
+        <rect x="2.5" y="2.5" width="11" height="11" rx="2.5" />
+        <path d="M8 5.5v5M5.5 8h5" />
+      </svg>
+      {t('link')}
+    </button>
+  )
+}
