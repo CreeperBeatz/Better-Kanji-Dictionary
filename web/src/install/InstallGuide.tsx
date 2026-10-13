@@ -19,7 +19,7 @@ import step5 from './step5.webp'
 const S = strings(
   {
     label: 'Install the app',
-    title: 'This app is designed to work from your Home Screen.',
+    title: 'This app is designed to work from your Home Screen',
     why: 'In the browser, you might see some bugs or glitches.',
     s1: 'Tap ••• at the bottom right.',
     s1b: 'No ••• button? Tap Share, then go to step 3.',
@@ -33,7 +33,7 @@ const S = strings(
   },
   {
     label: 'Инсталиране на приложението',
-    title: 'Приложението е направено за работа от началния екран.',
+    title: 'Приложението е направено за работа от началния екран',
     why: 'В браузъра може да видите грешки и проблеми.',
     s1: 'Натиснете ••• долу вдясно.',
     s1b: 'Няма бутон •••? Натиснете „Споделяне“ и продължете от стъпка 3.',

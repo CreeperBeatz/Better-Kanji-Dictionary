@@ -3323,11 +3323,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 20px 18px 18px;
 }
 
-.install-title {
-  margin: 0 36px 0 0;
-  font-size: calc(18px * var(--type));
-  line-height: 1.35;
-  font-weight: 600;
+/* A title: .account-panel h2 would make it a label. */
+.install-panel .install-title {
+  margin: 2px 36px 2px 0;
+  font-size: calc(21px * var(--type));
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--paper);
 }
 
 .install-why {
