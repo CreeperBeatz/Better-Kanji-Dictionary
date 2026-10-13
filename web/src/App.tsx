@@ -221,8 +221,9 @@ const PULL = 80
 const HAN = /[㐀-䶿一-鿿]/
 
 /**
- * In a browser tab, not the installed app. There the keyboard comes up only
- * when the search box is tapped.
+ * In a browser tab, not the installed app. There the keyboard does not come
+ * up by itself on the way back to the search: only when it is asked for, by
+ * a tap on the box or a pull or swipe that opens it.
  */
 const IN_TAB = !runningInstalled()
 /**
@@ -1334,7 +1335,7 @@ export function App() {
   // The search has nothing to its left: a swipe that way opens the box, as a
   // pull down does.
   function swipeOpensSearch(dx: number) {
-    return !IN_TAB && dx > 0 && (onSearchPage || phoneTab === 'search')
+    return dx > 0 && (onSearchPage || phoneTab === 'search')
   }
   function swipeStart(e: React.TouchEvent) {
     swipe.current = null
@@ -1371,7 +1372,7 @@ export function App() {
     if (s.mode === null) {
       if (Math.hypot(dx, dy) < 10) return
       if (Math.abs(dx) > 1.5 * Math.abs(dy)) s.mode = s.turns ? 'turn' : null
-      else if (dy > 0 && s.atTop && !IN_TAB) s.mode = 'pull'
+      else if (dy > 0 && s.atTop) s.mode = 'pull'
       // Anything else is the page scrolling, which is the browser's.
       if (s.mode === null) {
         swipe.current = null
