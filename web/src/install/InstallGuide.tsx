@@ -1,7 +1,7 @@
 /**
  * On an iPhone or iPad, in a browser: how to put the app on the Home Screen,
- * step by step, for the browser in use -- Safari with its own screens,
- * Chrome, or any other in general terms. It opens by itself on the first
+ * step by step, for the browser in use -- Safari or Chrome with its own
+ * screens, or any other in general terms. It opens by itself on the first
  * visit, and from the search home's note and the account dialog after that. Installed, the app has
  * the whole screen, and the swipes from the screen's edges are the only ones
  * that are not its own.
@@ -17,6 +17,10 @@ import step2 from './step2.webp'
 import step3 from './step3.webp'
 import step4 from './step4.webp'
 import step5 from './step5.webp'
+import chrome1 from './chrome1.webp'
+import chrome2 from './chrome2.webp'
+import chrome3 from './chrome3.webp'
+import chrome4 from './chrome4.webp'
 
 const S = strings(
   {
@@ -29,10 +33,7 @@ const S = strings(
     s3: 'Tap View More.',
     s4: 'Tap Add to Home Screen.',
     s5: 'Keep Open as Web App on. Tap Add.',
-    c1: 'Tap Share, at the right end of the address bar.',
-    c2: 'Tap Add to Home Screen.',
-    c2b: 'Not in the list? Tap View More, or scroll down.',
-    c3: 'If you see Open as Web App, keep it on. Tap Add.',
+    c1: 'Tap Share, in the address bar.',
     o1: 'Tap Share in your browser.',
     o1b: 'No Share, or no Add to Home Screen after it? Open this page in Safari.',
     o2: 'Tap Add to Home Screen.',
@@ -53,10 +54,7 @@ const S = strings(
     s3: 'Натиснете „Покажи още“.',
     s4: 'Натиснете „Добавяне към начален екран“.',
     s5: 'Оставете „Отваряне като уеб приложение“ включено. Натиснете „Добави“.',
-    c1: 'Натиснете „Споделяне“ вдясно в адресната лента.',
-    c2: 'Натиснете „Добавяне към начален екран“.',
-    c2b: 'Не е в списъка? Натиснете „Покажи още“ или превъртете надолу.',
-    c3: 'Ако виждате „Отваряне като уеб приложение“, оставете го включено. Натиснете „Добави“.',
+    c1: 'Натиснете „Споделяне“ в адресната лента.',
     o1: 'Натиснете „Споделяне“ в браузъра.',
     o1b: 'Няма „Споделяне“ или „Добавяне към начален екран“? Отворете страницата в Safari.',
     o2: 'Натиснете „Добавяне към начален екран“.',
@@ -89,7 +87,13 @@ const STEPS: Record<ReturnType<typeof browser>, Step[]> = {
     { text: 's4', img: step4, h: 403 },
     { text: 's5', img: step5, h: 488 },
   ],
-  chrome: [{ text: 'c1' }, { text: 'c2', note: 'c2b' }, { text: 'c3' }],
+  // After Share, Chrome's steps are Safari's: the same system screens.
+  chrome: [
+    { text: 'c1', img: chrome1, h: 195 },
+    { text: 's3', img: chrome2, h: 579 },
+    { text: 's4', img: chrome3, h: 452 },
+    { text: 's5', img: chrome4, h: 488 },
+  ],
   other: [{ text: 'o1', note: 'o1b' }, { text: 'o2' }, { text: 'o3' }],
 }
 
