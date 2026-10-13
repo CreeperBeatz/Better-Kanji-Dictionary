@@ -1436,21 +1436,25 @@ export function App() {
   }
   // A pull down at the top is the app's, not the browser's. Chrome would take
   // it as a scroll with nowhere to go, and a touch that ends a scroll is no
-  // tap: the box is focused, but the keyboard stays down. A sideways swipe
-  // never scrolls (touch-action), which is why that one always worked. React's
-  // touch listeners are passive, so this one is the page's own.
+  // tap: the box is focused, but the keyboard stays down. A sideways swipe is
+  // the app's too: touch-action keeps the page from moving sideways, but not
+  // up and down with the finger as it drifts, on a page long enough to scroll.
+  // It is claimed from the first move, as a scroll once begun is the browser's.
+  // React's touch listeners are passive, so this one is the page's own.
   useEffect(() => {
     const el = scroller.current
     if (!el || !mobile) return
-    function claimPull(e: TouchEvent) {
+    function claim(e: TouchEvent) {
       const s = swipe.current
       const touch = e.touches[0]
-      if (!s?.atTop || s.mode === 'turn' || !touch || !e.cancelable) return
+      if (!s || !touch || !e.cancelable) return
+      const dx = touch.clientX - s.x
       const dy = touch.clientY - s.y
-      if (dy > 0 && dy >= Math.abs(touch.clientX - s.x)) e.preventDefault()
+      if (s.mode === 'turn' || (s.mode === null && s.turns && Math.abs(dx) > Math.abs(dy))) return e.preventDefault()
+      if (s.atTop && dy > 0 && dy >= Math.abs(dx)) e.preventDefault()
     }
-    el.addEventListener('touchmove', claimPull, { passive: false })
-    return () => el.removeEventListener('touchmove', claimPull)
+    el.addEventListener('touchmove', claim, { passive: false })
+    return () => el.removeEventListener('touchmove', claim)
   }, [mobile])
   // Pulled down, the page brings up the search: the keyboard comes up with
   // what was searched last selected, so typing starts a new search, Enter

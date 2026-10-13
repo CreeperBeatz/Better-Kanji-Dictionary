@@ -6294,9 +6294,12 @@ html {
 @media (max-width: 900px) {
   /* Sideways, a finger on a page or its tabs is the app's (a tab turn), never
      the browser's: Chrome otherwise starts a scroll gesture that has nowhere
-     to go, and the tap that follows it can be spent stopping that instead. */
+     to go, and the tap that follows it can be spent stopping that instead.
+     Plain pan-y first, for a browser that does not know pinch-zoom and would
+     drop the whole line. */
   .rail-body,
   .phone-tabs {
+    touch-action: pan-y;
     touch-action: pan-y pinch-zoom;
   }
 
