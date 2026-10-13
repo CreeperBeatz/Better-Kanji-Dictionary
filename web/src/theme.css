@@ -1187,6 +1187,18 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     height: var(--app-h, 100%);
   }
 
+  /* Clear of the screen's rounded corners, the notch and the home bar
+     (viewport-fit=cover in index.html is what makes these known). The tabs
+     pad themselves at the bottom, so their colour runs under the home bar,
+     as an iPhone's own tab bars do; without them, the page is lifted. */
+  .shell {
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
+  }
+
+  .shell:not(:has(.phone-tabs)) {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   /* The rail's parts join the page's grid: the search along the top, a
      page's tabs along the bottom where the thumb is, and between them one pane
      at a time -- the rail's pages or the stage. The hidden one keeps its size,
