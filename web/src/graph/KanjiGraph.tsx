@@ -272,8 +272,9 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
   const pinched = useRef(false)
   // One-handed zoom, as on a map: tap twice, keep the finger down the second
   // time, and drag down to zoom in, up to zoom out, about where it tapped. A
-  // plain double tap zooms in a step. `lastTap` is the first tap, for the
-  // second to be told from a fresh press.
+  // plain double tap zooms in a step. Locked or not: the lock keeps a finger
+  // from moving the graph by chance, and this is never by chance. `lastTap`
+  // is the first tap, for the second to be told from a fresh press.
   const lastTap = useRef<{ x: number; y: number; at: number } | null>(null)
   const tapZoom = useRef<{ y: number; px: number; py: number; from: View; moved: boolean } | null>(null)
   // The click that ends the second tap must not open a card.
@@ -478,9 +479,30 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
     return { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }
   }
 
+  /** The second tap of a double tap, still down: from here the finger zooms. */
+  function startTapZoom(e: React.PointerEvent): boolean {
+    const prev = lastTap.current
+    if (
+      !prev ||
+      touches.current.size > 0 ||
+      e.timeStamp - prev.at >= DOUBLE_TAP_MS ||
+      Math.hypot(e.clientX - prev.x, e.clientY - prev.y) >= DOUBLE_TAP_PX
+    )
+      return false
+    lastTap.current = null
+    const at = inSvg(e)
+    if (!locked) touches.current.set(e.pointerId, at)
+    pinched.current = false
+    interrupt()
+    tapZoom.current = { y: e.clientY, px: at.x, py: at.y, from: viewRef.current, moved: false }
+    svgRef.current?.setPointerCapture?.(e.pointerId)
+    return true
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     pointer.current = e.pointerType
     if (e.button !== 0) return
+    if (e.pointerType === 'touch' && startTapZoom(e)) return
     if (locked) {
       // Locked, a finger neither drags nor pinches; it only taps, and a
       // swipe is the page's, to turn its tab. The press is still followed,
@@ -493,20 +515,6 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       const at = inSvg(e)
       touches.current.set(e.pointerId, at)
       if (touches.current.size === 1) pinched.current = false
-      // The second tap of a double tap, still down: from here the finger zooms.
-      const prev = lastTap.current
-      if (
-        touches.current.size === 1 &&
-        prev &&
-        e.timeStamp - prev.at < DOUBLE_TAP_MS &&
-        Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < DOUBLE_TAP_PX
-      ) {
-        lastTap.current = null
-        interrupt()
-        tapZoom.current = { y: e.clientY, px: at.x, py: at.y, from: viewRef.current, moved: false }
-        svgRef.current?.setPointerCapture?.(e.pointerId)
-        return
-      }
       if (touches.current.size === 2) {
         // A second finger turns the drag into a pinch.
         for (const id of touches.current.keys()) svgRef.current?.setPointerCapture?.(id)
@@ -571,7 +579,7 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       zoomTapped.current = true
       // Tapped twice and let go: a step in, about the taps.
       if (!z.moved) zoomAt(1.6, z.px, z.py)
-    } else if (e.pointerType === 'touch' && e.type !== 'pointercancel' && !locked) {
+    } else if (e.pointerType === 'touch' && e.type !== 'pointercancel') {
       // A tap -- a press that did not move -- may be the first of two.
       const d = drag.current
       const still = !d || !d.moved
@@ -749,6 +757,10 @@ ${t('form', { f: n.form })}`}
         onPointerUp={onPointerUp}
         onPointerLeave={onPointerUp}
         onPointerCancel={onPointerUp}
+        // A zoom by double tap is the graph's: the page does not turn its tab
+        // under it, as it would for a sideways move on a locked graph.
+        onTouchStart={(e) => tapZoom.current && e.stopPropagation()}
+        onTouchMove={(e) => tapZoom.current && e.stopPropagation()}
         // A long press would otherwise open the browser's own menu.
         onContextMenu={(e) => e.preventDefault()}
       >
