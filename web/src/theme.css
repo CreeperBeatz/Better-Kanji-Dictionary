@@ -1194,7 +1194,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
      search bar's own top padding sits under the status bar's lower edge, as
      the clock does not reach it. */
   .shell {
-    padding: max(0px, calc(env(safe-area-inset-top, 0px) - 10px)) env(safe-area-inset-right, 0px) 0
+    padding: max(0px, calc(env(safe-area-inset-top, 0px) - 20px)) env(safe-area-inset-right, 0px) 0
       env(safe-area-inset-left, 0px);
   }
 
