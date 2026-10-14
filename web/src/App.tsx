@@ -2088,11 +2088,6 @@ export function App() {
             {stackShown && (
               <div className="card-stack" style={{ height: stackHeight(stackUnder.length) }}>
                 <div className="stack-copies" ref={copiesRef} />
-                {/* How many cards are open, beside the edges of the ones under
-                    this: there only, and gone with them as the card scrolls. */}
-                <span className="depth-bubble" key={openCards} aria-label={t('openCards', { n: openCards })}>
-                  {openCards}
-                </span>
                 {rims(stackUnder.length).map((r, k, all) => {
                   const i = stackUnder.length - all.length + k
                   return (

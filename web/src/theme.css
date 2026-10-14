@@ -1274,26 +1274,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     transform: translateY(calc(-100% - 1px));
   }
 
-  /* How many cards are open, at the right of the nearest card's edge. */
-  .depth-bubble {
-    position: absolute;
-    bottom: 8px;
-    right: 18px;
-    z-index: 2;
-    display: grid;
-    place-items: center;
-    min-width: 28px;
-    height: 28px;
-    padding: 0 6px;
-    border: 1px solid var(--rule-bright);
-    border-radius: 14px;
-    background: var(--sumi-lift);
-    color: var(--paper);
-    font-size: calc(13px * var(--type));
-    pointer-events: none;
-    animation: depth-change 240ms var(--ease) backwards;
-  }
-
   .stage {
     grid-area: main;
     min-height: 0;
@@ -5740,17 +5720,17 @@ html {
 .tab-ring[data-on]::before {
   content: '';
   position: absolute;
-  inset: 4px 6px 5px;
+  inset: 3px 2px 4px;
   border: 1px solid var(--rule-bright);
-  border-radius: 999px;
+  border-radius: 12px;
   pointer-events: none;
 }
 
 /* How many cards are open, on the ring's shoulder. */
 .tab-depth {
   position: absolute;
-  top: -2px;
-  right: 4px;
+  top: -4px;
+  right: -2px;
   display: grid;
   place-items: center;
   min-width: 16px;
