@@ -23,6 +23,8 @@ import { pageInUrl, restoreScroll, samePage, urlOf, useNav, type Page, type Stac
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 import { isIOS } from './account/install'
+import { glossOf, meaningsOf } from './i18n/content'
+import { realMeanings } from './detail/meanings'
 
 // Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -487,6 +489,40 @@ function CardStack({ under, onPick, t }: { under: Page[]; onPick: (i: number) =>
         ),
       )}
     </div>
+  )
+}
+
+/**
+ * On a phone, a card scrolled past its head: what it is, along its top, so a
+ * card come back to part way down is still that card. A tap goes to its top.
+ */
+function CardBar({ shown, glyph, sub, gloss, onTop }: {
+  shown: boolean
+  glyph: string
+  sub?: string
+  gloss?: string
+  onTop: () => void
+}) {
+  return (
+    <button className="card-bar" data-shown={shown || undefined} tabIndex={shown ? 0 : -1} onClick={onTop}>
+      <span className="card-bar-glyph">{glyph}</span>
+      {sub && <span className="card-bar-sub">{sub}</span>}
+      {gloss && <span className="card-bar-gloss">{gloss}</span>}
+    </button>
+  )
+}
+
+/**
+ * Over the Dictionary tab, the cards under the open one, as the edges above
+ * a card are: one line each, the nearest widest, two at most.
+ */
+function TabLayers({ n }: { n: number }) {
+  if (n <= 0) return null
+  return (
+    <span className="tab-layers" aria-hidden>
+      {n > 1 && <span className="tab-layer" data-far />}
+      <span className="tab-layer" />
+    </span>
   )
 }
 
@@ -1059,6 +1095,8 @@ export function App() {
   })
   /** A card pulled off, and the page under it brought back without a slide. */
   const dropped = useRef(false)
+  // On a phone, whether the open card is scrolled past its head (see CardBar).
+  const [headGone, setHeadGone] = useState(false)
   /** How far the copy of that page was scrolled. */
   const droppedTo = useRef<number | null>(null)
   // Back `k` pages at once, sliding: as history slides it, when it goes
@@ -1318,6 +1356,36 @@ export function App() {
   function copyAt(at: number, page: Page | null | undefined): Copy | null {
     if (!page) return null
     return underCopies.current.find((c) => c.at === at && samePage(c.page, page))?.copy ?? null
+  }
+  // What a card scrolled past its head says along its top.
+  const bar = (() => {
+    if (!mobile || !onCard) return null
+    if (shownTop?.kind === 'kanji') {
+      const node = detailOf(shownTop.char)?.focus
+      const gloss = node ? meaningsOf({ meanings: realMeanings(node.meanings), meaningsBg: node.meaningsBg }, t.lang).value[0] : undefined
+      return { glyph: shownTop.char, gloss }
+    }
+    if (shownWord) {
+      const gloss = shownWord.senses.length ? glossOf(shownWord.senses[0], t.lang).value.split(';')[0].trim() : undefined
+      return { glyph: shownWord.headword, sub: shownWord.reading, gloss }
+    }
+    return null
+  })()
+  useEffect(() => {
+    const sc = scroller.current
+    const head = cardRef.current?.querySelector('.page-head')
+    if (!bar || !sc || !head) return setHeadGone(false)
+    // Gone once no more than the bar's height of it shows.
+    const io = new IntersectionObserver(
+      ([e]) => setHeadGone(!e.isIntersecting && e.boundingClientRect.top < (e.rootBounds?.top ?? 0) + 44),
+      { root: sc, rootMargin: '-44px 0px 0px 0px' },
+    )
+    io.observe(head)
+    return () => io.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bar !== null, shownTop, searchShown, onStage])
+  function toCardTop() {
+    scroller.current?.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' })
   }
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
@@ -2030,6 +2098,7 @@ export function App() {
               </div>
             )}
             <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
+              {bar && <CardBar shown={headGone} {...bar} onTop={toCardTop} />}
               {subject && !searchShown && <div className="page-head">{pageHead()}</div>}
               <div className="tab-pane" ref={paneRef}>
                 {/* Behind the graph on a phone the page is not on the screen, and
@@ -2090,6 +2159,7 @@ export function App() {
                 >
                   <span className="phone-tab-icon">
                     <PhoneTabIcon tab={p} />
+                    {p === 'dictionary' && <TabLayers n={mobile ? Math.min(2, stackUnder.length) : 0} />}
                     {p === 'associations' && subject && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
                   </span>
                   {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
