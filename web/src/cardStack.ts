@@ -22,11 +22,12 @@ const PAD = 8
 /** How many cards under the open one show at all. */
 const SHOWN = 3
 
-/** A card under the open one: its copy, its head, and how far the head folds up. */
+/** A card under the open one: its copy, its head, how far the head folds up, and its top edge. */
 export interface Under {
   el: HTMLElement
   head: HTMLElement | null
   fold: number
+  edge: HTMLElement | null
 }
 
 /** Where a card lies: moved down `y`, at `s` of its width, its head folded `p`. */
@@ -66,10 +67,27 @@ function mix(a: Place, b: Place, t: number): Place {
   return { y: at(a.y, b.y), s: at(a.s, b.s), p: at(a.p, b.p) }
 }
 
-/** Puts a card where `at` says. Only the card and its head change: nothing inherits from them. */
+/**
+ * Puts a card where `at` says. Folded, what shows of it starts at its line,
+ * so it is cut there, with the rounded top and the edge a card has; as it
+ * unfolds, the cut goes up to its own top. Only the card, its head and its
+ * edge change, and nothing inherits from them: no layout, little restyling.
+ */
 export function put(u: Under, at: Place) {
+  const cut = (u.fold * at.p).toFixed(1)
   u.el.style.transform = `translateY(${at.y}px) scale(${at.s})`
+  // Unfolded, nothing is cut, and its shadow shows as the open card's does.
+  u.el.style.clipPath = at.p > 0 ? `inset(${cut}px 0 0 0 round 14px 14px 0 0)` : ''
   u.head?.style.setProperty('--p', at.p.toFixed(3))
+  if (u.edge) u.edge.style.transform = `translateY(${cut}px)`
+}
+
+/** The rounded edge along the top of what shows of a card under the open one (see `put`). */
+function withEdge(g: HTMLElement): HTMLElement {
+  const edge = document.createElement('div')
+  edge.className = 'copy-edge'
+  g.append(edge)
+  return g
 }
 
 /** A card's move: from where it lies to where it goes. */
@@ -149,7 +167,7 @@ export function copyCard(card: HTMLElement, screen: number): HTMLElement {
   g.setAttribute('aria-hidden', 'true')
   g.inert = true
   g.querySelector('.page-head')?.removeAttribute('data-collapsed')
-  return g
+  return withEdge(g)
 }
 
 /** For a page no copy was kept of -- one opened from a link, say -- a card with its name. */
@@ -163,11 +181,12 @@ export function blankCard(name: string): HTMLElement {
   line.className = 'page-head card-name'
   line.textContent = name
   g.append(line)
-  return g
+  return withEdge(g)
 }
 
 /** A card put in the stack: its head, and how far that folds up to leave its line on top. */
 export function underOf(el: HTMLElement): Under {
   const head = el.querySelector<HTMLElement>('.page-head')
-  return { el, head, fold: Math.max(0, (head?.offsetHeight ?? LINE) - LINE) }
+  const edge = el.querySelector<HTMLElement>(':scope > .copy-edge')
+  return { el, head, edge, fold: Math.max(0, (head?.offsetHeight ?? LINE) - LINE) }
 }

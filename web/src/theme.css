@@ -6570,6 +6570,25 @@ html {
     will-change: transform;
   }
 
+  /* The rounded top edge of what shows of a card under the open one, which
+     moves down to its folded line (cardStack.ts). It is the copy's only one:
+     its own would be cut off, or drawn twice. */
+  .stack-copies > .page-card[data-copy] {
+    border-top-color: transparent;
+  }
+
+  .copy-edge {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    height: 14px;
+    border-top: 1px solid var(--rule-bright);
+    border-radius: 14px 14px 0 0;
+    pointer-events: none;
+  }
+
   /* A copy's head is where it lies, not held to the top of the page. */
   [data-copy] .page-head[data-folding] {
     position: relative;
