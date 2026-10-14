@@ -19,7 +19,7 @@ import { GraphDetail, LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
-import { pageInUrl, restoreScroll, samePage, urlOf, useNav, type Page, type Stack } from './nav'
+import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 import { isIOS } from './account/install'
@@ -323,6 +323,8 @@ function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
   return placeCopy(copyOf(el, within), el)
 }
 
+const keepScrollOnBack = () => !matches(MOBILE)
+
 /** A still copy of a pane, kept out of the page until `placeCopy` puts it there. */
 interface Copy {
   g: HTMLElement
@@ -335,9 +337,10 @@ interface Copy {
 /**
  * Copying costs only the clone: the copy is laid out once it is placed, so a
  * page can be kept like this at each step forward and only laid out if a
- * pull ever needs it.
+ * pull ever needs it. `atTop`: the page as it is at its top, where back
+ * comes to on a phone, however far down it was left.
  */
-function copyOf(el: HTMLElement, within?: HTMLElement): Copy {
+function copyOf(el: HTMLElement, within?: HTMLElement, atTop = false): Copy {
   const whole = el.getBoundingClientRect()
   const box = within?.getBoundingClientRect()
   const top = box ? Math.max(whole.top, box.top) : whole.top
@@ -359,6 +362,8 @@ function copyOf(el: HTMLElement, within?: HTMLElement): Copy {
   })
   // Rows out of sight are not copied: below, they are left out; above, a
   // blank of their height stands in, so the copy scrolls to the same place.
+  const scrolled = el.scrollTop + (top - whole.top)
+  const back = atTop ? scrolled : 0
   const rows = '.rail-section, .word, .comment, .vocab-row'
   const from = el.querySelectorAll(rows)
   const into = g.querySelectorAll(rows)
@@ -366,8 +371,8 @@ function copyOf(el: HTMLElement, within?: HTMLElement): Copy {
     const b = row.getBoundingClientRect()
     const copy = into[i]
     if (!copy || !copy.parentNode) return
-    if (b.top > r.top + r.height + 24) copy.remove()
-    else if (b.bottom < r.top - 24) {
+    if (b.top + back > r.top + r.height + 24) copy.remove()
+    else if (b.bottom + back < r.top - 24) {
       const blank = document.createElement('div')
       blank.style.height = `${b.height}px`
       copy.replaceWith(blank)
@@ -377,7 +382,11 @@ function copyOf(el: HTMLElement, within?: HTMLElement): Copy {
   g.dataset.ghost = ''
   g.setAttribute('aria-hidden', 'true')
   g.inert = true
-  return { g, r, scroll: el.scrollTop + (top - whole.top) }
+  // At its top its head is not folded.
+  const head = g.querySelector<HTMLElement>('.page-head')
+  head?.style.setProperty('--p', '0')
+  head?.removeAttribute('data-collapsed')
+  return { g, r, scroll: atTop ? 0 : scrolled }
 }
 
 /** A copy put over the screen where its pane was, right after `after`, scrolled as it was. */
@@ -562,9 +571,12 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   // Filled in below: what to do as back or forward arrives, before the page changes.
   const beforePop = useRef<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>(null)
+  // On a phone back comes to the top of the page, which the copy under a
+  // card shows; a desktop keeps where it was.
   const { stack, stage, depth, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
     scroller,
     beforePop,
+    keepScrollOnBack,
   )
   const top = stack[stack.length - 1]
   const root = stack[0]
@@ -1097,10 +1109,6 @@ export function App() {
   })
   /** A card pulled off, and the page under it brought back without a slide. */
   const dropped = useRef(false)
-  // On a phone, whether the open card's head is folded all the way (see foldHead).
-  const [headGone, setHeadGone] = useState(false)
-  /** How far the copy of that page was scrolled. */
-  const droppedTo = useRef<number | null>(null)
   /** Back through history: the page comes back as it was, without arriving. */
   const returning = useRef(false)
   /** Which top the copy of the page under it is being put in place for, ahead of a pull. */
@@ -1357,53 +1365,73 @@ export function App() {
     // From the search tab, what is left is the search, at the bottom.
     const at = searchShown ? 0 : entries.length - 1
     underCopies.current = underCopies.current.filter((u) => u.at < at)
-    underCopies.current.push({ page: entries[at], at, copy: copyOf(el) })
+    underCopies.current.push({ page: entries[at], at, copy: copyOf(el, undefined, true) })
   }
   function copyAt(at: number, page: Page | null | undefined): Copy | null {
     if (!page) return null
     return underCopies.current.find((c) => c.at === at && samePage(c.page, page))?.copy ?? null
   }
-  // On a phone a card's head folds into a line along its top as the card is
-  // scrolled: its character shrinks into the line and the rest squeezes away,
-  // with the scroll and not at some point of it. The head is sticky, as tall
-  // as itself less the line, so the line is what stays. --p on it is how far
-  // it is folded, 0 to 1 (set here, read by theme.css); the measures it
-  // folds by are taken when its size changes.
+  // On a phone, scrolling down a card, the search bar goes first, with the
+  // scroll, and then the card's head folds into a line along the top: its
+  // character shrinks to the line's left with its first meaning beside it,
+  // and the rest squeezes away. The head is sticky, as tall as itself less
+  // the line, so the line is what stays. --p on it is how far it is folded,
+  // 0 to 1 (read by theme.css); the measures it folds by are taken when its
+  // size changes.
   const folding = mobile && onCard && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
   const headRef = useRef<HTMLDivElement>(null)
-  const fold = useRef<{ h: number; pad: number } | null>(null)
+  const fold = useRef<{ h: number; bar: number } | null>(null)
   const foldHead = useStable(() => {
     const sc = scroller.current
     const head = headRef.current
     const card = cardRef.current
+    const box = searchBarOf(inputRef.current)
     const m = fold.current
     if (!sc || !head || !card || !m) return
-    // How far the card's top has gone under the top of the page, of all the
-    // way it folds.
-    const under = m.pad - (card.getBoundingClientRect().top - sc.getBoundingClientRect().top)
-    const p = Math.min(1, Math.max(0, under / Math.max(1, m.h - FOLDED)))
+    // The search, over the first stretch of scroll; not while typed in.
+    const gone = box?.contains(document.activeElement) ? 0 : Math.min(1, sc.scrollTop / Math.max(1, m.bar))
+    if (box) box.style.transform = gone > 0 ? `translateY(${-gone * (m.bar + 1)}px)` : ''
+    // Then the head, as the card's top goes past the top of the screen.
+    const past = sc.getBoundingClientRect().top - card.getBoundingClientRect().top
+    const p = Math.min(1, Math.max(0, past / Math.max(1, m.h - FOLDED)))
     head.style.setProperty('--p', p.toFixed(3))
     head.toggleAttribute('data-collapsed', p >= 1)
-    setHeadGone(p >= 1)
   })
   useLayoutEffect(() => {
     const sc = scroller.current
     const head = headRef.current
+    const box = searchBarOf(inputRef.current)
     fold.current = null
-    if (!folding || !sc || !head) return setHeadGone(false)
+    if (!folding || !sc || !head) return
     const measure = () => {
       const h = head.offsetHeight
-      fold.current = { h, pad: parseFloat(getComputedStyle(sc).paddingTop) || 0 }
+      fold.current = { h, bar: parseFloat(getComputedStyle(sc).paddingTop) || 0 }
       head.style.setProperty('--head-h', `${h}px`)
       // The character ends at the line's left, as tall as the line allows,
       // in the middle of it: the bottom of the head, which is what shows.
       const glyph = head.querySelector<HTMLElement>('.detail-glyph, .entry-head')
-      if (glyph) {
-        const { x, y } = offsetIn(glyph, head)
-        const gh = glyph.offsetHeight || 1
-        head.style.setProperty('--gs', String(Math.min(1, FOLDED_GLYPH / gh)))
-        head.style.setProperty('--gx', `${16 - x}px`)
-        head.style.setProperty('--gy', `${h - FOLDED / 2 - (y + gh / 2)}px`)
+      if (!glyph) return foldHead()
+      const { x, y } = offsetIn(glyph, head)
+      const gh = glyph.offsetHeight || 1
+      const gs = Math.min(1, FOLDED_GLYPH / gh)
+      head.style.setProperty('--gs', String(gs))
+      head.style.setProperty('--gx', `${16 - x}px`)
+      head.style.setProperty('--gy', `${h - FOLDED / 2 - (y + gh / 2)}px`)
+      // Its first meaning goes beside it, after the characters themselves (a
+      // word's head is as wide as its reading).
+      const lead = head.querySelector<HTMLElement>('.detail-meanings')
+      if (lead) {
+        const chars = glyph.children.length
+          ? [...glyph.children].reduce((w, c) => w + (c as HTMLElement).offsetWidth, 0)
+          : glyph.offsetWidth
+        const at = offsetIn(lead, head)
+        const style = getComputedStyle(lead)
+        const size = parseFloat(style.fontSize) || 15
+        const ms = Math.min(1, 15 / size)
+        const lh = parseFloat(style.lineHeight) || size * 1.4
+        head.style.setProperty('--ms', String(ms))
+        head.style.setProperty('--mx', `${16 + chars * gs + 10 - at.x}px`)
+        head.style.setProperty('--my', `${h - FOLDED / 2 - at.y - (lh * ms) / 2}px`)
       }
       foldHead()
     }
@@ -1419,6 +1447,7 @@ export function App() {
       ro.disconnect()
       sc.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(frame)
+      box?.style.removeProperty('transform')
     }
   }, [folding, shownTop, searchShown, onStage, foldHead])
   // A tap on the folded line goes to the card's top, whatever it is on.
@@ -1768,7 +1797,6 @@ export function App() {
     g.style.removeProperty('content-visibility')
     sinkUnder(g, 0, 0)
     if (g.scrollTop !== copy.scroll) g.scrollTop = copy.scroll
-    droppedTo.current = copy.scroll
     return g
   }
   /** Out of sight, and not drawn or styled, until a pull wakes it. */
@@ -1849,9 +1877,6 @@ export function App() {
       duration: ms,
       easing: thrown ? `cubic-bezier(0.25, ${(0.25 * slope).toFixed(3)}, 0.5, 1)` : 'cubic-bezier(0.32, 0.72, 0, 1)',
     })
-    // A page come back to part way down has no search over it: it goes as
-    // the card falls, not after.
-    if (under?.querySelector('.page-head[data-collapsed]')) sc.closest('.shell-grid')?.setAttribute('data-bar-hidden', '')
     if (under) {
       under.animate([{ transform: under.style.transform, opacity: under.style.opacity }, { transform: 'none', opacity: 1 }], {
         duration: ms,
@@ -1970,19 +1995,11 @@ export function App() {
       const html = document.documentElement
       html.dataset.nav = kind
       html.dataset.turn = scope
-      // Back, the card falls off whole where all of it is in sight: from
-      // part way down the page, the page is all card anyway.
-      const sc = scroller.current
-      const card = cardRef.current
-      if (kind === 'back' && sc && card && card.getBoundingClientRect().top >= sc.getBoundingClientRect().top - 1) {
-        html.dataset.card = 'going'
-      }
       // Back, the page is one seen already: all of it at once, not held for the slide.
       if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
       const t = document.startViewTransition(() => {
-        // The card is its own picture only on the side it is coming or going.
+        // The card coming up is a picture of its own, on the new side only.
         if (kind === 'forward') html.dataset.card = 'coming'
-        else if (html.dataset.card === 'going') html.dataset.card = 'gone'
         flushSync(go)
       })
       t.finished.finally(() => {
@@ -2062,13 +2079,6 @@ export function App() {
       card.toggleAttribute('data-quiet', dropped.current || returning.current)
     }
     returning.current = false
-    // Where its copy was scrolled, which history may not know, as when the
-    // pages came off in place.
-    const sc = scroller.current
-    if (dropped.current && sc && droppedTo.current !== null) restoreScroll(sc, droppedTo.current)
-    // And its head folded as its copy had it.
-    if (dropped.current) foldHead()
-    droppedTo.current = null
     dropped.current = false
     document.querySelectorAll('[data-under]').forEach((g) => g.remove())
     stackOf()?.style.removeProperty('opacity')
@@ -2164,8 +2174,6 @@ export function App() {
         className="shell-grid"
         data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
-        // Reading a card past its head, the search goes and its name stays.
-        data-bar-hidden={(mobile && !onStage && folding && headGone) || undefined}
         data-split={split || undefined}
         style={
           {

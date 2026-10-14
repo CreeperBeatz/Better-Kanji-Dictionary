@@ -170,7 +170,7 @@ function write(entry: Entry, how: 'push' | 'replace') {
 }
 
 /** The pages to restore a scroll position to, once they have drawn. */
-export function restoreScroll(el: HTMLElement | null, to: number) {
+function restoreScroll(el: HTMLElement | null, to: number) {
   if (!el) return
   // Lists fill in over a frame or two; try again as they do.
   el.scrollTop = to
@@ -201,6 +201,8 @@ function stepBack(n: number) {
 export function useNav(
   scroller: React.RefObject<HTMLElement | null>,
   beforePop?: React.RefObject<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>,
+  /** Whether back comes to a page where it was left; else at its top. */
+  keepScroll: () => boolean = () => true,
 ) {
   const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
@@ -224,14 +226,14 @@ export function useNav(
   const go = useCallback(
     (to: Entry) => {
       flush()
-      write({ ...current.current, scroll: scroller.current?.scrollTop ?? 0 }, 'replace')
+      write({ ...current.current, scroll: keepScroll() ? (scroller.current?.scrollTop ?? 0) : 0 }, 'replace')
       const next = { ...to, n: (current.current.n ?? 0) + 1 }
       write(next, 'push')
       current.current = next
       setEntry(next)
       if (scroller.current) scroller.current.scrollTop = 0
     },
-    [flush, scroller],
+    [flush, scroller, keepScroll],
   )
 
   /**
