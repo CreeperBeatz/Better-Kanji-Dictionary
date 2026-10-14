@@ -21,6 +21,7 @@ import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { ReadingsLine, SpecialReadings } from './Readings'
+import { warmKanji } from '../warm'
 
 const S = strings(
   {
@@ -233,7 +234,7 @@ function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c
 function KanjiChip({ k, lang, onKanji }: { k: KanjiLite; lang: Lang; onKanji: (c: string) => void }) {
   const meaning = meaningsOf(k, lang).value[0]
   return (
-    <button className="kanji-chip" onClick={() => onKanji(k.char)} title={meaning}>
+    <button className="kanji-chip" {...warmKanji(k.char)} onClick={() => onKanji(k.char)} title={meaning}>
       <span lang="ja">{k.char}</span>
       {meaning && <span className="kanji-chip-meaning">{meaning}</span>}
     </button>

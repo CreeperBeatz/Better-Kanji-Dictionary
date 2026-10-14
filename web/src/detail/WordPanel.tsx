@@ -15,6 +15,7 @@ import { transitivity } from '../search/transitivity'
 import { Valency } from '../search/Valency'
 import { WordMeta } from './HeadMeta'
 import { WordEditButton } from '../review/PageEdit'
+import { warmKanji, warmWord } from '../warm'
 
 const S = strings(
   {
@@ -113,7 +114,7 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
         <h2 className="entry-head">
           {[...w.headword].map((ch, i) =>
             KANJI.test(ch) ? (
-              <button key={i} className="entry-char" onClick={() => onPick(ch)} title={t('open', { char: ch })}>
+              <button key={i} className="entry-char" {...warmKanji(ch)} onClick={() => onPick(ch)} title={t('open', { char: ch })}>
                 {ch}
               </button>
             ) : (
@@ -192,7 +193,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
         <p className="entry-pairs">
           <span>{t(transitivity(entry.pairs[0]) === 'vt' ? 'pairVt' : 'pairVi')}</span>
           {entry.pairs.map((p) => (
-            <button key={p.id} className="entry-pair" onClick={() => onWord(p)} title={t('pairTitle', { word: p.headword })}>
+            <button key={p.id} className="entry-pair" {...warmWord(p.id)} onClick={() => onWord(p)} title={t('pairTitle', { word: p.headword })}>
               <span className="entry-pair-word">{p.headword}</span>
               <span className="entry-pair-reading">{p.reading}</span>
               <Valency word={p} alone />
@@ -252,6 +253,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                 <button
                   className="entry-kanji-glyph"
                   data-current={k.char === from || undefined}
+                  {...warmKanji(k.char)}
                   onClick={() => onPick(k.char)}
                   title={t('open', { char: k.char })}
                 >

@@ -14,6 +14,7 @@ import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../ap
 import { strings, useLang } from '../i18n'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 import { toggled } from '../sets'
+import { warmKanji } from '../warm'
 
 const S = strings(
   {
@@ -166,7 +167,7 @@ export function WordsWith({
     <section className="rail-section search-page words-with" aria-label={t('title', { char })} aria-busy={!data}>
       {back}
       <header className="words-with-head">
-        <button className="words-with-kanji" onClick={() => onKanji(char)} title={t('openKanji', { char })} lang="ja">
+        <button className="words-with-kanji" {...warmKanji(char)} onClick={() => onKanji(char)} title={t('openKanji', { char })} lang="ja">
           {char}
         </button>
         <div>

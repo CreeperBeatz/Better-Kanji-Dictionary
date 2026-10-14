@@ -13,6 +13,7 @@ import { strings, useLang } from '../i18n'
 import { CommentCard } from './CommentCard'
 import { Composer, savedAttachments } from './Composer'
 import { Note } from './NoteContent'
+import { warmKanji } from '../warm'
 
 const S = strings(
   {
@@ -292,7 +293,7 @@ export function Associations({ subject, label, onPick, onSignIn, onCount }: Prop
           <h3>{t(isWord ? 'fromKanji' : 'fromParts')}</h3>
           {noted.map((p) => (
             <div key={p.char} className="assoc-part">
-              <button className="assoc-part-glyph" onClick={() => onPick(p.char)}>
+              <button className="assoc-part-glyph" {...warmKanji(p.char)} onClick={() => onPick(p.char)}>
                 {p.char}
               </button>
               <div>

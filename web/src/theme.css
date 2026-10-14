@@ -187,15 +187,6 @@ body {
   overscroll-behavior: contain;
 }
 
-.rail-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* Flush with the search row above on both sides. */
-  padding: 0 16px 0 22px;
-  border-bottom: 1px solid var(--rule);
-}
-
 /* Above every page with one behind it: the way back, the same on the
    dictionary and associations tabs. */
 .rail-crumb {
@@ -210,18 +201,68 @@ body {
   margin-bottom: -8px;
 }
 
-/* Over a phone's small head, which has little room of its own to tuck into. */
-.rail-crumb:has(+ .page-head) {
+/* Over a page's head, which has little room of its own to tuck into. */
+.rail-crumb:has(+ .card-slot > .page-card > .page-head) {
   margin-bottom: 0;
 }
 
-.rail-crumb + .page-head > .rail-section {
+.rail-crumb + .card-slot > .page-card > .page-head > .rail-section {
   padding-top: 8px;
 }
 
 .back-link.rail-back {
   flex: none;
   margin: 0;
+}
+
+/* After the way back, the pages before it, each a step further back:
+   smaller and fainter the further they are. */
+.rail-trail {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.trail-step {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 5px;
+  background: none;
+  border: 0;
+  border-radius: 2px;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: calc(12px * var(--type));
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.trail-step + .trail-step {
+  opacity: 0.55;
+}
+
+.trail-step .back-glyph {
+  font-size: calc(14px * var(--type));
+}
+
+.trail-step:hover {
+  opacity: 1;
+  color: var(--paper);
+  background: var(--sumi-lift);
+}
+
+.trail-sep {
+  color: var(--muted);
+}
+
+.trail-more {
+  padding: 2px 5px;
+  color: var(--muted);
+  font-size: calc(11px * var(--type));
+  opacity: 0.55;
 }
 
 /* A wide invisible grip over the rail's border; the border itself lights up. */
@@ -579,7 +620,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .reading-row[data-rare] .reading-kana .okuri,
 .reading-row[data-rare] .yomi-link,
 .reading-row[data-rare] .reading-about {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .special-readings .hint {
@@ -625,7 +666,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .reading-chip[data-rare],
 .reading-chip[data-rare] .okuri {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .meanings > .meanings-title {
@@ -684,7 +725,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .meaning-n {
   font-size: calc(11.5px * var(--type));
-  color: var(--faint);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1331,7 +1372,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .search-input::placeholder {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .search-input:focus {
@@ -1395,7 +1436,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .kanji-hit-fanout {
   display: block;
-  color: var(--faint);
+  color: var(--muted);
   font-size: calc(11px * var(--type));
   font-variant-numeric: tabular-nums;
 }
@@ -1615,7 +1656,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   flex-shrink: 0;
   font-size: calc(10.5px * var(--type));
   letter-spacing: 0.04em;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .word-common[data-common] {
@@ -1861,7 +1902,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .sense b {
-  color: var(--faint);
+  color: var(--muted);
   font-weight: 400;
   font-size: calc(11px * var(--type));
   margin-right: 3px;
@@ -1953,7 +1994,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .drawpad-actions .clear:disabled {
-  color: var(--faint);
+  color: var(--muted);
   cursor: default;
 }
 
@@ -1973,7 +2014,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .assoc-text::placeholder {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .assoc-text:focus {
@@ -2353,7 +2394,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .strokes-count {
-  color: var(--faint);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -2517,7 +2558,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* A stage with nothing waiting: still there, greyed. */
 .overlay-tabs button[data-empty] {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .overlay-tabs button[data-empty][data-on='true'] {
@@ -2796,7 +2837,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   right: 10px;
   font-family: var(--gothic);
   font-size: calc(11px * var(--type));
-  color: var(--faint);
+  color: var(--muted);
   border: 1px solid var(--rule-bright);
   border-radius: 2px;
   padding: 0 5px;
@@ -3938,7 +3979,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .map-zoom button:disabled {
-  color: var(--faint);
+  color: var(--muted);
   cursor: default;
   background: none;
 }
@@ -4226,7 +4267,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .entry-senses li {
   padding-left: 2px;
   font-size: calc(12px * var(--type));
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .entry-senses li + li {
@@ -4286,7 +4327,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .entry-form[data-rare] {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .entry-kanji h3,
@@ -4784,7 +4825,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .profile-who .profile-email {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .profile-picture-actions {
@@ -4960,7 +5001,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   flex: none;
   margin-left: auto;
   font-size: calc(11.5px * var(--type));
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .comment-body {
@@ -5103,55 +5144,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   }
 }
 
-/* ---------------------------------------------------------------- rail tabs */
-
-/* As wide as its tabs and never squeezed, so the view switch after it can
-   tell what room is left (the rail's minimum width keeps them all in). */
-.rail-tabs {
-  display: flex;
-  flex: none;
-  min-width: 0;
-  gap: 4px;
-}
-
-.rail-tabs button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 10px 11px;
-  background: none;
-  border: 0;
-  color: var(--muted);
-  font-family: var(--gothic);
-  font-size: calc(13px * var(--type));
-  cursor: pointer;
-  transition: color 120ms var(--ease);
-}
-
-.rail-tabs button:first-child {
-  margin-left: -10px;
-}
-
-.rail-tabs button:hover {
-  color: var(--paper);
-}
-
-.rail-tabs button[aria-selected='true'] {
-  color: var(--paper);
-}
-
-/* The same vermilion underline as the Focus / Map switch. */
-.rail-tabs button[aria-selected='true']::after {
-  content: '';
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -1px;
-  height: 2px;
-  background: var(--shu);
-}
-
 /* The search column's toggle, at the end of the search row. */
 .split-toggle svg {
   width: 17px;
@@ -5164,16 +5156,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .split-toggle svg .solid {
   fill: currentColor;
   stroke: none;
-}
-
-.rail-tab-count {
-  padding: 0 6px;
-  border: 1px solid var(--rule-bright);
-  border-radius: 999px;
-  color: var(--paper-dim);
-  font-size: calc(11px * var(--type));
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---------------------------------------------------------------- composer */
@@ -6029,10 +6011,6 @@ html {
     padding: 18px 16px;
   }
 
-  .rail-head {
-    padding: 0 16px;
-  }
-
   .rail-crumb {
     padding-right: 16px;
   }
@@ -6704,149 +6682,151 @@ html {
     animation: none !important;
   }
 
-  /* A card's head folds into a line along its top as the card is scrolled
-     (App.tsx sets --p, 0 to 1, and the measures): sticky, as tall as itself
-     less the line, so the line is what stays. Its character shrinks to the
-     line's left; the rest squeezes and fades away first. */
-  .page-head[data-folding] {
-    position: sticky;
-    top: calc(44px - var(--head-h, 0px));
-    z-index: 2;
-    background: var(--sumi-sunk);
-  }
-
-  .page-card[data-stacked] .page-head[data-folding] {
-    background: var(--sumi);
-    border-radius: 14px 14px 0 0;
-  }
-
-  .page-head[data-folding] :is(.detail-glyph, .entry-head) {
-    transform-origin: left center;
-    transform: translate(calc(var(--gx, 0px) * var(--p, 0)), calc(var(--gy, 0px) * var(--p, 0)))
-      scale(calc(1 - (1 - var(--gs, 1)) * var(--p, 0)));
-  }
-
-  /* All but the character and the first meaning squeeze and fade away. */
-  .page-head[data-folding]
-    :is(
-      .detail-head > :not(.detail-glyph):not(:has(.detail-meanings)),
-      .detail-head > div > :not(.detail-meanings),
-      .word-head > :not(:first-child):not(.detail-meanings),
-      .word-head > :first-child > :not(.entry-head)
-    ) {
-    transform-origin: left center;
-    transform: scaleY(calc(1 - 0.7 * var(--p, 0)));
-    opacity: calc(1 - 1.8 * var(--p, 0));
-  }
-
-  /* The first meaning goes to the line, beside the character; the rest of
-     the meanings fade off it. */
-  .page-head[data-folding] .detail-meanings {
-    transform-origin: left top;
-    transform: translate(calc(var(--mx, 0px) * var(--p, 0)), calc(var(--my, 0px) * var(--p, 0)))
-      scale(calc(1 - (1 - var(--ms, 1)) * var(--p, 0)));
-  }
-
-  /* Its other lines are cut away as it folds -- the clamp's ellipsis with
-     them -- and the rest of its first line fades. */
-  .page-head[data-folding] .detail-meanings {
-    clip-path: inset(0 0 calc(var(--p, 0) * (100% - 1lh)) 0);
-  }
-
-  .page-head[data-folding] .detail-meanings .rest {
-    opacity: calc(1 - 2 * var(--p, 0));
-  }
-
-  .page-head[data-collapsed] {
-    cursor: pointer;
-  }
-
-  /* A card's page while what it shows is on its way (App.tsx): blank, as
-     tall as a screen, so the page comes in whole. */
-  .page-wait {
-    min-height: 70vh;
-  }
-
-  /* A page's associations, beside its first title (App.tsx): Statistics on
-     a kanji, how common it is on a word. */
-  .facts-title-row,
-  .entry-rank-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .facts-title-row {
-    margin-top: 18px;
-  }
-
-  .facts-title-row > .facts-title {
-    margin: 0;
-  }
-
-  .facts-title-row + .facts {
-    margin-top: 8px;
-  }
-
-  /* The button stands on the title's rule, not taller than the line it is in. */
-  .facts-title-row .notes-chip {
-    margin: -6px 0 -4px;
-  }
-
-  .entry-rank-row > .entry-rank-line {
-    margin: 0;
-  }
-
-  .notes-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 0 11px;
-    border: 1px solid var(--rule-bright);
-    border-radius: 16px;
-    background: var(--sumi-lift);
-    color: var(--paper);
-    font-size: calc(13px * var(--type));
-    line-height: 1;
-  }
-
-  .notes-chip-icon {
-    display: block;
-    width: 16px;
-    height: 16px;
-  }
-
-  .notes-chip-icon svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  /* Always there, so the button keeps its size; the number comes into it. */
-  .notes-chip-count {
-    min-width: 18px;
-    min-height: 1.5em;
-    box-sizing: border-box;
-    padding: 2px 5px;
-    border-radius: 9px;
-    background: var(--ai-deep);
-    color: var(--paper);
-    font-size: calc(11px * var(--type));
-    text-align: center;
-  }
-
   /* A card coming up is a picture of its own, which moves whole (App.tsx
      sets data-card on the new side only). Not the copies under it. */
   html[data-card='coming'] .page-card:not([data-copy]) {
     view-transition-name: card;
   }
+}
+
+/* ---------------------------------------------------------------- folding head, associations button */
+
+/* A card's head folds into a line along its top as the card is scrolled
+   (App.tsx sets --p, 0 to 1, and the measures): sticky, as tall as itself
+   less the line, so the line is what stays. Its character shrinks to the
+   line's left; the rest squeezes and fades away first. */
+.page-head[data-folding] {
+  position: sticky;
+  top: calc(44px - var(--head-h, 0px));
+  z-index: 2;
+  background: var(--sumi-sunk);
+}
+
+.page-card[data-stacked] .page-head[data-folding] {
+  background: var(--sumi);
+  border-radius: 14px 14px 0 0;
+}
+
+.page-head[data-folding] :is(.detail-glyph, .entry-head) {
+  transform-origin: left center;
+  transform: translate(calc(var(--gx, 0px) * var(--p, 0)), calc(var(--gy, 0px) * var(--p, 0)))
+    scale(calc(1 - (1 - var(--gs, 1)) * var(--p, 0)));
+}
+
+/* All but the character and the first meaning squeeze and fade away. */
+.page-head[data-folding]
+  :is(
+    .detail-head > :not(.detail-glyph):not(:has(.detail-meanings)),
+    .detail-head > div > :not(.detail-meanings),
+    .word-head > :not(:first-child):not(.detail-meanings),
+    .word-head > :first-child > :not(.entry-head)
+  ) {
+  transform-origin: left center;
+  transform: scaleY(calc(1 - 0.7 * var(--p, 0)));
+  opacity: calc(1 - 1.8 * var(--p, 0));
+}
+
+/* The first meaning goes to the line, beside the character; the rest of
+   the meanings fade off it. */
+.page-head[data-folding] .detail-meanings {
+  transform-origin: left top;
+  transform: translate(calc(var(--mx, 0px) * var(--p, 0)), calc(var(--my, 0px) * var(--p, 0)))
+    scale(calc(1 - (1 - var(--ms, 1)) * var(--p, 0)));
+}
+
+/* Its other lines are cut away as it folds -- the clamp's ellipsis with
+   them -- and the rest of its first line fades. */
+.page-head[data-folding] .detail-meanings {
+  clip-path: inset(0 0 calc(var(--p, 0) * (100% - 1lh)) 0);
+}
+
+.page-head[data-folding] .detail-meanings .rest {
+  opacity: calc(1 - 2 * var(--p, 0));
+}
+
+.page-head[data-collapsed] {
+  cursor: pointer;
+}
+
+/* A card's page while what it shows is on its way (App.tsx): blank, as
+   tall as a screen, so the page comes in whole. */
+.page-wait {
+  min-height: 70vh;
+}
+
+/* A page's associations, beside its first title (App.tsx): Statistics on
+   a kanji, how common it is on a word. */
+.facts-title-row,
+.entry-rank-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.facts-title-row {
+  margin-top: 18px;
+}
+
+.facts-title-row > .facts-title {
+  margin: 0;
+}
+
+.facts-title-row + .facts {
+  margin-top: 8px;
+}
+
+/* The button stands on the title's rule, not taller than the line it is in. */
+.facts-title-row .notes-chip {
+  margin: -6px 0 -4px;
+}
+
+.entry-rank-row > .entry-rank-line {
+  margin: 0;
+}
+
+.notes-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 16px;
+  background: var(--sumi-lift);
+  color: var(--paper);
+  font-size: calc(13px * var(--type));
+  line-height: 1;
+}
+
+.notes-chip-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.notes-chip-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Always there, so the button keeps its size; the number comes into it. */
+.notes-chip-count {
+  min-width: 18px;
+  min-height: 1.5em;
+  box-sizing: border-box;
+  padding: 2px 5px;
+  border-radius: 9px;
+  background: var(--ai-deep);
+  color: var(--paper);
+  font-size: calc(11px * var(--type));
+  text-align: center;
 }
 
 /* ---------------------------------------------------------------- page slides (view transitions) */
@@ -8787,7 +8767,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 }
 
 .forms-hint {
-  color: var(--faint);
+  color: var(--muted);
 }
 
 .forms-row dd {
@@ -9483,7 +9463,7 @@ html[data-nav]::view-transition-old(tabs):only-child {
 
 .book-turn:disabled,
 .book-zoom button:disabled {
-  color: var(--faint);
+  color: var(--muted);
   cursor: default;
 }
 

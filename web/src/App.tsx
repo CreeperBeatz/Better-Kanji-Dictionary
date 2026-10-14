@@ -24,6 +24,7 @@ import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
+import { warmPage } from './warm'
 import { isIOS } from './account/install'
 import {
   LINE as FOLDED,
@@ -191,7 +192,6 @@ function useVisibleHeight(enabled: boolean) {
   }, [enabled])
 }
 
-const RAIL_TAB_KEY = 'betterrtk:railTab'
 // On a wide enough desktop the search gets a column of its own, left of the
 // dictionary, so its results stay in view while one of them is open. The
 // rail's edge resizes the two together; the edge between them moves the split.
@@ -199,10 +199,9 @@ const SPLIT_KEY = 'betterrtk:searchBeside'
 // '0' when the graph shows visual splits too (expanded); only the parts (simple) otherwise.
 const GRAPH_SIMPLE_KEY = 'betterrtk:graphSimple'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
-type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
 // is the search the page was opened from, and Components is the graph.
-type PhoneTab = 'search' | RailTab | 'components'
+type PhoneTab = 'search' | 'dictionary' | 'associations' | 'components'
 // On a phone a page's associations are a card of their own, opened from its
 // head (`notes` on the page), not a tab.
 const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'components']
@@ -222,15 +221,6 @@ function initialWorkbench(): WorkbenchTab | null {
   const tab = reviewTabInUrl() ?? legacy
   if (tab) replaceReview(tab)
   return tab
-}
-
-function initialRailTab(): RailTab {
-  try {
-    const saved = localStorage.getItem(RAIL_TAB_KEY)
-    return saved === 'associations' ? saved : 'dictionary'
-  } catch {
-    return 'dictionary'
-  }
 }
 
 // The page's own name, from index.html. A hot reload runs this again with a
@@ -456,6 +446,9 @@ function nameOf(p: Page, t: T) {
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
 
+/** How many pages before the one gone back to the way back names on a desktop; the rest are counted. */
+const TRAIL = 2
+
 /** A page's associations, as a card of their own over its dictionary. */
 function hasNotes(p: Page | null | undefined): boolean {
   return !!p && (p.kind === 'kanji' || p.kind === 'word') && !!p.notes
@@ -501,6 +494,9 @@ function known(p: Page): boolean {
   const c = p.char
   return !!(api.kanji.peek(c) && api.kanjiPage.peek(c) && api.forms.peek(c) && api.fonts.peek(c) && api.similar.peek(c))
 }
+
+/** How long a mouse rests on a link before what its page shows is asked for (see `warm`). */
+const REST_MS = 80
 
 /** How long a page waits at most to show whole, before it shows what it has. */
 const WHOLE_MS = 2500
@@ -675,7 +671,6 @@ export function App() {
   const [mapOpened, setMapOpened] = useState(view === 'map')
   const [railWidth, setRailWidth] = useRailWidth()
   const [searchShare, setSearchShare] = useSearchShare()
-  const [railTab, setRailTab] = useState<RailTab>(initialRailTab)
   // On a phone the search is a tab of the page too: the page it was turned to
   // from, so going anywhere else leaves it. Compared as a page, not an object:
   // leaving the graph for it comes back through history, as a copy.
@@ -763,24 +758,6 @@ export function App() {
     watch.observe(head)
     return () => watch.disconnect()
   }, [split])
-
-  const chooseRailTab = useCallback(
-    (t: RailTab) => {
-      setRailTab(t)
-      leaveStage('back')
-      try {
-        localStorage.setItem(RAIL_TAB_KEY, t)
-      } catch {
-        // not remembered, which is fine
-      }
-    },
-    [leaveStage],
-  )
-
-  const toDictionary = useCallback(() => {
-    setRailTab('dictionary')
-    leaveStage('replace')
-  }, [leaveStage])
 
   const setView = useCallback(
     (v: StageView) => {
@@ -974,8 +951,7 @@ export function App() {
   }
 
   // Opening a character from a page puts it on top -- unless it is the page
-  // just below, as when a word's kanji is the one it was opened from. The tab
-  // stays, so a part opened from the associations shows its associations.
+  // just below, as when a word's kanji is the one it was opened from.
   const openKanji = useStable(
     (char: string) => {
       setHovered(null)
@@ -998,7 +974,7 @@ export function App() {
     (w: Word) => {
       keepSearch()
       rise(wordPage(w), () => {
-        toDictionary()
+        leaveStage('replace')
         if (HAN.test(w.headword)) setViewState('focus')
         push(wordPage(w))
       })
@@ -1033,12 +1009,13 @@ export function App() {
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
       const picked = top.kind === 'kanji' && top.centre !== undefined && top.centre === focus
       leaveStage('replace')
-      if (under?.kind === 'kanji' && under.char === char && (under.centre ?? under.char) === focus) pop()
-      else if (picked) {
-        if (top.char === char) return
+      if (under?.kind === 'kanji' && under.char === char && (under.centre ?? under.char) === focus) return pop()
+      if (picked && top.char === char) return
+      rise(page, () => {
+        if (!picked) return push(page)
         replaceTop(page)
         if (scroller.current) scroller.current.scrollTop = 0
-      } else push(page)
+      })
     },
   )
 
@@ -1088,8 +1065,9 @@ export function App() {
     rememberSearch(q)
     openOver(searchBase, p)
   }
-  const listKanji = useStable((char: string) => openOverSearch(kanjiPage(char)))
-  const listWord = useStable((w: Word) => openOverSearch(wordPage(w)))
+  const listPick = (p: Picked) => rise(p, () => openOverSearch(p))
+  const listKanji = useStable((char: string) => listPick(kanjiPage(char)))
+  const listWord = useStable((w: Word) => listPick(wordPage(w)))
 
   const deselect = useStable(() => {
     setHovered(null)
@@ -1101,14 +1079,14 @@ export function App() {
   const type = useCallback(
     (text: string) => {
       setQ(text)
-      toDictionary()
+      leaveStage('replace')
       const page: Page = { kind: 'search', q: text }
       // Beside the dictionary, the results change and the open entry stays.
       if (split) rebase(page)
       else if (stack.length === 1 && stack[0].kind === 'search') replaceTop(page)
       else reset(page)
     },
-    [split, stack, replaceTop, reset, rebase, toDictionary],
+    [split, stack, replaceTop, reset, rebase, leaveStage],
   )
 
   // Going into the box leaves the page up, so a slip of the finger costs
@@ -1120,10 +1098,10 @@ export function App() {
   // stack if that is where it is.
   const toSearch = useCallback(() => {
     if (split || top.kind === 'search') return
-    toDictionary()
+    leaveStage('replace')
     if (root.kind === 'search' && root.q === q) pop(stack.length - 1)
     else reset({ kind: 'search', q })
-  }, [split, top, root, q, stack.length, pop, reset, toDictionary])
+  }, [split, top, root, q, stack.length, pop, reset, leaveStage])
 
   // Back -- the browser's, or the app's -- to the search brings the keyboard
   // up with it, ready for the next word. Phones raise the keyboard for focus
@@ -1324,17 +1302,11 @@ export function App() {
   // A page the tabs treat as a card: a kanji, a word, or every word with a kanji.
   const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
-  // On a phone the page shows its dictionary, or its associations when it is
-  // their card.
-  const tab: RailTab = mobile
-    ? hasNotes(shownTop)
-      ? 'associations'
-      : 'dictionary'
-    : railTab === 'associations' && !subject
-      ? 'dictionary'
-      : railTab
-  // The tab not showing is mounted for its count, but only once the page has
-  // come to rest: comments rendered behind a page sliding in cost it frames.
+  // The page shows its dictionary, or its associations when it is their page.
+  const notesShown = hasNotes(shownTop)
+  // Its associations are mounted under its dictionary too, unseen, for their
+  // count, but only once the page has come to rest: comments rendered behind
+  // a page sliding in cost it frames.
   const subjectKey = subject?.key ?? null
   const [settled, setSettled] = useState<string | null>(null)
   useEffect(() => {
@@ -1368,7 +1340,7 @@ export function App() {
   // hovered on the graph, so only the dictionary's head previews that.
   function pageHead() {
     if (shownTop?.kind === 'kanji') {
-      const node = (tab === 'dictionary' && hoveredNode) || detailOf(shownTop.char)?.focus
+      const node = (!notesShown && hoveredNode) || detailOf(shownTop.char)?.focus
       return (
         <section className="rail-section">
           {node ? (
@@ -1398,11 +1370,6 @@ export function App() {
   // Components on a phone is the graph of the page's kanji: for a word, of
   // the one its graph is on.
   const componentsOf = shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? wordCentre : null
-  // Back from the graph is the dictionary, whichever tab it was gone to from.
-  function showComponents() {
-    setRailTab('dictionary')
-    setView('focus')
-  }
   // The Search tab shows the search with the page marked in it, and the page
   // still there to turn back to.
   const searchShown = mobile && !onStage && carded && searchOver !== null && samePage(searchOver, top)
@@ -1510,13 +1477,13 @@ export function App() {
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stack, stackShown])
-  // On a phone, scrolling down a card, its head folds into a line along the
-  // top: its character shrinks to the line's left with its first meaning beside it,
+  // Scrolling down a card, its head folds into a line along the top: its
+  // character shrinks to the line's left with its first meaning beside it,
   // and the rest squeezes away. The head is sticky, as tall as itself less
   // the line, so the line is what stays. --p on it is how far it is folded,
   // 0 to 1 (read by theme.css); the measures it folds by are taken when its
   // size changes.
-  const folding = mobile && onCard && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
+  const folding = (!mobile || onCard) && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
   const headRef = useRef<HTMLDivElement>(null)
   const fold = useRef<{ h: number } | null>(null)
   const foldHead = useStable(() => {
@@ -1554,8 +1521,9 @@ export function App() {
       cancelAnimationFrame(frame)
     }
   }, [folding, shownTop, searchShown, onStage, foldHead])
-  // A page's associations, from beside its first title: a card of their own,
-  // over its dictionary, back from which is the dictionary again.
+  // A page's associations, from beside its first title: a page of their own
+  // -- on a phone, a card -- over its dictionary, back from which is the
+  // dictionary again.
   const openNotes = useStable(() => {
     if (!shownTop || (shownTop.kind !== 'kanji' && shownTop.kind !== 'word') || shownTop.notes) return
     const p: Page = { ...shownTop, notes: true }
@@ -1563,7 +1531,7 @@ export function App() {
   })
   // In a page drawn under the open card it is only a picture, with no count.
   function notesButton(p: Page, live: boolean) {
-    if (!mobile || (p.kind !== 'kanji' && p.kind !== 'word')) return undefined
+    if (p.kind !== 'kanji' && p.kind !== 'word') return undefined
     // The count's circle is always there; the number comes into it once known.
     const known = !live && subject !== null && assocCount.key === subject.key
     return (
@@ -1604,6 +1572,32 @@ export function App() {
   function toCardTop() {
     scroller.current?.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' })
   }
+  // With a mouse, what a page shows is asked for as the pointer rests on a
+  // link to it (warm.ts) or on its character on the graph, so the click
+  // finds it here and the page comes whole at once.
+  useEffect(() => {
+    let timer = 0
+    let at: Element | null = null
+    const over = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return
+      const el = e.target instanceof Element ? e.target.closest('[data-warm]') : null
+      if (el === at) return
+      at = el
+      window.clearTimeout(timer)
+      const p = el && warmPage(el.getAttribute('data-warm') ?? '')
+      if (p) timer = window.setTimeout(() => warm(p)?.catch(() => {}), REST_MS)
+    }
+    document.addEventListener('pointerover', over, { passive: true })
+    return () => {
+      document.removeEventListener('pointerover', over)
+      window.clearTimeout(timer)
+    }
+  }, [])
+  useEffect(() => {
+    if (!hovered || mobile) return
+    const timer = window.setTimeout(() => warm({ kind: 'kanji', char: hovered })?.catch(() => {}), REST_MS)
+    return () => window.clearTimeout(timer)
+  }, [hovered, mobile])
   // A card shows whole: until all its page shows at once is here, it has its
   // head and a blank below it, not its parts coming in one by one, each
   // pushing the next down. Once that is here -- or has failed, or after
@@ -1613,7 +1607,7 @@ export function App() {
   const keyOf = (p: Page) =>
     p.kind === 'kanji' ? p.char : p.kind === 'word' ? `word:${p.id}` : p.kind === 'words' ? `words:${p.char}` : ''
   const waiting =
-    mobile && shownTop !== null && !hasNotes(shownTop) && !known(shownTop) && !released.current.has(keyOf(shownTop))
+    shownTop !== null && !hasNotes(shownTop) && !known(shownTop) && !released.current.has(keyOf(shownTop))
   useEffect(() => {
     if (!waiting || !shownTop) return
     const key = keyOf(shownTop)
@@ -1635,7 +1629,7 @@ export function App() {
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
-    onStage && view === 'focus' ? 'components' : searchShown || !carded ? 'search' : mobile ? 'dictionary' : tab
+    onStage && view === 'focus' ? 'components' : searchShown || !carded ? 'search' : 'dictionary'
   // On a phone a card -- its dictionary, its associations, its graph -- has
   // no search over it: the Search tab is the way to it. What shows instead,
   // at the top and on the tabs, is how many cards are open.
@@ -1658,8 +1652,8 @@ export function App() {
     // What lies under a page opened from another tab is this one's
     // dictionary, as it was left.
     keepUnder()
-    if (to === 'components') showComponents()
-    else chooseRailTab(to)
+    if (to === 'components') setView('focus')
+    else leaveStage('back')
   }
   // A pick in the search tab: the page already open turns back to; another
   // opens over the search, as a pick in the search column does.
@@ -1668,7 +1662,7 @@ export function App() {
     leaveSearchTab()
     rise(p, () => {
       setSearchOver(null)
-      toDictionary()
+      leaveStage('replace')
       openOverSearch(p)
     })
   }
@@ -2120,7 +2114,7 @@ export function App() {
     stacking.current?.()
   }
   function rise(p: Page, go: () => void) {
-    const ready = mobile && pagesSlide() ? warm(p) : null
+    const ready = !mobile || pagesSlide() ? warm(p) : null
     if (!ready) return animateNav('forward', go)
     if (rising.current) return
     rising.current = true
@@ -2285,10 +2279,7 @@ export function App() {
     }
     returning.current = false
     dropped.current = false
-    if (toCard.current && mobile) {
-      if (railTab !== 'dictionary') setRailTab('dictionary')
-      if (stage) leaveStage('replace')
-    }
+    if (toCard.current && mobile && stage) leaveStage('replace')
     toCard.current = false
     underCopies.current = underCopies.current.filter((u) => u.at < entries.length - 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2406,23 +2397,6 @@ export function App() {
         )}
         <aside className="rail">
           {!split && searchBar}
-          {!mobile && subject && (
-            <div className="rail-head">
-              <div className="rail-tabs" role="tablist" aria-label={t('sidePanel')}>
-                <button role="tab" aria-selected={tab === 'dictionary'} onClick={() => chooseRailTab('dictionary')}>
-                  {t('dictionary')}
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={tab === 'associations'}
-                  onClick={() => chooseRailTab('associations')}
-                >
-                  {t('associations')}
-                  {notesCount > 0 && <span className="rail-tab-count">{notesCount}</span>}
-                </button>
-              </div>
-            </div>
-          )}
 
           <div
             className="rail-body"
@@ -2451,11 +2425,34 @@ export function App() {
                 })}
               </div>
             )}
+            {/* The way back, and after it, smaller, the pages before that one,
+                each a step further back: how deep this page is, as the
+                cards' edges show it on a phone. */}
             {!mobile && shownUnder && !searchShown && (
               <div className="rail-crumb">
-                <button className="back-link rail-back" onClick={goBack} title={t('back')}>
-                  <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
-                </button>
+                <nav className="rail-trail" aria-label={t('back')}>
+                  <button className="back-link rail-back" onClick={goBack} title={t('back')}>
+                    <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
+                  </button>
+                  {entries
+                    .slice(0, -2)
+                    .reverse()
+                    .slice(0, TRAIL)
+                    .map((p, j) => (
+                      <button
+                        key={j}
+                        className="trail-step"
+                        onClick={() => popBy(j + 2)}
+                        title={t('backTo', { page: labelOf(p, t) })}
+                      >
+                        <span className="trail-sep" aria-hidden>
+                          ‹
+                        </span>
+                        {nameOf(p, t)}
+                      </button>
+                    ))}
+                  {entries.length - 2 > TRAIL && <span className="trail-more">+{entries.length - 2 - TRAIL}</span>}
+                </nav>
               </div>
             )}
             {/* The card's place, which clips it (theme.css): moved down, coming up
@@ -2496,7 +2493,7 @@ export function App() {
                     onWordsWith={showWords}
                   />
                 )}
-                {tab === 'dictionary' &&
+                {!notesShown &&
                   !onStage &&
                   !searchShown &&
                   (shownTop ? (
@@ -2508,10 +2505,10 @@ export function App() {
                   ) : (
                     <p className="hint rail-section">{t('pickResult')}</p>
                   ))}
-                {/* Kept mounted while hidden, so the count on its tab is there
-                    before the tab is opened. */}
-                {subject && (tab === 'associations' || settled === subject.key) && (
-                  <div hidden={tab !== 'associations' || searchShown}>
+                {/* Kept mounted while hidden, so the count on its button is
+                    there before they are opened. */}
+                {subject && (notesShown || settled === subject.key) && (
+                  <div hidden={!notesShown || searchShown}>
                     {associations(subject)}
                   </div>
                 )}
