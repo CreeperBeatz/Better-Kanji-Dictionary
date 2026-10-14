@@ -5514,11 +5514,17 @@ html {
   scrollbar-color: transparent transparent;
 }
 
-.rail-body:hover,
-.rail-body:focus-within,
-.search-column-body:hover,
-.search-column-body:focus-within {
-  scrollbar-color: var(--rule-bright) transparent;
+/* Only where there is a pointer to be over it. scrollbar-color is inherited,
+   so the hover a tap leaves on a phone would restyle the whole page under
+   it -- and the copy of the one under a card: 27 ms at 4x on letting go of
+   a pull. */
+@media (hover: hover) {
+  .rail-body:hover,
+  .rail-body:focus-within,
+  .search-column-body:hover,
+  .search-column-body:focus-within {
+    scrollbar-color: var(--rule-bright) transparent;
+  }
 }
 
 /* Safari, which has no scrollbar-color. */
@@ -6624,6 +6630,7 @@ html {
     background: var(--sumi);
     border-top: 1px solid var(--rule-bright);
     border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.55);
   }
 
   /* Pulled down, a card is a card, over the copy of the page under it. */
@@ -6641,83 +6648,51 @@ html {
     animation: none !important;
   }
 
-  /* A card scrolled past its head says what it is along its top: on the
-     search, flat with a rule under it; on other cards, as the card's own top. */
-  .card-bar {
+  /* A card's head folds into a line along its top as the card is scrolled
+     (App.tsx sets --p, 0 to 1, and the measures): sticky, as tall as itself
+     less the line, so the line is what stays. Its character shrinks to the
+     line's left; the rest squeezes and fades away first. */
+  .page-head[data-folding] {
     position: sticky;
-    top: 0;
+    top: calc(44px - var(--head-h, 0px));
     z-index: 2;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    width: 100%;
-    height: 44px;
-    margin-bottom: -44px;
-    padding: 0 16px;
-    overflow: hidden;
     background: var(--sumi-sunk);
-    border: 0;
-    border-bottom: 1px solid var(--rule);
-    color: var(--paper);
-    font: inherit;
-    text-align: left;
-    white-space: nowrap;
-    line-height: 44px;
-    opacity: 0;
-    transform: translateY(-100%);
-    pointer-events: none;
-    transition:
-      opacity 160ms var(--ease),
-      transform 200ms var(--ease);
   }
 
-  .card-bar[data-shown] {
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
+  .page-card[data-stacked] .page-head[data-folding] {
+    background: var(--sumi);
+    border-radius: 14px 14px 0 0;
   }
 
-  /* With the search gone, at the very top: a sticky box's top counts from
-     inside the page's padding, which is where the search lay. */
-  .shell-grid[data-bar-hidden] .card-bar {
-    top: calc(0px - var(--bar-h, 0px));
+  .page-head[data-folding] :is(.detail-glyph, .entry-head) {
+    transform-origin: left center;
+    transform: translate(calc(var(--gx, 0px) * var(--p, 0)), calc(var(--gy, 0px) * var(--p, 0)))
+      scale(calc(1 - (1 - var(--gs, 1)) * var(--p, 0)));
   }
 
-  /* A page come back to has its bar as its copy had it, at once. */
-  .page-card[data-landing] .card-bar {
-    transition: none;
+  .page-head[data-folding] :is(.detail-head > :not(.detail-glyph), .word-head > :not(:first-child), .word-head > :first-child > :not(.entry-head)) {
+    transform-origin: left center;
+    transform: scaleY(calc(1 - 0.7 * var(--p, 0)));
+    opacity: calc(1 - 1.8 * var(--p, 0));
+  }
+
+  .page-head[data-collapsed] {
+    cursor: pointer;
+  }
+
+  /* With the search gone, the line goes to the very top: a sticky box's top
+     counts from inside the page's padding, which is where the search lay.
+     Set on the head itself, not as a variable on the grid: a variable there
+     is inherited by every element on the page, and would restyle them all
+     each time the search comes or goes. */
+  .shell-grid[data-bar-hidden] .page-head[data-folding] {
+    top: calc(44px - var(--head-h, 0px) - var(--bar-h, 0px));
   }
 
   /* Moving with the finger, and under it a copy: their own layers. */
   .page-card[data-moving],
   [data-under] {
     will-change: transform, opacity;
-  }
-
-  .page-card[data-stacked] .card-bar {
-    background: var(--sumi);
-    border-top: 1px solid var(--rule-bright);
-    border-radius: 14px 14px 0 0;
-  }
-
-  .card-bar-glyph {
-    flex: none;
-    font-family: var(--mincho);
-    font-size: calc(20px * var(--type));
-  }
-
-  .card-bar-sub {
-    flex: none;
-    color: var(--paper-dim);
-    font-size: calc(13px * var(--type));
-  }
-
-  .card-bar-gloss {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    color: var(--paper-dim);
-    font-size: calc(14px * var(--type));
   }
 
   /* The edges stay put as a card comes and goes over them. */
@@ -6754,6 +6729,13 @@ html {
   html[data-nav] .phone-tabs {
     view-transition-name: tabs;
   }
+}
+
+/* A copy of a page -- one sliding away, or the one waiting under a card --
+   is never one of the pictures: two of a name stop the transition. */
+[data-ghost],
+[data-ghost] * {
+  view-transition-name: none !important;
 }
 
 ::view-transition-old(root),

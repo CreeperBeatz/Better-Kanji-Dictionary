@@ -25,10 +25,21 @@ for (let round = 0; round < 3; round++) {
   await wait(300)
   await row.click()
   await wait(1200)
-  await page.locator('.rail-body').evaluate((e) => (e.scrollTop = 0))
+  await page.locator('.rail-body:not([data-ghost])').evaluate((e) => (e.scrollTop = 0))
   await wait(300)
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: RATE })
   await page.evaluate(() => {
+    window.__loaf = []
+    new PerformanceObserver((l) => {
+      for (const e of l.getEntries())
+        window.__loaf.push({
+          start: e.startTime,
+          dur: e.duration,
+          render: e.renderStart ? e.startTime + e.duration - e.renderStart : 0,
+          style: e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0,
+          scripts: e.scripts.map((sc) => `${sc.invoker} ${sc.duration.toFixed(0)}ms`).join(', '),
+        })
+    }).observe({ type: 'long-animation-frame', buffered: false })
     window.__marks = []
     window.__frames = []
     const loop = (t) => {
@@ -47,7 +58,7 @@ for (let round = 0; round < 3; round++) {
   }
   await mark('release')
   await touch('touchEnd')
-  await page.waitForFunction(() => !document.querySelector('[data-under]'), null, { timeout: 5000 })
+  await page.waitForFunction(() => ![...document.querySelectorAll('[data-under]')].some((e) => Number(getComputedStyle(e).opacity) > 0.05), null, { timeout: 5000 })
   await mark('swapped')
   await wait(400)
   await mark('end')
@@ -67,6 +78,9 @@ for (let round = 0; round < 3; round++) {
     return `${name}: worst ${worst.toFixed(0)}ms, ${dropped}/${gaps.length} slow`
   })
   console.log(`round ${round + 1} | ${line.join(' | ')} | where ${decodeURIComponent(new URL(page.url()).pathname)}`)
+  const loaf = await page.evaluate(() => window.__loaf)
+  for (const l of loaf) if (l.start > at.release - 20 && l.start < at.release + 200)
+    console.log(`  long frame +${(l.start - at.release).toFixed(0)}ms ${l.dur.toFixed(0)}ms (style+layout ${l.style.toFixed(0)}) ${l.scripts}`)
   // Where the slow frames fall, from letting go.
   const slow = frames.slice(1).map((t, i) => [t, t - frames[i]]).filter(([, g]) => g > 25)
   console.log('  slow frames (ms after release, length):', slow.map(([t, g]) => `${(t - at.release).toFixed(0)}:${g.toFixed(0)}`).join(' '), '| swapped at', (at.swapped - at.release).toFixed(0))

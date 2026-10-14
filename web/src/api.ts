@@ -960,6 +960,7 @@ const changeListeners = new Set<() => void>()
 export function dataChanged() {
   for (const c of keptCaches) c.clear()
   similarCache.clear()
+  similarSettled.clear()
   for (const l of changeListeners) l()
 }
 
@@ -984,6 +985,7 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
 }
 
 const similarCache = new Map<string, Promise<SimilarResponse>>()
+const similarSettled = new Map<string, SimilarResponse>()
 
 export type ImageKind = 'all' | 'photo' | 'illustration' | 'vector'
 
@@ -1027,15 +1029,21 @@ export const api = {
   map: (scope: string) => get<MapResponse>(`/api/map/${encodeURIComponent(scope)}`),
 
   /** Kept for the session: a character's page is opened again and again. */
-  similar: (char: string): Promise<SimilarResponse> => {
-    let p = similarCache.get(char)
-    if (!p) {
-      p = get<SimilarResponse>(`/api/kanji/${encodeURIComponent(char)}/similar`)
-      p.catch(() => similarCache.delete(char))
-      similarCache.set(char, p)
-    }
-    return p
-  },
+  similar: Object.assign(
+    (char: string): Promise<SimilarResponse> => {
+      let p = similarCache.get(char)
+      if (!p) {
+        p = get<SimilarResponse>(`/api/kanji/${encodeURIComponent(char)}/similar`)
+        p.then(
+          (d) => similarSettled.set(char, d),
+          () => similarCache.delete(char),
+        )
+        similarCache.set(char, p)
+      }
+      return p
+    },
+    { peek: (char: string) => similarSettled.get(char) },
+  ),
 
   forms: kept((char: string) => get<FormsResponse>(`/api/kanji/${encodeURIComponent(char)}/forms`)),
 

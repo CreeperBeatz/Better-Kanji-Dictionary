@@ -165,7 +165,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const [words, setWords] = useState<Word[]>([])
   // Its meanings with their readings and words, special readings and radical.
   // Offline, only the word each reading forms, from the device: `full` false.
-  const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(null)
+  // Known already, it is there at once, as on a page come back to.
+  const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(() => {
+    const known = api.kanjiPage.peek(data.focus.char)
+    return known ? { char: data.focus.char, data: known, full: true } : null
+  })
   // The same page from the offline pack: at once, but as of the pack's build.
   const [onDevice, setOnDevice] = useState<KanjiPage | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))

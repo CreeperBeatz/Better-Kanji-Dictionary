@@ -82,7 +82,7 @@ export function FormSource({ source }: { source: string }) {
 
 /** The forms of `char`, or null until they arrive (offline they never do; the page goes without). */
 export function useForms(char: string, wanted = true): FormsResponse | null {
-  const [data, setData] = useState<FormsResponse | null>(null)
+  const [data, setData] = useState<FormsResponse | null>(() => (wanted ? (api.forms.peek(char) ?? null) : null))
   const [version, setVersion] = useState(0)
   useEffect(() => onDataChanged(() => setVersion((v) => v + 1)), [])
   useEffect(() => {

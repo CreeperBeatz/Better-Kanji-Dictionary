@@ -138,12 +138,13 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
 export function WordPanel({ id, word, from, onPick, onWord, onSignIn }: Props) {
   const lang = useLang()
   const t = S(lang)
-  const [entry, setEntry] = useState<WordEntry | null>(null)
+  // Known already, it is there at once, as on a page come back to.
+  const [entry, setEntry] = useState<WordEntry | null>(() => api.word.peek(id) ?? null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     let stale = false
-    setEntry(null)
+    setEntry(api.word.peek(id) ?? null)
     setFailed(false)
     // The device has everything but the example sentences, and answers
     // first; the server's full entry replaces it when it comes.

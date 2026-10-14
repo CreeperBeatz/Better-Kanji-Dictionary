@@ -23,8 +23,6 @@ import { pageInUrl, restoreScroll, samePage, urlOf, useNav, type Page, type Stac
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 import { isIOS } from './account/install'
-import { glossOf, meaningsOf } from './i18n/content'
-import { realMeanings } from './detail/meanings'
 
 // Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -492,25 +490,22 @@ function CardStack({ under, onPick, t }: { under: Page[]; onPick: (i: number) =>
   )
 }
 
-/**
- * On a phone, a card scrolled past its head: what it is, along its top, so a
- * card come back to part way down is still that card. A tap goes to its top.
- */
-function CardBar({ shown, glyph, sub, gloss, onTop }: {
-  shown: boolean
-  glyph: string
-  sub?: string
-  gloss?: string
-  onTop: () => void
-}) {
-  return (
-    <button className="card-bar" data-shown={shown || undefined} tabIndex={shown ? 0 : -1} onClick={onTop}>
-      <span className="card-bar-glyph">{glyph}</span>
-      {sub && <span className="card-bar-sub">{sub}</span>}
-      {gloss && <span className="card-bar-gloss">{gloss}</span>}
-    </button>
-  )
+/** Where `el` sits inside `within`, laid out, whatever transforms are on it. */
+function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number } {
+  let x = 0
+  let y = 0
+  let at: HTMLElement | null = el
+  while (at && at !== within) {
+    x += at.offsetLeft
+    y += at.offsetTop
+    at = at.offsetParent as HTMLElement | null
+  }
+  return { x, y }
 }
+
+/** How tall a card's head is folded into a line, and how tall its character is there. */
+const FOLDED = 44
+const FOLDED_GLYPH = 26
 
 /**
  * Over the Dictionary tab, the cards under the open one, as the edges above
@@ -801,8 +796,15 @@ export function App() {
 
   // The rail shows the graph's data once it is for this character, and the
   // device's until then -- or instead, when there is no connection.
+  // Known already -- a page come back to -- it is there at once.
   const detail: DetailData | null =
-    data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : null
+    data?.focus.char === focus
+      ? data
+      : onDevice?.focus.char === focus
+        ? onDevice
+        : focus
+          ? (api.kanji.peek(focus) ?? null)
+          : null
 
   // A character picked on the graph is open while the graph stays centred on
   // another, so its page fetches its own.
@@ -892,7 +894,7 @@ export function App() {
         ? pageData
         : pageOnDevice?.focus.char === char
           ? pageOnDevice
-          : null
+          : (api.kanji.peek(char) ?? null)
 
   // A character seen in the dictionary from the map starts the stack again from it.
   const drill = useStable(
@@ -1095,10 +1097,14 @@ export function App() {
   })
   /** A card pulled off, and the page under it brought back without a slide. */
   const dropped = useRef(false)
-  // On a phone, whether the open card is scrolled past its head (see CardBar).
+  // On a phone, whether the open card's head is folded all the way (see foldHead).
   const [headGone, setHeadGone] = useState(false)
   /** How far the copy of that page was scrolled. */
   const droppedTo = useRef<number | null>(null)
+  /** Back through history: the page comes back as it was, without arriving. */
+  const returning = useRef(false)
+  /** Which top the copy of the page under it is being put in place for, ahead of a pull. */
+  const parkFor = useRef(0)
   // Back `k` pages at once, sliding: as history slides it, when it goes
   // through history, or here when the pages come off in place. `still`: the
   // card has gone already, pulled off, and the page under it is in sight.
@@ -1357,33 +1363,71 @@ export function App() {
     if (!page) return null
     return underCopies.current.find((c) => c.at === at && samePage(c.page, page))?.copy ?? null
   }
-  // What a card scrolled past its head says along its top.
-  const bar = (() => {
-    if (!mobile || !onCard) return null
-    if (shownTop?.kind === 'kanji') {
-      const node = detailOf(shownTop.char)?.focus
-      const gloss = node ? meaningsOf({ meanings: realMeanings(node.meanings), meaningsBg: node.meaningsBg }, t.lang).value[0] : undefined
-      return { glyph: shownTop.char, gloss }
-    }
-    if (shownWord) {
-      const gloss = shownWord.senses.length ? glossOf(shownWord.senses[0], t.lang).value.split(';')[0].trim() : undefined
-      return { glyph: shownWord.headword, sub: shownWord.reading, gloss }
-    }
-    return null
-  })()
-  useEffect(() => {
+  // On a phone a card's head folds into a line along its top as the card is
+  // scrolled: its character shrinks into the line and the rest squeezes away,
+  // with the scroll and not at some point of it. The head is sticky, as tall
+  // as itself less the line, so the line is what stays. --p on it is how far
+  // it is folded, 0 to 1 (set here, read by theme.css); the measures it
+  // folds by are taken when its size changes.
+  const folding = mobile && onCard && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
+  const headRef = useRef<HTMLDivElement>(null)
+  const fold = useRef<{ h: number; pad: number } | null>(null)
+  const foldHead = useStable(() => {
     const sc = scroller.current
-    const head = cardRef.current?.querySelector('.page-head')
-    if (!bar || !sc || !head) return setHeadGone(false)
-    // Gone once no more than the bar's height of it shows.
-    const io = new IntersectionObserver(
-      ([e]) => setHeadGone(!e.isIntersecting && e.boundingClientRect.top < (e.rootBounds?.top ?? 0) + 44),
-      { root: sc, rootMargin: '-44px 0px 0px 0px' },
-    )
-    io.observe(head)
-    return () => io.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bar !== null, shownTop, searchShown, onStage])
+    const head = headRef.current
+    const card = cardRef.current
+    const m = fold.current
+    if (!sc || !head || !card || !m) return
+    // How far the card's top has gone under the top of the page, of all the
+    // way it folds.
+    const under = m.pad - (card.getBoundingClientRect().top - sc.getBoundingClientRect().top)
+    const p = Math.min(1, Math.max(0, under / Math.max(1, m.h - FOLDED)))
+    head.style.setProperty('--p', p.toFixed(3))
+    head.toggleAttribute('data-collapsed', p >= 1)
+    setHeadGone(p >= 1)
+  })
+  useLayoutEffect(() => {
+    const sc = scroller.current
+    const head = headRef.current
+    fold.current = null
+    if (!folding || !sc || !head) return setHeadGone(false)
+    const measure = () => {
+      const h = head.offsetHeight
+      fold.current = { h, pad: parseFloat(getComputedStyle(sc).paddingTop) || 0 }
+      head.style.setProperty('--head-h', `${h}px`)
+      // The character ends at the line's left, as tall as the line allows,
+      // in the middle of it: the bottom of the head, which is what shows.
+      const glyph = head.querySelector<HTMLElement>('.detail-glyph, .entry-head')
+      if (glyph) {
+        const { x, y } = offsetIn(glyph, head)
+        const gh = glyph.offsetHeight || 1
+        head.style.setProperty('--gs', String(Math.min(1, FOLDED_GLYPH / gh)))
+        head.style.setProperty('--gx', `${16 - x}px`)
+        head.style.setProperty('--gy', `${h - FOLDED / 2 - (y + gh / 2)}px`)
+      }
+      foldHead()
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(head)
+    let frame = 0
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(() => ((frame = 0), foldHead()))
+    }
+    sc.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      ro.disconnect()
+      sc.removeEventListener('scroll', onScroll)
+      cancelAnimationFrame(frame)
+    }
+  }, [folding, shownTop, searchShown, onStage, foldHead])
+  // A tap on the folded line goes to the card's top, whatever it is on.
+  function onHeadTap(e: React.MouseEvent) {
+    if (!headRef.current?.hasAttribute('data-collapsed')) return
+    e.preventDefault()
+    e.stopPropagation()
+    toCardTop()
+  }
   // On a phone the search bar lies over the top of the page, so it can slide
   // away without the page moving: the page starts as far down as it is tall.
   useLayoutEffect(() => {
@@ -1442,6 +1486,11 @@ export function App() {
     setHovered(null)
     if (split || searchShown) return rebase(page)
     if (top.kind === 'search') return replaceTop(page)
+    // On a phone the search is a tab, and they are a mode of it, not a card.
+    if (mobile) {
+      rebase(page)
+      return tapPhoneTab('search')
+    }
     push(page)
   })
   const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
@@ -1586,6 +1635,13 @@ export function App() {
       under: null,
       armed: false,
     }
+    // A pull may follow: the copy under the card wakes, and the card gets a
+    // layer of its own, before the finger has moved far enough to tell.
+    const s = swipe.current
+    if (s.card && s.back && s.atTop) {
+      s.under = layUnder(copyAt(entries.length - 2, shownUnder))
+      s.card.dataset.moving = ''
+    }
   }
   function swipeMove(e: React.TouchEvent) {
     const s = swipe.current
@@ -1593,16 +1649,24 @@ export function App() {
     if (e.touches.length !== 1) return swipeCancel()
     const touch = e.touches[0]
     const dx = touch.clientX - s.x
-    const dy = touch.clientY - s.y
+    let dy = touch.clientY - s.y
     if (s.mode === null) {
       if (Math.hypot(dx, dy) < 10) return
       if (Math.abs(dx) > 1.5 * Math.abs(dy)) s.mode = s.turns ? 'turn' : null
-      else if (dy > 0 && s.atTop) s.mode = 'pull'
+      else if (dy > 0 && s.atTop) {
+        s.mode = 'pull'
+        // The card starts moving from here, not with a jump of the way it
+        // took to tell a pull from a tap.
+        s.y = touch.clientY
+        dy = 0
+      }
       // Anything else is the page scrolling, which is the browser's.
       if (s.mode === null) {
+        unwake(s)
         swipe.current = null
         return
       }
+      if (s.mode === 'turn') unwake(s)
     }
     const dt = e.timeStamp - s.last.at
     if (dt > 0) {
@@ -1620,9 +1684,13 @@ export function App() {
         s.card.style.transform = `translateY(${s.back ? down : down / 3}px)`
       }
       if (s.back && s.card) {
-        // The page under it, back a little and dim, comes forward as it goes.
-        if (!s.under) s.under = layUnder(copyAt(entries.length - 2, shownUnder))
-        if (s.under) sinkUnder(s.under, Math.min(1, down / (scroller.current.clientHeight * 0.6)))
+        // The page under it, back a little and dim, comes forward as it goes;
+        // the card's edges give way to it over the first part of the pull.
+        const shown = Math.min(1, down / FADE_IN)
+        if (s.under) {
+          sinkUnder(s.under, Math.min(1, down / (scroller.current.clientHeight * 0.6)), shown)
+          stackOf()?.style.setProperty('opacity', String(1 - shown))
+        }
         if (s.armed !== dy > PULL) stackOf()?.toggleAttribute('data-armed', (s.armed = dy > PULL))
       } else searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
       return
@@ -1642,6 +1710,7 @@ export function App() {
     swipe.current = null
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     const el = s?.moved
+    if (s && s.mode !== 'pull') unwake(s)
     if (s?.mode === 'pull') {
       const dy = e.changedTouches[0].clientY - s.y
       const far = dy > PULL || (s.vy > 0.4 && dy > SWIPE)
@@ -1675,6 +1744,7 @@ export function App() {
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     stackOf()?.removeAttribute('data-armed')
     if (s?.mode === 'pull' && s.card) settleCard(s.card, s.under)
+    else if (s) unwake(s)
     if (s?.mode !== 'turn' || !el) return
     dragMark(null)
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
@@ -1684,17 +1754,34 @@ export function App() {
   function stackOf() {
     return scroller.current?.querySelector<HTMLElement>('.card-stack') ?? null
   }
-  /** The copy of the page under the card, put behind it; the card's own edges go. */
+  /**
+   * The copy of the page under the card, behind it and out of sight until a
+   * pull shows it: the one put there ahead of time, woken, or placed now.
+   */
   function layUnder(copy: Copy | null): HTMLElement | null {
     const sc = scroller.current
     if (!copy || !sc) return null
-    const g = placeCopy(copy, sc)
+    const g = copy.g.isConnected ? copy.g : placeCopy(copy, sc)
     g.dataset.under = ''
     g.style.zIndex = '3'
     g.style.transformOrigin = 'top center'
-    stackOf()?.style.setProperty('opacity', '0')
+    g.style.removeProperty('content-visibility')
+    sinkUnder(g, 0, 0)
+    if (g.scrollTop !== copy.scroll) g.scrollTop = copy.scroll
     droppedTo.current = copy.scroll
     return g
+  }
+  /** Out of sight, and not drawn or styled, until a pull wakes it. */
+  function park(g: HTMLElement | null) {
+    if (!g) return
+    g.style.transform = ''
+    g.style.opacity = '0'
+    g.style.contentVisibility = 'hidden'
+  }
+  /** A touch that was not a pull after all: the card and the copy back to rest. */
+  function unwake(s: { card: HTMLElement | null; under: HTMLElement | null }) {
+    park(s.under)
+    if (s.card) delete s.card.dataset.moving
   }
   /**
    * The open card falls off, from where it is, over the copy of the page it
@@ -1711,29 +1798,35 @@ export function App() {
     dropCard(card, g, 0, commit)
     return true
   }
-  /** `p` of the way from sunk under the card to in its place. */
-  function sinkUnder(g: HTMLElement, p: number) {
+  /**
+   * `p` of the way from sunk under the card to in its place. `shown`: how far
+   * it has faded in over the card's own edges, which fade out as it does.
+   */
+  function sinkUnder(g: HTMLElement, p: number, shown = 1) {
     g.style.transform = `translateY(${-6 * (1 - p)}px) scale(${0.95 + 0.05 * p})`
-    g.style.opacity = String(0.45 + 0.55 * p)
+    g.style.opacity = String(shown * (0.45 + 0.55 * p))
   }
+  /** How far the copy has faded in, over the first part of a pull. */
+  const FADE_IN = 48
   /** The card let go of short of going: back up into its place, over the page under it. */
   function settleCard(card: HTMLElement, under: HTMLElement | null) {
     const at = new DOMMatrix(getComputedStyle(card).transform).m42
     card.style.transform = ''
+    const stack = stackOf()
     const done = () => {
       delete card.dataset.moving
-      under?.remove()
-      stackOf()?.style.removeProperty('opacity')
+      park(under)
+      stack?.style.removeProperty('opacity')
     }
     if (at <= 0) return done()
     const ms = reducedMotion() ? 0 : 240
     card.animate([{ transform: `translateY(${at}px)` }, { transform: 'none' }], { duration: ms, easing: EASE }).onfinish =
       done
-    under?.animate([{ transform: under.style.transform, opacity: under.style.opacity }, SUNK], {
+    under?.animate([{ transform: under.style.transform, opacity: under.style.opacity }, { ...SUNK, opacity: 0 }], {
       duration: ms,
       easing: EASE,
-      fill: 'forwards',
     })
+    stack?.animate([{ opacity: stack.style.opacity || '1' }, { opacity: 1 }], { duration: ms, easing: EASE })
   }
   /**
    * The card let go of far enough, or sent back: it falls off the bottom --
@@ -1758,13 +1851,18 @@ export function App() {
     })
     // A page come back to part way down has no search over it: it goes as
     // the card falls, not after.
-    if (under?.querySelector('.card-bar[data-shown]')) sc.closest('.shell-grid')?.setAttribute('data-bar-hidden', '')
+    if (under?.querySelector('.page-head[data-collapsed]')) sc.closest('.shell-grid')?.setAttribute('data-bar-hidden', '')
     if (under) {
       under.animate([{ transform: under.style.transform, opacity: under.style.opacity }, { transform: 'none', opacity: 1 }], {
         duration: ms,
         easing: EASE,
       })
       sinkUnder(under, 1)
+      const stack = stackOf()
+      if (stack) {
+        stack.animate([{ opacity: stack.style.opacity || '1' }, { opacity: 0 }], { duration: ms * 0.5, easing: EASE })
+        stack.style.opacity = '0'
+      }
     }
     fall.onfinish = commit
     window.setTimeout(() => {
@@ -1879,7 +1977,8 @@ export function App() {
       if (kind === 'back' && sc && card && card.getBoundingClientRect().top >= sc.getBoundingClientRect().top - 1) {
         html.dataset.card = 'going'
       }
-      startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
+      // Back, the page is one seen already: all of it at once, not held for the slide.
+      if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
       const t = document.startViewTransition(() => {
         // The card is its own picture only on the side it is coming or going.
         if (kind === 'forward') html.dataset.card = 'coming'
@@ -1960,24 +2059,33 @@ export function App() {
       card.getAnimations().forEach((a) => a.cancel())
       card.style.transform = ''
       delete card.dataset.moving
-      card.toggleAttribute('data-quiet', dropped.current)
+      card.toggleAttribute('data-quiet', dropped.current || returning.current)
     }
+    returning.current = false
     // Where its copy was scrolled, which history may not know, as when the
     // pages came off in place.
     const sc = scroller.current
     if (dropped.current && sc && droppedTo.current !== null) restoreScroll(sc, droppedTo.current)
-    // And its name along its top, as its copy had it, without sliding in again.
-    if (dropped.current && card && sc) {
-      const head = card.querySelector('.page-head')
-      setHeadGone(head !== null && head.getBoundingClientRect().bottom < sc.getBoundingClientRect().top + 44)
-      card.dataset.landing = ''
-      requestAnimationFrame(() => requestAnimationFrame(() => delete card.dataset.landing))
-    }
+    // And its head folded as its copy had it.
+    if (dropped.current) foldHead()
     droppedTo.current = null
     dropped.current = false
     document.querySelectorAll('[data-under]').forEach((g) => g.remove())
     stackOf()?.style.removeProperty('opacity')
     underCopies.current = underCopies.current.filter((u) => u.at < entries.length - 1)
+    // Once the page has settled, the copy of the one under it is laid out
+    // behind it and put to sleep, so the first frame of a pull has nothing
+    // to lay out: it only wakes.
+    const gen = ++parkFor.current
+    const at = entries.length - 2
+    const below = stackShown ? entries[at] : null
+    if (below) {
+      window.setTimeout(() => {
+        const copy = copyAt(at, below)
+        if (gen !== parkFor.current || !copy || copy.g.isConnected || swipe.current) return
+        park(layUnder(copy))
+      }, 900)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top])
 
@@ -1988,13 +2096,15 @@ export function App() {
   // nav.ts), so there they never do.
   beforePop.current = (e: PopStateEvent, apply: () => void, byApp: boolean) => {
     cameBack.current = performance.now()
+    const n = (e.state as { n?: number } | null)?.n
+    const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
+    // A page gone back to was seen already: it does not arrive again.
+    returning.current = !forward
     if (turning.current || dropped.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
     const slidAlready = (e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true
     if (!byApp && (isIOS || slidAlready)) return false
-    const n = (e.state as { n?: number } | null)?.n
-    const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
     // Back one card or more, on the rail: it falls off over the page it goes
     // back to, if a copy of that was kept.
     const to = e.state as { stack?: Stack; stage?: StageView } | null
@@ -2055,7 +2165,7 @@ export function App() {
         data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
         // Reading a card past its head, the search goes and its name stays.
-        data-bar-hidden={(mobile && !onStage && bar !== null && headGone) || undefined}
+        data-bar-hidden={(mobile && !onStage && folding && headGone) || undefined}
         data-split={split || undefined}
         style={
           {
@@ -2127,8 +2237,11 @@ export function App() {
               </div>
             )}
             <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
-              {bar && <CardBar shown={headGone} {...bar} onTop={toCardTop} />}
-              {subject && !searchShown && <div className="page-head">{pageHead()}</div>}
+              {subject && !searchShown && (
+                <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
+                  {pageHead()}
+                </div>
+              )}
               <div className="tab-pane" ref={paneRef}>
                 {/* Behind the graph on a phone the page is not on the screen, and
                     is not rendered: laid out unseen, it would cost the graph
