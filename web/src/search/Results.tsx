@@ -241,6 +241,11 @@ function SortPill({
 // Common only is the default, so what is stored is the choice to see everything.
 const ALL_WORDS_KEY = 'betterrtk:allWords'
 
+/** Whether the search shows common words only, as it last did. */
+export function commonOnly(): boolean {
+  return localStorage.getItem(ALL_WORDS_KEY) !== '1'
+}
+
 function useCommon(): [boolean, () => void] {
   const [common, setCommon] = useState(() => localStorage.getItem(ALL_WORDS_KEY) !== '1')
   const toggle = () =>

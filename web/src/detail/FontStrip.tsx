@@ -68,19 +68,30 @@ function loadLazyFonts() {
   document.head.appendChild(link)
 }
 
+/**
+ * What is already known, by character: a page come back to draws its strip
+ * at once, as tall as it was, instead of growing again under the reader.
+ */
+const knownFonts = new Map<string, FontsResponse>()
+const drawable = new Set<string>()
+
 /** True once `family` can draw `char`: false offline, or when the font lacks it. */
 function useFontReady(family: string, char: string, wanted: boolean): boolean {
-  const [ready, setReady] = useState(false)
+  const key = `${family}|${char}`
+  const [ready, setReady] = useState(() => drawable.has(key))
   useEffect(() => {
-    setReady(false)
-    if (!wanted) return
+    setReady(drawable.has(key))
+    if (!wanted || drawable.has(key)) return
     let stale = false
     // The stylesheet may still be on its way; give it a moment, then ask again.
     const ask = (tries: number) =>
       document.fonts.load(`40px "${family}"`, char).then(
         (faces) => {
           if (stale) return
-          if (faces.length) setReady(true)
+          if (faces.length) {
+            drawable.add(key)
+            setReady(true)
+          }
           else if (tries > 0) setTimeout(() => ask(tries - 1), 400)
         },
         () => {},
@@ -89,7 +100,7 @@ function useFontReady(family: string, char: string, wanted: boolean): boolean {
     return () => {
       stale = true
     }
-  }, [family, char, wanted])
+  }, [key, family, char, wanted])
   return ready
 }
 
@@ -101,8 +112,9 @@ function useFontReady(family: string, char: string, wanted: boolean): boolean {
 export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old' }) {
   const t = S(useLang())
   const ref = useRef<HTMLDivElement>(null)
-  const [seen, setSeen] = useState(false)
-  const [info, setInfo] = useState<FontsResponse | null>(null)
+  const [seen, setSeen] = useState(() => knownFonts.has(char))
+  // Asked for already, as opening the page does (App.tsx warm): there at once.
+  const [info, setInfo] = useState<FontsResponse | null>(() => knownFonts.get(char) ?? api.fonts.peek(char) ?? null)
 
   useEffect(() => {
     const el = ref.current
@@ -124,9 +136,14 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
     if (!seen) return
     loadLazyFonts()
     let stale = false
-    setInfo(null)
+    const known = knownFonts.get(char) ?? api.fonts.peek(char)
+    setInfo(known ?? null)
+    if (known) return
     api.fonts(char).then(
-      (d) => !stale && setInfo(d),
+      (d) => {
+        knownFonts.set(char, d)
+        if (!stale) setInfo(d)
+      },
       // Offline or an old server: the two faces the page already has are still worth showing.
       () => !stale && setInfo({ char, faces: ['mincho', 'gothic'], old: [] }),
     )
@@ -135,10 +152,15 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
     }
   }, [seen, char])
 
-  const has = (f: Face) => info?.faces.includes(f) ?? false
+  // Mincho and gothic are the page's own faces, so they are there from the
+  // start; the others have their place as soon as the kanji is known to be in
+  // them, and their glyph comes into it when their font has loaded -- so
+  // nothing below moves as they come.
+  const has = (f: Face) => f === 'mincho' || f === 'gothic' || (info?.faces.includes(f) ?? false)
   const textbook = useFontReady(FAMILY.textbook, char, seen && has('textbook'))
   const brush = useFontReady(FAMILY.brush, char, seen && has('brush'))
-  const shown = FACES.filter((f) => has(f) && (f === 'textbook' ? textbook : f === 'brush' ? brush : true))
+  const ready = (f: Face) => (f === 'textbook' ? textbook : f === 'brush' ? brush : true)
+  const shown = FACES.filter(has)
 
   // One cell per distinct old outline: 1978 and 1983 often agree.
   const old: { face: Face; years: string[]; em: number; d: string }[] = []
@@ -155,7 +177,7 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
           {!part && <h3>{t('title')}</h3>}
           <ul>
             {shown.map((f) => (
-              <li key={f} title={t(`${f}Tip`)}>
+              <li key={f} title={t(`${f}Tip`)} data-wait={!ready(f) || undefined}>
                 <span className="font-strip-glyph" style={{ fontFamily: `'${FAMILY[f]}'` }} lang="ja">
                   {char}
                 </span>

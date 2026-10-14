@@ -1,16 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { flushSync } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
-import { LevelPage, SearchPage } from './search/Results'
+import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
+import { loadNotes } from './detail/NoteContent'
+import { wordsWithKey } from './search/WordsWith'
 import { local, runningInstalled } from './local/local'
 import { InstallGuide } from './install/InstallGuide'
 import { WordHead, WordPanel } from './detail/WordPanel'
@@ -23,6 +25,25 @@ import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 import { isIOS } from './account/install'
+import {
+  LINE as FOLDED,
+  blankCard,
+  comeOff,
+  copyCard,
+  liveCard,
+  fallTime,
+  moveTo,
+  put,
+  putOn,
+  trimCard,
+  rest,
+  rims,
+  run,
+  stackHeight,
+  underOf,
+  type Move,
+  type Under,
+} from './cardStack'
 
 // Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -54,6 +75,8 @@ const S = strings(
     howMap: 'How to read the map',
     howGraph: 'How to read the graph',
     legend: 'Legend',
+    openCards: '{n} cards open',
+    wordsWith: 'Words with {c}',
   },
   {
     offline: 'Графът има нужда от връзка.',
@@ -77,6 +100,8 @@ const S = strings(
     howMap: 'Как се чете картата',
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
+    openCards: '{n} отворени карти',
+    wordsWith: 'Думи с {c}',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -178,7 +203,9 @@ type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
 // is the search the page was opened from, and Components is the graph.
 type PhoneTab = 'search' | RailTab | 'components'
-const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'associations', 'components']
+// On a phone a page's associations are a card of their own, opened from its
+// head (`notes` on the page), not a tab.
+const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'components']
 /** How a page changes on a phone: to another page, or to another of its tabs. */
 type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
 /** What slides as a tab turns: the whole screen, or only what is under the page's head. */
@@ -298,8 +325,17 @@ function slide(el: HTMLElement, from: number, to: number, ms: number) {
   })
 }
 
+/** A card with one on top of it: back a little, and dimmed. */
+const SUNK = { filter: 'brightness(0.5)' }
+
 /** How long a page takes to slide in or out. */
 const PAGE_MS = 300
+/** Room above a card in its clipped slot, for its shadow (theme.css .card-slot). */
+const SLOT_ROOM = 40
+/** How a card comes up: fast, then settling (as the view transition's, theme.css). */
+const RISE_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
+/** How long a card takes to come up over the page it was opened from. */
+const RISE_MS = 400
 /** How long a tab tapped takes to turn. */
 const TAP_TURN_MS = 260
 
@@ -376,6 +412,8 @@ function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
   return g
 }
 
+const keepScrollOnBack = () => !matches(MOBILE)
+
 // Opening the app afresh lands on the whole common map, to wander in, on a
 // desktop; on a phone, on the search, with the map a tap away. A link to a
 // character or a word opens on its focus view; a link to anything else, on a
@@ -413,8 +451,113 @@ function nameOf(p: Page, t: T) {
   if (p.kind === 'kanji') return <span className="back-glyph">{p.char}</span>
   if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? t('theWord')}</span>
   if (p.kind === 'level') return <>N{p.level}</>
+  if (p.kind === 'words') return <>{t('wordsWith', { c: p.char })}</>
   if (!p.q) return <>{t('search')}</>
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
+}
+
+/** A page's associations, as a card of their own over its dictionary. */
+function hasNotes(p: Page | null | undefined): boolean {
+  return !!p && (p.kind === 'kanji' || p.kind === 'word') && !!p.notes
+}
+
+/** A page's name as plain text, for a label. */
+function labelOf(p: Page, t: T): string {
+  if (hasNotes(p)) return `${labelOf({ ...p, notes: false } as Page, t)} · ${t('associations')}`
+  if (p.kind === 'kanji') return p.char
+  if (p.kind === 'word') return p.word?.headword ?? t('theWord')
+  if (p.kind === 'level') return `N${p.level}`
+  if (p.kind === 'words') return t('wordsWith', { c: p.char })
+  return p.q || t('search')
+}
+
+/** Where `el` sits inside `within`, laid out, whatever transforms are on it. */
+function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number } {
+  let x = 0
+  let y = 0
+  let at: HTMLElement | null = el
+  while (at && at !== within) {
+    x += at.offsetLeft
+    y += at.offsetTop
+    at = at.offsetParent as HTMLElement | null
+  }
+  return { x, y }
+}
+
+/** How tall a card's character is in its folded line. */
+const FOLDED_GLYPH = 26
+
+/** For an Associations that counts for nobody: one drawn under the open card. */
+const noCount = () => {}
+
+/** How long a tap waits at most for what the card it opens shows (see `rise`). */
+const READY_MS = 300
+
+/** Whether all a page shows at once is here (see `warm`). */
+function known(p: Page): boolean {
+  if (p.kind === 'word') return !!api.word.peek(p.id)
+  if (p.kind === 'words') return !!api.wordsWithFirst.peek(wordsWithKey(p.char, commonOnly()))
+  if (p.kind !== 'kanji') return true
+  const c = p.char
+  return !!(api.kanji.peek(c) && api.kanjiPage.peek(c) && api.forms.peek(c) && api.fonts.peek(c) && api.similar.peek(c))
+}
+
+/** How long a page waits at most to show whole, before it shows what it has. */
+const WHOLE_MS = 2500
+
+/**
+ * Asks for what a page shows at once, where it is not known yet: for a
+ * kanji its details, its page, its forms, its faces and its look-alikes
+ * (shown only for a common one, but asked for alongside the rest, not after
+ * the details say so). Null where there is nothing to wait for.
+ */
+function warm(p: Page): Promise<unknown> | null {
+  if (known(p)) return null
+  if (p.kind === 'word') return api.word(p.id)
+  if (p.kind === 'words') return api.wordsWithFirst(wordsWithKey(p.char, commonOnly()))
+  const c = (p as { char: string }).char
+  return Promise.all([
+    api.kanji(c),
+    api.similar(c),
+    api.kanjiPage(c),
+    api.forms(c),
+    api.fonts(c),
+  ])
+}
+
+/**
+ * Measures a card's head for folding (read by theme.css): the character ends
+ * at the line's left, as tall as the line allows, in the middle of it -- the
+ * bottom of the head, which is what shows -- and its first meaning beside it.
+ * Returns how tall the head is.
+ */
+function measureFold(head: HTMLElement): number {
+  const h = head.offsetHeight
+  head.style.setProperty('--head-h', `${h}px`)
+  const glyph = head.querySelector<HTMLElement>('.detail-glyph, .entry-head')
+  if (!glyph) return h
+  const { x, y } = offsetIn(glyph, head)
+  const gh = glyph.offsetHeight || 1
+  const gs = Math.min(1, FOLDED_GLYPH / gh)
+  head.style.setProperty('--gs', String(gs))
+  head.style.setProperty('--gx', `${16 - x}px`)
+  head.style.setProperty('--gy', `${h - FOLDED / 2 - (y + gh / 2)}px`)
+  // After the characters themselves: a word's head is as wide as its reading.
+  const lead = head.querySelector<HTMLElement>('.detail-meanings')
+  if (lead) {
+    const chars = glyph.children.length
+      ? [...glyph.children].reduce((w, c) => w + (c as HTMLElement).offsetWidth, 0)
+      : glyph.offsetWidth
+    const at = offsetIn(lead, head)
+    const style = getComputedStyle(lead)
+    const size = parseFloat(style.fontSize) || 15
+    const ms = Math.min(1, 15 / size)
+    const lh = parseFloat(style.lineHeight) || size * 1.4
+    head.style.setProperty('--ms', String(ms))
+    head.style.setProperty('--mx', `${16 + chars * gs + 10 - at.x}px`)
+    head.style.setProperty('--my', `${h - FOLDED / 2 - at.y - (lh * ms) / 2}px`)
+  }
+  return h
 }
 
 /** A kanji or a word, as picked from a list. */
@@ -433,6 +576,7 @@ function titleOf(p: Page): string {
   if (p.kind === 'kanji') return `${p.char} · ${TITLE}`
   if (p.kind === 'word' && p.word) return `${p.word.headword} · ${TITLE}`
   if (p.kind === 'level') return `N${p.level} · ${TITLE}`
+  if (p.kind === 'words') return `${p.char} · ${TITLE}`
   if (p.kind === 'search' && p.q) return `${p.q} · ${TITLE}`
   return TITLE
 }
@@ -443,9 +587,12 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   // Filled in below: what to do as back or forward arrives, before the page changes.
   const beforePop = useRef<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>(null)
-  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
+  // On a phone back comes to the top of the page, which the copy under a
+  // card shows; a desktop keeps where it was.
+  const { stack, stage, depth, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
     scroller,
     beforePop,
+    keepScrollOnBack,
   )
   const top = stack[stack.length - 1]
   const root = stack[0]
@@ -533,7 +680,17 @@ export function App() {
   // from, so going anywhere else leaves it. Compared as a page, not an object:
   // leaving the graph for it comes back through history, as a copy.
   const [searchOver, setSearchOver] = useState<Page | null>(null)
-  const [assocCount, setAssocCount] = useState(0)
+  // How many associations a page has, told by its Associations as they load.
+  const [assocCount, setAssocCount] = useState<{ key: string; n: number }>({ key: '', n: 0 })
+  const counters = useRef(new Map<string, (n: number) => void>())
+  function counterFor(key: string) {
+    let f = counters.current.get(key)
+    if (!f) {
+      f = (n: number) => setAssocCount((c) => (c.key === key && c.n === n ? c : { key, n }))
+      counters.current.set(key, f)
+    }
+    return f
+  }
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time: the graph is a page's Components tab, the map is gone to
@@ -677,8 +834,15 @@ export function App() {
 
   // The rail shows the graph's data once it is for this character, and the
   // device's until then -- or instead, when there is no connection.
+  // Known already -- a page come back to -- it is there at once.
   const detail: DetailData | null =
-    data?.focus.char === focus ? data : onDevice?.focus.char === focus ? onDevice : null
+    data?.focus.char === focus
+      ? data
+      : onDevice?.focus.char === focus
+        ? onDevice
+        : focus
+          ? (api.kanji.peek(focus) ?? null)
+          : null
 
   // A character picked on the graph is open while the graph stays centred on
   // another, so its page fetches its own.
@@ -768,7 +932,7 @@ export function App() {
         ? pageData
         : pageOnDevice?.focus.char === char
           ? pageOnDevice
-          : null
+          : (api.kanji.peek(char) ?? null)
 
   // A character seen in the dictionary from the map starts the stack again from it.
   const drill = useStable(
@@ -825,7 +989,7 @@ export function App() {
       }
       // Back through history animates from the popstate it causes.
       if (back) go()
-      else animateNav('forward', go)
+      else rise({ kind: 'kanji', char }, go)
     },
   )
 
@@ -833,7 +997,7 @@ export function App() {
   const openWord = useStable(
     (w: Word) => {
       keepSearch()
-      animateNav('forward', () => {
+      rise(wordPage(w), () => {
         toDictionary()
         if (HAN.test(w.headword)) setViewState('focus')
         push(wordPage(w))
@@ -863,7 +1027,7 @@ export function App() {
           else push({ kind: 'kanji', char })
         }
         if (back) go()
-        else animateNav('forward', go)
+        else rise({ kind: 'kanji', char }, go)
         return
       }
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
@@ -896,7 +1060,7 @@ export function App() {
   const seeInDictionary = useStable(
     (char: string) => {
       setMapCard(null)
-      animateNav('forward', () => {
+      rise({ kind: 'kanji', char }, () => {
         // Opening it puts the page up, on a phone.
         drill(char)
         if (mobile) {
@@ -968,6 +1132,23 @@ export function App() {
   const goBack = useStable(() => {
     cameBack.current = performance.now()
     pop()
+  })
+  /** A card pulled off: the page under it is in sight already, so nothing slides. */
+  const dropped = useRef(false)
+  /** Back, by any way: the page was seen already, so it does not arrive again. */
+  const returning = useRef(false)
+  /** Back to a card under this one, on a phone: it shows its dictionary, however it was left. */
+  const toCard = useRef(false)
+  // Back `k` pages at once, sliding: as history slides it, when it goes
+  // through history, or here when the pages come off in place. `still`: the
+  // card has gone already, pulled off, and the page under it is in sight.
+  const popBy = useStable((k: number, still: boolean = false) => {
+    cameBack.current = performance.now()
+    dropped.current = still
+    returning.current = true
+    toCard.current = true
+    if (depth >= k || still) pop(k)
+    else animateNav('back', () => pop(k))
   })
 
   useEffect(() => {
@@ -1062,7 +1243,11 @@ export function App() {
     if (was && !cardPreview && scroller.current) scroller.current.scrollTop = pageScroll.current
   }, [cardPreview])
 
-  function page(p: Page) {
+  function page(p: Page, live = false) {
+    if (hasNotes(p)) {
+      const s = subjectOf(p)
+      return s && associations(s, live)
+    }
     switch (p.kind) {
       case 'search':
         return (
@@ -1081,6 +1266,20 @@ export function App() {
         )
       case 'level':
         return <LevelPage level={p.level} onKanji={openKanji} />
+      case 'words':
+        return (
+          <SearchPage
+            q=""
+            words={p.char}
+            onKanji={openKanji}
+            onWord={openWord}
+            onSearch={type}
+            asked={asked}
+            onAsk={setAsked}
+            onMap={browseMap}
+            railBack
+          />
+        )
       case 'word':
         return (
           <WordPanel
@@ -1091,6 +1290,7 @@ export function App() {
             onPick={openKanji}
             onWord={openWord}
             onSignIn={signIn}
+            notes={notesButton(p, live)}
           />
         )
       case 'kanji': {
@@ -1104,6 +1304,7 @@ export function App() {
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
             onSignIn={signIn}
             onWordsWith={showWords}
+            notes={notesButton(p, live)}
           />
         ) : null
       }
@@ -1112,23 +1313,40 @@ export function App() {
 
   // Kanji and words carry associations; searches and levels do not, so
   // there the tab steps aside and the page shows.
-  const subject =
-    shownTop?.kind === 'kanji'
-      ? { key: shownTop.char, label: shownTop.char }
-      : shownTop?.kind === 'word'
-        ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
+  function subjectOf(p: Page | null) {
+    return p?.kind === 'kanji'
+      ? { key: p.char, label: p.char }
+      : p?.kind === 'word'
+        ? { key: `word:${p.id}`, label: p.word?.headword ?? t('thisWord') }
         : null
-  const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
+  }
+  const subject = subjectOf(shownTop)
+  // A page the tabs treat as a card: a kanji, a word, or every word with a kanji.
+  const carded = subject !== null || shownTop?.kind === 'words'
+  const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
+  // On a phone the page shows its dictionary, or its associations when it is
+  // their card.
+  const tab: RailTab = mobile
+    ? hasNotes(shownTop)
+      ? 'associations'
+      : 'dictionary'
+    : railTab === 'associations' && !subject
+      ? 'dictionary'
+      : railTab
   // The tab not showing is mounted for its count, but only once the page has
   // come to rest: comments rendered behind a page sliding in cost it frames.
   const subjectKey = subject?.key ?? null
   const [settled, setSettled] = useState<string | null>(null)
   useEffect(() => {
     if (!subjectKey) return
-    const t = window.setTimeout(() => setSettled(subjectKey), mobile ? PAGE_MS + 160 : 0)
+    const t = window.setTimeout(() => {
+      setSettled(subjectKey)
+      // Its associations are a tap away: what draws their notes, ready.
+      loadNotes()
+    }, mobile ? PAGE_MS + 160 : 0)
     return () => clearTimeout(t)
   }, [subjectKey, mobile])
-  function associations(s: { key: string; label: string }) {
+  function associations(s: { key: string; label: string }, live = false) {
     return (
       <Associations
         key={s.key}
@@ -1136,7 +1354,7 @@ export function App() {
         label={s.label}
         onPick={openKanji}
         onSignIn={signIn}
-        onCount={setAssocCount}
+        onCount={live ? noCount : counterFor(s.key)}
       />
     )
   }
@@ -1187,11 +1405,242 @@ export function App() {
   }
   // The Search tab shows the search with the page marked in it, and the page
   // still there to turn back to.
-  const searchShown = mobile && !onStage && subject !== null && searchOver !== null && samePage(searchOver, top)
+  const searchShown = mobile && !onStage && carded && searchOver !== null && samePage(searchOver, top)
+  // On a phone the open page is a card: pulled down, it comes off, if it
+  // lies on another. The pages opened before it show their edges above it --
+  // not the search or level list they were all opened from, which is the
+  // table, and which a pull on the first card types over instead.
+  const onCard = mobile && !searchShown && shownTop !== null && (shownUnder !== null || shownTop.kind !== 'search')
+  const base = entries[0]?.kind === 'search' || entries[0]?.kind === 'level' ? 1 : 0
+  const stackUnder = entries.slice(base, -1)
+  const stackShown = onCard && stackUnder.length > 0
+  const cardRef = useRef<HTMLDivElement>(null)
+  // A tap on a card's rim takes the cards over it off, as a pull does.
+  function pickUnder(i: number) {
+    const k = stackUnder.length - i
+    if (!takeOff(k, () => popBy(k, true))) popBy(k)
+  }
+  // The card left at each step forward, copied as it shows, to lie under the
+  // ones opened over it (see cardStack.ts): `at` is where it is in the stack.
+  // Not the search: the first card lies on it, not on a card. It is copied
+  // when left -- for a new card, or for the graph or the search, which are
+  // not drawn over it -- and a copy kept from before stays while it is not on
+  // the screen. A card never seen at all -- one gone to on the graph, say --
+  // is drawn there live.
+  const underCopies = useRef<{ page: Page; at: number; el: HTMLElement; live?: boolean }[]>([])
+  function keepUnder() {
+    const card = cardRef.current
+    const sc = scroller.current
+    const page = shownTop
+    const at = entries.length - 1
+    if (!page) return
+    const kept = underCopies.current.filter(
+      (u) => u.at < at || (u.at === at && !u.live && samePage(u.page, page)),
+    )
+    if (!onCard || onStageRef.current || !card || !sc) {
+      underCopies.current = kept
+      return
+    }
+    // Down to where it was read, for going on the stack from there (see stackOn).
+    const past = Math.max(0, sc.getBoundingClientRect().top - card.getBoundingClientRect().top)
+    underCopies.current = [...kept.filter((u) => u.at < at), { page, at, el: copyCard(card, sc.clientHeight + past) }]
+  }
+  /** The copy of the card at `at`, or a live one where none was kept. */
+  function cardAt(at: number, page: Page) {
+    const kept = underCopies.current.find((c) => c.at === at && samePage(c.page, page))
+    if (kept) return kept
+    const drawn = page.kind === 'kanji' || page.kind === 'word'
+    const live = { page, at, el: drawn ? liveCard() : blankCard(labelOf(page, t)), live: drawn }
+    underCopies.current.push(live)
+    return live
+  }
+  // Only while they show: not behind the graph or the search.
+  const underCards = stackShown ? stackUnder.map((p, i) => cardAt(base + i, p)) : []
+  /** A live card under the open one: its head and its dictionary. */
+  function liveUnder(p: Page) {
+    const node = p.kind === 'kanji' ? detailOf(p.char)?.focus : undefined
+    const head =
+      p.kind === 'kanji' ? (
+        node ? (
+          <KanjiHead node={node} />
+        ) : (
+          <div className="detail-head">
+            <span className="detail-glyph">{p.char}</span>
+          </div>
+        )
+      ) : p.kind === 'word' && p.word ? (
+        <WordHead word={p.word} onPick={openKanji} />
+      ) : null
+    return (
+      <>
+        <div className="page-head" data-folding="">
+          <section className={p.kind === 'word' ? 'rail-section word-panel' : 'rail-section'}>{head}</section>
+        </div>
+        <div className="tab-pane">{page(p, true)}</div>
+      </>
+    )
+  }
+  // The cards under the open one, where they rest. The box holding them is
+  // React's but empty to it; what is in it is laid here.
+  const copiesRef = useRef<HTMLDivElement>(null)
+  const unders = useRef<Under[]>([])
+  useLayoutEffect(() => {
+    const box = copiesRef.current
+    const sc = scroller.current
+    unders.current = []
+    if (!box || !sc) return
+    box.style.height = `${sc.clientHeight - (parseFloat(getComputedStyle(sc).paddingTop) || 0)}px`
+    const els = underCards.map((c) => c.el)
+    box.replaceChildren(...els)
+    // A live card's head is measured as the open card's is, and again as
+    // what it shows comes in.
+    const heads = underCards.flatMap((c) => {
+      const head = c.live ? c.el.querySelector<HTMLElement>(':scope > .page-head') : null
+      return head ? [head] : []
+    })
+    const lay = () => {
+      heads.forEach(measureFold)
+      unders.current = els.map(underOf)
+      unders.current.forEach((u, i) => put(u, rest(els.length, i, u.fold)))
+    }
+    lay()
+    if (!heads.length) return
+    const ro = new ResizeObserver(lay)
+    heads.forEach((h) => ro.observe(h))
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stack, stackShown])
+  // On a phone, scrolling down a card, its head folds into a line along the
+  // top: its character shrinks to the line's left with its first meaning beside it,
+  // and the rest squeezes away. The head is sticky, as tall as itself less
+  // the line, so the line is what stays. --p on it is how far it is folded,
+  // 0 to 1 (read by theme.css); the measures it folds by are taken when its
+  // size changes.
+  const folding = mobile && onCard && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
+  const headRef = useRef<HTMLDivElement>(null)
+  const fold = useRef<{ h: number } | null>(null)
+  const foldHead = useStable(() => {
+    const sc = scroller.current
+    const head = headRef.current
+    const card = cardRef.current
+    const m = fold.current
+    if (!sc || !head || !card || !m) return
+    // As the card's top goes past the top of the screen.
+    const past = sc.getBoundingClientRect().top - card.getBoundingClientRect().top
+    const p = Math.min(1, Math.max(0, past / Math.max(1, m.h - FOLDED)))
+    head.style.setProperty('--p', p.toFixed(3))
+    head.toggleAttribute('data-collapsed', p >= 1)
+  })
+  useLayoutEffect(() => {
+    const sc = scroller.current
+    const head = headRef.current
+    fold.current = null
+    if (!folding || !sc || !head) return
+    const measure = () => {
+      fold.current = { h: measureFold(head) }
+      foldHead()
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(head)
+    let frame = 0
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(() => ((frame = 0), foldHead()))
+    }
+    sc.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      ro.disconnect()
+      sc.removeEventListener('scroll', onScroll)
+      cancelAnimationFrame(frame)
+    }
+  }, [folding, shownTop, searchShown, onStage, foldHead])
+  // A page's associations, from beside its first title: a card of their own,
+  // over its dictionary, back from which is the dictionary again.
+  const openNotes = useStable(() => {
+    if (!shownTop || (shownTop.kind !== 'kanji' && shownTop.kind !== 'word') || shownTop.notes) return
+    const p: Page = { ...shownTop, notes: true }
+    rise(p, () => push(p))
+  })
+  // In a page drawn under the open card it is only a picture, with no count.
+  function notesButton(p: Page, live: boolean) {
+    if (!mobile || (p.kind !== 'kanji' && p.kind !== 'word')) return undefined
+    // The count's circle is always there; the number comes into it once known.
+    const known = !live && subject !== null && assocCount.key === subject.key
+    return (
+      <button
+        className="notes-chip"
+        aria-label={known ? `${t('associations')} ${notesCount}` : t('associations')}
+        onClick={live ? undefined : openNotes}
+      >
+        <span className="notes-chip-icon" aria-hidden>
+          <PhoneTabIcon tab="associations" />
+        </span>
+        {t('associations')}
+        <span className="notes-chip-count" aria-hidden>
+          {known ? notesCount : ''}
+        </span>
+      </button>
+    )
+  }
+  // A tap on the folded line goes to the card's top, whatever it is on.
+  function onHeadTap(e: React.MouseEvent) {
+    if (!headRef.current?.hasAttribute('data-collapsed')) return
+    e.preventDefault()
+    e.stopPropagation()
+    toCardTop()
+  }
+  // On a phone the search bar lies over the top of the page, so it can slide
+  // away without the page moving: the page starts as far down as it is tall.
+  useLayoutEffect(() => {
+    const box = searchBarOf(inputRef.current)
+    const grid = box?.closest<HTMLElement>('.shell-grid')
+    if (!mobile || !box || !grid) return
+    const measure = () => grid.style.setProperty('--bar-h', `${box.offsetHeight}px`)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [mobile])
+  function toCardTop() {
+    scroller.current?.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' })
+  }
+  // A card shows whole: until all its page shows at once is here, it has its
+  // head and a blank below it, not its parts coming in one by one, each
+  // pushing the next down. Once that is here -- or has failed, or after
+  // WHOLE_MS, offline say -- it shows what it has.
+  const [, setWarmed] = useState(0)
+  const released = useRef(new Set<string>())
+  const keyOf = (p: Page) =>
+    p.kind === 'kanji' ? p.char : p.kind === 'word' ? `word:${p.id}` : p.kind === 'words' ? `words:${p.char}` : ''
+  const waiting =
+    mobile && shownTop !== null && !hasNotes(shownTop) && !known(shownTop) && !released.current.has(keyOf(shownTop))
+  useEffect(() => {
+    if (!waiting || !shownTop) return
+    const key = keyOf(shownTop)
+    let done = false
+    const show = () => {
+      if (done) return
+      done = true
+      released.current.add(key)
+      afterSlide(() => setWarmed((n) => n + 1))
+    }
+    warm(shownTop)?.then(show, show)
+    const timer = window.setTimeout(show, WHOLE_MS)
+    return () => {
+      done = true
+      window.clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, shownTop])
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
-    onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : tab
+    onStage && view === 'focus' ? 'components' : searchShown || !carded ? 'search' : mobile ? 'dictionary' : tab
+  // On a phone a card -- its dictionary, its associations, its graph -- has
+  // no search over it: the Search tab is the way to it. What shows instead,
+  // at the top and on the tabs, is how many cards are open.
+  const barOff = mobile && carded && phoneTab !== 'search'
+  const openCards = mobile ? entries.length - base : 0
   // Where the page was scrolled to, for coming back to it from the search.
   const pageAt = useRef(0)
   function leaveSearchTab() {
@@ -1206,6 +1655,9 @@ export function App() {
       return leaveStage('back')
     }
     setSearchOver(null)
+    // What lies under a page opened from another tab is this one's
+    // dictionary, as it was left.
+    keepUnder()
     if (to === 'components') showComponents()
     else chooseRailTab(to)
   }
@@ -1214,21 +1666,25 @@ export function App() {
   function openFromSearchTab(p: Picked) {
     if (samePage(p, top)) return tapPhoneTab('dictionary')
     leaveSearchTab()
-    animateNav('forward', () => {
+    rise(p, () => {
       setSearchOver(null)
       toDictionary()
       openOverSearch(p)
     })
   }
-  // "All words with 日". In the search -- its column beside the card, or the
-  // phone's Search tab -- the search turns to them, by meaning, and the card
-  // stays where it is. From a kanji's page with one page at a time (a phone,
-  // one column), they open over the page, so back, the rail's link or the
-  // browser's, comes to the kanji before the search. Null turns the search
+  // "All words with 日". On a phone, from a card, a card of their own. In the
+  // search -- its column beside the card, or the phone's Search tab -- the
+  // search turns to them, by meaning, and the card stays where it is. From a
+  // kanji's page with one page at a time (one column), they open over the
+  // page, so back comes to the kanji before the search. Null turns the search
   // back to its results.
   const showWords = useStable((char: string | null) => {
     const page: Page = char ? { kind: 'search', q, words: char } : { kind: 'search', q }
     setHovered(null)
+    if (mobile && char && onCard) {
+      const card: Page = { kind: 'words', char }
+      return rise(card, () => push(card))
+    }
     if (split || searchShown) return rebase(page)
     if (top.kind === 'search') return replaceTop(page)
     push(page)
@@ -1286,6 +1742,12 @@ export function App() {
     vy: number
     /** What follows the finger: the pane, or the whole page. */
     moved: HTMLElement | null
+    /** The open card: a pull down moves it. */
+    card: HTMLElement | null
+    /** Whether a pull down takes the card off, or brings up the search. */
+    back: boolean
+    /** How the cards under it move as it is pulled off (cardStack.ts). */
+    plan: Move[] | null
   } | null>(null)
   // The tab turned from, as a still copy, and where it goes as the tab turned
   // to comes in beside it: for the effect below, once that one is showing.
@@ -1325,7 +1787,7 @@ export function App() {
   // never move about: all but Search on the search itself or a level's list,
   // Components for a word with no kanji.
   function tabOff(p: PhoneTab) {
-    return p !== 'search' && (subject === null || (p === 'components' && !componentsOf))
+    return p !== 'search' && (!carded || (p === 'components' && !componentsOf))
   }
   function besideTab(dx: number): PhoneTab | undefined {
     if (onSearchPage) return undefined
@@ -1344,15 +1806,18 @@ export function App() {
     // On the graph only while it is locked: free, a finger moves the graph.
     if (e.currentTarget === stageRef.current && (view !== 'focus' || !graphLocked)) return
     if (movesItself(e.target as Element, e.currentTarget)) return
-    // A page still sliding in is where it is going.
-    scroller.current?.getAnimations({ subtree: true }).forEach((a) => a.finish())
+    // A card still falling off is gone, and the page under it up, for this
+    // finger to go on with. A page still sliding in is where it is going --
+    // but a card coming up goes on coming, under a finger that scrolls it.
+    flight.current?.()
+    scroller.current?.getAnimations({ subtree: true }).forEach((a) => a !== riseAnim.current && a.finish())
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const touch = e.touches[0]
     swipe.current = {
       x: touch.clientX,
       y: touch.clientY,
       mode: null,
-      turns: subject !== null || onSearchPage,
+      turns: carded || onSearchPage,
       // The tabs along the bottom turn too, but do not pull.
       // Under a pixel: on a phone the top can rest at a fraction of one.
       atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop < 1,
@@ -1360,7 +1825,16 @@ export function App() {
       v: 0,
       vy: 0,
       moved: null,
+      card: onCard && e.currentTarget === scroller.current ? cardRef.current : null,
+      // Only off a card on another card: on the first, the search it was
+      // opened from is a tab away, and a pull brings up the keyboard over it.
+      back: stackShown,
+      plan: null,
     }
+    // A pull may follow: the card gets a layer of its own before the finger
+    // has moved far enough to tell.
+    const s = swipe.current
+    if (s.card && s.back && s.atTop && unders.current.length > 0) s.card.dataset.moving = ''
   }
   function swipeMove(e: React.TouchEvent) {
     const s = swipe.current
@@ -1368,12 +1842,26 @@ export function App() {
     if (e.touches.length !== 1) return swipeCancel()
     const touch = e.touches[0]
     const dx = touch.clientX - s.x
-    const dy = touch.clientY - s.y
+    let dy = touch.clientY - s.y
     if (s.mode === null) {
       if (Math.hypot(dx, dy) < 10) return
       if (Math.abs(dx) > 1.5 * Math.abs(dy)) s.mode = s.turns ? 'turn' : null
-      else if (dy > 0 && s.atTop) s.mode = 'pull'
+      else if (dy > 0 && s.atTop) {
+        s.mode = 'pull'
+        // The card starts moving from here, not with a jump of the way it
+        // took to tell a pull from a tap.
+        s.y = touch.clientY
+        dy = 0
+        // The stack as it is now: a card that fell off as this finger came
+        // down has gone by now, and the page under it is up.
+        finishRise()
+        s.card = onCard ? cardRef.current : null
+        s.back = stackShown
+        s.plan = s.card && s.back && unders.current.length > 0 ? comeOff(unders.current, 1, scroller.current.clientHeight) : null
+      }
+      if (s.mode === 'turn') finishRise()
       // Anything else is the page scrolling, which is the browser's.
+      if (s.mode !== 'pull' && s.card) delete s.card.dataset.moving
       if (s.mode === null) {
         swipe.current = null
         return
@@ -1386,8 +1874,16 @@ export function App() {
     }
     s.last = { x: touch.clientX, y: touch.clientY, at: e.timeStamp }
     if (s.mode === 'pull') {
-      // The search lights up once letting go would open it.
-      searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
+      // On a stack the card comes down with the finger, and the cards under it
+      // move as far towards where they go. The first card only gives a
+      // little: under it is the search, which lights up instead.
+      const down = Math.max(0, dy)
+      if (s.card) {
+        s.card.dataset.moving = ''
+        s.card.style.transform = `translateY(${s.back ? down : down / 3}px)`
+      }
+      if (s.plan) moveTo(s.plan, Math.min(1, down / scroller.current.clientHeight))
+      else searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
       return
     }
     // Past the last tab the page gives a little, and comes back.
@@ -1407,7 +1903,17 @@ export function App() {
     const el = s?.moved
     if (s?.mode === 'pull') {
       const dy = e.changedTouches[0].clientY - s.y
-      if (dy > PULL || (s.vy > 0.4 && dy > SWIPE)) typeOver()
+      const down = Math.max(0, dy)
+      const far = dy > PULL || (s.vy > 0.4 && dy > SWIPE)
+      const plan = s.plan
+      if (plan && far && takeOff(1, () => popBy(1, true), { down, vy: s.vy, plan })) return
+      if (s.card) settle(s.card, plan, s.back ? down : down / 3)
+      // On the first card: the search, typing. The box comes up at once,
+      // focused from the touch itself (see typeOver), and its tab after it.
+      if (far && !s.back) {
+        typeOver()
+        toPhoneTab('search')
+      }
       return
     }
     if (s?.mode !== 'turn' || !el) return
@@ -1431,11 +1937,66 @@ export function App() {
     swipe.current = null
     const el = s?.moved
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
+    if (s?.card) settle(s.card, s.plan, new DOMMatrix(getComputedStyle(s.card).transform).m42)
     if (s?.mode !== 'turn' || !el) return
     dragMark(null)
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
+  }
+  /**
+   * Takes the open card off and `k - 1` under it, as things: the open card
+   * falls off the bottom -- from where a finger left it (`from`), at the speed
+   * it was thrown -- and the cards under it move with it to where they go
+   * (cardStack.ts). Then `commit` makes the card come back to the open one, in
+   * the place its copy came to. False where there is no stack to move.
+   */
+  function takeOff(k: number, commit: () => void, from?: { down: number; vy: number; plan: Move[] }): boolean {
+    const card = cardRef.current
+    const sc = scroller.current
+    if (!card || !sc || !pagesSlide() || onStageRef.current || unders.current.length < k) return false
+    const h = sc.clientHeight
+    const plan = from?.plan ?? comeOff(unders.current, k, h)
+    const down = from?.down ?? 0
+    const t0 = down / h
+    card.dataset.moving = ''
+    const step = (e: number) => {
+      card.style.transform = `translateY(${down + (h - down) * e}px)`
+      moveTo(plan, t0 + (1 - t0) * e)
+    }
+    let over = false
+    const end = () => {
+      if (over) return
+      over = true
+      flight.current = null
+      commit()
+    }
+    const stop = run(from ? fallTime(h - down, from.vy) : 380, step, end)
+    flight.current = () => {
+      stop()
+      step(1)
+      end()
+    }
+    // Should the page not change after all, it comes back.
+    window.setTimeout(() => {
+      if (card.dataset.moving === undefined) return
+      dropped.current = false
+      settle(card, plan, h)
+    }, 1300)
+    return true
+  }
+  /** A card let go of short of going: back up into its place, the cards under it back to theirs. */
+  function settle(card: HTMLElement, plan: Move[] | null, down: number) {
+    const h = scroller.current?.clientHeight || 1
+    const t0 = Math.min(1, down / h)
+    const step = (e: number) => {
+      card.style.transform = `translateY(${down * (1 - e)}px)`
+      if (plan) moveTo(plan, t0 * (1 - e))
+    }
+    run(reducedMotion() ? 0 : 240, step, () => {
+      card.style.transform = ''
+      delete card.dataset.moving
+    })
   }
   // A pull down at the top is the app's, not the browser's. Chrome would take
   // it as a scroll with nowhere to go, and a touch that ends a scroll is no
@@ -1469,6 +2030,21 @@ export function App() {
     if (!input) return
     raiseKeyboard(input)
     input.setSelectionRange(0, input.value.length)
+  }
+  function phoneTabButton(p: PhoneTab) {
+    return (
+      <button key={p} role="tab" aria-selected={phoneTab === p} disabled={tabOff(p)} onClick={() => tapPhoneTab(p)}>
+        <span className="phone-tab-icon">
+          <PhoneTabIcon tab={p} />
+          {p === 'dictionary' && openCards > 1 && (
+            <span className="tab-depth" key={openCards} aria-label={t('openCards', { n: openCards })}>
+              {openCards}
+            </span>
+          )}
+        </span>
+        {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
+      </button>
+    )
   }
   // A tab tapped turns the same way, from where the page stands.
   function tapPhoneTab(to: PhoneTab) {
@@ -1508,9 +2084,9 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneTab])
 
-  // Going to a page slides it in from the right over the one it was opened
-  // from, which slips a little to the left beneath it; going back, the page
-  // slides off to the right and the one under it comes back from the left.
+  // Going to a page brings it up from the bottom over the one it was opened
+  // from, which sinks back a little beneath it, a card on a stack; going
+  // back, the page drops off the bottom and the one under it comes forward.
   // The tabs along the bottom come and go with the page they belong to. The
   // pane being left is copied before it changes, as a tab turn is.
   const navAnim = useRef<{ ghosts: HTMLElement[]; tabs: HTMLElement | null; dir: 'forward' | 'back' } | null>(null)
@@ -1529,22 +2105,120 @@ export function App() {
    * the browser has them -- it photographs the old page itself, which costs
    * nothing next to copying it -- and by a copy of the page elsewhere.
    */
-  function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole') {
+  // A card comes up whole: what its page shows is asked for at the tap, and
+  // it rises once that is here -- or after READY_MS, whatever has come, so a
+  // slow connection never holds the tap up long. What comes later than the
+  // rise waits for its end (see `afterSlide`), as before.
+  const rising = useRef(false)
+  /** The card coming up, and the cards under it moving into place: finished at once when a pull or a turn starts. */
+  const riseAnim = useRef<Animation | null>(null)
+  const stacking = useRef<(() => void) | null>(null)
+  /** A card falling off: finished at once, and the page under it put up, when a finger comes down again. */
+  const flight = useRef<(() => void) | null>(null)
+  function finishRise() {
+    riseAnim.current?.finish()
+    stacking.current?.()
+  }
+  function rise(p: Page, go: () => void) {
+    const ready = mobile && pagesSlide() ? warm(p) : null
+    if (!ready) return animateNav('forward', go)
+    if (rising.current) return
+    rising.current = true
+    let done = false
+    const start = () => {
+      if (done) return
+      done = true
+      rising.current = false
+      animateNav('forward', go)
+    }
+    ready.then(start, start)
+    window.setTimeout(start, READY_MS)
+  }
+  function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole', flat = false) {
+    if (kind === 'forward') keepUnder()
     if (!pagesSlide() || navAnim.current || turning.current) return go()
+    // From a card, the new one goes on the stack by moving things, with no
+    // view transition: what was on the screen is there already, as the cards
+    // under the new one, standing where they stood (see `stackOn`), so there
+    // is nothing to photograph. Safari's view transitions also flash, for a
+    // frame or three, where the new card comes (WebKit bugs 299091, 300877).
+    const sc = scroller.current
+    const open = cardRef.current
+    if (kind === 'forward' && onCard && !onStageRef.current && sc && open) {
+      const was = {
+        m: unders.current.length,
+        top: open.getBoundingClientRect().top - sc.getBoundingClientRect().top,
+        p: parseFloat(headRef.current?.style.getPropertyValue('--p') || '0') || 0,
+        scrolled: sc.scrollTop,
+      }
+      startSliding(RISE_MS)
+      flushSync(go)
+      const card = cardRef.current
+      if (!card) return
+      if (unders.current.length === was.m + 1) stackOn(was)
+      card.dataset.moving = ''
+      const a = card.animate([{ transform: `translateY(${sc.clientHeight}px)` }, { transform: 'none' }], {
+        duration: reducedMotion() ? 0 : RISE_MS,
+        easing: RISE_EASE,
+      })
+      riseAnim.current = a
+      a.onfinish = () => {
+        if (riseAnim.current === a) riseAnim.current = null
+        delete card.dataset.moving
+      }
+      return
+    }
     if (hasViewTransitions()) {
       const html = document.documentElement
       html.dataset.nav = kind
       html.dataset.turn = scope
-      startSliding(PAGE_MS)
-      const t = document.startViewTransition(() => flushSync(go))
+      if (flat) html.dataset.cardFlat = ''
+      // Back, the page is one seen already: all of it at once, not held for the slide.
+      if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
+      const t = document.startViewTransition(() => {
+        // The card coming up is a picture of its own, on the new side only;
+        // the first card comes up flat, as it lies.
+        if (kind === 'forward') html.dataset.card = 'coming'
+        flushSync(go)
+        if (kind === 'forward' && !cardRef.current?.hasAttribute('data-stacked')) html.dataset.cardFlat = ''
+      })
       t.finished.finally(() => {
         delete html.dataset.nav
         delete html.dataset.turn
+        delete html.dataset.card
+        delete html.dataset.cardFlat
       })
       return
     }
     if (kind === 'forward' || kind === 'back') leaveBy(kind)
     go()
+  }
+  /**
+   * A card put on the stack: the new page shows from the first frame, the
+   * cards under the new one standing where the old screen had them -- the
+   * one it was opened from just as it was, scrolled or not -- and moving to
+   * their places as the card comes up (cardStack.ts putOn). Nothing on the
+   * screen is ever two pictures fading through each other, which flickers.
+   */
+  function stackOn(was: { m: number; top: number; p: number; scrolled: number }) {
+    const sc = scroller.current
+    if (!sc) return
+    const { moves, settle } = putOn(unders.current, was.top, was.p, was.scrolled)
+    const nearest = unders.current[unders.current.length - 1]
+    moveTo(moves, 0)
+    let over = false
+    const end = () => {
+      if (over) return
+      over = true
+      stacking.current = null
+      settle()
+      if (nearest) trimCard(nearest.el, sc.clientHeight)
+    }
+    const stop = run(reducedMotion() ? 0 : RISE_MS, (e) => moveTo(moves, e), end)
+    stacking.current = () => {
+      stop()
+      end()
+    }
   }
   function leaveBy(dir: 'forward' | 'back') {
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
@@ -1568,16 +2242,18 @@ export function App() {
     navAnim.current = null
     const to = onStage ? stageRef.current : scroller.current
     const w = to?.clientWidth ?? window.innerWidth
+    const h = to?.getBoundingClientRect().height ?? window.innerHeight
     const fwd = how.dir === 'forward'
     startSliding(PAGE_MS)
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
-      const room = to.getBoundingClientRect().height
-      for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
+      for (const g of how.ghosts) if (g.offsetHeight > h) g.style.height = `${h}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
-      slide(to, fwd ? w : -w * 0.3, 0, PAGE_MS).onfinish = () => to.style.removeProperty('z-index')
+      const frames = fwd ? [{ transform: `translateY(${h}px)` }, { transform: 'none' }] : [SUNK, { filter: 'none' }]
+      to.animate(frames, { duration: reducedMotion() ? 0 : PAGE_MS, easing: EASE }).onfinish = () =>
+        to.style.removeProperty('z-index')
     }
     // The tabs stay put between two pages that both have them; they come in
     // with a page that has them, and leave with one that had.
@@ -1588,16 +2264,35 @@ export function App() {
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
       const a = g.animate(
-        [
-          { transform: 'translateX(0)', opacity: 1 },
-          { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
-        ],
+        fwd ? [{ filter: 'none' }, SUNK] : [{ transform: 'none' }, { transform: `translateY(${h}px)` }],
         { duration: PAGE_MS, easing: EASE },
       )
       a.onfinish = () => g.remove()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top, pane, onStage])
+
+  // A card taken off is a new page now: in its place again. The page that
+  // was under it is on the screen already, as its copy, in this same place:
+  // it takes the copy's place with nothing arriving, so the two are one.
+  useLayoutEffect(() => {
+    const card = cardRef.current
+    if (card) {
+      card.getAnimations().forEach((a) => a.cancel())
+      card.style.transform = ''
+      delete card.dataset.moving
+      card.toggleAttribute('data-quiet', returning.current)
+    }
+    returning.current = false
+    dropped.current = false
+    if (toCard.current && mobile) {
+      if (railTab !== 'dictionary') setRailTab('dictionary')
+      if (stage) leaveStage('replace')
+    }
+    toCard.current = false
+    underCopies.current = underCopies.current.filter((u) => u.at < entries.length - 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [top])
 
   // The app's own steps back slide the page: a tab turn away from the graph
   // as that turn, anything else the way history went. The browser's own back
@@ -1606,15 +2301,29 @@ export function App() {
   // nav.ts), so there they never do.
   beforePop.current = (e: PopStateEvent, apply: () => void, byApp: boolean) => {
     cameBack.current = performance.now()
-    if (turning.current) return false
+    const n = (e.state as { n?: number } | null)?.n
+    const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
+    // A page gone back to was seen already: it does not arrive again.
+    returning.current = !forward
+    const to = e.state as { stack?: Stack; stage?: StageView } | null
+    if (!forward && to?.stack && to.stack.length < stack.length) toCard.current = true
+    if (turning.current || dropped.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
     const slidAlready = (e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true
     if (!byApp && (isIOS || slidAlready)) return false
-    const n = (e.state as { n?: number } | null)?.n
-    const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
+    // Back to a card under this one: the cards come off as they do when pulled.
+    if (!turn && !forward && mobile && to?.stack) {
+      const at = to.stack.length - 1
+      const commit = () => {
+        dropped.current = true
+        apply()
+      }
+      if (at >= base && takeOff(entries.length - 1 - at, commit)) return true
+    }
     if (turn) animateNav(turn.kind, apply, turn.scope)
-    else animateNav(forward ? 'forward' : 'back', apply)
+    // Back from the first card to the search it lies on: off to the side, as it came.
+    else animateNav(forward ? 'forward' : 'back', apply, 'whole', !forward && mobile && to?.stack?.length === 1)
     return true
   }
   // Back on the search, the keyboard comes up (see `cameBack`).
@@ -1661,6 +2370,7 @@ export function App() {
         className="shell-grid"
         data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
+        data-bar-off={barOff || undefined}
         data-split={split || undefined}
         style={
           {
@@ -1708,7 +2418,7 @@ export function App() {
                   onClick={() => chooseRailTab('associations')}
                 >
                   {t('associations')}
-                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  {notesCount > 0 && <span className="rail-tab-count">{notesCount}</span>}
                 </button>
               </div>
             </div>
@@ -1723,47 +2433,90 @@ export function App() {
             onTouchEnd={swipeEnd}
             onTouchCancel={swipeCancel}
           >
-            {shownUnder && !searchShown && (
+            {stackShown && (
+              <div className="card-stack" style={{ height: stackHeight(stackUnder.length) }}>
+                <div className="stack-copies" ref={copiesRef} />
+                {underCards.map((c) => c.live && createPortal(liveUnder(c.page), c.el, `${c.at}`))}
+                {rims(stackUnder.length).map((r) => {
+                  const i = r.i
+                  return (
+                    <button
+                      key={i}
+                      className="stack-rim"
+                      style={{ top: r.top, height: r.height }}
+                      onClick={() => pickUnder(i)}
+                      aria-label={t('backTo', { page: labelOf(stackUnder[i], t) })}
+                    />
+                  )
+                })}
+              </div>
+            )}
+            {!mobile && shownUnder && !searchShown && (
               <div className="rail-crumb">
                 <button className="back-link rail-back" onClick={goBack} title={t('back')}>
                   <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
                 </button>
               </div>
             )}
-            {subject && !searchShown && <div className="page-head">{pageHead()}</div>}
-            <div className="tab-pane" ref={paneRef}>
-              {/* Behind the graph on a phone the page is not on the screen, and
-                  is not rendered: laid out unseen, it would cost the graph
-                  frames each time its centre moved. */}
-              {searchShown && (
-                <SearchPage
-                  q={q}
-                  onKanji={searchTabKanji}
-                  onWord={searchTabWord}
-                  onSearch={type}
-                  asked={asked}
-                  onAsk={setAsked}
-                  onMap={browseMap}
-                  open={openIn(top)}
-                  words={searchWords}
-                  onWordsWith={showWords}
-                />
-              )}
-              {tab === 'dictionary' &&
-                !onStage &&
-                !searchShown &&
-                (shownTop ? (
-                  page(shownTop)
-                ) : (
-                  <p className="hint rail-section">{t('pickResult')}</p>
-                ))}
-              {/* Kept mounted while hidden, so the count on its tab is there
-                  before the tab is opened. */}
-              {subject && (tab === 'associations' || settled === subject.key) && (
-                <div hidden={tab !== 'associations' || searchShown}>
-                  {associations(subject)}
+            {/* The card's place, which clips it (theme.css): moved down, coming up
+                or going, the card adds no room to scroll, which, as it came
+                back, would pull a page being scrolled back up. */}
+            <div
+              className="card-slot"
+              // On others, it reaches the bottom of the screen however short
+              // the page, so they do not show under its end.
+              style={stackShown ? { minHeight: `calc(100% - ${stackHeight(stackUnder.length)}px + ${SLOT_ROOM}px)` } : undefined}
+            >
+            <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
+              {subject && !searchShown && (
+                <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
+                  {pageHead()}
                 </div>
               )}
+              {/* Every word with a kanji: its name along the top, held there,
+                  which is the line it shows under the cards opened from it. */}
+              {mobile && shownTop?.kind === 'words' && !searchShown && (
+                <div className="page-head card-name words-head">{labelOf(shownTop, t)}</div>
+              )}
+              <div className="tab-pane" ref={paneRef}>
+                {/* Behind the graph on a phone the page is not on the screen, and
+                    is not rendered: laid out unseen, it would cost the graph
+                    frames each time its centre moved. */}
+                {searchShown && (
+                  <SearchPage
+                    q={q}
+                    onKanji={searchTabKanji}
+                    onWord={searchTabWord}
+                    onSearch={type}
+                    asked={asked}
+                    onAsk={setAsked}
+                    onMap={browseMap}
+                    open={openIn(top)}
+                    words={searchWords}
+                    onWordsWith={showWords}
+                  />
+                )}
+                {tab === 'dictionary' &&
+                  !onStage &&
+                  !searchShown &&
+                  (shownTop ? (
+                    waiting ? (
+                      <div className="page-wait" aria-busy="true" />
+                    ) : (
+                      page(shownTop)
+                    )
+                  ) : (
+                    <p className="hint rail-section">{t('pickResult')}</p>
+                  ))}
+                {/* Kept mounted while hidden, so the count on its tab is there
+                    before the tab is opened. */}
+                {subject && (tab === 'associations' || settled === subject.key) && (
+                  <div hidden={tab !== 'associations' || searchShown}>
+                    {associations(subject)}
+                  </div>
+                )}
+              </div>
+            </div>
             </div>
           </div>
           {mobile && !(onStage && view === 'map') && (
@@ -1779,21 +2532,8 @@ export function App() {
               onTouchCancel={swipeCancel}
             >
               <span className="phone-tab-mark" aria-hidden />
-              {PHONE_TABS.map((p) => (
-                <button
-                  key={p}
-                  role="tab"
-                  aria-selected={phoneTab === p}
-                  disabled={tabOff(p)}
-                  onClick={() => tapPhoneTab(p)}
-                >
-                  <span className="phone-tab-icon">
-                    <PhoneTabIcon tab={p} />
-                    {p === 'associations' && subject && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
-                  </span>
-                  {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
-                </button>
-              ))}
+              {/* On Dictionary, how many cards are open. */}
+              {PHONE_TABS.map((p) => phoneTabButton(p))}
             </nav>
           )}
         </aside>

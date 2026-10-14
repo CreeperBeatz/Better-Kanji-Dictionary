@@ -30,13 +30,17 @@ export type Page =
   /**
    * `centre` is the character the graph was centred on when this one was
    * picked there, which it stays centred on while this page is up.
+   * `notes`: its associations, which on a phone are a card of their own,
+   * opened over its dictionary from the head.
    */
-  | { kind: 'kanji'; char: string; centre?: string }
+  | { kind: 'kanji'; char: string; centre?: string; notes?: boolean }
   /**
    * `word` is what the list already knew, so the head shows at once.
    * `centre` is which of its kanji the graph shows, once one was picked.
    */
-  | { kind: 'word'; id: number; word?: Word; centre?: string }
+  | { kind: 'word'; id: number; word?: Word; centre?: string; notes?: boolean }
+  /** On a phone, every word with a kanji, by meaning, as a card of its own over that kanji's page. */
+  | { kind: 'words'; char: string }
 
 export type Stack = Page[]
 
@@ -65,9 +69,10 @@ interface Entry {
 
 const MAX = 40
 const HOME: Page = { kind: 'search', q: '' }
-const KANJI_PATH = /^\/kanji\/([^/]+)\/?$/
-const WORD_PATH = /^\/word\/(\d+)\/?$/
+const KANJI_PATH = /^\/kanji\/([^/]+)(\/associations)?\/?$/
+const WORD_PATH = /^\/word\/(\d+)(\/associations)?\/?$/
 const LEVEL_PATH = /^\/level\/([1-5])\/?$/
+const WORDS_PATH = /^\/words\/([^/]+)\/?$/
 
 export function samePage(a: Page, b: Page): boolean {
   if (a.kind !== b.kind) return false
@@ -77,9 +82,11 @@ export function samePage(a: Page, b: Page): boolean {
     case 'level':
       return a.level === (b as typeof a).level
     case 'kanji':
-      return a.char === (b as typeof a).char
+      return a.char === (b as typeof a).char && !a.notes === !(b as typeof a).notes
     case 'word':
-      return a.id === (b as typeof a).id
+      return a.id === (b as typeof a).id && !a.notes === !(b as typeof a).notes
+    case 'words':
+      return a.char === (b as typeof a).char
   }
 }
 
@@ -96,7 +103,9 @@ export function urlOf(p: Page): string {
   if (p.kind === 'kanji') path = `/kanji/${encodeURIComponent(p.char)}`
   else if (p.kind === 'word') path = `/word/${p.id}`
   else if (p.kind === 'level') path = `/level/${p.level}`
-  else if (p.q || p.words) {
+  else if (p.kind === 'words') path = `/words/${encodeURIComponent(p.char)}`
+  if ((p.kind === 'kanji' || p.kind === 'word') && p.notes) path += '/associations'
+  else if (p.kind === 'search' && (p.q || p.words)) {
     path = '/search'
     if (p.q) params.set('q', p.q)
     if (p.words) params.set('words', p.words)
@@ -111,13 +120,22 @@ export function pageInUrl(): Page | null {
     const k = path.match(KANJI_PATH)
     if (k) {
       const c = decodeURIComponent(k[1])
-      return [...c].length === 1 ? { kind: 'kanji', char: c } : null
+      return [...c].length === 1 ? { kind: 'kanji', char: c, ...(k[2] ? { notes: true } : {}) } : null
     }
   } catch {
     return null
   }
   const w = path.match(WORD_PATH)
-  if (w) return { kind: 'word', id: Number(w[1]) }
+  if (w) return { kind: 'word', id: Number(w[1]), ...(w[2] ? { notes: true } : {}) }
+  try {
+    const ws = path.match(WORDS_PATH)
+    if (ws) {
+      const c = decodeURIComponent(ws[1])
+      return [...c].length === 1 ? { kind: 'words', char: c } : null
+    }
+  } catch {
+    return null
+  }
   const l = path.match(LEVEL_PATH)
   if (l) return { kind: 'level', level: Number(l[1]) as Level }
   if (path === '/search' || path === '/search/') {
@@ -201,6 +219,8 @@ function stepBack(n: number) {
 export function useNav(
   scroller: React.RefObject<HTMLElement | null>,
   beforePop?: React.RefObject<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>,
+  /** Whether back comes to a page where it was left; else at its top. */
+  keepScroll: () => boolean = () => true,
 ) {
   const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
@@ -224,14 +244,14 @@ export function useNav(
   const go = useCallback(
     (to: Entry) => {
       flush()
-      write({ ...current.current, scroll: scroller.current?.scrollTop ?? 0 }, 'replace')
+      write({ ...current.current, scroll: keepScroll() ? (scroller.current?.scrollTop ?? 0) : 0 }, 'replace')
       const next = { ...to, n: (current.current.n ?? 0) + 1 }
       write(next, 'push')
       current.current = next
       setEntry(next)
       if (scroller.current) scroller.current.scrollTop = 0
     },
-    [flush, scroller],
+    [flush, scroller, keepScroll],
   )
 
   /**
@@ -409,5 +429,18 @@ export function useNav(
     return () => window.removeEventListener('popstate', onPop)
   }, [scroller, beforePop])
 
-  return { stack: entry.stack, stage: entry.stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage }
+  return {
+    stack: entry.stack,
+    stage: entry.stage,
+    /** How many pages off the top back takes through history, not in place. */
+    depth: entry.depth,
+    push,
+    reset,
+    replaceTop,
+    openOver,
+    rebase,
+    pop,
+    enterStage,
+    leaveStage,
+  }
 }

@@ -41,7 +41,8 @@ export type Similar = Omit<SimilarResponse, 'char'>
  * ones, the ones you will actually meet; a rare one's may be anything.
  */
 export function useSimilar(char: string, common: boolean): Similar | null {
-  const [data, setData] = useState<SimilarResponse | null>(null)
+  // Known already, it is there at once: a page come back to does not grow under the reader.
+  const [data, setData] = useState<SimilarResponse | null>(() => api.similar.peek(char) ?? null)
   useEffect(() => {
     let stale = false
     api.similar(char).then(

@@ -97,6 +97,8 @@ interface Props {
   onSignIn?: () => void
   /** Opens every word with the kanji, by meaning: "see all words". */
   onWordsWith?: (char: string) => void
+  /** The way to its associations, beside the statistics' title (a phone's). */
+  notes?: React.ReactNode
 }
 
 // With no meaning groups, the page shows this many key words; the rest are a search away.
@@ -159,13 +161,17 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith, notes }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
   // Its meanings with their readings and words, special readings and radical.
   // Offline, only the word each reading forms, from the device: `full` false.
-  const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(null)
+  // Known already, it is there at once, as on a page come back to.
+  const [page, setPage] = useState<{ char: string; data: KanjiPage; full: boolean } | null>(() => {
+    const known = api.kanjiPage.peek(data.focus.char)
+    return known ? { char: data.focus.char, data: known, full: true } : null
+  })
   // The same page from the offline pack: at once, but as of the pack's build.
   const [onDevice, setOnDevice] = useState<KanjiPage | null>(null)
   const similar = useSimilar(data.focus.char, isCommon(data.focus))
@@ -271,7 +277,14 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <p className="kanji-hero-note">{t('heroAi')}</p>
         </>
       )}
-      <h3 className="facts-title">{t('statistics')}</h3>
+      {notes ? (
+        <div className="facts-title-row">
+          <h3 className="facts-title">{t('statistics')}</h3>
+          {notes}
+        </div>
+      ) : (
+        <h3 className="facts-title">{t('statistics')}</h3>
+      )}
       <dl className="facts">
         {n.strokes != null && (
           <>

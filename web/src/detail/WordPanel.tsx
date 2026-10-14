@@ -65,6 +65,8 @@ interface Props {
   onWord: (w: Word) => void
   /** Opens sign-in, for someone signed out who wants to suggest a change. */
   onSignIn?: () => void
+  /** The way to its associations, beside how common it is (a phone's). */
+  notes?: React.ReactNode
 }
 
 const KANJI = /[㐀-䶿一-鿿]/
@@ -135,15 +137,16 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
   )
 }
 
-export function WordPanel({ id, word, from, onPick, onWord, onSignIn }: Props) {
+export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: Props) {
   const lang = useLang()
   const t = S(lang)
-  const [entry, setEntry] = useState<WordEntry | null>(null)
+  // Known already, it is there at once, as on a page come back to.
+  const [entry, setEntry] = useState<WordEntry | null>(() => api.word.peek(id) ?? null)
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
     let stale = false
-    setEntry(null)
+    setEntry(api.word.peek(id) ?? null)
     setFailed(false)
     // The device has everything but the example sentences, and answers
     // first; the server's full entry replaces it when it comes.
@@ -175,7 +178,14 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn }: Props) {
 
   return (
     <section className="rail-section word-panel" aria-label={t('entryFor', { word: w.headword })}>
-      {rank && <p className="entry-rank entry-rank-line">{rank}</p>}
+      {notes ? (
+        <div className="entry-rank-row">
+          {rank ? <p className="entry-rank entry-rank-line">{rank}</p> : <span />}
+          {notes}
+        </div>
+      ) : (
+        rank && <p className="entry-rank entry-rank-line">{rank}</p>
+      )}
 
       {/* The verb's other half: 開ける for 開く, and the other way. */}
       {entry && entry.pairs.length > 0 && (
