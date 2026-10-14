@@ -32,6 +32,8 @@ import {
   fallTime,
   moveTo,
   put,
+  putOn,
+  trimCard,
   rest,
   rims,
   run,
@@ -1394,7 +1396,9 @@ export function App() {
       underCopies.current = kept
       return
     }
-    underCopies.current = [...kept.filter((u) => u.at < at), { page, at, el: copyCard(card, sc.clientHeight) }]
+    // Down to where it was read, for going on the stack from there (see stackOn).
+    const past = Math.max(0, sc.getBoundingClientRect().top - card.getBoundingClientRect().top)
+    underCopies.current = [...kept.filter((u) => u.at < at), { page, at, el: copyCard(card, sc.clientHeight + past) }]
   }
   /** The copy of the card at `at`, or a live one where none was kept. */
   function cardAt(at: number, page: Page) {
@@ -2043,6 +2047,18 @@ export function App() {
       html.dataset.nav = kind
       html.dataset.turn = scope
       if (flat) html.dataset.cardFlat = ''
+      // Where the open card stands, for the stack it goes on (see `stackOn`).
+      const sc = scroller.current
+      const card = cardRef.current
+      const was =
+        kind === 'forward' && onCard && !onStageRef.current && sc && card
+          ? {
+              m: unders.current.length,
+              top: card.getBoundingClientRect().top - sc.getBoundingClientRect().top,
+              p: parseFloat(headRef.current?.style.getPropertyValue('--p') || '0') || 0,
+              scrolled: sc.scrollTop,
+            }
+          : null
       // Back, the page is one seen already: all of it at once, not held for the slide.
       if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
       const t = document.startViewTransition(() => {
@@ -2051,21 +2067,39 @@ export function App() {
         if (kind === 'forward') html.dataset.card = 'coming'
         flushSync(go)
         if (kind === 'forward' && !cardRef.current?.hasAttribute('data-stacked')) html.dataset.cardFlat = ''
-        // The first card, gone under the second: it stays flat and as wide as
-        // it was, so it only dims as the second comes up.
-        if (kind === 'forward' && copiesRef.current?.childElementCount === 1) html.dataset.onFirst = ''
+        if (was && unders.current.length === was.m + 1) stackOn(was)
       })
       t.finished.finally(() => {
         delete html.dataset.nav
         delete html.dataset.turn
         delete html.dataset.card
         delete html.dataset.cardFlat
-        delete html.dataset.onFirst
+        delete html.dataset.stacking
       })
       return
     }
     if (kind === 'forward' || kind === 'back') leaveBy(kind)
     go()
+  }
+  /**
+   * A card put on the stack: the new page shows from the first frame, the
+   * cards under the new one standing where the old screen had them -- the
+   * one it was opened from just as it was, scrolled or not -- and moving to
+   * their places as the card comes up (cardStack.ts putOn). The old page is
+   * not shown at all: nothing on the screen is ever two pictures fading
+   * through each other, which flickers (theme.css).
+   */
+  function stackOn(was: { m: number; top: number; p: number; scrolled: number }) {
+    const sc = scroller.current
+    if (!sc) return
+    document.documentElement.dataset.stacking = ''
+    const { moves, settle } = putOn(unders.current, was.top, was.p, was.scrolled)
+    const nearest = unders.current[unders.current.length - 1]
+    moveTo(moves, 0)
+    run(reducedMotion() ? 0 : RISE_MS, (e) => moveTo(moves, e), () => {
+      settle()
+      if (nearest) trimCard(nearest.el, sc.clientHeight)
+    })
   }
   function leaveBy(dir: 'forward' | 'back') {
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())

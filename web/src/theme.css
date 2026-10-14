@@ -6594,6 +6594,14 @@ html {
     pointer-events: none;
   }
 
+  /* A copy is the page as it stood: what arrived on the page arrived once,
+     and does not arrive again in the copy (cloning starts animations over). */
+  [data-copy],
+  [data-copy] * {
+    animation: none !important;
+    transition: none !important;
+  }
+
   /* A copy's head is where it lies, not held to the top of the page. */
   [data-copy] .page-head[data-folding] {
     position: relative;
@@ -6892,8 +6900,17 @@ html[data-card-flat]::view-transition-group(card) {
   animation-name: vt-card-in;
 }
 
-html[data-nav='forward'][data-on-first]::view-transition-old(page) {
-  animation-name: vt-dim;
+/* A card put on a stack (App.tsx stackOn): the new page from the first
+   frame, its cards moving from where the old screen had them; the old page
+   not at all. Never one picture through the other. */
+html[data-nav='forward'][data-stacking]::view-transition-old(page) {
+  animation: none;
+  opacity: 0;
+}
+
+html[data-nav='forward'][data-stacking]::view-transition-new(page) {
+  animation: none;
+  opacity: 1;
 }
 
 html[data-nav='forward'][data-card-flat]::view-transition-old(page) {
@@ -7034,15 +7051,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
    would show the black behind it through itself and the page coming in, a
    dark flash for a few frames. Nor does it shrink, which would bare the
    black around it. */
-@keyframes vt-dim {
-  from {
-    filter: none;
-  }
-  to {
-    filter: brightness(0.6);
-  }
-}
-
 @keyframes vt-aside {
   from {
     transform: none;

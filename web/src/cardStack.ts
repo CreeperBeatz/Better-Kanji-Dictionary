@@ -37,6 +37,14 @@ export interface Place {
   p: number
   /** How far it has become the first card, which lies flat on the search. */
   flat: number
+  /** How far a flat card shows its top edge: under others, where it is the end of the stack. */
+  edge?: number
+  /**
+   * How far down its head stands from its top: a card's head is held at the
+   * top of the screen when the card is scrolled past it (sticky), which a
+   * copy of it can only show by moving the head itself.
+   */
+  lift?: number
 }
 
 /** How tall the cards under the open one stand above it, `m` of them. */
@@ -63,7 +71,7 @@ export function rims(m: number): { top: number; height: number; i: number }[] {
  */
 export function rest(m: number, i: number, fold: number): Place {
   const shown = Math.min(m, SHOWN)
-  if (i === 0) return { y: PAD - fold, s: 1, p: 1, flat: 1 }
+  if (i === 0) return { y: PAD - fold, s: 1, p: 1, flat: 1, edge: 1 }
   const k = Math.max(1, i - (m - shown))
   const s = 1 - 0.04 * (shown - k)
   return { y: PAD + RIM * k - s * fold, s, p: 1, flat: 0 }
@@ -76,7 +84,14 @@ function open(m: number): Place {
 
 function mix(a: Place, b: Place, t: number): Place {
   const at = (x: number, y: number) => x + (y - x) * t
-  return { y: at(a.y, b.y), s: at(a.s, b.s), p: at(a.p, b.p), flat: at(a.flat, b.flat) }
+  return {
+    y: at(a.y, b.y),
+    s: at(a.s, b.s),
+    p: at(a.p, b.p),
+    flat: at(a.flat, b.flat),
+    edge: at(a.edge ?? 0, b.edge ?? 0),
+    lift: at(a.lift ?? 0, b.lift ?? 0),
+  }
 }
 
 /**
@@ -88,12 +103,14 @@ function mix(a: Place, b: Place, t: number): Place {
  * nothing inherits from them: no layout, little restyling.
  */
 export function put(u: Under, at: Place) {
-  const cut = (u.fold * at.p).toFixed(1)
+  const lift = at.lift ?? 0
+  const cut = (u.fold * at.p + lift).toFixed(1)
   const r = `${(14 * (1 - at.flat)).toFixed(1)}px`
   u.el.style.transform = `translateY(${at.y}px) scale(${at.s})`
   // Unfolded, nothing is cut, and its shadow shows as the open card's does.
-  u.el.style.clipPath = at.p > 0 ? `inset(${cut}px 0 0 0 round ${r} ${r} 0 0)` : ''
+  u.el.style.clipPath = at.p > 0 || lift !== 0 ? `inset(${cut}px 0 0 0 round ${r} ${r} 0 0)` : ''
   u.head?.style.setProperty('--p', at.p.toFixed(3))
+  if (u.head) u.head.style.translate = lift ? `0 ${lift.toFixed(1)}px` : ''
   if (u.edge) u.edge.style.transform = `translateY(${cut}px)`
   if (at.flat === 0 && !u.el.style.background) return
   const f = (at.flat * 100).toFixed(1)
@@ -106,8 +123,10 @@ export function put(u: Under, at: Place) {
     u.head.style.background = ground
   }
   if (u.edge) {
+    // Flat on the search, no edge; flat under others, its edge, square.
+    const line = Math.max(1 - at.flat, at.edge ?? 0)
     u.edge.style.borderRadius = `${r} ${r} 0 0`
-    u.edge.style.borderTopColor = `color-mix(in srgb, transparent ${f}%, var(--rule-bright))`
+    u.edge.style.borderTopColor = `color-mix(in srgb, transparent ${((1 - line) * 100).toFixed(1)}%, var(--rule-bright))`
   }
 }
 
@@ -139,6 +158,49 @@ export function comeOff(unders: Under[], k: number, h: number): Move[] {
     if (i > m - k) return { u, from, to: { ...from, y: from.y + h } }
     if (i === m - k) return { u, from, to: open(m - k) }
     return { u, from, to: rest(m - k, i, u.fold) }
+  })
+}
+
+/**
+ * The cards under a card just put on them, from where they stood on the
+ * screen before to where they rest now: the one it was opened from from the
+ * open card's place, its top `top` down the screen, its head folded `p`;
+ * the ones under that from where they lay, scrolled up `scrolled`.
+ *
+ * At its top, the card folds into its line as it goes up into place. Scrolled
+ * down, it stays where it is -- what is in it is about to be covered -- and
+ * only its head, held at the top, goes down to the place its line rests:
+ * `settle` puts it there for good once the open card covers the rest.
+ */
+export function putOn(unders: Under[], top: number, p: number, scrolled: number): { moves: Move[]; settle: () => void } {
+  const m = unders.length
+  const moves = unders.map((u, i) => {
+    const to = rest(m, i, u.fold)
+    if (i < m - 1) {
+      const was = rest(m - 1, i, u.fold)
+      return { u, from: { ...was, y: was.y - scrolled }, to }
+    }
+    const flat = m === 1 ? 1 : 0
+    const from: Place = { y: top, s: 1, p, flat, lift: Math.max(0, -u.fold - top) }
+    if (top >= 0) return { u, from, to }
+    // Its line, from the top of the screen down to where it rests.
+    const line = to.y + u.fold
+    return { u, from, to: { ...to, y: top, s: 1, p: 1, lift: line - top - u.fold } }
+  })
+  const settle = () => unders.forEach((u, i) => put(u, rest(m, i, u.fold)))
+  return { moves, settle }
+}
+
+/**
+ * Leaves out of a copy what is further down it than a screen: kept while the
+ * card it was copied from was scrolled down, for putting it on the stack
+ * from where it stood (see `putOn`).
+ */
+export function trimCard(g: HTMLElement, screen: number) {
+  const top = g.getBoundingClientRect().top
+  const scale = g.getBoundingClientRect().width / (g.offsetWidth || 1)
+  g.querySelectorAll(ROWS).forEach((row) => {
+    if (!row.closest('.page-head') && (row.getBoundingClientRect().top - top) / scale > screen + 24) row.remove()
   })
 }
 
