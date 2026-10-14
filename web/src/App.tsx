@@ -467,6 +467,29 @@ function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number 
 /** How tall a card's character is in its folded line. */
 const FOLDED_GLYPH = 26
 
+/** How long a tap waits at most for what the card it opens shows (see `rise`). */
+const READY_MS = 300
+
+/**
+ * Asks for what a page shows at once, where it is not known yet: for a
+ * kanji its details, its page, its forms, its faces and its look-alikes
+ * (shown only for a common one, but asked for alongside the rest, not after
+ * the details say so). Null where there is nothing to wait for.
+ */
+function warm(p: Page): Promise<unknown> | null {
+  if (p.kind === 'word') return api.word.peek(p.id) ? null : api.word(p.id)
+  if (p.kind !== 'kanji') return null
+  const c = p.char
+  if (api.kanji.peek(c) && api.kanjiPage.peek(c) && api.forms.peek(c)) return null
+  return Promise.all([
+    api.kanji(c),
+    api.similar(c),
+    api.kanjiPage(c),
+    api.forms(c),
+    api.fonts(c),
+  ])
+}
+
 /**
  * Measures a card's head for folding (read by theme.css): the character ends
  * at the line's left, as tall as the line allows, in the middle of it -- the
@@ -920,7 +943,7 @@ export function App() {
       }
       // Back through history animates from the popstate it causes.
       if (back) go()
-      else animateNav('forward', go)
+      else rise({ kind: 'kanji', char }, go)
     },
   )
 
@@ -928,7 +951,7 @@ export function App() {
   const openWord = useStable(
     (w: Word) => {
       keepSearch()
-      animateNav('forward', () => {
+      rise(wordPage(w), () => {
         toDictionary()
         if (HAN.test(w.headword)) setViewState('focus')
         push(wordPage(w))
@@ -958,7 +981,7 @@ export function App() {
           else push({ kind: 'kanji', char })
         }
         if (back) go()
-        else animateNav('forward', go)
+        else rise({ kind: 'kanji', char }, go)
         return
       }
       const page: Page = char === focus || !focus ? { kind: 'kanji', char } : { kind: 'kanji', char, centre: focus }
@@ -991,7 +1014,7 @@ export function App() {
   const seeInDictionary = useStable(
     (char: string) => {
       setMapCard(null)
-      animateNav('forward', () => {
+      rise({ kind: 'kanji', char }, () => {
         // Opening it puts the page up, on a phone.
         drill(char)
         if (mobile) {
@@ -1503,7 +1526,7 @@ export function App() {
     if (samePage(p, top)) return tapPhoneTab('dictionary')
     leaveSearchTab()
     const onCards = searchWords !== undefined && entries.length > base
-    animateNav('forward', () => {
+    rise(p, () => {
       setSearchOver(null)
       toDictionary()
       if (!onCards) return openOverSearch(p)
@@ -1924,6 +1947,26 @@ export function App() {
    * the browser has them -- it photographs the old page itself, which costs
    * nothing next to copying it -- and by a copy of the page elsewhere.
    */
+  // A card comes up whole: what its page shows is asked for at the tap, and
+  // it rises once that is here -- or after READY_MS, whatever has come, so a
+  // slow connection never holds the tap up long. What comes later than the
+  // rise waits for its end (see `afterSlide`), as before.
+  const rising = useRef(false)
+  function rise(p: Page, go: () => void) {
+    const ready = mobile && pagesSlide() ? warm(p) : null
+    if (!ready) return animateNav('forward', go)
+    if (rising.current) return
+    rising.current = true
+    let done = false
+    const start = () => {
+      if (done) return
+      done = true
+      rising.current = false
+      animateNav('forward', go)
+    }
+    ready.then(start, start)
+    window.setTimeout(start, READY_MS)
+  }
   function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole', flat = false) {
     if (kind === 'forward') keepUnder()
     if (!pagesSlide() || navAnim.current || turning.current) return go()

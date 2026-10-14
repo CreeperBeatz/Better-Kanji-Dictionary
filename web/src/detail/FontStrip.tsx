@@ -135,7 +135,7 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
     if (!seen) return
     loadLazyFonts()
     let stale = false
-    const known = knownFonts.get(char)
+    const known = knownFonts.get(char) ?? api.fonts.peek(char)
     setInfo(known ?? null)
     if (known) return
     api.fonts(char).then(
