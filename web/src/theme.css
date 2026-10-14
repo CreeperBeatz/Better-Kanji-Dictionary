@@ -6892,6 +6892,10 @@ html[data-card-flat]::view-transition-group(card) {
   animation-name: vt-card-in;
 }
 
+html[data-nav='forward'][data-on-first]::view-transition-old(page) {
+  animation-name: vt-dim;
+}
+
 html[data-nav='forward'][data-card-flat]::view-transition-old(page) {
   animation-name: vt-aside;
 }
@@ -7026,56 +7030,69 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
 }
 
+/* The page left under a card darkens, but stays solid: faded instead, it
+   would show the black behind it through itself and the page coming in, a
+   dark flash for a few frames. Nor does it shrink, which would bare the
+   black around it. */
+@keyframes vt-dim {
+  from {
+    filter: none;
+  }
+  to {
+    filter: brightness(0.6);
+  }
+}
+
 @keyframes vt-aside {
   from {
     transform: none;
-    opacity: 1;
+    filter: none;
   }
   to {
     transform: translateX(-25%);
-    opacity: 0.45;
+    filter: brightness(0.5);
   }
 }
 
 @keyframes vt-unaside {
   from {
     transform: translateX(-25%);
-    opacity: 0.45;
+    filter: brightness(0.5);
   }
   to {
     transform: none;
-    opacity: 1;
+    filter: none;
   }
 }
 
+/* What lies under the card coming up -- the cards under it, their edges --
+   comes in over the old page once the card covers most of the screen, so
+   the two are never seen through each other. */
 @keyframes vt-floor {
-  from {
+  0%,
+  55% {
     opacity: 0;
   }
-  to {
+  100% {
     opacity: 1;
   }
 }
 
 @keyframes vt-sink {
   from {
-    transform: none;
-    opacity: 1;
+    filter: none;
   }
   to {
-    transform: translateY(-6px) scale(0.95);
-    opacity: 0.45;
+    filter: brightness(0.5);
   }
 }
 
 @keyframes vt-unsink {
   from {
-    transform: translateY(-6px) scale(0.95);
-    opacity: 0.45;
+    filter: brightness(0.5);
   }
   to {
-    transform: none;
-    opacity: 1;
+    filter: none;
   }
 }
 

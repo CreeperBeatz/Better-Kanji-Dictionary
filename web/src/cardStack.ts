@@ -44,17 +44,27 @@ export function stackHeight(m: number): number {
   return m === 0 ? 0 : PAD + RIM * (Math.min(m, SHOWN) - 1) + LINE
 }
 
-/** Where the rims show, bottom first: for App's taps on them. */
-export function rims(m: number): { top: number; height: number }[] {
+/** Where the rims show, bottom first, and which of the `m` cards each is: for App's taps on them. */
+export function rims(m: number): { top: number; height: number; i: number }[] {
   const shown = Math.min(m, SHOWN)
-  return Array.from({ length: shown }, (_, k) => ({ top: PAD + RIM * k, height: k === shown - 1 ? LINE : RIM }))
+  return Array.from({ length: shown }, (_, k) => ({
+    top: PAD + RIM * k,
+    height: k === shown - 1 ? LINE : RIM,
+    i: k === 0 ? 0 : m - shown + k,
+  }))
 }
 
-/** The `i`-th of `m` cards under the open one (0 the bottom), at rest. Its folded line is its top. */
+/**
+ * The `i`-th of `m` cards under the open one (0 the bottom), at rest. Its
+ * folded line is its top. The bottom one -- the first card, lying on the
+ * search -- always shows, flat and as wide as the screen, as it lies when
+ * open: the end of the stack. Over it, the nearest ones; those between
+ * lie under the lowest of those.
+ */
 export function rest(m: number, i: number, fold: number): Place {
   const shown = Math.min(m, SHOWN)
-  // The ones below those shown lie under the bottom one shown.
-  const k = Math.max(0, i - (m - shown))
+  if (i === 0) return { y: PAD - fold, s: 1, p: 1, flat: 1 }
+  const k = Math.max(1, i - (m - shown))
   const s = 1 - 0.04 * (shown - k)
   return { y: PAD + RIM * k - s * fold, s, p: 1, flat: 0 }
 }

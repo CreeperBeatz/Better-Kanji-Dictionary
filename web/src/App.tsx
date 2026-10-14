@@ -320,7 +320,7 @@ function slide(el: HTMLElement, from: number, to: number, ms: number) {
 }
 
 /** A card with one on top of it: back a little, and dimmed. */
-const SUNK = { transform: 'translateY(-6px) scale(0.95)', opacity: 0.45 }
+const SUNK = { filter: 'brightness(0.5)' }
 
 /** How long a page takes to slide in or out. */
 const PAGE_MS = 300
@@ -2051,12 +2051,16 @@ export function App() {
         if (kind === 'forward') html.dataset.card = 'coming'
         flushSync(go)
         if (kind === 'forward' && !cardRef.current?.hasAttribute('data-stacked')) html.dataset.cardFlat = ''
+        // The first card, gone under the second: it stays flat and as wide as
+        // it was, so it only dims as the second comes up.
+        if (kind === 'forward' && copiesRef.current?.childElementCount === 1) html.dataset.onFirst = ''
       })
       t.finished.finally(() => {
         delete html.dataset.nav
         delete html.dataset.turn
         delete html.dataset.card
         delete html.dataset.cardFlat
+        delete html.dataset.onFirst
       })
       return
     }
@@ -2094,7 +2098,7 @@ export function App() {
       for (const g of how.ghosts) if (g.offsetHeight > h) g.style.height = `${h}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
-      const frames = fwd ? [{ transform: `translateY(${h}px)` }, { transform: 'none' }] : [SUNK, { transform: 'none', opacity: 1 }]
+      const frames = fwd ? [{ transform: `translateY(${h}px)` }, { transform: 'none' }] : [SUNK, { filter: 'none' }]
       to.animate(frames, { duration: reducedMotion() ? 0 : PAGE_MS, easing: EASE }).onfinish = () =>
         to.style.removeProperty('z-index')
     }
@@ -2107,7 +2111,7 @@ export function App() {
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
       const a = g.animate(
-        fwd ? [{ transform: 'none', opacity: 1 }, SUNK] : [{ transform: 'none' }, { transform: `translateY(${h}px)` }],
+        fwd ? [{ filter: 'none' }, SUNK] : [{ transform: 'none' }, { transform: `translateY(${h}px)` }],
         { duration: PAGE_MS, easing: EASE },
       )
       a.onfinish = () => g.remove()
@@ -2280,8 +2284,8 @@ export function App() {
               <div className="card-stack" style={{ height: stackHeight(stackUnder.length) }}>
                 <div className="stack-copies" ref={copiesRef} />
                 {underCards.map((c) => c.live && createPortal(liveUnder(c.page), c.el, `${c.at}`))}
-                {rims(stackUnder.length).map((r, k, all) => {
-                  const i = stackUnder.length - all.length + k
+                {rims(stackUnder.length).map((r) => {
+                  const i = r.i
                   return (
                     <button
                       key={i}
