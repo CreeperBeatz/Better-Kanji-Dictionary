@@ -6486,6 +6486,91 @@ html {
   }
 }
 
+/* ---------------------------------------------------------------- card stack (phone) */
+
+/* On a phone the open page is a card lying on the pages under it: their
+   edges show above it, the nearest one named, the ones under it thinner and
+   narrower. Pulled down, the card comes off and the one under it is back. */
+@media (max-width: 900px) {
+  .card-stack {
+    display: flex;
+    flex-direction: column;
+    padding-top: 10px;
+  }
+
+  .stack-edge,
+  .stack-near {
+    display: block;
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: var(--sumi-lift);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  /* Further down the stack, narrower and fainter. */
+  .stack-edge {
+    height: 6px;
+    margin: 0 calc(12px + var(--i) * 10px);
+    opacity: calc(1 - var(--i) * 0.25);
+  }
+
+  /* Its lower part is under the card, which lies over it. */
+  .stack-near {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 12px -12px;
+    padding: 6px 12px 18px;
+    color: var(--paper-dim);
+    font-size: calc(13px * var(--type));
+    text-align: left;
+    transition:
+      color 120ms,
+      background-color 120ms;
+  }
+
+  .stack-near .back-glyph {
+    font-size: calc(15px * var(--type));
+    color: inherit;
+  }
+
+  .stack-icon {
+    width: 14px;
+    height: 14px;
+    flex: none;
+  }
+
+  .stack-more {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: calc(12px * var(--type));
+  }
+
+  /* Pulled far enough that letting go brings it back. */
+  .card-stack[data-armed] .stack-near {
+    color: var(--paper);
+    background: var(--ai-wash);
+    border-color: var(--ai-deep);
+  }
+
+  .page-card[data-stacked] {
+    position: relative;
+    background: var(--sumi);
+    border-top: 1px solid var(--rule-bright);
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* The edges stay put as a card comes and goes over them. */
+  html[data-nav='forward'] .card-stack,
+  html[data-nav='back'] .card-stack {
+    view-transition-name: stack;
+  }
+}
+
 /* ---------------------------------------------------------------- page slides (view transitions) */
 
 /* On a phone, going to a page or back is a view transition where the browser
@@ -6537,23 +6622,34 @@ html {
   mix-blend-mode: normal;
 }
 
-/* Forward: the new page slides in over the old, which slips left and dims. */
+/* Forward: the new page comes up from the bottom over the old, which sinks
+   back and dims, a card on a stack. */
 html[data-nav='forward']::view-transition-old(page) {
-  animation-name: vt-slip-left;
+  animation-name: vt-sink;
+  transform-origin: top center;
 }
 
 html[data-nav='forward']::view-transition-new(page) {
-  animation-name: vt-in-right;
+  animation-name: vt-rise;
 }
 
-/* Back: the old page slides off to the right over the one under it. */
+/* Back: the old page drops off the bottom over the one under it, which
+   comes forward. */
 html[data-nav='back']::view-transition-old(page) {
-  animation-name: vt-out-right;
+  animation-name: vt-drop;
   z-index: 1;
 }
 
 html[data-nav='back']::view-transition-new(page) {
-  animation-name: vt-in-left;
+  animation-name: vt-unsink;
+  transform-origin: top center;
+}
+
+::view-transition-group(stack),
+::view-transition-old(stack),
+::view-transition-new(stack) {
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* A tab turn is a carousel: the old tab goes off one side as the new one
@@ -6615,15 +6711,6 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
 }
 
-@keyframes vt-in-left {
-  from {
-    transform: translateX(-30%);
-  }
-  to {
-    transform: none;
-  }
-}
-
 @keyframes vt-out-right {
   from {
     transform: none;
@@ -6633,14 +6720,43 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
 }
 
-@keyframes vt-slip-left {
+@keyframes vt-rise {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes vt-drop {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes vt-sink {
   from {
     transform: none;
     opacity: 1;
   }
   to {
-    transform: translateX(-30%);
-    opacity: 0.5;
+    transform: translateY(-6px) scale(0.95);
+    opacity: 0.45;
+  }
+}
+
+@keyframes vt-unsink {
+  from {
+    transform: translateY(-6px) scale(0.95);
+    opacity: 0.45;
+  }
+  to {
+    transform: none;
+    opacity: 1;
   }
 }
 

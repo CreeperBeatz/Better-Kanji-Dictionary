@@ -409,5 +409,18 @@ export function useNav(
     return () => window.removeEventListener('popstate', onPop)
   }, [scroller, beforePop])
 
-  return { stack: entry.stack, stage: entry.stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage }
+  return {
+    stack: entry.stack,
+    stage: entry.stage,
+    /** How many pages off the top back takes through history, not in place. */
+    depth: entry.depth,
+    push,
+    reset,
+    replaceTop,
+    openOver,
+    rebase,
+    pop,
+    enterStage,
+    leaveStage,
+  }
 }

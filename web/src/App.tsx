@@ -298,6 +298,9 @@ function slide(el: HTMLElement, from: number, to: number, ms: number) {
   })
 }
 
+/** A card with one on top of it: back a little, and dimmed. */
+const SUNK = { transform: 'translateY(-6px) scale(0.95)', opacity: 0.45 }
+
 /** How long a page takes to slide in or out. */
 const PAGE_MS = 300
 /** How long a tab tapped takes to turn. */
@@ -417,6 +420,65 @@ function nameOf(p: Page, t: T) {
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
 
+/** How many cards under the open one show their edge, the nearest named. */
+const EDGES = 3
+
+/** A page's name as plain text, for a label. */
+function labelOf(p: Page, t: T): string {
+  if (p.kind === 'kanji') return p.char
+  if (p.kind === 'word') return p.word?.headword ?? t('theWord')
+  if (p.kind === 'level') return `N${p.level}`
+  return p.q || t('search')
+}
+
+/**
+ * On a phone, the pages under the open one, as the edges of cards it lies on:
+ * the nearest with its name, those under it thinner and narrower, a search at
+ * the bottom. Pulled down, the open card goes and the one under it is back;
+ * from the last card, the search. `under` runs bottom first; null is a search
+ * that is not in the stack, as under a page opened from a link.
+ */
+function CardStack({ under, onPick, t }: { under: (Page | null)[]; onPick: (i: number) => void; t: T }) {
+  const hidden = under.length - Math.min(under.length, EDGES)
+  const near = under.length - 1
+  return (
+    <div className="card-stack">
+      {under.map((p, i) =>
+        i < hidden ? null : i === near ? (
+          <button key={i} className="stack-near" onClick={() => onPick(i)} title={t('back')}>
+            <StackDownIcon />
+            <span className="stack-name">{nameOf(p ?? { kind: 'search', q: '' }, t)}</span>
+            {hidden > 0 && <span className="stack-more">+{hidden}</span>}
+          </button>
+        ) : (
+          <button
+            key={i}
+            className="stack-edge"
+            style={{ '--i': near - i } as React.CSSProperties}
+            onClick={() => onPick(i)}
+            aria-label={t('backTo', { page: labelOf(p ?? { kind: 'search', q: '' }, t) })}
+          />
+        ),
+      )}
+    </div>
+  )
+}
+
+function StackDownIcon() {
+  return (
+    <svg className="stack-icon" viewBox="0 0 16 16" aria-hidden>
+      <path
+        d="M4 6l4 4 4-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 /** A kanji or a word, as picked from a list. */
 type Picked = { kind: 'kanji'; char: string } | { kind: 'word'; id: number; word: Word }
 const kanjiPage = (char: string): Picked => ({ kind: 'kanji', char })
@@ -443,7 +505,7 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   // Filled in below: what to do as back or forward arrives, before the page changes.
   const beforePop = useRef<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>(null)
-  const { stack, stage, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
+  const { stack, stage, depth, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
     scroller,
     beforePop,
   )
@@ -969,6 +1031,13 @@ export function App() {
     cameBack.current = performance.now()
     pop()
   })
+  // Back `k` pages at once, sliding: as history slides it, when it goes
+  // through history, or here when the pages come off in place.
+  const popBy = useStable((k: number) => {
+    cameBack.current = performance.now()
+    if (depth >= k) pop(k)
+    else animateNav('back', () => pop(k))
+  })
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -1188,6 +1257,17 @@ export function App() {
   // The Search tab shows the search with the page marked in it, and the page
   // still there to turn back to.
   const searchShown = mobile && !onStage && subject !== null && searchOver !== null && samePage(searchOver, top)
+  // On a phone the open page lies on the pages under it, with a search at
+  // the bottom: the one under a page opened from a link is a new one.
+  const stackShown = mobile && !searchShown && shownTop !== null && (shownUnder !== null || shownTop.kind !== 'search')
+  const underPages = entries.slice(0, -1)
+  const stackUnder: (Page | null)[] = underPages[0]?.kind === 'search' ? underPages : [null, ...underPages]
+  const cardRef = useRef<HTMLDivElement>(null)
+  function pickUnder(i: number) {
+    if (stackUnder[i] === null) return typeOver()
+    const at = stackUnder[0] === null ? i - 1 : i
+    popBy(entries.length - 1 - at)
+  }
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
@@ -1286,6 +1366,10 @@ export function App() {
     vy: number
     /** What follows the finger: the pane, or the whole page. */
     moved: HTMLElement | null
+    /** The open card, on a stack of them: a pull down moves it. */
+    card: HTMLElement | null
+    /** Whether a pull down takes the card off, or brings up the search. */
+    back: boolean
   } | null>(null)
   // The tab turned from, as a still copy, and where it goes as the tab turned
   // to comes in beside it: for the effect below, once that one is showing.
@@ -1360,6 +1444,8 @@ export function App() {
       v: 0,
       vy: 0,
       moved: null,
+      card: stackShown && e.currentTarget === scroller.current ? cardRef.current : null,
+      back: stackShown && shownUnder !== null,
     }
   }
   function swipeMove(e: React.TouchEvent) {
@@ -1386,8 +1472,13 @@ export function App() {
     }
     s.last = { x: touch.clientX, y: touch.clientY, at: e.timeStamp }
     if (s.mode === 'pull') {
-      // The search lights up once letting go would open it.
-      searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
+      // On a stack the card comes down with the finger, and the one under it
+      // lights up once letting go would bring it back. The last card only
+      // gives a little: under it is the search, which lights up instead.
+      const down = Math.max(0, dy)
+      if (s.card) s.card.style.transform = `translateY(${s.back ? down : down / 3}px)`
+      if (s.back) stackOf()?.toggleAttribute('data-armed', dy > PULL)
+      else searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
       return
     }
     // Past the last tab the page gives a little, and comes back.
@@ -1407,7 +1498,11 @@ export function App() {
     const el = s?.moved
     if (s?.mode === 'pull') {
       const dy = e.changedTouches[0].clientY - s.y
-      if (dy > PULL || (s.vy > 0.4 && dy > SWIPE)) typeOver()
+      const far = dy > PULL || (s.vy > 0.4 && dy > SWIPE)
+      stackOf()?.removeAttribute('data-armed')
+      if (s.card && s.back && far) return dropCard(s.card)
+      if (s.card) settleCard(s.card)
+      if (far) typeOver()
       return
     }
     if (s?.mode !== 'turn' || !el) return
@@ -1431,11 +1526,33 @@ export function App() {
     swipe.current = null
     const el = s?.moved
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
+    stackOf()?.removeAttribute('data-armed')
+    if (s?.mode === 'pull' && s.card) settleCard(s.card)
     if (s?.mode !== 'turn' || !el) return
     dragMark(null)
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
+  }
+  function stackOf() {
+    return scroller.current?.querySelector<HTMLElement>('.card-stack') ?? null
+  }
+  /** The card let go of short of going: back up into its place. */
+  function settleCard(card: HTMLElement) {
+    const at = new DOMMatrix(getComputedStyle(card).transform).m42
+    card.style.transform = ''
+    if (at > 0) card.animate([{ transform: `translateY(${at}px)` }, { transform: 'none' }], { duration: 220, easing: EASE })
+  }
+  /**
+   * The card let go of far enough: it falls off from where the finger left it
+   * as the one under it comes back. It stays there until the page changes
+   * (see the effect on `top`), so the slide starts where the finger let go.
+   */
+  function dropCard(card: HTMLElement) {
+    popBy(1)
+    window.setTimeout(() => {
+      if (card.style.transform) settleCard(card)
+    }, 900)
   }
   // A pull down at the top is the app's, not the browser's. Chrome would take
   // it as a scroll with nowhere to go, and a touch that ends a scroll is no
@@ -1508,9 +1625,9 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phoneTab])
 
-  // Going to a page slides it in from the right over the one it was opened
-  // from, which slips a little to the left beneath it; going back, the page
-  // slides off to the right and the one under it comes back from the left.
+  // Going to a page brings it up from the bottom over the one it was opened
+  // from, which sinks back a little beneath it, a card on a stack; going
+  // back, the page drops off the bottom and the one under it comes forward.
   // The tabs along the bottom come and go with the page they belong to. The
   // pane being left is copied before it changes, as a tab turn is.
   const navAnim = useRef<{ ghosts: HTMLElement[]; tabs: HTMLElement | null; dir: 'forward' | 'back' } | null>(null)
@@ -1568,16 +1685,19 @@ export function App() {
     navAnim.current = null
     const to = onStage ? stageRef.current : scroller.current
     const w = to?.clientWidth ?? window.innerWidth
+    const h = to?.getBoundingClientRect().height ?? window.innerHeight
     const fwd = how.dir === 'forward'
     startSliding(PAGE_MS)
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
-      const room = to.getBoundingClientRect().height
+      const room = h
       for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
-      slide(to, fwd ? w : -w * 0.3, 0, PAGE_MS).onfinish = () => to.style.removeProperty('z-index')
+      const frames = fwd ? [{ transform: `translateY(${h}px)` }, { transform: 'none' }] : [SUNK, { transform: 'none', opacity: 1 }]
+      to.animate(frames, { duration: reducedMotion() ? 0 : PAGE_MS, easing: EASE }).onfinish = () =>
+        to.style.removeProperty('z-index')
     }
     // The tabs stay put between two pages that both have them; they come in
     // with a page that has them, and leave with one that had.
@@ -1587,17 +1707,20 @@ export function App() {
     else if (how.tabs) how.ghosts.push(how.tabs)
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
+      // A card pulled down is copied where the finger left it, and falls on from there.
       const a = g.animate(
-        [
-          { transform: 'translateX(0)', opacity: 1 },
-          { transform: `translateX(${fwd ? -w * 0.3 : w}px)`, opacity: fwd ? 0.5 : 1 },
-        ],
+        fwd ? [{ transform: 'none', opacity: 1 }, SUNK] : [{ transform: 'none' }, { transform: `translateY(${h}px)` }],
         { duration: PAGE_MS, easing: EASE },
       )
       a.onfinish = () => g.remove()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top, pane, onStage])
+
+  // A card pulled down and let go is a new page now: in its place again.
+  useLayoutEffect(() => {
+    if (cardRef.current) cardRef.current.style.transform = ''
+  }, [top])
 
   // The app's own steps back slide the page: a tab turn away from the graph
   // as that turn, anything else the way history went. The browser's own back
@@ -1723,47 +1846,50 @@ export function App() {
             onTouchEnd={swipeEnd}
             onTouchCancel={swipeCancel}
           >
-            {shownUnder && !searchShown && (
+            {stackShown && <CardStack under={stackUnder} onPick={pickUnder} t={t} />}
+            {!mobile && shownUnder && !searchShown && (
               <div className="rail-crumb">
                 <button className="back-link rail-back" onClick={goBack} title={t('back')}>
                   <span aria-hidden>←</span> {t.node('backTo', { page: nameOf(shownUnder, t) })}
                 </button>
               </div>
             )}
-            {subject && !searchShown && <div className="page-head">{pageHead()}</div>}
-            <div className="tab-pane" ref={paneRef}>
-              {/* Behind the graph on a phone the page is not on the screen, and
-                  is not rendered: laid out unseen, it would cost the graph
-                  frames each time its centre moved. */}
-              {searchShown && (
-                <SearchPage
-                  q={q}
-                  onKanji={searchTabKanji}
-                  onWord={searchTabWord}
-                  onSearch={type}
-                  asked={asked}
-                  onAsk={setAsked}
-                  onMap={browseMap}
-                  open={openIn(top)}
-                  words={searchWords}
-                  onWordsWith={showWords}
-                />
-              )}
-              {tab === 'dictionary' &&
-                !onStage &&
-                !searchShown &&
-                (shownTop ? (
-                  page(shownTop)
-                ) : (
-                  <p className="hint rail-section">{t('pickResult')}</p>
-                ))}
-              {/* Kept mounted while hidden, so the count on its tab is there
-                  before the tab is opened. */}
-              {subject && (tab === 'associations' || settled === subject.key) && (
-                <div hidden={tab !== 'associations' || searchShown}>
-                  {associations(subject)}
-                </div>
-              )}
+            <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
+              {subject && !searchShown && <div className="page-head">{pageHead()}</div>}
+              <div className="tab-pane" ref={paneRef}>
+                {/* Behind the graph on a phone the page is not on the screen, and
+                    is not rendered: laid out unseen, it would cost the graph
+                    frames each time its centre moved. */}
+                {searchShown && (
+                  <SearchPage
+                    q={q}
+                    onKanji={searchTabKanji}
+                    onWord={searchTabWord}
+                    onSearch={type}
+                    asked={asked}
+                    onAsk={setAsked}
+                    onMap={browseMap}
+                    open={openIn(top)}
+                    words={searchWords}
+                    onWordsWith={showWords}
+                  />
+                )}
+                {tab === 'dictionary' &&
+                  !onStage &&
+                  !searchShown &&
+                  (shownTop ? (
+                    page(shownTop)
+                  ) : (
+                    <p className="hint rail-section">{t('pickResult')}</p>
+                  ))}
+                {/* Kept mounted while hidden, so the count on its tab is there
+                    before the tab is opened. */}
+                {subject && (tab === 'associations' || settled === subject.key) && (
+                  <div hidden={tab !== 'associations' || searchShown}>
+                    {associations(subject)}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           {mobile && !(onStage && view === 'map') && (
