@@ -58,21 +58,22 @@ export function rims(m: number): { top: number; height: number; i: number }[] {
   return Array.from({ length: shown }, (_, k) => ({
     top: PAD + RIM * k,
     height: k === shown - 1 ? LINE : RIM,
-    i: k === 0 ? 0 : m - shown + k,
+    i: m - shown + k,
   }))
 }
 
 /**
  * The `i`-th of `m` cards under the open one (0 the bottom), at rest. Its
- * folded line is its top. The bottom one -- the first card, lying on the
- * search -- always shows, flat and as wide as the screen, as it lies when
- * open: the end of the stack. Over it, the nearest ones; those between
- * lie under the lowest of those.
+ * folded line is its top. Alone under the open one, the first card -- lying
+ * on the search -- stays flat and as wide as the screen, as it lies when
+ * open. With more on it, it is a card like the others: the nearest ones
+ * show, a little narrower the further down, and those below lie under the
+ * lowest of those.
  */
 export function rest(m: number, i: number, fold: number): Place {
+  if (m === 1) return { y: PAD - fold, s: 1, p: 1, flat: 1, edge: 1 }
   const shown = Math.min(m, SHOWN)
-  if (i === 0) return { y: PAD - fold, s: 1, p: 1, flat: 1, edge: 1 }
-  const k = Math.max(1, i - (m - shown))
+  const k = Math.max(0, i - (m - shown))
   const s = 1 - 0.04 * (shown - k)
   return { y: PAD + RIM * k - s * fold, s, p: 1, flat: 0 }
 }
@@ -165,7 +166,8 @@ export function comeOff(unders: Under[], k: number, h: number): Move[] {
  * The cards under a card just put on them, from where they stood on the
  * screen before to where they rest now: the one it was opened from from the
  * open card's place, its top `top` down the screen, its head folded `p`;
- * the ones under that from where they lay, scrolled up `scrolled`.
+ * the ones under that from where they lay, scrolled up `scrolled` -- or,
+ * scrolled out of sight, where they go, uncovered there by its line.
  *
  * At its top, the card folds into its line as it goes up into place. Scrolled
  * down, it stays where it is -- what is in it is about to be covered -- and
@@ -177,6 +179,9 @@ export function putOn(unders: Under[], top: number, p: number, scrolled: number)
   const moves = unders.map((u, i) => {
     const to = rest(m, i, u.fold)
     if (i < m - 1) {
+      // Scrolled out of sight, they wait where they go, behind the line
+      // coming down to them; in sight, they move from where they were.
+      if (scrolled >= stackHeight(m - 1)) return { u, from: to, to }
       const was = rest(m - 1, i, u.fold)
       return { u, from: { ...was, y: was.y - scrolled }, to }
     }

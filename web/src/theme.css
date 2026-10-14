@@ -6554,6 +6554,11 @@ html {
 
 /* ---------------------------------------------------------------- card stack (phone) */
 
+/* A card's place: only a phone's clips (below). */
+.card-slot {
+  display: contents;
+}
+
 /* On a phone the open page is a card lying on the cards under it, each a
    copy of its page (cardStack.ts places them): the nearest one's folded
    head shows above it, a rim of the ones under that. */
@@ -6646,6 +6651,23 @@ html {
   .page-card {
     background: var(--sumi-sunk);
     border-top: 1px solid transparent;
+  }
+
+  /* A card's place (App.tsx): it clips the card, so the card moved down --
+     coming up, pulled, falling -- adds no room to scroll. Room above it for
+     its shadow (SLOT_ROOM), which takes no taps from the rims there. */
+  .card-slot {
+    display: flex;
+    flex-direction: column;
+    margin-top: -40px;
+    padding-top: 40px;
+    overflow: clip;
+    pointer-events: none;
+  }
+
+  .card-slot > .page-card {
+    flex: 1 0 auto;
+    pointer-events: auto;
   }
 
   .page-card[data-stacked] {

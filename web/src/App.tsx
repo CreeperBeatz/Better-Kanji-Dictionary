@@ -327,6 +327,8 @@ const SUNK = { filter: 'brightness(0.5)' }
 
 /** How long a page takes to slide in or out. */
 const PAGE_MS = 300
+/** Room above a card in its clipped slot, for its shadow (theme.css .card-slot). */
+const SLOT_ROOM = 40
 /** How a card comes up: fast, then settling (as the view transition's, theme.css). */
 const RISE_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
 /** How long a card takes to come up over the page it was opened from. */
@@ -1786,8 +1788,11 @@ export function App() {
     // On the graph only while it is locked: free, a finger moves the graph.
     if (e.currentTarget === stageRef.current && (view !== 'focus' || !graphLocked)) return
     if (movesItself(e.target as Element, e.currentTarget)) return
-    // A page still sliding in is where it is going.
-    scroller.current?.getAnimations({ subtree: true }).forEach((a) => a.finish())
+    // A card still falling off is gone, and the page under it up, for this
+    // finger to go on with. A page still sliding in is where it is going --
+    // but a card coming up goes on coming, under a finger that scrolls it.
+    flight.current?.()
+    scroller.current?.getAnimations({ subtree: true }).forEach((a) => a !== riseAnim.current && a.finish())
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
     const touch = e.touches[0]
     swipe.current = {
@@ -1811,10 +1816,7 @@ export function App() {
     // A pull may follow: the card gets a layer of its own before the finger
     // has moved far enough to tell.
     const s = swipe.current
-    if (s.card && s.back && s.atTop && unders.current.length > 0) {
-      s.plan = comeOff(unders.current, 1, scroller.current?.clientHeight ?? 0)
-      s.card.dataset.moving = ''
-    }
+    if (s.card && s.back && s.atTop && unders.current.length > 0) s.card.dataset.moving = ''
   }
   function swipeMove(e: React.TouchEvent) {
     const s = swipe.current
@@ -1832,7 +1834,14 @@ export function App() {
         // took to tell a pull from a tap.
         s.y = touch.clientY
         dy = 0
+        // The stack as it is now: a card that fell off as this finger came
+        // down has gone by now, and the page under it is up.
+        finishRise()
+        s.card = onCard ? cardRef.current : null
+        s.back = stackShown
+        s.plan = s.card && s.back && unders.current.length > 0 ? comeOff(unders.current, 1, scroller.current.clientHeight) : null
       }
+      if (s.mode === 'turn') finishRise()
       // Anything else is the page scrolling, which is the browser's.
       if (s.mode !== 'pull' && s.card) delete s.card.dataset.moving
       if (s.mode === null) {
@@ -1937,7 +1946,19 @@ export function App() {
       card.style.transform = `translateY(${down + (h - down) * e}px)`
       moveTo(plan, t0 + (1 - t0) * e)
     }
-    run(from ? fallTime(h - down, from.vy) : 380, step, commit)
+    let over = false
+    const end = () => {
+      if (over) return
+      over = true
+      flight.current = null
+      commit()
+    }
+    const stop = run(from ? fallTime(h - down, from.vy) : 380, step, end)
+    flight.current = () => {
+      stop()
+      step(1)
+      end()
+    }
     // Should the page not change after all, it comes back.
     window.setTimeout(() => {
       if (card.dataset.moving === undefined) return
@@ -2071,6 +2092,15 @@ export function App() {
   // slow connection never holds the tap up long. What comes later than the
   // rise waits for its end (see `afterSlide`), as before.
   const rising = useRef(false)
+  /** The card coming up, and the cards under it moving into place: finished at once when a pull or a turn starts. */
+  const riseAnim = useRef<Animation | null>(null)
+  const stacking = useRef<(() => void) | null>(null)
+  /** A card falling off: finished at once, and the page under it put up, when a finger comes down again. */
+  const flight = useRef<(() => void) | null>(null)
+  function finishRise() {
+    riseAnim.current?.finish()
+    stacking.current?.()
+  }
   function rise(p: Page, go: () => void) {
     const ready = mobile && pagesSlide() ? warm(p) : null
     if (!ready) return animateNav('forward', go)
@@ -2109,10 +2139,15 @@ export function App() {
       if (!card) return
       if (unders.current.length === was.m + 1) stackOn(was)
       card.dataset.moving = ''
-      card.animate([{ transform: `translateY(${sc.clientHeight}px)` }, { transform: 'none' }], {
+      const a = card.animate([{ transform: `translateY(${sc.clientHeight}px)` }, { transform: 'none' }], {
         duration: reducedMotion() ? 0 : RISE_MS,
         easing: RISE_EASE,
-      }).onfinish = () => delete card.dataset.moving
+      })
+      riseAnim.current = a
+      a.onfinish = () => {
+        if (riseAnim.current === a) riseAnim.current = null
+        delete card.dataset.moving
+      }
       return
     }
     if (hasViewTransitions()) {
@@ -2153,10 +2188,19 @@ export function App() {
     const { moves, settle } = putOn(unders.current, was.top, was.p, was.scrolled)
     const nearest = unders.current[unders.current.length - 1]
     moveTo(moves, 0)
-    run(reducedMotion() ? 0 : RISE_MS, (e) => moveTo(moves, e), () => {
+    let over = false
+    const end = () => {
+      if (over) return
+      over = true
+      stacking.current = null
       settle()
       if (nearest) trimCard(nearest.el, sc.clientHeight)
-    })
+    }
+    const stop = run(reducedMotion() ? 0 : RISE_MS, (e) => moveTo(moves, e), end)
+    stacking.current = () => {
+      stop()
+      end()
+    }
   }
   function leaveBy(dir: 'forward' | 'back') {
     document.querySelectorAll('[data-ghost]').forEach((g) => g.remove())
@@ -2396,14 +2440,16 @@ export function App() {
                 </button>
               </div>
             )}
+            {/* The card's place, which clips it (theme.css): moved down, coming up
+                or going, the card adds no room to scroll, which, as it came
+                back, would pull a page being scrolled back up. */}
             <div
-              className="page-card"
-              ref={cardRef}
-              data-stacked={stackShown || undefined}
+              className="card-slot"
               // On others, it reaches the bottom of the screen however short
               // the page, so they do not show under its end.
-              style={stackShown ? { minHeight: `calc(100% - ${stackHeight(stackUnder.length)}px)` } : undefined}
+              style={stackShown ? { minHeight: `calc(100% - ${stackHeight(stackUnder.length)}px + ${SLOT_ROOM}px)` } : undefined}
             >
+            <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
@@ -2447,6 +2493,7 @@ export function App() {
                   </div>
                 )}
               </div>
+            </div>
             </div>
           </div>
           {mobile && !(onStage && view === 'map') && (
