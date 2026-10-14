@@ -926,13 +926,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* A kanji's page: each section's title is ruled off, the line across the column. */
 .kanji-page :is(.facts-title, .strokes h3, .readings h3, .meanings > h3, .special-readings > h3, .forms h3, .font-strip h3, .similar-rows h3),
-.kanji-page .vocab-head {
+.kanji-page :is(.vocab-head, .facts-title-row) {
   margin-bottom: 8px;
   padding-bottom: 5px;
   border-bottom: 1px solid var(--rule);
 }
 
-.kanji-page .vocab-head h3 {
+.kanji-page .vocab-head h3,
+.kanji-page .facts-title-row > .facts-title {
   margin: 0;
   padding: 0;
   border: 0;
@@ -4154,7 +4155,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin: 0;
 }
 
-.entry-rank-line + .entry-senses {
+.entry-rank-line + .entry-senses,
+.entry-rank-row + .entry-senses {
   margin-top: 10px;
 }
 
@@ -5714,34 +5716,11 @@ html {
   stroke-linejoin: round;
 }
 
-/* Dictionary and Associations, a card's two tabs, side by side as the others
-   are: in one ring, always. With no card open, the ring is faint, as its tabs are. */
-.tab-ring {
-  position: relative;
-  flex: 1;
-  display: flex;
-}
-
-.tab-ring::before {
-  content: '';
-  position: absolute;
-  inset: 3px 2px 4px;
-  border: 1px solid var(--rule-bright);
-  border-radius: 12px;
-  opacity: 0.35;
-  pointer-events: none;
-  transition: opacity 200ms var(--ease);
-}
-
-.tab-ring[data-on]::before {
-  opacity: 1;
-}
-
-/* How many cards are open, on the ring's shoulder. */
+/* How many cards are open, on the Dictionary icon's shoulder. */
 .tab-depth {
   position: absolute;
-  top: -4px;
-  right: -2px;
+  bottom: 50%;
+  left: 70%;
   display: grid;
   place-items: center;
   min-width: 16px;
@@ -6729,22 +6708,35 @@ html {
     cursor: pointer;
   }
 
-  /* A page's associations, from the foot of its head (App.tsx): that foot is
-     the line the head folds into, so the button is there however far down
-     the card is read. Folded, it is its icon and count only. */
-  .notes-row {
-    position: relative;
-    z-index: 1;
+  /* A page's associations, beside its first title (App.tsx): Statistics on
+     a kanji, how common it is on a word. */
+  .facts-title-row,
+  .entry-rank-row {
     display: flex;
-    justify-content: flex-end;
-    margin-top: -12px;
-    padding: 0 16px 7px;
-    border-bottom: 1px solid var(--rule);
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
 
-  /* The head's rule is under the row, not through it. */
-  .page-head > .rail-section:has(+ .notes-row) {
-    border-bottom: 0;
+  .facts-title-row {
+    margin-top: 18px;
+  }
+
+  .facts-title-row > .facts-title {
+    margin: 0;
+  }
+
+  .facts-title-row + .facts {
+    margin-top: 8px;
+  }
+
+  /* The button stands on the title's rule, not taller than the line it is in. */
+  .facts-title-row .notes-chip {
+    margin: -6px 0 -4px;
+  }
+
+  .entry-rank-row > .entry-rank-line {
+    margin: 0;
   }
 
   .notes-chip {
@@ -6786,18 +6778,6 @@ html {
     color: var(--paper);
     font-size: calc(11px * var(--type));
     text-align: center;
-  }
-
-  /* On their own card: where you are, not a way. */
-  .notes-chip[data-on] {
-    border-color: transparent;
-    background: none;
-    color: var(--paper-dim);
-    cursor: default;
-  }
-
-  .page-head[data-collapsed] .notes-chip-label {
-    display: none;
   }
 
   /* A card coming up is a picture of its own, which moves whole (App.tsx

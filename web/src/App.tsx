@@ -1251,6 +1251,7 @@ export function App() {
             onPick={openKanji}
             onWord={openWord}
             onSignIn={signIn}
+            notes={notesButton(p, live)}
           />
         )
       case 'kanji': {
@@ -1264,6 +1265,7 @@ export function App() {
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
             onSignIn={signIn}
             onWordsWith={showWords}
+            notes={notesButton(p, live)}
           />
         ) : null
       }
@@ -1424,7 +1426,6 @@ export function App() {
       <>
         <div className="page-head" data-folding="">
           <section className={p.kind === 'word' ? 'rail-section word-panel' : 'rail-section'}>{head}</section>
-          {notesRow(p, true)}
         </div>
         <div className="tab-pane">{page(p, true)}</div>
       </>
@@ -1504,40 +1505,33 @@ export function App() {
       cancelAnimationFrame(frame)
     }
   }, [folding, shownTop, searchShown, onStage, foldHead])
-  // A page's associations, from the foot of its head: a card of their own,
+  // A page's associations, from beside its first title: a card of their own,
   // over its dictionary, back from which is the dictionary again.
   const openNotes = useStable(() => {
     if (!shownTop || (shownTop.kind !== 'kanji' && shownTop.kind !== 'word') || shownTop.notes) return
     const p: Page = { ...shownTop, notes: true }
     rise(p, () => push(p))
   })
-  // The head's foot is the line it folds into, so this is in reach however
-  // far down the card is read. On their own card, it says where you are.
-  function notesRow(p: Page | null, live = false) {
-    if (!mobile || !p || (p.kind !== 'kanji' && p.kind !== 'word')) return null
-    const on = hasNotes(p)
+  // In a page drawn under the open card it is only a picture, with no count.
+  function notesButton(p: Page, live: boolean) {
+    if (!mobile || (p.kind !== 'kanji' && p.kind !== 'word')) return undefined
     const n = live ? 0 : notesCount
     return (
-      <div className="notes-row">
-        <button
-          className="notes-chip"
-          data-on={on || undefined}
-          aria-current={on ? 'page' : undefined}
-          aria-label={n > 0 ? `${t('associations')} ${n}` : t('associations')}
-          onClick={on || live ? undefined : openNotes}
-        >
-          <span className="notes-chip-icon" aria-hidden>
-            <PhoneTabIcon tab="associations" />
-          </span>
-          <span className="notes-chip-label">{t('associations')}</span>
-          {!on && n > 0 && <span className="notes-chip-count">{n}</span>}
-        </button>
-      </div>
+      <button
+        className="notes-chip"
+        aria-label={n > 0 ? `${t('associations')} ${n}` : t('associations')}
+        onClick={live ? undefined : openNotes}
+      >
+        <span className="notes-chip-icon" aria-hidden>
+          <PhoneTabIcon tab="associations" />
+        </span>
+        {t('associations')}
+        {n > 0 && <span className="notes-chip-count">{n}</span>}
+      </button>
     )
   }
   // A tap on the folded line goes to the card's top, whatever it is on.
   function onHeadTap(e: React.MouseEvent) {
-    if ((e.target as Element).closest('.notes-chip')) return
     if (!headRef.current?.hasAttribute('data-collapsed')) return
     e.preventDefault()
     e.stopPropagation()
@@ -1952,6 +1946,11 @@ export function App() {
       <button key={p} role="tab" aria-selected={phoneTab === p} disabled={tabOff(p)} onClick={() => tapPhoneTab(p)}>
         <span className="phone-tab-icon">
           <PhoneTabIcon tab={p} />
+          {p === 'dictionary' && openCards > 1 && (
+            <span className="tab-depth" key={openCards} aria-label={t('openCards', { n: openCards })}>
+              {openCards}
+            </span>
+          )}
         </span>
         {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
       </button>
@@ -2313,7 +2312,6 @@ export function App() {
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
-                  {notesRow(shownTop)}
                 </div>
               )}
               <div className="tab-pane" ref={paneRef}>
@@ -2365,21 +2363,8 @@ export function App() {
               onTouchCancel={swipeCancel}
             >
               <span className="phone-tab-mark" aria-hidden />
-              {PHONE_TABS.map((p) =>
-                p === 'dictionary' ? (
-                  // The cards' tab, in a ring, with how many cards are open on it.
-                  <div key="card" className="tab-ring" data-on={subject !== null || undefined}>
-                    {phoneTabButton('dictionary')}
-                    {openCards > 1 && (
-                      <span className="tab-depth" key={openCards} aria-label={t('openCards', { n: openCards })}>
-                        {openCards}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  phoneTabButton(p)
-                ),
-              )}
+              {/* On Dictionary, how many cards are open. */}
+              {PHONE_TABS.map((p) => phoneTabButton(p))}
             </nav>
           )}
         </aside>

@@ -97,6 +97,8 @@ interface Props {
   onSignIn?: () => void
   /** Opens every word with the kanji, by meaning: "see all words". */
   onWordsWith?: (char: string) => void
+  /** The way to its associations, beside the statistics' title (a phone's). */
+  notes?: React.ReactNode
 }
 
 // With no meaning groups, the page shows this many key words; the rest are a search away.
@@ -159,7 +161,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith, notes }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -275,7 +277,14 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <p className="kanji-hero-note">{t('heroAi')}</p>
         </>
       )}
-      <h3 className="facts-title">{t('statistics')}</h3>
+      {notes ? (
+        <div className="facts-title-row">
+          <h3 className="facts-title">{t('statistics')}</h3>
+          {notes}
+        </div>
+      ) : (
+        <h3 className="facts-title">{t('statistics')}</h3>
+      )}
       <dl className="facts">
         {n.strokes != null && (
           <>
