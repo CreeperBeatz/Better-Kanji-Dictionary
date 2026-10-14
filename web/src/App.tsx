@@ -1384,6 +1384,18 @@ export function App() {
     return () => io.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bar !== null, shownTop, searchShown, onStage])
+  // On a phone the search bar lies over the top of the page, so it can slide
+  // away without the page moving: the page starts as far down as it is tall.
+  useLayoutEffect(() => {
+    const box = searchBarOf(inputRef.current)
+    const grid = box?.closest<HTMLElement>('.shell-grid')
+    if (!mobile || !box || !grid) return
+    const measure = () => grid.style.setProperty('--bar-h', `${box.offsetHeight}px`)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(box)
+    return () => ro.disconnect()
+  }, [mobile])
   function toCardTop() {
     scroller.current?.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' })
   }
@@ -1491,6 +1503,8 @@ export function App() {
     back: boolean
     /** The page under the card, copied, showing as the card comes off it. */
     under: HTMLElement | null
+    /** Whether letting go now would take the card off. */
+    armed: boolean
   } | null>(null)
   // The tab turned from, as a still copy, and where it goes as the tab turned
   // to comes in beside it: for the effect below, once that one is showing.
@@ -1570,6 +1584,7 @@ export function App() {
       // opened from is a tab away, and a pull brings up the keyboard over it.
       back: stackShown,
       under: null,
+      armed: false,
     }
   }
   function swipeMove(e: React.TouchEvent) {
@@ -1608,7 +1623,7 @@ export function App() {
         // The page under it, back a little and dim, comes forward as it goes.
         if (!s.under) s.under = layUnder(copyAt(entries.length - 2, shownUnder))
         if (s.under) sinkUnder(s.under, Math.min(1, down / (scroller.current.clientHeight * 0.6)))
-        stackOf()?.toggleAttribute('data-armed', dy > PULL)
+        if (s.armed !== dy > PULL) stackOf()?.toggleAttribute('data-armed', (s.armed = dy > PULL))
       } else searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
       return
     }
@@ -1731,14 +1746,19 @@ export function App() {
     if (!sc) return
     const at = new DOMMatrix(getComputedStyle(card).transform).m42
     const h = sc.clientHeight
-    // Thrown, it keeps going; from rest, it eases off the screen.
+    // Thrown, it goes on at the speed the finger left it at, so there is no
+    // kink where the finger lets go; from rest, it eases off the screen.
     const thrown = vy > 0.2
-    const ms = reducedMotion() ? 0 : thrown ? Math.min(320, Math.max(180, (h - at) / Math.max(vy, 1.6))) : 340
+    const ms = reducedMotion() ? 0 : thrown ? Math.min(300, Math.max(200, (h - at) / Math.max(vy, 1.2))) : 340
+    const slope = thrown ? Math.min(3, (vy * ms) / Math.max(1, h - at)) : 0
     card.style.transform = `translateY(${h}px)`
     const fall = card.animate([{ transform: `translateY(${at}px)` }, { transform: `translateY(${h}px)` }], {
       duration: ms,
-      easing: thrown ? 'cubic-bezier(0.3, 0.5, 0.6, 1)' : 'cubic-bezier(0.32, 0.72, 0, 1)',
+      easing: thrown ? `cubic-bezier(0.25, ${(0.25 * slope).toFixed(3)}, 0.5, 1)` : 'cubic-bezier(0.32, 0.72, 0, 1)',
     })
+    // A page come back to part way down has no search over it: it goes as
+    // the card falls, not after.
+    if (under?.querySelector('.card-bar[data-shown]')) sc.closest('.shell-grid')?.setAttribute('data-bar-hidden', '')
     if (under) {
       under.animate([{ transform: under.style.transform, opacity: under.style.opacity }, { transform: 'none', opacity: 1 }], {
         duration: ms,
@@ -1946,6 +1966,13 @@ export function App() {
     // pages came off in place.
     const sc = scroller.current
     if (dropped.current && sc && droppedTo.current !== null) restoreScroll(sc, droppedTo.current)
+    // And its name along its top, as its copy had it, without sliding in again.
+    if (dropped.current && card && sc) {
+      const head = card.querySelector('.page-head')
+      setHeadGone(head !== null && head.getBoundingClientRect().bottom < sc.getBoundingClientRect().top + 44)
+      card.dataset.landing = ''
+      requestAnimationFrame(() => requestAnimationFrame(() => delete card.dataset.landing))
+    }
     droppedTo.current = null
     dropped.current = false
     document.querySelectorAll('[data-under]').forEach((g) => g.remove())
@@ -2027,6 +2054,8 @@ export function App() {
         className="shell-grid"
         data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
+        // Reading a card past its head, the search goes and its name stays.
+        data-bar-hidden={(mobile && !onStage && bar !== null && headGone) || undefined}
         data-split={split || undefined}
         style={
           {

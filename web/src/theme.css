@@ -1240,9 +1240,28 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     display: none;
   }
 
+  /* The rail's pages run under the search bar, which lies over their top
+     and can slide away (data-bar-hidden) without them moving; they start
+     below it. --bar-h is the bar's height (App.tsx). */
   .rail-body {
-    grid-area: main;
+    grid-row: bar-start / main-end;
+    grid-column: 1;
+    padding-top: var(--bar-h, 0px);
     background: var(--sumi-sunk);
+  }
+
+  .searchbar {
+    transition: transform 220ms var(--ease);
+  }
+
+  /* Not while it is being typed in. */
+  .shell-grid[data-bar-hidden] .searchbar:not(:focus-within) {
+    transform: translateY(calc(-100% - 1px));
+  }
+
+  /* Above the pages sliding under it as they come and go. */
+  html[data-nav] .searchbar {
+    view-transition-name: searchbar;
   }
 
   .stage {
@@ -6658,6 +6677,23 @@ html {
     pointer-events: auto;
   }
 
+  /* With the search gone, at the very top: a sticky box's top counts from
+     inside the page's padding, which is where the search lay. */
+  .shell-grid[data-bar-hidden] .card-bar {
+    top: calc(0px - var(--bar-h, 0px));
+  }
+
+  /* A page come back to has its bar as its copy had it, at once. */
+  .page-card[data-landing] .card-bar {
+    transition: none;
+  }
+
+  /* Moving with the finger, and under it a copy: their own layers. */
+  .page-card[data-moving],
+  [data-under] {
+    will-change: transform, opacity;
+  }
+
   .page-card[data-stacked] .card-bar {
     background: var(--sumi);
     border-top: 1px solid var(--rule-bright);
@@ -6788,6 +6824,12 @@ html[data-nav='forward']::view-transition-new(stack) {
 ::view-transition-old(card),
 ::view-transition-new(card) {
   animation: none;
+}
+
+::view-transition-group(searchbar),
+::view-transition-old(searchbar),
+::view-transition-new(searchbar) {
+  animation-duration: 220ms;
 }
 
 html[data-card='coming']::view-transition-group(card) {
