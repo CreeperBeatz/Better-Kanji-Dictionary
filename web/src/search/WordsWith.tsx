@@ -77,6 +77,11 @@ function GroupToggle({
   )
 }
 
+/** What the list asks for first, kept by the api: for opening it whole (App.tsx warm). */
+export function wordsWithKey(char: string, common: boolean): string {
+  return `${char}|${common ? 'true' : 'false'}|${FIRST}`
+}
+
 export function WordsWith({
   char,
   common,
@@ -97,7 +102,8 @@ export function WordsWith({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const [data, setData] = useState<WordsWithResponse | null>(null)
+  // Asked for already, as opening its card does: there at once.
+  const [data, setData] = useState<WordsWithResponse | null>(() => api.wordsWithFirst.peek(wordsWithKey(char, common)) ?? null)
   const [offline, setOffline] = useState(false)
   const [more, setMore] = useState(false)
   // Per group: how many words are shown, and whether it is folded.
@@ -117,9 +123,14 @@ export function WordsWith({
 
   useEffect(() => {
     let stale = false
-    setData(null)
     setOffline(false)
-    api.wordsWith(char, common, 0, FIRST).then(
+    const known = api.wordsWithFirst.peek(wordsWithKey(char, common))
+    if (known) {
+      setData(known)
+      return
+    }
+    setData(null)
+    api.wordsWithFirst(wordsWithKey(char, common)).then(
       (d) => !stale && setData(d),
       () =>
         // No server: the device's few most common words for the kanji, as one list.

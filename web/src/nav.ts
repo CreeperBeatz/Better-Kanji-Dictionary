@@ -39,6 +39,8 @@ export type Page =
    * `centre` is which of its kanji the graph shows, once one was picked.
    */
   | { kind: 'word'; id: number; word?: Word; centre?: string; notes?: boolean }
+  /** On a phone, every word with a kanji, by meaning, as a card of its own over that kanji's page. */
+  | { kind: 'words'; char: string }
 
 export type Stack = Page[]
 
@@ -70,6 +72,7 @@ const HOME: Page = { kind: 'search', q: '' }
 const KANJI_PATH = /^\/kanji\/([^/]+)(\/associations)?\/?$/
 const WORD_PATH = /^\/word\/(\d+)(\/associations)?\/?$/
 const LEVEL_PATH = /^\/level\/([1-5])\/?$/
+const WORDS_PATH = /^\/words\/([^/]+)\/?$/
 
 export function samePage(a: Page, b: Page): boolean {
   if (a.kind !== b.kind) return false
@@ -82,6 +85,8 @@ export function samePage(a: Page, b: Page): boolean {
       return a.char === (b as typeof a).char && !a.notes === !(b as typeof a).notes
     case 'word':
       return a.id === (b as typeof a).id && !a.notes === !(b as typeof a).notes
+    case 'words':
+      return a.char === (b as typeof a).char
   }
 }
 
@@ -98,6 +103,7 @@ export function urlOf(p: Page): string {
   if (p.kind === 'kanji') path = `/kanji/${encodeURIComponent(p.char)}`
   else if (p.kind === 'word') path = `/word/${p.id}`
   else if (p.kind === 'level') path = `/level/${p.level}`
+  else if (p.kind === 'words') path = `/words/${encodeURIComponent(p.char)}`
   if ((p.kind === 'kanji' || p.kind === 'word') && p.notes) path += '/associations'
   else if (p.kind === 'search' && (p.q || p.words)) {
     path = '/search'
@@ -121,6 +127,15 @@ export function pageInUrl(): Page | null {
   }
   const w = path.match(WORD_PATH)
   if (w) return { kind: 'word', id: Number(w[1]), ...(w[2] ? { notes: true } : {}) }
+  try {
+    const ws = path.match(WORDS_PATH)
+    if (ws) {
+      const c = decodeURIComponent(ws[1])
+      return [...c].length === 1 ? { kind: 'words', char: c } : null
+    }
+  } catch {
+    return null
+  }
   const l = path.match(LEVEL_PATH)
   if (l) return { kind: 'level', level: Number(l[1]) as Level }
   if (path === '/search' || path === '/search/') {

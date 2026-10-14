@@ -6622,6 +6622,20 @@ html {
     top: auto;
   }
 
+  /* Every word with a kanji, as a card: its name held along its top. */
+  .page-card:not([data-copy]) > .words-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--sumi);
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* Its list says its name once: along the top. */
+  .words-head ~ .tab-pane .words-with-head h2 {
+    display: none;
+  }
+
   /* A card no copy was kept of: its name, as a folded line. */
   .card-name {
     height: 44px;

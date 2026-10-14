@@ -4,7 +4,7 @@ import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } fro
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
-import { LevelPage, SearchPage } from './search/Results'
+import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
@@ -12,6 +12,7 @@ import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { loadNotes } from './detail/NoteContent'
+import { wordsWithKey } from './search/WordsWith'
 import { local, runningInstalled } from './local/local'
 import { InstallGuide } from './install/InstallGuide'
 import { WordHead, WordPanel } from './detail/WordPanel'
@@ -75,6 +76,7 @@ const S = strings(
     howGraph: 'How to read the graph',
     legend: 'Legend',
     openCards: '{n} cards open',
+    wordsWith: 'Words with {c}',
   },
   {
     offline: 'Графът има нужда от връзка.',
@@ -99,6 +101,7 @@ const S = strings(
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
     openCards: '{n} отворени карти',
+    wordsWith: 'Думи с {c}',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -448,6 +451,7 @@ function nameOf(p: Page, t: T) {
   if (p.kind === 'kanji') return <span className="back-glyph">{p.char}</span>
   if (p.kind === 'word') return <span className="back-glyph">{p.word?.headword ?? t('theWord')}</span>
   if (p.kind === 'level') return <>N{p.level}</>
+  if (p.kind === 'words') return <>{t('wordsWith', { c: p.char })}</>
   if (!p.q) return <>{t('search')}</>
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
@@ -463,6 +467,7 @@ function labelOf(p: Page, t: T): string {
   if (p.kind === 'kanji') return p.char
   if (p.kind === 'word') return p.word?.headword ?? t('theWord')
   if (p.kind === 'level') return `N${p.level}`
+  if (p.kind === 'words') return t('wordsWith', { c: p.char })
   return p.q || t('search')
 }
 
@@ -491,6 +496,7 @@ const READY_MS = 300
 /** Whether all a page shows at once is here (see `warm`). */
 function known(p: Page): boolean {
   if (p.kind === 'word') return !!api.word.peek(p.id)
+  if (p.kind === 'words') return !!api.wordsWithFirst.peek(wordsWithKey(p.char, commonOnly()))
   if (p.kind !== 'kanji') return true
   const c = p.char
   return !!(api.kanji.peek(c) && api.kanjiPage.peek(c) && api.forms.peek(c) && api.fonts.peek(c) && api.similar.peek(c))
@@ -508,6 +514,7 @@ const WHOLE_MS = 2500
 function warm(p: Page): Promise<unknown> | null {
   if (known(p)) return null
   if (p.kind === 'word') return api.word(p.id)
+  if (p.kind === 'words') return api.wordsWithFirst(wordsWithKey(p.char, commonOnly()))
   const c = (p as { char: string }).char
   return Promise.all([
     api.kanji(c),
@@ -569,6 +576,7 @@ function titleOf(p: Page): string {
   if (p.kind === 'kanji') return `${p.char} · ${TITLE}`
   if (p.kind === 'word' && p.word) return `${p.word.headword} · ${TITLE}`
   if (p.kind === 'level') return `N${p.level} · ${TITLE}`
+  if (p.kind === 'words') return `${p.char} · ${TITLE}`
   if (p.kind === 'search' && p.q) return `${p.q} · ${TITLE}`
   return TITLE
 }
@@ -1258,6 +1266,20 @@ export function App() {
         )
       case 'level':
         return <LevelPage level={p.level} onKanji={openKanji} />
+      case 'words':
+        return (
+          <SearchPage
+            q=""
+            words={p.char}
+            onKanji={openKanji}
+            onWord={openWord}
+            onSearch={type}
+            asked={asked}
+            onAsk={setAsked}
+            onMap={browseMap}
+            railBack
+          />
+        )
       case 'word':
         return (
           <WordPanel
@@ -1299,6 +1321,8 @@ export function App() {
         : null
   }
   const subject = subjectOf(shownTop)
+  // A page the tabs treat as a card: a kanji, a word, or every word with a kanji.
+  const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
   // On a phone the page shows its dictionary, or its associations when it is
   // their card.
@@ -1381,7 +1405,7 @@ export function App() {
   }
   // The Search tab shows the search with the page marked in it, and the page
   // still there to turn back to.
-  const searchShown = mobile && !onStage && subject !== null && searchOver !== null && samePage(searchOver, top)
+  const searchShown = mobile && !onStage && carded && searchOver !== null && samePage(searchOver, top)
   // On a phone the open page is a card: pulled down, it comes off, if it
   // lies on another. The pages opened before it show their edges above it --
   // not the search or level list they were all opened from, which is the
@@ -1584,7 +1608,8 @@ export function App() {
   // WHOLE_MS, offline say -- it shows what it has.
   const [, setWarmed] = useState(0)
   const released = useRef(new Set<string>())
-  const keyOf = (p: Page) => (p.kind === 'kanji' ? p.char : p.kind === 'word' ? `word:${p.id}` : '')
+  const keyOf = (p: Page) =>
+    p.kind === 'kanji' ? p.char : p.kind === 'word' ? `word:${p.id}` : p.kind === 'words' ? `words:${p.char}` : ''
   const waiting =
     mobile && shownTop !== null && !hasNotes(shownTop) && !known(shownTop) && !released.current.has(keyOf(shownTop))
   useEffect(() => {
@@ -1608,11 +1633,11 @@ export function App() {
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
-    onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : mobile ? 'dictionary' : tab
+    onStage && view === 'focus' ? 'components' : searchShown || !carded ? 'search' : mobile ? 'dictionary' : tab
   // On a phone a card -- its dictionary, its associations, its graph -- has
   // no search over it: the Search tab is the way to it. What shows instead,
   // at the top and on the tabs, is how many cards are open.
-  const barOff = mobile && subject !== null && phoneTab !== 'search'
+  const barOff = mobile && carded && phoneTab !== 'search'
   const openCards = mobile ? entries.length - base : 0
   // Where the page was scrolled to, for coming back to it from the search.
   const pageAt = useRef(0)
@@ -1660,15 +1685,13 @@ export function App() {
   const showWords = useStable((char: string | null) => {
     const page: Page = char ? { kind: 'search', q, words: char } : { kind: 'search', q }
     setHovered(null)
+    // On a phone, from a card: a card of their own, on the stack.
+    if (mobile && char && onCard) {
+      const card: Page = { kind: 'words', char }
+      return rise(card, () => push(card))
+    }
     if (split || searchShown) return rebase(page)
     if (top.kind === 'search') return replaceTop(page)
-    // On a phone the search is a tab, and they are a mode of it, not a card.
-    // The card is kept, to lie under a word opened from them.
-    if (mobile) {
-      keepUnder(stack[0].kind === 'search' ? stack.length - 1 : stack.length)
-      rebase(page)
-      return tapPhoneTab('search')
-    }
     push(page)
   })
   const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
@@ -1769,7 +1792,7 @@ export function App() {
   // never move about: all but Search on the search itself or a level's list,
   // Components for a word with no kanji.
   function tabOff(p: PhoneTab) {
-    return p !== 'search' && (subject === null || (p === 'components' && !componentsOf))
+    return p !== 'search' && (!carded || (p === 'components' && !componentsOf))
   }
   function besideTab(dx: number): PhoneTab | undefined {
     if (onSearchPage) return undefined
@@ -1799,7 +1822,7 @@ export function App() {
       x: touch.clientX,
       y: touch.clientY,
       mode: null,
-      turns: subject !== null || onSearchPage,
+      turns: carded || onSearchPage,
       // The tabs along the bottom turn too, but do not pull.
       // Under a pixel: on a phone the top can rest at a fraction of one.
       atTop: e.currentTarget === scroller.current && e.currentTarget.scrollTop < 1,
@@ -2454,6 +2477,11 @@ export function App() {
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
                 </div>
+              )}
+              {/* Every word with a kanji: its name along the top, held there,
+                  which is the line it shows under the cards opened from it. */}
+              {mobile && shownTop?.kind === 'words' && !searchShown && (
+                <div className="page-head card-name words-head">{labelOf(shownTop, t)}</div>
               )}
               <div className="tab-pane" ref={paneRef}>
                 {/* Behind the graph on a phone the page is not on the screen, and

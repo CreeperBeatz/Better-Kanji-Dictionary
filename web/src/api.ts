@@ -1102,6 +1102,19 @@ export const api = {
       ['limit', String(limit)],
     ]),
 
+  /**
+   * The first of every word with a kanji, kept, for the list to show at once:
+   * `key` is `char|common|limit` (see WordsWith).
+   */
+  wordsWithFirst: kept((key: string) => {
+    const [char, common, limit] = key.split('|')
+    return get<WordsWithResponse>(`/api/search/words-with/${encodeURIComponent(char)}`, [
+      ['common', common],
+      ['offset', '0'],
+      ['limit', limit],
+    ])
+  }),
+
   /** A kanji page's meanings, readings and words, and its radical. */
   kanjiPage: kept((char: string) => get<KanjiPage>(`/api/search/kanji-page/${encodeURIComponent(char)}`)),
 
