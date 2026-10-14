@@ -30,13 +30,15 @@ export type Page =
   /**
    * `centre` is the character the graph was centred on when this one was
    * picked there, which it stays centred on while this page is up.
+   * `notes`: its associations, which on a phone are a card of their own,
+   * opened over its dictionary from the head.
    */
-  | { kind: 'kanji'; char: string; centre?: string }
+  | { kind: 'kanji'; char: string; centre?: string; notes?: boolean }
   /**
    * `word` is what the list already knew, so the head shows at once.
    * `centre` is which of its kanji the graph shows, once one was picked.
    */
-  | { kind: 'word'; id: number; word?: Word; centre?: string }
+  | { kind: 'word'; id: number; word?: Word; centre?: string; notes?: boolean }
 
 export type Stack = Page[]
 
@@ -65,8 +67,8 @@ interface Entry {
 
 const MAX = 40
 const HOME: Page = { kind: 'search', q: '' }
-const KANJI_PATH = /^\/kanji\/([^/]+)\/?$/
-const WORD_PATH = /^\/word\/(\d+)\/?$/
+const KANJI_PATH = /^\/kanji\/([^/]+)(\/associations)?\/?$/
+const WORD_PATH = /^\/word\/(\d+)(\/associations)?\/?$/
 const LEVEL_PATH = /^\/level\/([1-5])\/?$/
 
 export function samePage(a: Page, b: Page): boolean {
@@ -77,9 +79,9 @@ export function samePage(a: Page, b: Page): boolean {
     case 'level':
       return a.level === (b as typeof a).level
     case 'kanji':
-      return a.char === (b as typeof a).char
+      return a.char === (b as typeof a).char && !a.notes === !(b as typeof a).notes
     case 'word':
-      return a.id === (b as typeof a).id
+      return a.id === (b as typeof a).id && !a.notes === !(b as typeof a).notes
   }
 }
 
@@ -96,7 +98,8 @@ export function urlOf(p: Page): string {
   if (p.kind === 'kanji') path = `/kanji/${encodeURIComponent(p.char)}`
   else if (p.kind === 'word') path = `/word/${p.id}`
   else if (p.kind === 'level') path = `/level/${p.level}`
-  else if (p.q || p.words) {
+  if ((p.kind === 'kanji' || p.kind === 'word') && p.notes) path += '/associations'
+  else if (p.kind === 'search' && (p.q || p.words)) {
     path = '/search'
     if (p.q) params.set('q', p.q)
     if (p.words) params.set('words', p.words)
@@ -111,13 +114,13 @@ export function pageInUrl(): Page | null {
     const k = path.match(KANJI_PATH)
     if (k) {
       const c = decodeURIComponent(k[1])
-      return [...c].length === 1 ? { kind: 'kanji', char: c } : null
+      return [...c].length === 1 ? { kind: 'kanji', char: c, ...(k[2] ? { notes: true } : {}) } : null
     }
   } catch {
     return null
   }
   const w = path.match(WORD_PATH)
-  if (w) return { kind: 'word', id: Number(w[1]) }
+  if (w) return { kind: 'word', id: Number(w[1]), ...(w[2] ? { notes: true } : {}) }
   const l = path.match(LEVEL_PATH)
   if (l) return { kind: 'level', level: Number(l[1]) as Level }
   if (path === '/search' || path === '/search/') {

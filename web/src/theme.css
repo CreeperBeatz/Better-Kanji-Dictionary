@@ -5718,7 +5718,7 @@ html {
    are: in one ring, always. With no card open, the ring is faint, as its tabs are. */
 .tab-ring {
   position: relative;
-  flex: 2;
+  flex: 1;
   display: flex;
 }
 
@@ -6727,6 +6727,77 @@ html {
 
   .page-head[data-collapsed] {
     cursor: pointer;
+  }
+
+  /* A page's associations, from the foot of its head (App.tsx): that foot is
+     the line the head folds into, so the button is there however far down
+     the card is read. Folded, it is its icon and count only. */
+  .notes-row {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -12px;
+    padding: 0 16px 7px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  /* The head's rule is under the row, not through it. */
+  .page-head > .rail-section:has(+ .notes-row) {
+    border-bottom: 0;
+  }
+
+  .notes-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 11px;
+    border: 1px solid var(--rule-bright);
+    border-radius: 16px;
+    background: var(--sumi-lift);
+    color: var(--paper);
+    font-size: calc(13px * var(--type));
+    line-height: 1;
+  }
+
+  .notes-chip-icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+
+  .notes-chip-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .notes-chip-count {
+    min-width: 18px;
+    padding: 2px 5px;
+    border-radius: 9px;
+    background: var(--ai-deep);
+    color: var(--paper);
+    font-size: calc(11px * var(--type));
+    text-align: center;
+  }
+
+  /* On their own card: where you are, not a way. */
+  .notes-chip[data-on] {
+    border-color: transparent;
+    background: none;
+    color: var(--paper-dim);
+    cursor: default;
+  }
+
+  .page-head[data-collapsed] .notes-chip-label {
+    display: none;
   }
 
   /* A card coming up is a picture of its own, which moves whole (App.tsx

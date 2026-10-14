@@ -197,7 +197,9 @@ type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
 // is the search the page was opened from, and Components is the graph.
 type PhoneTab = 'search' | RailTab | 'components'
-const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'associations', 'components']
+// On a phone a page's associations are a card of their own, opened from its
+// head (`notes` on the page), not a tab.
+const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'components']
 /** How a page changes on a phone: to another page, or to another of its tabs. */
 type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
 /** What slides as a tab turns: the whole screen, or only what is under the page's head. */
@@ -443,8 +445,14 @@ function nameOf(p: Page, t: T) {
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
 
+/** A page's associations, as a card of their own over its dictionary. */
+function hasNotes(p: Page | null | undefined): boolean {
+  return !!p && (p.kind === 'kanji' || p.kind === 'word') && !!p.notes
+}
+
 /** A page's name as plain text, for a label. */
 function labelOf(p: Page, t: T): string {
+  if (hasNotes(p)) return `${labelOf({ ...p, notes: false } as Page, t)} · ${t('associations')}`
   if (p.kind === 'kanji') return p.char
   if (p.kind === 'word') return p.word?.headword ?? t('theWord')
   if (p.kind === 'level') return `N${p.level}`
@@ -466,6 +474,9 @@ function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number 
 
 /** How tall a card's character is in its folded line. */
 const FOLDED_GLYPH = 26
+
+/** For an Associations that counts for nobody: one drawn under the open card. */
+const noCount = () => {}
 
 /** How long a tap waits at most for what the card it opens shows (see `rise`). */
 const READY_MS = 300
@@ -644,7 +655,17 @@ export function App() {
   // from, so going anywhere else leaves it. Compared as a page, not an object:
   // leaving the graph for it comes back through history, as a copy.
   const [searchOver, setSearchOver] = useState<Page | null>(null)
-  const [assocCount, setAssocCount] = useState(0)
+  // How many associations a page has, told by its Associations as they load.
+  const [assocCount, setAssocCount] = useState<{ key: string; n: number }>({ key: '', n: 0 })
+  const counters = useRef(new Map<string, (n: number) => void>())
+  function counterFor(key: string) {
+    let f = counters.current.get(key)
+    if (!f) {
+      f = (n: number) => setAssocCount((c) => (c.key === key && c.n === n ? c : { key, n }))
+      counters.current.set(key, f)
+    }
+    return f
+  }
 
   // On a phone the rail and the stage cannot both have room, so one fills the
   // screen at a time: the graph is a page's Components tab, the map is gone to
@@ -1197,7 +1218,11 @@ export function App() {
     if (was && !cardPreview && scroller.current) scroller.current.scrollTop = pageScroll.current
   }, [cardPreview])
 
-  function page(p: Page) {
+  function page(p: Page, live = false) {
+    if (hasNotes(p)) {
+      const s = subjectOf(p)
+      return s && associations(s, live)
+    }
     switch (p.kind) {
       case 'search':
         return (
@@ -1247,13 +1272,24 @@ export function App() {
 
   // Kanji and words carry associations; searches and levels do not, so
   // there the tab steps aside and the page shows.
-  const subject =
-    shownTop?.kind === 'kanji'
-      ? { key: shownTop.char, label: shownTop.char }
-      : shownTop?.kind === 'word'
-        ? { key: `word:${shownTop.id}`, label: shownTop.word?.headword ?? t('thisWord') }
+  function subjectOf(p: Page | null) {
+    return p?.kind === 'kanji'
+      ? { key: p.char, label: p.char }
+      : p?.kind === 'word'
+        ? { key: `word:${p.id}`, label: p.word?.headword ?? t('thisWord') }
         : null
-  const tab: RailTab = railTab === 'associations' && !subject ? 'dictionary' : railTab
+  }
+  const subject = subjectOf(shownTop)
+  const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
+  // On a phone the page shows its dictionary, or its associations when it is
+  // their card.
+  const tab: RailTab = mobile
+    ? hasNotes(shownTop)
+      ? 'associations'
+      : 'dictionary'
+    : railTab === 'associations' && !subject
+      ? 'dictionary'
+      : railTab
   // The tab not showing is mounted for its count, but only once the page has
   // come to rest: comments rendered behind a page sliding in cost it frames.
   const subjectKey = subject?.key ?? null
@@ -1263,7 +1299,7 @@ export function App() {
     const t = window.setTimeout(() => setSettled(subjectKey), mobile ? PAGE_MS + 160 : 0)
     return () => clearTimeout(t)
   }, [subjectKey, mobile])
-  function associations(s: { key: string; label: string }) {
+  function associations(s: { key: string; label: string }, live = false) {
     return (
       <Associations
         key={s.key}
@@ -1271,7 +1307,7 @@ export function App() {
         label={s.label}
         onPick={openKanji}
         onSignIn={signIn}
-        onCount={setAssocCount}
+        onCount={live ? noCount : counterFor(s.key)}
       />
     )
   }
@@ -1352,7 +1388,7 @@ export function App() {
     const kept = underCopies.current.filter(
       (u) => u.at < at || (u.at === at && !u.live && samePage(u.page, page)),
     )
-    if (!onCard || onStageRef.current || tab !== 'dictionary' || !card || !sc) {
+    if (!onCard || onStageRef.current || !card || !sc) {
       underCopies.current = kept
       return
     }
@@ -1388,8 +1424,9 @@ export function App() {
       <>
         <div className="page-head" data-folding="">
           <section className={p.kind === 'word' ? 'rail-section word-panel' : 'rail-section'}>{head}</section>
+          {notesRow(p, true)}
         </div>
-        <div className="tab-pane">{page(p)}</div>
+        <div className="tab-pane">{page(p, true)}</div>
       </>
     )
   }
@@ -1467,8 +1504,40 @@ export function App() {
       cancelAnimationFrame(frame)
     }
   }, [folding, shownTop, searchShown, onStage, foldHead])
+  // A page's associations, from the foot of its head: a card of their own,
+  // over its dictionary, back from which is the dictionary again.
+  const openNotes = useStable(() => {
+    if (!shownTop || (shownTop.kind !== 'kanji' && shownTop.kind !== 'word') || shownTop.notes) return
+    const p: Page = { ...shownTop, notes: true }
+    rise(p, () => push(p))
+  })
+  // The head's foot is the line it folds into, so this is in reach however
+  // far down the card is read. On their own card, it says where you are.
+  function notesRow(p: Page | null, live = false) {
+    if (!mobile || !p || (p.kind !== 'kanji' && p.kind !== 'word')) return null
+    const on = hasNotes(p)
+    const n = live ? 0 : notesCount
+    return (
+      <div className="notes-row">
+        <button
+          className="notes-chip"
+          data-on={on || undefined}
+          aria-current={on ? 'page' : undefined}
+          aria-label={n > 0 ? `${t('associations')} ${n}` : t('associations')}
+          onClick={on || live ? undefined : openNotes}
+        >
+          <span className="notes-chip-icon" aria-hidden>
+            <PhoneTabIcon tab="associations" />
+          </span>
+          <span className="notes-chip-label">{t('associations')}</span>
+          {!on && n > 0 && <span className="notes-chip-count">{n}</span>}
+        </button>
+      </div>
+    )
+  }
   // A tap on the folded line goes to the card's top, whatever it is on.
   function onHeadTap(e: React.MouseEvent) {
+    if ((e.target as Element).closest('.notes-chip')) return
     if (!headRef.current?.hasAttribute('data-collapsed')) return
     e.preventDefault()
     e.stopPropagation()
@@ -1492,7 +1561,7 @@ export function App() {
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
-    onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : tab
+    onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : mobile ? 'dictionary' : tab
   // On a phone a card -- its dictionary, its associations, its graph -- has
   // no search over it: the Search tab is the way to it. What shows instead,
   // at the top and on the tabs, is how many cards are open.
@@ -2193,7 +2262,7 @@ export function App() {
                   onClick={() => chooseRailTab('associations')}
                 >
                   {t('associations')}
-                  {assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                  {notesCount > 0 && <span className="rail-tab-count">{notesCount}</span>}
                 </button>
               </div>
             </div>
@@ -2244,6 +2313,7 @@ export function App() {
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
+                  {notesRow(shownTop)}
                 </div>
               )}
               <div className="tab-pane" ref={paneRef}>
@@ -2296,12 +2366,10 @@ export function App() {
             >
               <span className="phone-tab-mark" aria-hidden />
               {PHONE_TABS.map((p) =>
-                p === 'associations' ? null : p === 'dictionary' ? (
-                  // The card's two tabs, in one ring while a card is open,
-                  // with how many cards are open on it.
+                p === 'dictionary' ? (
+                  // The cards' tab, in a ring, with how many cards are open on it.
                   <div key="card" className="tab-ring" data-on={subject !== null || undefined}>
                     {phoneTabButton('dictionary')}
-                    {phoneTabButton('associations')}
                     {openCards > 1 && (
                       <span className="tab-depth" key={openCards} aria-label={t('openCards', { n: openCards })}>
                         {openCards}
