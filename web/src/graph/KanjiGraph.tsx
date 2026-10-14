@@ -826,15 +826,21 @@ ${t('form', { f: n.form })}`}
             >
               ◎
             </button>
-            <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
-              +
-            </button>
-            <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
-              −
-            </button>
-            <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
-              ⤢
-            </button>
+            {/* A phone (the one with a lock) zooms with the fingers, and the
+                whole graph is little more than recentring: only that stays. */}
+            {!onLock && (
+              <>
+                <button onClick={() => zoomAt(1.6, ...middle())} aria-label={t('zoomIn')} title={t('zoomIn')}>
+                  +
+                </button>
+                <button onClick={() => zoomAt(1 / 1.6, ...middle())} aria-label={t('zoomOut')} title={t('zoomOut')}>
+                  −
+                </button>
+                <button onClick={fit} aria-label={t('whole')} title={t('whole')}>
+                  ⤢
+                </button>
+              </>
+            )}
           </>
         )}
       </div>

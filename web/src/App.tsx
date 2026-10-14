@@ -70,6 +70,7 @@ const S = strings(
     howMap: 'How to read the map',
     howGraph: 'How to read the graph',
     legend: 'Legend',
+    openCards: '{n} cards open',
   },
   {
     offline: 'Графът има нужда от връзка.',
@@ -93,6 +94,7 @@ const S = strings(
     howMap: 'Как се чете картата',
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
+    openCards: '{n} отворени карти',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -463,20 +465,6 @@ function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number 
 
 /** How tall a card's character is in its folded line. */
 const FOLDED_GLYPH = 26
-
-/**
- * Over the Dictionary tab, the cards under the open one, as the edges above
- * a card are: one line each, the nearest widest, two at most.
- */
-function TabLayers({ n }: { n: number }) {
-  if (n <= 0) return null
-  return (
-    <span className="tab-layers" aria-hidden>
-      {n > 1 && <span className="tab-layer" data-far />}
-      <span className="tab-layer" />
-    </span>
-  )
-}
 
 /** A kanji or a word, as picked from a list. */
 type Picked = { kind: 'kanji'; char: string } | { kind: 'word'; id: number; word: Word }
@@ -1323,27 +1311,22 @@ export function App() {
     unders.current.forEach((u, i) => put(u, rest(els.length, i, u.fold)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stack, stackShown])
-  // On a phone, scrolling down a card, the search bar goes first, with the
-  // scroll, and then the card's head folds into a line along the top: its
-  // character shrinks to the line's left with its first meaning beside it,
+  // On a phone, scrolling down a card, its head folds into a line along the
+  // top: its character shrinks to the line's left with its first meaning beside it,
   // and the rest squeezes away. The head is sticky, as tall as itself less
   // the line, so the line is what stays. --p on it is how far it is folded,
   // 0 to 1 (read by theme.css); the measures it folds by are taken when its
   // size changes.
   const folding = mobile && onCard && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
   const headRef = useRef<HTMLDivElement>(null)
-  const fold = useRef<{ h: number; bar: number } | null>(null)
+  const fold = useRef<{ h: number } | null>(null)
   const foldHead = useStable(() => {
     const sc = scroller.current
     const head = headRef.current
     const card = cardRef.current
-    const box = searchBarOf(inputRef.current)
     const m = fold.current
     if (!sc || !head || !card || !m) return
-    // The search, over the first stretch of scroll; not while typed in.
-    const gone = box?.contains(document.activeElement) ? 0 : Math.min(1, sc.scrollTop / Math.max(1, m.bar))
-    if (box) box.style.transform = gone > 0 ? `translateY(${-gone * (m.bar + 1)}px)` : ''
-    // Then the head, as the card's top goes past the top of the screen.
+    // As the card's top goes past the top of the screen.
     const past = sc.getBoundingClientRect().top - card.getBoundingClientRect().top
     const p = Math.min(1, Math.max(0, past / Math.max(1, m.h - FOLDED)))
     head.style.setProperty('--p', p.toFixed(3))
@@ -1352,12 +1335,11 @@ export function App() {
   useLayoutEffect(() => {
     const sc = scroller.current
     const head = headRef.current
-    const box = searchBarOf(inputRef.current)
     fold.current = null
     if (!folding || !sc || !head) return
     const measure = () => {
       const h = head.offsetHeight
-      fold.current = { h, bar: parseFloat(getComputedStyle(sc).paddingTop) || 0 }
+      fold.current = { h }
       head.style.setProperty('--head-h', `${h}px`)
       // The character ends at the line's left, as tall as the line allows,
       // in the middle of it: the bottom of the head, which is what shows.
@@ -1399,7 +1381,6 @@ export function App() {
       ro.disconnect()
       sc.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(frame)
-      box?.style.removeProperty('transform')
     }
   }, [folding, shownTop, searchShown, onStage, foldHead])
   // A tap on the folded line goes to the card's top, whatever it is on.
@@ -1428,6 +1409,11 @@ export function App() {
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
     onStage && view === 'focus' ? 'components' : searchShown || subject === null ? 'search' : tab
+  // On a phone a card -- its dictionary, its associations, its graph -- has
+  // no search over it: the Search tab is the way to it. What shows instead,
+  // at the top and on the tabs, is how many cards are open.
+  const barOff = mobile && subject !== null && phoneTab !== 'search'
+  const openCards = mobile ? entries.length - base : 0
   // Where the page was scrolled to, for coming back to it from the search.
   const pageAt = useRef(0)
   function leaveSearchTab() {
@@ -1686,7 +1672,12 @@ export function App() {
       const plan = s.plan
       if (plan && far && takeOff(1, () => popBy(1, true), { down, vy: s.vy, plan })) return
       if (s.card) settle(s.card, plan, s.back ? down : down / 3)
-      if (far && !s.back) typeOver()
+      // On the first card: the search, typing. The box comes up at once,
+      // focused from the touch itself (see typeOver), and its tab after it.
+      if (far && !s.back) {
+        typeOver()
+        toPhoneTab('search')
+      }
       return
     }
     if (s?.mode !== 'turn' || !el) return
@@ -2021,6 +2012,7 @@ export function App() {
         className="shell-grid"
         data-dimmed={accountShown || undefined}
         data-pane={mobile ? pane : undefined}
+        data-bar-off={barOff || undefined}
         data-split={split || undefined}
         style={
           {
@@ -2149,6 +2141,11 @@ export function App() {
               </div>
             </div>
           </div>
+          {barOff && openCards > 1 && (
+            <span className="depth-bubble" key={openCards} aria-label={t('openCards', { n: openCards })}>
+              {openCards}
+            </span>
+          )}
           {mobile && !(onStage && view === 'map') && (
             <nav
               className="phone-tabs"
@@ -2172,8 +2169,11 @@ export function App() {
                 >
                   <span className="phone-tab-icon">
                     <PhoneTabIcon tab={p} />
-                    {p === 'dictionary' && <TabLayers n={mobile ? Math.min(2, stackUnder.length) : 0} />}
-                    {p === 'associations' && subject && assocCount > 0 && <span className="rail-tab-count">{assocCount}</span>}
+                    {(p === 'dictionary' || p === 'associations') && openCards > 1 && (
+                      <span className="tab-depth" key={openCards}>
+                        {openCards}
+                      </span>
+                    )}
                   </span>
                   {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
                 </button>

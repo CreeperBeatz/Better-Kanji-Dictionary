@@ -1255,6 +1255,45 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     view-transition-name: searchbar;
   }
 
+  /* No search over a card, its associations or its graph (App.tsx): the
+     bar's row is gone and the bar is above the screen -- until it is typed
+     in, as a pull on the first card does, when it comes down over the page. */
+  .shell-grid[data-bar-off] {
+    grid-template-rows: 0 minmax(0, 1fr) auto;
+  }
+
+  .shell-grid[data-bar-off] .rail-body {
+    padding-top: 0;
+  }
+
+  .shell-grid[data-bar-off] .searchbar {
+    align-self: start;
+  }
+
+  .shell-grid[data-bar-off] .searchbar:not(:focus-within) {
+    transform: translateY(calc(-100% - 1px));
+  }
+
+  /* How many cards are open, at the top right, over the card. */
+  .depth-bubble {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    z-index: 25;
+    display: grid;
+    place-items: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border: 1px solid var(--rule-bright);
+    border-radius: 14px;
+    background: var(--sumi-lift);
+    color: var(--paper);
+    font-size: calc(13px * var(--type));
+    pointer-events: none;
+    animation: depth-change 240ms var(--ease) backwards;
+  }
+
   .stage {
     grid-area: main;
     min-height: 0;
@@ -5652,8 +5691,7 @@ html {
   justify-content: center;
   gap: 3px;
   min-width: 0;
-  /* Room above the icon for the layers over Dictionary, clear of the mark. */
-  padding: 10px 2px 7px;
+  padding: 8px 2px 9px;
   white-space: nowrap;
   background: none;
   border: 0;
@@ -5701,38 +5739,28 @@ html {
   font-size: calc(10px * var(--type));
 }
 
-/* Over the Dictionary icon, the cards under the open one, as the edges above
-   a card show them: the nearest line widest, the one past it narrower. */
-.tab-layers {
+/* On Dictionary and Associations, how many cards are open, on the icon's shoulder. */
+.tab-depth {
   position: absolute;
-  bottom: calc(100% + 1.5px);
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  transform: translateX(-50%);
+  bottom: 50%;
+  left: 70%;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--ai-deep);
+  color: var(--paper);
+  font-size: calc(10px * var(--type));
+  line-height: 1;
+  animation: depth-change 240ms var(--ease) backwards;
 }
 
-.tab-layer {
-  display: block;
-  width: 16px;
-  height: 1.5px;
-  border-radius: 1px;
-  background: currentColor;
-  opacity: 0.75;
-  animation: tab-layer-in 260ms var(--ease) backwards;
-}
-
-.tab-layer[data-far] {
-  width: 10px;
-  opacity: 0.4;
-}
-
-@keyframes tab-layer-in {
+/* A new count comes in with a small bounce, so the change is seen. */
+@keyframes depth-change {
   from {
-    transform: scaleX(0);
-    opacity: 0;
+    transform: scale(0.6);
   }
 }
 
@@ -6652,9 +6680,7 @@ html {
      line's left; the rest squeezes and fades away first. */
   .page-head[data-folding] {
     position: sticky;
-    /* The line at the very top, where the search lay: a sticky box's top
-       counts from inside the page's padding. */
-    top: calc(44px - var(--head-h, 0px) - var(--bar-h, 0px));
+    top: calc(44px - var(--head-h, 0px));
     z-index: 2;
     background: var(--sumi-sunk);
   }
