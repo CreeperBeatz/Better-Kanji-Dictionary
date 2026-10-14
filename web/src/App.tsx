@@ -483,6 +483,17 @@ const noCount = () => {}
 /** How long a tap waits at most for what the card it opens shows (see `rise`). */
 const READY_MS = 300
 
+/** Whether all a page shows at once is here (see `warm`). */
+function known(p: Page): boolean {
+  if (p.kind === 'word') return !!api.word.peek(p.id)
+  if (p.kind !== 'kanji') return true
+  const c = p.char
+  return !!(api.kanji.peek(c) && api.kanjiPage.peek(c) && api.forms.peek(c) && api.fonts.peek(c) && api.similar.peek(c))
+}
+
+/** How long a page waits at most to show whole, before it shows what it has. */
+const WHOLE_MS = 2500
+
 /**
  * Asks for what a page shows at once, where it is not known yet: for a
  * kanji its details, its page, its forms, its faces and its look-alikes
@@ -490,10 +501,9 @@ const READY_MS = 300
  * the details say so). Null where there is nothing to wait for.
  */
 function warm(p: Page): Promise<unknown> | null {
-  if (p.kind === 'word') return api.word.peek(p.id) ? null : api.word(p.id)
-  if (p.kind !== 'kanji') return null
-  const c = p.char
-  if (api.kanji.peek(c) && api.kanjiPage.peek(c) && api.forms.peek(c)) return null
+  if (known(p)) return null
+  if (p.kind === 'word') return api.word(p.id)
+  const c = (p as { char: string }).char
   return Promise.all([
     api.kanji(c),
     api.similar(c),
@@ -1519,18 +1529,21 @@ export function App() {
   // In a page drawn under the open card it is only a picture, with no count.
   function notesButton(p: Page, live: boolean) {
     if (!mobile || (p.kind !== 'kanji' && p.kind !== 'word')) return undefined
-    const n = live ? 0 : notesCount
+    // The count's circle is always there; the number comes into it once known.
+    const known = !live && subject !== null && assocCount.key === subject.key
     return (
       <button
         className="notes-chip"
-        aria-label={n > 0 ? `${t('associations')} ${n}` : t('associations')}
+        aria-label={known ? `${t('associations')} ${notesCount}` : t('associations')}
         onClick={live ? undefined : openNotes}
       >
         <span className="notes-chip-icon" aria-hidden>
           <PhoneTabIcon tab="associations" />
         </span>
         {t('associations')}
-        {n > 0 && <span className="notes-chip-count">{n}</span>}
+        <span className="notes-chip-count" aria-hidden>
+          {known ? notesCount : ''}
+        </span>
       </button>
     )
   }
@@ -1556,6 +1569,33 @@ export function App() {
   function toCardTop() {
     scroller.current?.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' })
   }
+  // A card shows whole: until all its page shows at once is here, it has its
+  // head and a blank below it, not its parts coming in one by one, each
+  // pushing the next down. Once that is here -- or has failed, or after
+  // WHOLE_MS, offline say -- it shows what it has.
+  const [, setWarmed] = useState(0)
+  const released = useRef(new Set<string>())
+  const keyOf = (p: Page) => (p.kind === 'kanji' ? p.char : p.kind === 'word' ? `word:${p.id}` : '')
+  const waiting =
+    mobile && shownTop !== null && !hasNotes(shownTop) && !known(shownTop) && !released.current.has(keyOf(shownTop))
+  useEffect(() => {
+    if (!waiting || !shownTop) return
+    const key = keyOf(shownTop)
+    let done = false
+    const show = () => {
+      if (done) return
+      done = true
+      released.current.add(key)
+      afterSlide(() => setWarmed((n) => n + 1))
+    }
+    warm(shownTop)?.then(show, show)
+    const timer = window.setTimeout(show, WHOLE_MS)
+    return () => {
+      done = true
+      window.clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, shownTop])
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
@@ -2374,7 +2414,11 @@ export function App() {
                   !onStage &&
                   !searchShown &&
                   (shownTop ? (
-                    page(shownTop)
+                    waiting ? (
+                      <div className="page-wait" aria-busy="true" />
+                    ) : (
+                      page(shownTop)
+                    )
                   ) : (
                     <p className="hint rail-section">{t('pickResult')}</p>
                   ))}

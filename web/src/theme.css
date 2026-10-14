@@ -2428,6 +2428,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   border-radius: 2px;
 }
 
+/* A face whose font is still loading: its place is kept, its glyph comes. */
+.font-strip li[data-wait] .font-strip-glyph {
+  opacity: 0;
+}
+
+.font-strip-glyph {
+  transition: opacity 200ms var(--ease);
+}
+
 .font-strip-glyph {
   display: block;
   font-size: 44px;
@@ -6716,6 +6725,12 @@ html {
     cursor: pointer;
   }
 
+  /* A card's page while what it shows is on its way (App.tsx): blank, as
+     tall as a screen, so the page comes in whole. */
+  .page-wait {
+    min-height: 70vh;
+  }
+
   /* A page's associations, beside its first title (App.tsx): Statistics on
      a kanji, how common it is on a word. */
   .facts-title-row,
@@ -6778,8 +6793,11 @@ html {
     stroke-linejoin: round;
   }
 
+  /* Always there, so the button keeps its size; the number comes into it. */
   .notes-chip-count {
     min-width: 18px;
+    min-height: 1.5em;
+    box-sizing: border-box;
     padding: 2px 5px;
     border-radius: 9px;
     background: var(--ai-deep);

@@ -113,7 +113,8 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
   const t = S(useLang())
   const ref = useRef<HTMLDivElement>(null)
   const [seen, setSeen] = useState(() => knownFonts.has(char))
-  const [info, setInfo] = useState<FontsResponse | null>(() => knownFonts.get(char) ?? null)
+  // Asked for already, as opening the page does (App.tsx warm): there at once.
+  const [info, setInfo] = useState<FontsResponse | null>(() => knownFonts.get(char) ?? api.fonts.peek(char) ?? null)
 
   useEffect(() => {
     const el = ref.current
@@ -151,10 +152,15 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
     }
   }, [seen, char])
 
-  const has = (f: Face) => info?.faces.includes(f) ?? false
+  // Mincho and gothic are the page's own faces, so they are there from the
+  // start; the others have their place as soon as the kanji is known to be in
+  // them, and their glyph comes into it when their font has loaded -- so
+  // nothing below moves as they come.
+  const has = (f: Face) => f === 'mincho' || f === 'gothic' || (info?.faces.includes(f) ?? false)
   const textbook = useFontReady(FAMILY.textbook, char, seen && has('textbook'))
   const brush = useFontReady(FAMILY.brush, char, seen && has('brush'))
-  const shown = FACES.filter((f) => has(f) && (f === 'textbook' ? textbook : f === 'brush' ? brush : true))
+  const ready = (f: Face) => (f === 'textbook' ? textbook : f === 'brush' ? brush : true)
+  const shown = FACES.filter(has)
 
   // One cell per distinct old outline: 1978 and 1983 often agree.
   const old: { face: Face; years: string[]; em: number; d: string }[] = []
@@ -171,7 +177,7 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
           {!part && <h3>{t('title')}</h3>}
           <ul>
             {shown.map((f) => (
-              <li key={f} title={t(`${f}Tip`)}>
+              <li key={f} title={t(`${f}Tip`)} data-wait={!ready(f) || undefined}>
                 <span className="font-strip-glyph" style={{ fontFamily: `'${FAMILY[f]}'` }} lang="ja">
                   {char}
                 </span>
