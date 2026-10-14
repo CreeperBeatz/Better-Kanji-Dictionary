@@ -1279,11 +1279,10 @@ export function App() {
   // ones opened over it (see cardStack.ts): `at` is where it is in the stack.
   // Not the search: the first card lies on it, not on a card.
   const underCopies = useRef<{ page: Page; at: number; el: HTMLElement }[]>([])
-  function keepUnder() {
+  function keepUnder(at = entries.length - 1) {
     const card = cardRef.current
     const sc = scroller.current
     if (!onCard || onStageRef.current || !card || !sc) return
-    const at = entries.length - 1
     underCopies.current = underCopies.current.filter((u) => u.at < at)
     underCopies.current.push({ page: entries[at], at, el: copyCard(card, sc.clientHeight) })
   }
@@ -1428,18 +1427,28 @@ export function App() {
       return leaveStage('back')
     }
     setSearchOver(null)
-    if (to === 'components') showComponents()
-    else chooseRailTab(to)
+    if (to === 'components') {
+      // The page is not drawn behind the graph: what lies under a page opened
+      // from there is the page as it was left for the graph.
+      keepUnder()
+      showComponents()
+    } else chooseRailTab(to)
   }
   // A pick in the search tab: the page already open turns back to; another
-  // opens over the search, as a pick in the search column does.
+  // opens over the search, as a pick in the search column does. In the words
+  // with a kanji, gone to from a card, it goes on the cards open: those words
+  // are that card's.
   function openFromSearchTab(p: Picked) {
     if (samePage(p, top)) return tapPhoneTab('dictionary')
     leaveSearchTab()
+    const onCards = searchWords !== undefined && entries.length > base
     animateNav('forward', () => {
       setSearchOver(null)
       toDictionary()
-      openOverSearch(p)
+      if (!onCards) return openOverSearch(p)
+      setHovered(null)
+      if (p.kind === 'kanji' || HAN.test(p.word.headword)) setViewState('focus')
+      push(p)
     })
   }
   // "All words with 日". In the search -- its column beside the card, or the
@@ -1454,7 +1463,9 @@ export function App() {
     if (split || searchShown) return rebase(page)
     if (top.kind === 'search') return replaceTop(page)
     // On a phone the search is a tab, and they are a mode of it, not a card.
+    // The card is kept, to lie under a word opened from them.
     if (mobile) {
+      keepUnder(stack[0].kind === 'search' ? stack.length - 1 : stack.length)
       rebase(page)
       return tapPhoneTab('search')
     }

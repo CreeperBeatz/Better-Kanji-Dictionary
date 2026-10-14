@@ -5710,20 +5710,26 @@ html {
 }
 
 /* Dictionary and Associations, a card's two tabs, side by side as the others
-   are: in one ring while a card is open. */
+   are: in one ring, always. With no card open, the ring is faint, as its tabs are. */
 .tab-ring {
   position: relative;
   flex: 2;
   display: flex;
 }
 
-.tab-ring[data-on]::before {
+.tab-ring::before {
   content: '';
   position: absolute;
   inset: 3px 2px 4px;
   border: 1px solid var(--rule-bright);
   border-radius: 12px;
+  opacity: 0.35;
   pointer-events: none;
+  transition: opacity 200ms var(--ease);
+}
+
+.tab-ring[data-on]::before {
+  opacity: 1;
 }
 
 /* How many cards are open, on the ring's shoulder. */
