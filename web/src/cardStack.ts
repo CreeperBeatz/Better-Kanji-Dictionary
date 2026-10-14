@@ -193,7 +193,9 @@ export function putOn(unders: Under[], top: number, p: number, scrolled: number)
     return { u, from, to: { ...to, y: top, s: 1, p: 1, lift: line - top - u.fold } }
   })
   const settle = () => unders.forEach((u, i) => put(u, rest(m, i, u.fold)))
-  return { moves, settle }
+  // Those already where they go are put there once, not on every frame.
+  for (const mv of moves) if (mv.from === mv.to) put(mv.u, mv.to)
+  return { moves: moves.filter((mv) => mv.from !== mv.to), settle }
 }
 
 /**

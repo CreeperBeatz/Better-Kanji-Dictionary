@@ -1420,17 +1420,19 @@ export function App() {
     const k = stackUnder.length - i
     if (!takeOff(k, () => popBy(k, true))) popBy(k)
   }
-  // The card left at each step forward, copied at its top, to lie under the
+  // The card left at each step forward, copied as it shows, to lie under the
   // ones opened over it (see cardStack.ts): `at` is where it is in the stack.
-  // Not the search: the first card lies on it, not on a card. A card under
-  // others is its dictionary, as back always comes to that: it is copied
-  // while it shows, and on the way to its other tabs. A card never seen in
-  // the dictionary -- one gone to on the graph, say -- is drawn there live.
+  // Not the search: the first card lies on it, not on a card. It is copied
+  // when left -- for a new card, or for the graph or the search, which are
+  // not drawn over it -- and a copy kept from before stays while it is not on
+  // the screen. A card never seen at all -- one gone to on the graph, say --
+  // is drawn there live.
   const underCopies = useRef<{ page: Page; at: number; el: HTMLElement; live?: boolean }[]>([])
-  function keepUnder(at = entries.length - 1) {
+  function keepUnder() {
     const card = cardRef.current
     const sc = scroller.current
     const page = shownTop
+    const at = entries.length - 1
     if (!page) return
     const kept = underCopies.current.filter(
       (u) => u.at < at || (u.at === at && !u.live && samePage(u.page, page)),
@@ -1660,32 +1662,25 @@ export function App() {
     else chooseRailTab(to)
   }
   // A pick in the search tab: the page already open turns back to; another
-  // opens over the search, as a pick in the search column does. In the words
-  // with a kanji, gone to from a card, it goes on the cards open: those words
-  // are that card's.
+  // opens over the search, as a pick in the search column does.
   function openFromSearchTab(p: Picked) {
     if (samePage(p, top)) return tapPhoneTab('dictionary')
     leaveSearchTab()
-    const onCards = searchWords !== undefined && entries.length > base
     rise(p, () => {
       setSearchOver(null)
       toDictionary()
-      if (!onCards) return openOverSearch(p)
-      setHovered(null)
-      if (p.kind === 'kanji' || HAN.test(p.word.headword)) setViewState('focus')
-      push(p)
+      openOverSearch(p)
     })
   }
-  // "All words with 日". In the search -- its column beside the card, or the
-  // phone's Search tab -- the search turns to them, by meaning, and the card
-  // stays where it is. From a kanji's page with one page at a time (a phone,
-  // one column), they open over the page, so back, the rail's link or the
-  // browser's, comes to the kanji before the search. Null turns the search
+  // "All words with 日". On a phone, from a card, a card of their own. In the
+  // search -- its column beside the card, or the phone's Search tab -- the
+  // search turns to them, by meaning, and the card stays where it is. From a
+  // kanji's page with one page at a time (one column), they open over the
+  // page, so back comes to the kanji before the search. Null turns the search
   // back to its results.
   const showWords = useStable((char: string | null) => {
     const page: Page = char ? { kind: 'search', q, words: char } : { kind: 'search', q }
     setHovered(null)
-    // On a phone, from a card: a card of their own, on the stack.
     if (mobile && char && onCard) {
       const card: Page = { kind: 'words', char }
       return rise(card, () => push(card))
