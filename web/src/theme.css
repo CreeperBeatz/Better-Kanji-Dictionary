@@ -1283,8 +1283,13 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
     grid-area: bar;
   }
 
+  /* Over the page and the graph, whatever stands out of them: a card
+     coming up and going off (by a copy, where there are no view
+     transitions), and the number on the tabs, which stands out over the
+     page above them. */
   .phone-tabs {
     grid-area: tabs;
+    z-index: 7;
   }
 
   /* Under the keyboard, as an iPhone's own apps have it (App.tsx). */
@@ -6828,9 +6833,25 @@ html[data-nav='forward']::view-transition-group(card) {
   animation: none;
 }
 
-/* The first card comes up flat, as it lies on the search. */
+/* The first card comes in flat, as it lies on the search, from the side --
+   and goes back the same way. The ones after it come up from the bottom. */
 html[data-card-flat]::view-transition-group(card) {
   border-radius: 0;
+  box-shadow: -10px 0 28px rgb(0 0 0 / 0.45);
+  animation-name: vt-card-in;
+}
+
+html[data-nav='forward'][data-card-flat]::view-transition-old(page) {
+  animation-name: vt-aside;
+}
+
+html[data-nav='back'][data-card-flat]::view-transition-old(page) {
+  animation-name: vt-out-right;
+  z-index: 1;
+}
+
+html[data-nav='back'][data-card-flat]::view-transition-new(page) {
+  animation-name: vt-unaside;
 }
 
 ::view-transition-group(searchbar),
@@ -6876,6 +6897,11 @@ html[data-nav='tab-back']::view-transition-new(page) {
 html[data-nav]::view-transition-old(tabs),
 html[data-nav]::view-transition-new(tabs) {
   animation-name: none;
+}
+
+/* Over the card coming up, which otherwise passes over them. */
+::view-transition-group(tabs) {
+  z-index: 2;
 }
 
 html[data-nav]::view-transition-new(tabs):only-child {
@@ -6937,6 +6963,37 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
   to {
     translate: 0 0;
+  }
+}
+
+@keyframes vt-card-in {
+  from {
+    translate: 100vw 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes vt-aside {
+  from {
+    transform: none;
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-25%);
+    opacity: 0.45;
+  }
+}
+
+@keyframes vt-unaside {
+  from {
+    transform: translateX(-25%);
+    opacity: 0.45;
+  }
+  to {
+    transform: none;
+    opacity: 1;
   }
 }
 

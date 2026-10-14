@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { flushSync } from 'react-dom'
+import { createPortal, flushSync } from 'react-dom'
 import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
@@ -28,6 +28,7 @@ import {
   blankCard,
   comeOff,
   copyCard,
+  liveCard,
   fallTime,
   moveTo,
   put,
@@ -465,6 +466,41 @@ function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number 
 
 /** How tall a card's character is in its folded line. */
 const FOLDED_GLYPH = 26
+
+/**
+ * Measures a card's head for folding (read by theme.css): the character ends
+ * at the line's left, as tall as the line allows, in the middle of it -- the
+ * bottom of the head, which is what shows -- and its first meaning beside it.
+ * Returns how tall the head is.
+ */
+function measureFold(head: HTMLElement): number {
+  const h = head.offsetHeight
+  head.style.setProperty('--head-h', `${h}px`)
+  const glyph = head.querySelector<HTMLElement>('.detail-glyph, .entry-head')
+  if (!glyph) return h
+  const { x, y } = offsetIn(glyph, head)
+  const gh = glyph.offsetHeight || 1
+  const gs = Math.min(1, FOLDED_GLYPH / gh)
+  head.style.setProperty('--gs', String(gs))
+  head.style.setProperty('--gx', `${16 - x}px`)
+  head.style.setProperty('--gy', `${h - FOLDED / 2 - (y + gh / 2)}px`)
+  // After the characters themselves: a word's head is as wide as its reading.
+  const lead = head.querySelector<HTMLElement>('.detail-meanings')
+  if (lead) {
+    const chars = glyph.children.length
+      ? [...glyph.children].reduce((w, c) => w + (c as HTMLElement).offsetWidth, 0)
+      : glyph.offsetWidth
+    const at = offsetIn(lead, head)
+    const style = getComputedStyle(lead)
+    const size = parseFloat(style.fontSize) || 15
+    const ms = Math.min(1, 15 / size)
+    const lh = parseFloat(style.lineHeight) || size * 1.4
+    head.style.setProperty('--ms', String(ms))
+    head.style.setProperty('--mx', `${16 + chars * gs + 10 - at.x}px`)
+    head.style.setProperty('--my', `${h - FOLDED / 2 - at.y - (lh * ms) / 2}px`)
+  }
+  return h
+}
 
 /** A kanji or a word, as picked from a list. */
 type Picked = { kind: 'kanji'; char: string } | { kind: 'word'; id: number; word: Word }
@@ -1032,6 +1068,8 @@ export function App() {
   const dropped = useRef(false)
   /** Back, by any way: the page was seen already, so it does not arrive again. */
   const returning = useRef(false)
+  /** Back to a card under this one, on a phone: it shows its dictionary, however it was left. */
+  const toCard = useRef(false)
   // Back `k` pages at once, sliding: as history slides it, when it goes
   // through history, or here when the pages come off in place. `still`: the
   // card has gone already, pulled off, and the page under it is in sight.
@@ -1039,6 +1077,7 @@ export function App() {
     cameBack.current = performance.now()
     dropped.current = still
     returning.current = true
+    toCard.current = true
     if (depth >= k || still) pop(k)
     else animateNav('back', () => pop(k))
   })
@@ -1277,22 +1316,59 @@ export function App() {
   }
   // The card left at each step forward, copied at its top, to lie under the
   // ones opened over it (see cardStack.ts): `at` is where it is in the stack.
-  // Not the search: the first card lies on it, not on a card.
-  const underCopies = useRef<{ page: Page; at: number; el: HTMLElement }[]>([])
+  // Not the search: the first card lies on it, not on a card. A card under
+  // others is its dictionary, as back always comes to that: it is copied
+  // while it shows, and on the way to its other tabs. A card never seen in
+  // the dictionary -- one gone to on the graph, say -- is drawn there live.
+  const underCopies = useRef<{ page: Page; at: number; el: HTMLElement; live?: boolean }[]>([])
   function keepUnder(at = entries.length - 1) {
     const card = cardRef.current
     const sc = scroller.current
-    if (!onCard || onStageRef.current || !card || !sc) return
-    underCopies.current = underCopies.current.filter((u) => u.at < at)
-    underCopies.current.push({ page: entries[at], at, el: copyCard(card, sc.clientHeight) })
+    const page = shownTop
+    if (!page) return
+    const kept = underCopies.current.filter(
+      (u) => u.at < at || (u.at === at && !u.live && samePage(u.page, page)),
+    )
+    if (!onCard || onStageRef.current || tab !== 'dictionary' || !card || !sc) {
+      underCopies.current = kept
+      return
+    }
+    underCopies.current = [...kept.filter((u) => u.at < at), { page, at, el: copyCard(card, sc.clientHeight) }]
   }
-  /** The copy of the card at `at`, or a card with its name where none was kept. */
-  function cardAt(at: number, page: Page): HTMLElement {
+  /** The copy of the card at `at`, or a live one where none was kept. */
+  function cardAt(at: number, page: Page) {
     const kept = underCopies.current.find((c) => c.at === at && samePage(c.page, page))
-    if (kept) return kept.el
-    const el = blankCard(labelOf(page, t))
-    underCopies.current.push({ page, at, el })
-    return el
+    if (kept) return kept
+    const drawn = page.kind === 'kanji' || page.kind === 'word'
+    const live = { page, at, el: drawn ? liveCard() : blankCard(labelOf(page, t)), live: drawn }
+    underCopies.current.push(live)
+    return live
+  }
+  // Only while they show: not behind the graph or the search.
+  const underCards = stackShown ? stackUnder.map((p, i) => cardAt(base + i, p)) : []
+  /** A live card under the open one: its head and its dictionary. */
+  function liveUnder(p: Page) {
+    const node = p.kind === 'kanji' ? detailOf(p.char)?.focus : undefined
+    const head =
+      p.kind === 'kanji' ? (
+        node ? (
+          <KanjiHead node={node} />
+        ) : (
+          <div className="detail-head">
+            <span className="detail-glyph">{p.char}</span>
+          </div>
+        )
+      ) : p.kind === 'word' && p.word ? (
+        <WordHead word={p.word} onPick={openKanji} />
+      ) : null
+    return (
+      <>
+        <div className="page-head" data-folding="">
+          <section className={p.kind === 'word' ? 'rail-section word-panel' : 'rail-section'}>{head}</section>
+        </div>
+        <div className="tab-pane">{page(p)}</div>
+      </>
+    )
   }
   // The cards under the open one, where they rest. The box holding them is
   // React's but empty to it; what is in it is laid here.
@@ -1304,10 +1380,24 @@ export function App() {
     unders.current = []
     if (!box || !sc) return
     box.style.height = `${sc.clientHeight - (parseFloat(getComputedStyle(sc).paddingTop) || 0)}px`
-    const els = stackUnder.map((p, i) => cardAt(base + i, p))
+    const els = underCards.map((c) => c.el)
     box.replaceChildren(...els)
-    unders.current = els.map(underOf)
-    unders.current.forEach((u, i) => put(u, rest(els.length, i, u.fold)))
+    // A live card's head is measured as the open card's is, and again as
+    // what it shows comes in.
+    const heads = underCards.flatMap((c) => {
+      const head = c.live ? c.el.querySelector<HTMLElement>(':scope > .page-head') : null
+      return head ? [head] : []
+    })
+    const lay = () => {
+      heads.forEach(measureFold)
+      unders.current = els.map(underOf)
+      unders.current.forEach((u, i) => put(u, rest(els.length, i, u.fold)))
+    }
+    lay()
+    if (!heads.length) return
+    const ro = new ResizeObserver(lay)
+    heads.forEach((h) => ro.observe(h))
+    return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stack, stackShown])
   // On a phone, scrolling down a card, its head folds into a line along the
@@ -1337,35 +1427,7 @@ export function App() {
     fold.current = null
     if (!folding || !sc || !head) return
     const measure = () => {
-      const h = head.offsetHeight
-      fold.current = { h }
-      head.style.setProperty('--head-h', `${h}px`)
-      // The character ends at the line's left, as tall as the line allows,
-      // in the middle of it: the bottom of the head, which is what shows.
-      const glyph = head.querySelector<HTMLElement>('.detail-glyph, .entry-head')
-      if (!glyph) return foldHead()
-      const { x, y } = offsetIn(glyph, head)
-      const gh = glyph.offsetHeight || 1
-      const gs = Math.min(1, FOLDED_GLYPH / gh)
-      head.style.setProperty('--gs', String(gs))
-      head.style.setProperty('--gx', `${16 - x}px`)
-      head.style.setProperty('--gy', `${h - FOLDED / 2 - (y + gh / 2)}px`)
-      // Its first meaning goes beside it, after the characters themselves (a
-      // word's head is as wide as its reading).
-      const lead = head.querySelector<HTMLElement>('.detail-meanings')
-      if (lead) {
-        const chars = glyph.children.length
-          ? [...glyph.children].reduce((w, c) => w + (c as HTMLElement).offsetWidth, 0)
-          : glyph.offsetWidth
-        const at = offsetIn(lead, head)
-        const style = getComputedStyle(lead)
-        const size = parseFloat(style.fontSize) || 15
-        const ms = Math.min(1, 15 / size)
-        const lh = parseFloat(style.lineHeight) || size * 1.4
-        head.style.setProperty('--ms', String(ms))
-        head.style.setProperty('--mx', `${16 + chars * gs + 10 - at.x}px`)
-        head.style.setProperty('--my', `${h - FOLDED / 2 - at.y - (lh * ms) / 2}px`)
-      }
+      fold.current = { h: measureFold(head) }
       foldHead()
     }
     measure()
@@ -1427,12 +1489,11 @@ export function App() {
       return leaveStage('back')
     }
     setSearchOver(null)
-    if (to === 'components') {
-      // The page is not drawn behind the graph: what lies under a page opened
-      // from there is the page as it was left for the graph.
-      keepUnder()
-      showComponents()
-    } else chooseRailTab(to)
+    // What lies under a page opened from another tab is this one's
+    // dictionary, as it was left.
+    keepUnder()
+    if (to === 'components') showComponents()
+    else chooseRailTab(to)
   }
   // A pick in the search tab: the page already open turns back to; another
   // opens over the search, as a pick in the search column does. In the words
@@ -1863,13 +1924,14 @@ export function App() {
    * the browser has them -- it photographs the old page itself, which costs
    * nothing next to copying it -- and by a copy of the page elsewhere.
    */
-  function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole') {
+  function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole', flat = false) {
     if (kind === 'forward') keepUnder()
     if (!pagesSlide() || navAnim.current || turning.current) return go()
     if (hasViewTransitions()) {
       const html = document.documentElement
       html.dataset.nav = kind
       html.dataset.turn = scope
+      if (flat) html.dataset.cardFlat = ''
       // Back, the page is one seen already: all of it at once, not held for the slide.
       if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
       const t = document.startViewTransition(() => {
@@ -1955,6 +2017,11 @@ export function App() {
     }
     returning.current = false
     dropped.current = false
+    if (toCard.current && mobile) {
+      if (railTab !== 'dictionary') setRailTab('dictionary')
+      if (stage) leaveStage('replace')
+    }
+    toCard.current = false
     underCopies.current = underCopies.current.filter((u) => u.at < entries.length - 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top])
@@ -1970,14 +2037,15 @@ export function App() {
     const forward = n !== undefined && lastN.current !== undefined && n > lastN.current
     // A page gone back to was seen already: it does not arrive again.
     returning.current = !forward
+    const to = e.state as { stack?: Stack; stage?: StageView } | null
+    if (!forward && to?.stack && to.stack.length < stack.length) toCard.current = true
     if (turning.current || dropped.current) return false
     const turn = pendingTurn.current
     pendingTurn.current = null
     const slidAlready = (e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true
     if (!byApp && (isIOS || slidAlready)) return false
     // Back to a card under this one: the cards come off as they do when pulled.
-    const to = e.state as { stack?: Stack; stage?: StageView } | null
-    if (!turn && !forward && mobile && to?.stack && !to.stage) {
+    if (!turn && !forward && mobile && to?.stack) {
       const at = to.stack.length - 1
       const commit = () => {
         dropped.current = true
@@ -1986,7 +2054,8 @@ export function App() {
       if (at >= base && takeOff(entries.length - 1 - at, commit)) return true
     }
     if (turn) animateNav(turn.kind, apply, turn.scope)
-    else animateNav(forward ? 'forward' : 'back', apply)
+    // Back from the first card to the search it lies on: off to the side, as it came.
+    else animateNav(forward ? 'forward' : 'back', apply, 'whole', !forward && mobile && to?.stack?.length === 1)
     return true
   }
   // Back on the search, the keyboard comes up (see `cameBack`).
@@ -2099,6 +2168,7 @@ export function App() {
             {stackShown && (
               <div className="card-stack" style={{ height: stackHeight(stackUnder.length) }}>
                 <div className="stack-copies" ref={copiesRef} />
+                {underCards.map((c) => c.live && createPortal(liveUnder(c.page), c.el, `${c.at}`))}
                 {rims(stackUnder.length).map((r, k, all) => {
                   const i = stackUnder.length - all.length + k
                   return (

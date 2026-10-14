@@ -203,6 +203,17 @@ export function blankCard(name: string): HTMLElement {
   return withEdge(g)
 }
 
+/** For a page no copy was kept of but there is a page to draw: a card App draws it in. */
+export function liveCard(): HTMLElement {
+  const g = document.createElement('div')
+  g.className = 'page-card'
+  g.dataset.copy = ''
+  g.dataset.stacked = ''
+  g.setAttribute('aria-hidden', 'true')
+  g.inert = true
+  return withEdge(g)
+}
+
 /** A card put in the stack: its head, and how far that folds up to leave its line on top. */
 export function underOf(el: HTMLElement): Under {
   const head = el.querySelector<HTMLElement>('.page-head')
