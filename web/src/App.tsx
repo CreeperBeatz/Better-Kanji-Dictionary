@@ -199,10 +199,9 @@ const SPLIT_KEY = 'betterrtk:searchBeside'
 // '0' when the graph shows visual splits too (expanded); only the parts (simple) otherwise.
 const GRAPH_SIMPLE_KEY = 'betterrtk:graphSimple'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
-type RailTab = 'dictionary' | 'associations'
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
 // is the search the page was opened from, and Components is the graph.
-type PhoneTab = 'search' | RailTab | 'components'
+type PhoneTab = 'search' | 'dictionary' | 'associations' | 'components'
 // On a phone a page's associations are a card of their own, opened from its
 // head (`notes` on the page), not a tab.
 const PHONE_TABS: PhoneTab[] = ['search', 'dictionary', 'components']
@@ -760,8 +759,6 @@ export function App() {
     return () => watch.disconnect()
   }, [split])
 
-  const toDictionary = useCallback(() => leaveStage('replace'), [leaveStage])
-
   const setView = useCallback(
     (v: StageView) => {
       setViewState(v)
@@ -977,7 +974,7 @@ export function App() {
     (w: Word) => {
       keepSearch()
       rise(wordPage(w), () => {
-        toDictionary()
+        leaveStage('replace')
         if (HAN.test(w.headword)) setViewState('focus')
         push(wordPage(w))
       })
@@ -1068,8 +1065,9 @@ export function App() {
     rememberSearch(q)
     openOver(searchBase, p)
   }
-  const listKanji = useStable((char: string) => rise(kanjiPage(char), () => openOverSearch(kanjiPage(char))))
-  const listWord = useStable((w: Word) => rise(wordPage(w), () => openOverSearch(wordPage(w))))
+  const listPick = (p: Picked) => rise(p, () => openOverSearch(p))
+  const listKanji = useStable((char: string) => listPick(kanjiPage(char)))
+  const listWord = useStable((w: Word) => listPick(wordPage(w)))
 
   const deselect = useStable(() => {
     setHovered(null)
@@ -1081,14 +1079,14 @@ export function App() {
   const type = useCallback(
     (text: string) => {
       setQ(text)
-      toDictionary()
+      leaveStage('replace')
       const page: Page = { kind: 'search', q: text }
       // Beside the dictionary, the results change and the open entry stays.
       if (split) rebase(page)
       else if (stack.length === 1 && stack[0].kind === 'search') replaceTop(page)
       else reset(page)
     },
-    [split, stack, replaceTop, reset, rebase, toDictionary],
+    [split, stack, replaceTop, reset, rebase, leaveStage],
   )
 
   // Going into the box leaves the page up, so a slip of the finger costs
@@ -1100,10 +1098,10 @@ export function App() {
   // stack if that is where it is.
   const toSearch = useCallback(() => {
     if (split || top.kind === 'search') return
-    toDictionary()
+    leaveStage('replace')
     if (root.kind === 'search' && root.q === q) pop(stack.length - 1)
     else reset({ kind: 'search', q })
-  }, [split, top, root, q, stack.length, pop, reset, toDictionary])
+  }, [split, top, root, q, stack.length, pop, reset, leaveStage])
 
   // Back -- the browser's, or the app's -- to the search brings the keyboard
   // up with it, ready for the next word. Phones raise the keyboard for focus
@@ -1305,9 +1303,10 @@ export function App() {
   const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
   // The page shows its dictionary, or its associations when it is their page.
-  const tab: RailTab = hasNotes(shownTop) ? 'associations' : 'dictionary'
-  // The tab not showing is mounted for its count, but only once the page has
-  // come to rest: comments rendered behind a page sliding in cost it frames.
+  const notesShown = hasNotes(shownTop)
+  // Its associations are mounted under its dictionary too, unseen, for their
+  // count, but only once the page has come to rest: comments rendered behind
+  // a page sliding in cost it frames.
   const subjectKey = subject?.key ?? null
   const [settled, setSettled] = useState<string | null>(null)
   useEffect(() => {
@@ -1341,7 +1340,7 @@ export function App() {
   // hovered on the graph, so only the dictionary's head previews that.
   function pageHead() {
     if (shownTop?.kind === 'kanji') {
-      const node = (tab === 'dictionary' && hoveredNode) || detailOf(shownTop.char)?.focus
+      const node = (!notesShown && hoveredNode) || detailOf(shownTop.char)?.focus
       return (
         <section className="rail-section">
           {node ? (
@@ -1371,10 +1370,6 @@ export function App() {
   // Components on a phone is the graph of the page's kanji: for a word, of
   // the one its graph is on.
   const componentsOf = shownTop?.kind === 'kanji' ? shownTop.char : shownTop?.kind === 'word' ? wordCentre : null
-  // Back from the graph is the dictionary, whichever tab it was gone to from.
-  function showComponents() {
-    setView('focus')
-  }
   // The Search tab shows the search with the page marked in it, and the page
   // still there to turn back to.
   const searchShown = mobile && !onStage && carded && searchOver !== null && samePage(searchOver, top)
@@ -1482,13 +1477,13 @@ export function App() {
     return () => ro.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stack, stackShown])
-  // Scrolling down a card, its head folds into a line along the
-  // top: its character shrinks to the line's left with its first meaning beside it,
+  // Scrolling down a card, its head folds into a line along the top: its
+  // character shrinks to the line's left with its first meaning beside it,
   // and the rest squeezes away. The head is sticky, as tall as itself less
   // the line, so the line is what stays. --p on it is how far it is folded,
   // 0 to 1 (read by theme.css); the measures it folds by are taken when its
   // size changes.
-  const folding = (mobile ? onCard : !onStage) && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
+  const folding = (!mobile || onCard) && (shownTop?.kind === 'kanji' || shownTop?.kind === 'word')
   const headRef = useRef<HTMLDivElement>(null)
   const fold = useRef<{ h: number } | null>(null)
   const foldHead = useStable(() => {
@@ -1634,7 +1629,7 @@ export function App() {
   // The search itself, and a level's list, have the tabs too, with only Search
   // to be had: they are there before a page is opened, not brought by it.
   const phoneTab: PhoneTab =
-    onStage && view === 'focus' ? 'components' : searchShown || !carded ? 'search' : mobile ? 'dictionary' : tab
+    onStage && view === 'focus' ? 'components' : searchShown || !carded ? 'search' : 'dictionary'
   // On a phone a card -- its dictionary, its associations, its graph -- has
   // no search over it: the Search tab is the way to it. What shows instead,
   // at the top and on the tabs, is how many cards are open.
@@ -1657,7 +1652,7 @@ export function App() {
     // What lies under a page opened from another tab is this one's
     // dictionary, as it was left.
     keepUnder()
-    if (to === 'components') showComponents()
+    if (to === 'components') setView('focus')
     else leaveStage('back')
   }
   // A pick in the search tab: the page already open turns back to; another
@@ -1667,7 +1662,7 @@ export function App() {
     leaveSearchTab()
     rise(p, () => {
       setSearchOver(null)
-      toDictionary()
+      leaveStage('replace')
       openOverSearch(p)
     })
   }
@@ -2498,7 +2493,7 @@ export function App() {
                     onWordsWith={showWords}
                   />
                 )}
-                {tab === 'dictionary' &&
+                {!notesShown &&
                   !onStage &&
                   !searchShown &&
                   (shownTop ? (
@@ -2510,10 +2505,10 @@ export function App() {
                   ) : (
                     <p className="hint rail-section">{t('pickResult')}</p>
                   ))}
-                {/* Kept mounted while hidden, so the count on its tab is there
-                    before the tab is opened. */}
-                {subject && (tab === 'associations' || settled === subject.key) && (
-                  <div hidden={tab !== 'associations' || searchShown}>
+                {/* Kept mounted while hidden, so the count on its button is
+                    there before they are opened. */}
+                {subject && (notesShown || settled === subject.key) && (
+                  <div hidden={!notesShown || searchShown}>
                     {associations(subject)}
                   </div>
                 )}
