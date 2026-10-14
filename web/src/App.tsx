@@ -11,6 +11,7 @@ import { Workbench } from './review/Workbench'
 import { strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
+import { loadNotes } from './detail/NoteContent'
 import { local, runningInstalled } from './local/local'
 import { InstallGuide } from './install/InstallGuide'
 import { WordHead, WordPanel } from './detail/WordPanel'
@@ -326,6 +327,8 @@ const SUNK = { filter: 'brightness(0.5)' }
 
 /** How long a page takes to slide in or out. */
 const PAGE_MS = 300
+/** How a card comes up: fast, then settling (as the view transition's, theme.css). */
+const RISE_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
 /** How long a card takes to come up over the page it was opened from. */
 const RISE_MS = 400
 /** How long a tab tapped takes to turn. */
@@ -1310,7 +1313,11 @@ export function App() {
   const [settled, setSettled] = useState<string | null>(null)
   useEffect(() => {
     if (!subjectKey) return
-    const t = window.setTimeout(() => setSettled(subjectKey), mobile ? PAGE_MS + 160 : 0)
+    const t = window.setTimeout(() => {
+      setSettled(subjectKey)
+      // Its associations are a tap away: what draws their notes, ready.
+      loadNotes()
+    }, mobile ? PAGE_MS + 160 : 0)
     return () => clearTimeout(t)
   }, [subjectKey, mobile])
   function associations(s: { key: string; label: string }, live = false) {
@@ -2082,23 +2089,37 @@ export function App() {
   function animateNav(kind: NavKind, go: () => void, scope: TurnScope = 'whole', flat = false) {
     if (kind === 'forward') keepUnder()
     if (!pagesSlide() || navAnim.current || turning.current) return go()
+    // From a card, the new one goes on the stack by moving things, with no
+    // view transition: what was on the screen is there already, as the cards
+    // under the new one, standing where they stood (see `stackOn`), so there
+    // is nothing to photograph. Safari's view transitions also flash, for a
+    // frame or three, where the new card comes (WebKit bugs 299091, 300877).
+    const sc = scroller.current
+    const open = cardRef.current
+    if (kind === 'forward' && onCard && !onStageRef.current && sc && open) {
+      const was = {
+        m: unders.current.length,
+        top: open.getBoundingClientRect().top - sc.getBoundingClientRect().top,
+        p: parseFloat(headRef.current?.style.getPropertyValue('--p') || '0') || 0,
+        scrolled: sc.scrollTop,
+      }
+      startSliding(RISE_MS)
+      flushSync(go)
+      const card = cardRef.current
+      if (!card) return
+      if (unders.current.length === was.m + 1) stackOn(was)
+      card.dataset.moving = ''
+      card.animate([{ transform: `translateY(${sc.clientHeight}px)` }, { transform: 'none' }], {
+        duration: reducedMotion() ? 0 : RISE_MS,
+        easing: RISE_EASE,
+      }).onfinish = () => delete card.dataset.moving
+      return
+    }
     if (hasViewTransitions()) {
       const html = document.documentElement
       html.dataset.nav = kind
       html.dataset.turn = scope
       if (flat) html.dataset.cardFlat = ''
-      // Where the open card stands, for the stack it goes on (see `stackOn`).
-      const sc = scroller.current
-      const card = cardRef.current
-      const was =
-        kind === 'forward' && onCard && !onStageRef.current && sc && card
-          ? {
-              m: unders.current.length,
-              top: card.getBoundingClientRect().top - sc.getBoundingClientRect().top,
-              p: parseFloat(headRef.current?.style.getPropertyValue('--p') || '0') || 0,
-              scrolled: sc.scrollTop,
-            }
-          : null
       // Back, the page is one seen already: all of it at once, not held for the slide.
       if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
       const t = document.startViewTransition(() => {
@@ -2107,14 +2128,12 @@ export function App() {
         if (kind === 'forward') html.dataset.card = 'coming'
         flushSync(go)
         if (kind === 'forward' && !cardRef.current?.hasAttribute('data-stacked')) html.dataset.cardFlat = ''
-        if (was && unders.current.length === was.m + 1) stackOn(was)
       })
       t.finished.finally(() => {
         delete html.dataset.nav
         delete html.dataset.turn
         delete html.dataset.card
         delete html.dataset.cardFlat
-        delete html.dataset.stacking
       })
       return
     }
@@ -2125,14 +2144,12 @@ export function App() {
    * A card put on the stack: the new page shows from the first frame, the
    * cards under the new one standing where the old screen had them -- the
    * one it was opened from just as it was, scrolled or not -- and moving to
-   * their places as the card comes up (cardStack.ts putOn). The old page is
-   * not shown at all: nothing on the screen is ever two pictures fading
-   * through each other, which flickers (theme.css).
+   * their places as the card comes up (cardStack.ts putOn). Nothing on the
+   * screen is ever two pictures fading through each other, which flickers.
    */
   function stackOn(was: { m: number; top: number; p: number; scrolled: number }) {
     const sc = scroller.current
     if (!sc) return
-    document.documentElement.dataset.stacking = ''
     const { moves, settle } = putOn(unders.current, was.top, was.p, was.scrolled)
     const nearest = unders.current[unders.current.length - 1]
     moveTo(moves, 0)

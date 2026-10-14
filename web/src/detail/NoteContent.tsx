@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api, isGifUrl } from '../api'
 import { strings, useLang } from '../i18n'
@@ -10,18 +10,22 @@ const S = strings(
 )
 
 // The markdown renderer is a fifth of the app's code and is wanted only once
-// a note is on the screen, so it loads then; the note reads as plain text
-// for the moment it takes.
-const Markdown = lazy(() => import('./Markdown'))
+// notes are near, so it loads then: when a page is opened (App.tsx calls
+// loadNotes), before its associations are. Once loaded it draws a note at
+// once; before, the note reads as plain text for the moment it takes.
+let Markdown: (typeof import('./Markdown'))['default'] | null = null
+let loading: Promise<unknown> | null = null
+export function loadNotes(): Promise<unknown> {
+  loading ??= import('./Markdown').then((m) => (Markdown = m.default))
+  return loading
+}
 
 export function Note({ text }: { text: string }) {
-  return (
-    <div className="md">
-      <Suspense fallback={<Plain text={text} />}>
-        <Markdown text={text} />
-      </Suspense>
-    </div>
-  )
+  const [, setLoaded] = useState(Markdown !== null)
+  useEffect(() => {
+    if (!Markdown) loadNotes().then(() => setLoaded(true))
+  }, [])
+  return <div className="md">{Markdown ? <Markdown text={text} /> : <Plain text={text} />}</div>
 }
 
 function Plain({ text }: { text: string }) {
