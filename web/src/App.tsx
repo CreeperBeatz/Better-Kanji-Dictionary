@@ -1783,6 +1783,16 @@ export function App() {
     raiseKeyboard(input)
     input.setSelectionRange(0, input.value.length)
   }
+  function phoneTabButton(p: PhoneTab) {
+    return (
+      <button key={p} role="tab" aria-selected={phoneTab === p} disabled={tabOff(p)} onClick={() => tapPhoneTab(p)}>
+        <span className="phone-tab-icon">
+          <PhoneTabIcon tab={p} />
+        </span>
+        {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
+      </button>
+    )
+  }
   // A tab tapped turns the same way, from where the page stands.
   function tapPhoneTab(to: PhoneTab) {
     if (to !== phoneTab) turn(to, 0, TAP_TURN_MS)
@@ -2078,6 +2088,11 @@ export function App() {
             {stackShown && (
               <div className="card-stack" style={{ height: stackHeight(stackUnder.length) }}>
                 <div className="stack-copies" ref={copiesRef} />
+                {/* How many cards are open, beside the edges of the ones under
+                    this: there only, and gone with them as the card scrolls. */}
+                <span className="depth-bubble" key={openCards} aria-label={t('openCards', { n: openCards })}>
+                  {openCards}
+                </span>
                 {rims(stackUnder.length).map((r, k, all) => {
                   const i = stackUnder.length - all.length + k
                   return (
@@ -2099,7 +2114,14 @@ export function App() {
                 </button>
               </div>
             )}
-            <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
+            <div
+              className="page-card"
+              ref={cardRef}
+              data-stacked={stackShown || undefined}
+              // On others, it reaches the bottom of the screen however short
+              // the page, so they do not show under its end.
+              style={stackShown ? { minHeight: `calc(100% - ${stackHeight(stackUnder.length)}px)` } : undefined}
+            >
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
@@ -2141,11 +2163,6 @@ export function App() {
               </div>
             </div>
           </div>
-          {barOff && openCards > 1 && (
-            <span className="depth-bubble" key={openCards} aria-label={t('openCards', { n: openCards })}>
-              {openCards}
-            </span>
-          )}
           {mobile && !(onStage && view === 'map') && (
             <nav
               className="phone-tabs"
@@ -2159,25 +2176,23 @@ export function App() {
               onTouchCancel={swipeCancel}
             >
               <span className="phone-tab-mark" aria-hidden />
-              {PHONE_TABS.map((p) => (
-                <button
-                  key={p}
-                  role="tab"
-                  aria-selected={phoneTab === p}
-                  disabled={tabOff(p)}
-                  onClick={() => tapPhoneTab(p)}
-                >
-                  <span className="phone-tab-icon">
-                    <PhoneTabIcon tab={p} />
-                    {(p === 'dictionary' || p === 'associations') && openCards > 1 && (
-                      <span className="tab-depth" key={openCards}>
+              {PHONE_TABS.map((p) =>
+                p === 'associations' ? null : p === 'dictionary' ? (
+                  // The card's two tabs, in one ring while a card is open,
+                  // with how many cards are open on it.
+                  <div key="card" className="tab-ring" data-on={subject !== null || undefined}>
+                    {phoneTabButton('dictionary')}
+                    {phoneTabButton('associations')}
+                    {openCards > 1 && (
+                      <span className="tab-depth" key={openCards} aria-label={t('openCards', { n: openCards })}>
                         {openCards}
                       </span>
                     )}
-                  </span>
-                  {t(p === 'components' ? 'focus' : p === 'search' ? 'searchTab' : p)}
-                </button>
-              ))}
+                  </div>
+                ) : (
+                  phoneTabButton(p)
+                ),
+              )}
             </nav>
           )}
         </aside>
