@@ -35,6 +35,8 @@ export interface Place {
   y: number
   s: number
   p: number
+  /** How far it has become the first card, which lies flat on the search. */
+  flat: number
 }
 
 /** How tall the cards under the open one stand above it, `m` of them. */
@@ -54,32 +56,49 @@ export function rest(m: number, i: number, fold: number): Place {
   // The ones below those shown lie under the bottom one shown.
   const k = Math.max(0, i - (m - shown))
   const s = 1 - 0.04 * (shown - k)
-  return { y: PAD + RIM * k - s * fold, s, p: 1 }
+  return { y: PAD + RIM * k - s * fold, s, p: 1, flat: 0 }
 }
 
 /** The open card's place, with `m` cards under it. */
 function open(m: number): Place {
-  return { y: stackHeight(m), s: 1, p: 0 }
+  return { y: stackHeight(m), s: 1, p: 0, flat: m === 0 ? 1 : 0 }
 }
 
 function mix(a: Place, b: Place, t: number): Place {
   const at = (x: number, y: number) => x + (y - x) * t
-  return { y: at(a.y, b.y), s: at(a.s, b.s), p: at(a.p, b.p) }
+  return { y: at(a.y, b.y), s: at(a.s, b.s), p: at(a.p, b.p), flat: at(a.flat, b.flat) }
 }
 
 /**
  * Puts a card where `at` says. Folded, what shows of it starts at its line,
  * so it is cut there, with the rounded top and the edge a card has; as it
- * unfolds, the cut goes up to its own top. Only the card, its head and its
- * edge change, and nothing inherits from them: no layout, little restyling.
+ * unfolds, the cut goes up to its own top. Becoming the first card, it lies
+ * down flat as it comes: its top squares, its edge and shadow go, and it
+ * takes the page's colour. Only the card, its head and its edge change, and
+ * nothing inherits from them: no layout, little restyling.
  */
 export function put(u: Under, at: Place) {
   const cut = (u.fold * at.p).toFixed(1)
+  const r = `${(14 * (1 - at.flat)).toFixed(1)}px`
   u.el.style.transform = `translateY(${at.y}px) scale(${at.s})`
   // Unfolded, nothing is cut, and its shadow shows as the open card's does.
-  u.el.style.clipPath = at.p > 0 ? `inset(${cut}px 0 0 0 round 14px 14px 0 0)` : ''
+  u.el.style.clipPath = at.p > 0 ? `inset(${cut}px 0 0 0 round ${r} ${r} 0 0)` : ''
   u.head?.style.setProperty('--p', at.p.toFixed(3))
   if (u.edge) u.edge.style.transform = `translateY(${cut}px)`
+  if (at.flat === 0 && !u.el.style.background) return
+  const f = (at.flat * 100).toFixed(1)
+  const ground = `color-mix(in srgb, var(--sumi-sunk) ${f}%, var(--sumi))`
+  u.el.style.borderRadius = `${r} ${r} 0 0`
+  u.el.style.background = ground
+  u.el.style.boxShadow = `0 -10px 28px rgb(0 0 0 / ${(0.55 * (1 - at.flat)).toFixed(3)})`
+  if (u.head) {
+    u.head.style.borderRadius = `${r} ${r} 0 0`
+    u.head.style.background = ground
+  }
+  if (u.edge) {
+    u.edge.style.borderRadius = `${r} ${r} 0 0`
+    u.edge.style.borderTopColor = `color-mix(in srgb, transparent ${f}%, var(--rule-bright))`
+  }
 }
 
 /** The rounded edge along the top of what shows of a card under the open one (see `put`). */

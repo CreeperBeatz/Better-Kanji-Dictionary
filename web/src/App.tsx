@@ -1861,14 +1861,17 @@ export function App() {
       // Back, the page is one seen already: all of it at once, not held for the slide.
       if (kind !== 'back') startSliding(kind === 'forward' ? RISE_MS : PAGE_MS)
       const t = document.startViewTransition(() => {
-        // The card coming up is a picture of its own, on the new side only.
+        // The card coming up is a picture of its own, on the new side only;
+        // the first card comes up flat, as it lies.
         if (kind === 'forward') html.dataset.card = 'coming'
         flushSync(go)
+        if (kind === 'forward' && !cardRef.current?.hasAttribute('data-stacked')) html.dataset.cardFlat = ''
       })
       t.finished.finally(() => {
         delete html.dataset.nav
         delete html.dataset.turn
         delete html.dataset.card
+        delete html.dataset.cardFlat
       })
       return
     }
@@ -2104,7 +2107,7 @@ export function App() {
                 </button>
               </div>
             )}
-            <div className="page-card" ref={cardRef} data-stacked={onCard || undefined}>
+            <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}

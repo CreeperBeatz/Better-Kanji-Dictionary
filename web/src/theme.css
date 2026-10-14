@@ -6616,17 +6616,20 @@ html {
     cursor: pointer;
   }
 
-  /* Solid, so nothing shows through it as it comes and goes. A card -- the
-     first one on the search too -- is lighter than the page, with a rounded
-     top, an edge and a shadow of its own. */
+  /* Solid, so nothing shows through it as it comes and goes. The first card
+     lies flat on the search, the same as the page; on other cards a card is
+     lighter, with a rounded top, an edge and a shadow of its own. */
+  /* The edge is always there, unseen on the first card, so a card is laid
+     out the same lying flat or on others, and its copy matches it. */
   .page-card {
     background: var(--sumi-sunk);
+    border-top: 1px solid transparent;
   }
 
   .page-card[data-stacked] {
     position: relative;
     background: var(--sumi);
-    border-top: 1px solid var(--rule-bright);
+    border-top-color: var(--rule-bright);
     border-radius: 14px 14px 0 0;
     box-shadow: 0 -10px 28px rgb(0 0 0 / 0.55);
   }
@@ -6802,6 +6805,11 @@ html[data-nav='forward']::view-transition-group(card) {
 ::view-transition-old(card),
 ::view-transition-new(card) {
   animation: none;
+}
+
+/* The first card comes up flat, as it lies on the search. */
+html[data-card-flat]::view-transition-group(card) {
+  border-radius: 0;
 }
 
 ::view-transition-group(searchbar),
