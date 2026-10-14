@@ -23,6 +23,22 @@ import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav
 import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 import { isIOS } from './account/install'
+import {
+  LINE as FOLDED,
+  blankCard,
+  comeOff,
+  copyCard,
+  fallTime,
+  moveTo,
+  put,
+  rest,
+  rims,
+  run,
+  stackHeight,
+  underOf,
+  type Move,
+  type Under,
+} from './cardStack'
 
 // Wanted only once the map is opened, so loaded then.
 const KanjiMap = lazy(() => import('./map/KanjiMap').then((m) => ({ default: m.KanjiMap })))
@@ -320,27 +336,6 @@ const hasViewTransitions = () => typeof document.startViewTransition === 'functi
  * inside a box that scrolls is copied as far as the box shows it.
  */
 function ghostOf(el: HTMLElement, within?: HTMLElement): HTMLElement {
-  return placeCopy(copyOf(el, within), el)
-}
-
-const keepScrollOnBack = () => !matches(MOBILE)
-
-/** A still copy of a pane, kept out of the page until `placeCopy` puts it there. */
-interface Copy {
-  g: HTMLElement
-  /** Where on the screen the pane was. */
-  r: { left: number; top: number; width: number; height: number }
-  /** How far it was scrolled. */
-  scroll: number
-}
-
-/**
- * Copying costs only the clone: the copy is laid out once it is placed, so a
- * page can be kept like this at each step forward and only laid out if a
- * pull ever needs it. `atTop`: the page as it is at its top, where back
- * comes to on a phone, however far down it was left.
- */
-function copyOf(el: HTMLElement, within?: HTMLElement, atTop = false): Copy {
   const whole = el.getBoundingClientRect()
   const box = within?.getBoundingClientRect()
   const top = box ? Math.max(whole.top, box.top) : whole.top
@@ -362,8 +357,6 @@ function copyOf(el: HTMLElement, within?: HTMLElement, atTop = false): Copy {
   })
   // Rows out of sight are not copied: below, they are left out; above, a
   // blank of their height stands in, so the copy scrolls to the same place.
-  const scrolled = el.scrollTop + (top - whole.top)
-  const back = atTop ? scrolled : 0
   const rows = '.rail-section, .word, .comment, .vocab-row'
   const from = el.querySelectorAll(rows)
   const into = g.querySelectorAll(rows)
@@ -371,8 +364,8 @@ function copyOf(el: HTMLElement, within?: HTMLElement, atTop = false): Copy {
     const b = row.getBoundingClientRect()
     const copy = into[i]
     if (!copy || !copy.parentNode) return
-    if (b.top + back > r.top + r.height + 24) copy.remove()
-    else if (b.bottom + back < r.top - 24) {
+    if (b.top > r.top + r.height + 24) copy.remove()
+    else if (b.bottom < r.top - 24) {
       const blank = document.createElement('div')
       blank.style.height = `${b.height}px`
       copy.replaceWith(blank)
@@ -382,15 +375,6 @@ function copyOf(el: HTMLElement, within?: HTMLElement, atTop = false): Copy {
   g.dataset.ghost = ''
   g.setAttribute('aria-hidden', 'true')
   g.inert = true
-  // At its top its head is not folded.
-  const head = g.querySelector<HTMLElement>('.page-head')
-  head?.style.setProperty('--p', '0')
-  head?.removeAttribute('data-collapsed')
-  return { g, r, scroll: atTop ? 0 : scrolled }
-}
-
-/** A copy put over the screen where its pane was, right after `after`, scrolled as it was. */
-function placeCopy({ g, r, scroll }: Copy, after: HTMLElement): HTMLElement {
   Object.assign(g.style, {
     position: 'fixed',
     left: `${r.left}px`,
@@ -403,17 +387,17 @@ function placeCopy({ g, r, scroll }: Copy, after: HTMLElement): HTMLElement {
     pointerEvents: 'none',
     zIndex: '4',
   })
-  g.style.removeProperty('transform')
-  g.style.removeProperty('opacity')
-  after.after(g)
+  el.after(g)
   // Over the pane even if something above it moves fixed boxes, and
   // scrolled as it was, once it is in the page to scroll.
   const at = g.getBoundingClientRect()
   g.style.left = `${2 * r.left - at.left}px`
   g.style.top = `${2 * r.top - at.top}px`
-  g.scrollTop = scroll
+  g.scrollTop = el.scrollTop + (top - whole.top)
   return g
 }
+
+const keepScrollOnBack = () => !matches(MOBILE)
 
 // Opening the app afresh lands on the whole common map, to wander in, on a
 // desktop; on a phone, on the search, with the map a tap away. A link to a
@@ -456,47 +440,12 @@ function nameOf(p: Page, t: T) {
   return t.lang === 'bg' ? <>„{p.q}“</> : <>“{p.q}”</>
 }
 
-/** How many cards under the open one show their edge, the nearest named. */
-const EDGES = 3
-
 /** A page's name as plain text, for a label. */
 function labelOf(p: Page, t: T): string {
   if (p.kind === 'kanji') return p.char
   if (p.kind === 'word') return p.word?.headword ?? t('theWord')
   if (p.kind === 'level') return `N${p.level}`
   return p.q || t('search')
-}
-
-/**
- * On a phone, the pages under the open one, as the edges of cards it lies on:
- * the nearest with its name, those under it thinner and narrower. Pulled
- * down, the open card goes and the one under it is back. `under` runs bottom
- * first, without the search they were all opened from.
- */
-function CardStack({ under, onPick, t }: { under: Page[]; onPick: (i: number) => void; t: T }) {
-  const hidden = under.length - Math.min(under.length, EDGES)
-  const near = under.length - 1
-  return (
-    <div className="card-stack">
-      {under.map((p, i) =>
-        i < hidden ? null : i === near ? (
-          <button key={i} className="stack-near" onClick={() => onPick(i)} title={t('back')}>
-            <StackDownIcon />
-            <span className="stack-name">{nameOf(p, t)}</span>
-            {hidden > 0 && <span className="stack-more">+{hidden}</span>}
-          </button>
-        ) : (
-          <button
-            key={i}
-            className="stack-edge"
-            style={{ '--i': near - i } as React.CSSProperties}
-            onClick={() => onPick(i)}
-            aria-label={t('backTo', { page: labelOf(p, t) })}
-          />
-        ),
-      )}
-    </div>
-  )
 }
 
 /** Where `el` sits inside `within`, laid out, whatever transforms are on it. */
@@ -512,8 +461,7 @@ function offsetIn(el: HTMLElement, within: HTMLElement): { x: number; y: number 
   return { x, y }
 }
 
-/** How tall a card's head is folded into a line, and how tall its character is there. */
-const FOLDED = 44
+/** How tall a card's character is in its folded line. */
 const FOLDED_GLYPH = 26
 
 /**
@@ -527,21 +475,6 @@ function TabLayers({ n }: { n: number }) {
       {n > 1 && <span className="tab-layer" data-far />}
       <span className="tab-layer" />
     </span>
-  )
-}
-
-function StackDownIcon() {
-  return (
-    <svg className="stack-icon" viewBox="0 0 16 16" aria-hidden>
-      <path
-        d="M4 6l4 4 4-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }
 
@@ -1111,8 +1044,6 @@ export function App() {
   const dropped = useRef(false)
   /** Back, by any way: the page was seen already, so it does not arrive again. */
   const returning = useRef(false)
-  /** Which top the copy of the page under it is being put in place for, ahead of a pull. */
-  const parkFor = useRef(0)
   // Back `k` pages at once, sliding: as history slides it, when it goes
   // through history, or here when the pages come off in place. `still`: the
   // card has gone already, pulled off, and the page under it is in sight.
@@ -1351,27 +1282,47 @@ export function App() {
   const stackUnder = entries.slice(base, -1)
   const stackShown = onCard && stackUnder.length > 0
   const cardRef = useRef<HTMLDivElement>(null)
-  // A tap on an edge: the open card falls off over that page, as when pulled.
+  // A tap on a card's rim takes the cards over it off, as a pull does.
   function pickUnder(i: number) {
-    const at = base + i
-    const k = entries.length - 1 - at
-    if (!dropOver(copyAt(at, entries[at]), () => popBy(k, true))) popBy(k)
+    const k = stackUnder.length - i
+    if (!takeOff(k, () => popBy(k, true))) popBy(k)
   }
   // The card left at each step forward, copied at its top, to lie under the
-  // card that replaced it as that one is pulled off: `at` is where it is in
-  // the stack. Not the search: the first card is not pulled off it.
-  const underCopies = useRef<{ page: Page; at: number; copy: Copy }[]>([])
+  // ones opened over it (see cardStack.ts): `at` is where it is in the stack.
+  // Not the search: the first card lies on it, not on a card.
+  const underCopies = useRef<{ page: Page; at: number; el: HTMLElement }[]>([])
   function keepUnder() {
-    const el = scroller.current
-    if (!onCard || onStageRef.current || !el) return
+    const card = cardRef.current
+    const sc = scroller.current
+    if (!onCard || onStageRef.current || !card || !sc) return
     const at = entries.length - 1
     underCopies.current = underCopies.current.filter((u) => u.at < at)
-    underCopies.current.push({ page: entries[at], at, copy: copyOf(el, undefined, true) })
+    underCopies.current.push({ page: entries[at], at, el: copyCard(card, sc.clientHeight) })
   }
-  function copyAt(at: number, page: Page | null | undefined): Copy | null {
-    if (!page) return null
-    return underCopies.current.find((c) => c.at === at && samePage(c.page, page))?.copy ?? null
+  /** The copy of the card at `at`, or a card with its name where none was kept. */
+  function cardAt(at: number, page: Page): HTMLElement {
+    const kept = underCopies.current.find((c) => c.at === at && samePage(c.page, page))
+    if (kept) return kept.el
+    const el = blankCard(labelOf(page, t))
+    underCopies.current.push({ page, at, el })
+    return el
   }
+  // The cards under the open one, where they rest. The box holding them is
+  // React's but empty to it; what is in it is laid here.
+  const copiesRef = useRef<HTMLDivElement>(null)
+  const unders = useRef<Under[]>([])
+  useLayoutEffect(() => {
+    const box = copiesRef.current
+    const sc = scroller.current
+    unders.current = []
+    if (!box || !sc) return
+    box.style.height = `${sc.clientHeight - (parseFloat(getComputedStyle(sc).paddingTop) || 0)}px`
+    const els = stackUnder.map((p, i) => cardAt(base + i, p))
+    box.replaceChildren(...els)
+    unders.current = els.map(underOf)
+    unders.current.forEach((u, i) => put(u, rest(els.length, i, u.fold)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stack, stackShown])
   // On a phone, scrolling down a card, the search bar goes first, with the
   // scroll, and then the card's head folds into a line along the top: its
   // character shrinks to the line's left with its first meaning beside it,
@@ -1580,10 +1531,8 @@ export function App() {
     card: HTMLElement | null
     /** Whether a pull down takes the card off, or brings up the search. */
     back: boolean
-    /** The page under the card, copied, showing as the card comes off it. */
-    under: HTMLElement | null
-    /** Whether letting go now would take the card off. */
-    armed: boolean
+    /** How the cards under it move as it is pulled off (cardStack.ts). */
+    plan: Move[] | null
   } | null>(null)
   // The tab turned from, as a still copy, and where it goes as the tab turned
   // to comes in beside it: for the effect below, once that one is showing.
@@ -1662,14 +1611,13 @@ export function App() {
       // Only off a card on another card: on the first, the search it was
       // opened from is a tab away, and a pull brings up the keyboard over it.
       back: stackShown,
-      under: null,
-      armed: false,
+      plan: null,
     }
-    // A pull may follow: the copy under the card wakes, and the card gets a
-    // layer of its own, before the finger has moved far enough to tell.
+    // A pull may follow: the card gets a layer of its own before the finger
+    // has moved far enough to tell.
     const s = swipe.current
-    if (s.card && s.back && s.atTop) {
-      s.under = layUnder(copyAt(entries.length - 2, shownUnder))
+    if (s.card && s.back && s.atTop && unders.current.length > 0) {
+      s.plan = comeOff(unders.current, 1, scroller.current?.clientHeight ?? 0)
       s.card.dataset.moving = ''
     }
   }
@@ -1691,12 +1639,11 @@ export function App() {
         dy = 0
       }
       // Anything else is the page scrolling, which is the browser's.
+      if (s.mode !== 'pull' && s.card) delete s.card.dataset.moving
       if (s.mode === null) {
-        unwake(s)
         swipe.current = null
         return
       }
-      if (s.mode === 'turn') unwake(s)
     }
     const dt = e.timeStamp - s.last.at
     if (dt > 0) {
@@ -1705,24 +1652,16 @@ export function App() {
     }
     s.last = { x: touch.clientX, y: touch.clientY, at: e.timeStamp }
     if (s.mode === 'pull') {
-      // On a stack the card comes down with the finger, and the one under it
-      // lights up once letting go would bring it back. The last card only
-      // gives a little: under it is the search, which lights up instead.
+      // On a stack the card comes down with the finger, and the cards under it
+      // move as far towards where they go. The first card only gives a
+      // little: under it is the search, which lights up instead.
       const down = Math.max(0, dy)
       if (s.card) {
         s.card.dataset.moving = ''
         s.card.style.transform = `translateY(${s.back ? down : down / 3}px)`
       }
-      if (s.back && s.card) {
-        // The page under it, back a little and dim, comes forward as it goes;
-        // the card's edges give way to it over the first part of the pull.
-        const shown = Math.min(1, down / FADE_IN)
-        if (s.under) {
-          sinkUnder(s.under, Math.min(1, down / (scroller.current.clientHeight * 0.6)), shown)
-          stackOf()?.style.setProperty('opacity', String(1 - shown))
-        }
-        if (s.armed !== dy > PULL) stackOf()?.toggleAttribute('data-armed', (s.armed = dy > PULL))
-      } else searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
+      if (s.plan) moveTo(s.plan, Math.min(1, down / scroller.current.clientHeight))
+      else searchBarOf(inputRef.current)?.toggleAttribute('data-pulled', dy > PULL)
       return
     }
     // Past the last tab the page gives a little, and comes back.
@@ -1740,14 +1679,13 @@ export function App() {
     swipe.current = null
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
     const el = s?.moved
-    if (s && s.mode !== 'pull') unwake(s)
     if (s?.mode === 'pull') {
       const dy = e.changedTouches[0].clientY - s.y
+      const down = Math.max(0, dy)
       const far = dy > PULL || (s.vy > 0.4 && dy > SWIPE)
-      stackOf()?.removeAttribute('data-armed')
-      const under = s.under
-      if (s.card && s.back && far) return dropCard(s.card, under, s.vy, () => popBy(1, under !== null))
-      if (s.card) settleCard(s.card, s.under)
+      const plan = s.plan
+      if (plan && far && takeOff(1, () => popBy(1, true), { down, vy: s.vy, plan })) return
+      if (s.card) settle(s.card, plan, s.back ? down : down / 3)
       if (far && !s.back) typeOver()
       return
     }
@@ -1772,129 +1710,54 @@ export function App() {
     swipe.current = null
     const el = s?.moved
     searchBarOf(inputRef.current)?.removeAttribute('data-pulled')
-    stackOf()?.removeAttribute('data-armed')
-    if (s?.mode === 'pull' && s.card) settleCard(s.card, s.under)
-    else if (s) unwake(s)
+    if (s?.card) settle(s.card, s.plan, new DOMMatrix(getComputedStyle(s.card).transform).m42)
     if (s?.mode !== 'turn' || !el) return
     dragMark(null)
     const at = new DOMMatrix(getComputedStyle(el).transform).m41
     el.style.transform = ''
     slide(el, at, 0, 220)
   }
-  function stackOf() {
-    return scroller.current?.querySelector<HTMLElement>('.card-stack') ?? null
-  }
   /**
-   * The copy of the page under the card, behind it and out of sight until a
-   * pull shows it: the one put there ahead of time, woken, or placed now.
+   * Takes the open card off and `k - 1` under it, as things: the open card
+   * falls off the bottom -- from where a finger left it (`from`), at the speed
+   * it was thrown -- and the cards under it move with it to where they go
+   * (cardStack.ts). Then `commit` makes the card come back to the open one, in
+   * the place its copy came to. False where there is no stack to move.
    */
-  function layUnder(copy: Copy | null): HTMLElement | null {
-    const sc = scroller.current
-    if (!copy || !sc) return null
-    const g = copy.g.isConnected ? copy.g : placeCopy(copy, sc)
-    g.dataset.under = ''
-    g.style.zIndex = '3'
-    g.style.transformOrigin = 'top center'
-    g.style.removeProperty('content-visibility')
-    sinkUnder(g, 0, 0)
-    if (g.scrollTop !== copy.scroll) g.scrollTop = copy.scroll
-    return g
-  }
-  /** Out of sight, and not drawn or styled, until a pull wakes it. */
-  function park(g: HTMLElement | null) {
-    if (!g) return
-    g.style.transform = ''
-    g.style.opacity = '0'
-    g.style.contentVisibility = 'hidden'
-  }
-  /** A touch that was not a pull after all: the card and the copy back to rest. */
-  function unwake(s: { card: HTMLElement | null; under: HTMLElement | null }) {
-    park(s.under)
-    if (s.card) delete s.card.dataset.moving
-  }
-  /**
-   * The open card falls off, from where it is, over the copy of the page it
-   * goes back to, and `commit` makes that page the open one. False where
-   * there is no copy to fall over, or nothing slides.
-   */
-  function dropOver(copy: Copy | null, commit: () => void): boolean {
+  function takeOff(k: number, commit: () => void, from?: { down: number; vy: number; plan: Move[] }): boolean {
     const card = cardRef.current
-    if (!card || !copy || !pagesSlide() || onStageRef.current) return false
-    const g = layUnder(copy)
-    if (!g) return false
-    card.dataset.moving = ''
-    dropCard(card, g, 0, commit)
-    return true
-  }
-  /**
-   * `p` of the way from sunk under the card to in its place. `shown`: how far
-   * it has faded in over the card's own edges, which fade out as it does.
-   */
-  function sinkUnder(g: HTMLElement, p: number, shown = 1) {
-    g.style.transform = `translateY(${-6 * (1 - p)}px) scale(${0.95 + 0.05 * p})`
-    g.style.opacity = String(shown * (0.45 + 0.55 * p))
-  }
-  /** How far the copy has faded in, over the first part of a pull. */
-  const FADE_IN = 48
-  /** The card let go of short of going: back up into its place, over the page under it. */
-  function settleCard(card: HTMLElement, under: HTMLElement | null) {
-    const at = new DOMMatrix(getComputedStyle(card).transform).m42
-    card.style.transform = ''
-    const stack = stackOf()
-    const done = () => {
-      delete card.dataset.moving
-      park(under)
-      stack?.style.removeProperty('opacity')
-    }
-    if (at <= 0) return done()
-    const ms = reducedMotion() ? 0 : 240
-    card.animate([{ transform: `translateY(${at}px)` }, { transform: 'none' }], { duration: ms, easing: EASE }).onfinish =
-      done
-    under?.animate([{ transform: under.style.transform, opacity: under.style.opacity }, { ...SUNK, opacity: 0 }], {
-      duration: ms,
-      easing: EASE,
-    })
-    stack?.animate([{ opacity: stack.style.opacity || '1' }, { opacity: 1 }], { duration: ms, easing: EASE })
-  }
-  /**
-   * The card let go of far enough, or sent back: it falls off the bottom --
-   * at the speed it was thrown, from where the finger left it -- the page
-   * under it coming forward. Only then does `commit` change the page, to the
-   * one already showing under it.
-   */
-  function dropCard(card: HTMLElement, under: HTMLElement | null, vy: number, commit: () => void) {
     const sc = scroller.current
-    if (!sc) return
-    const at = new DOMMatrix(getComputedStyle(card).transform).m42
+    if (!card || !sc || !pagesSlide() || onStageRef.current || unders.current.length < k) return false
     const h = sc.clientHeight
-    // Thrown, it goes on at the speed the finger left it at, so there is no
-    // kink where the finger lets go; from rest, it eases off the screen.
-    const thrown = vy > 0.2
-    const ms = reducedMotion() ? 0 : thrown ? Math.min(300, Math.max(200, (h - at) / Math.max(vy, 1.2))) : 340
-    const slope = thrown ? Math.min(3, (vy * ms) / Math.max(1, h - at)) : 0
-    card.style.transform = `translateY(${h}px)`
-    const fall = card.animate([{ transform: `translateY(${at}px)` }, { transform: `translateY(${h}px)` }], {
-      duration: ms,
-      easing: thrown ? `cubic-bezier(0.25, ${(0.25 * slope).toFixed(3)}, 0.5, 1)` : 'cubic-bezier(0.32, 0.72, 0, 1)',
-    })
-    if (under) {
-      under.animate([{ transform: under.style.transform, opacity: under.style.opacity }, { transform: 'none', opacity: 1 }], {
-        duration: ms,
-        easing: EASE,
-      })
-      sinkUnder(under, 1)
-      const stack = stackOf()
-      if (stack) {
-        stack.animate([{ opacity: stack.style.opacity || '1' }, { opacity: 0 }], { duration: ms * 0.5, easing: EASE })
-        stack.style.opacity = '0'
-      }
+    const plan = from?.plan ?? comeOff(unders.current, k, h)
+    const down = from?.down ?? 0
+    const t0 = down / h
+    card.dataset.moving = ''
+    const step = (e: number) => {
+      card.style.transform = `translateY(${down + (h - down) * e}px)`
+      moveTo(plan, t0 + (1 - t0) * e)
     }
-    fall.onfinish = commit
+    run(from ? fallTime(h - down, from.vy) : 380, step, commit)
+    // Should the page not change after all, it comes back.
     window.setTimeout(() => {
       if (card.dataset.moving === undefined) return
       dropped.current = false
-      settleCard(card, under)
-    }, ms + 900)
+      settle(card, plan, h)
+    }, 1300)
+    return true
+  }
+  /** A card let go of short of going: back up into its place, the cards under it back to theirs. */
+  function settle(card: HTMLElement, plan: Move[] | null, down: number) {
+    const h = scroller.current?.clientHeight || 1
+    const t0 = Math.min(1, down / h)
+    const step = (e: number) => {
+      card.style.transform = `translateY(${down * (1 - e)}px)`
+      if (plan) moveTo(plan, t0 * (1 - e))
+    }
+    run(reducedMotion() ? 0 : 240, step, () => {
+      card.style.transform = ''
+      delete card.dataset.moving
+    })
   }
   // A pull down at the top is the app's, not the browser's. Chrome would take
   // it as a scroll with nowhere to go, and a touch that ends a scroll is no
@@ -2064,10 +1927,9 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top, pane, onStage])
 
-  // A card pulled down and let go is a new page now: in its place again,
-  // over nothing. Pulled off, the page that was under it is already on the
-  // screen, as a copy: it is swapped for the page itself with nothing
-  // arriving, so the two are one.
+  // A card taken off is a new page now: in its place again. The page that
+  // was under it is on the screen already, as its copy, in this same place:
+  // it takes the copy's place with nothing arriving, so the two are one.
   useLayoutEffect(() => {
     const card = cardRef.current
     if (card) {
@@ -2078,22 +1940,7 @@ export function App() {
     }
     returning.current = false
     dropped.current = false
-    document.querySelectorAll('[data-under]').forEach((g) => g.remove())
-    stackOf()?.style.removeProperty('opacity')
     underCopies.current = underCopies.current.filter((u) => u.at < entries.length - 1)
-    // Once the page has settled, the copy of the one under it is laid out
-    // behind it and put to sleep, so the first frame of a pull has nothing
-    // to lay out: it only wakes.
-    const gen = ++parkFor.current
-    const at = entries.length - 2
-    const below = stackShown ? entries[at] : null
-    if (below) {
-      window.setTimeout(() => {
-        const copy = copyAt(at, below)
-        if (gen !== parkFor.current || !copy || copy.g.isConnected || swipe.current) return
-        park(layUnder(copy))
-      }, 900)
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [top])
 
@@ -2113,8 +1960,7 @@ export function App() {
     pendingTurn.current = null
     const slidAlready = (e as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true
     if (!byApp && (isIOS || slidAlready)) return false
-    // Back one card or more, on the rail: it falls off over the page it goes
-    // back to, if a copy of that was kept.
+    // Back to a card under this one: the cards come off as they do when pulled.
     const to = e.state as { stack?: Stack; stage?: StageView } | null
     if (!turn && !forward && mobile && to?.stack && !to.stage) {
       const at = to.stack.length - 1
@@ -2122,7 +1968,7 @@ export function App() {
         dropped.current = true
         apply()
       }
-      if (at < entries.length - 1 && dropOver(copyAt(at, to.stack[at]), commit)) return true
+      if (at >= base && takeOff(entries.length - 1 - at, commit)) return true
     }
     if (turn) animateNav(turn.kind, apply, turn.scope)
     else animateNav(forward ? 'forward' : 'back', apply)
@@ -2234,7 +2080,23 @@ export function App() {
             onTouchEnd={swipeEnd}
             onTouchCancel={swipeCancel}
           >
-            {stackShown && <CardStack under={stackUnder} onPick={pickUnder} t={t} />}
+            {stackShown && (
+              <div className="card-stack" style={{ height: stackHeight(stackUnder.length) }}>
+                <div className="stack-copies" ref={copiesRef} />
+                {rims(stackUnder.length).map((r, k, all) => {
+                  const i = stackUnder.length - all.length + k
+                  return (
+                    <button
+                      key={i}
+                      className="stack-rim"
+                      style={{ top: r.top, height: r.height }}
+                      onClick={() => pickUnder(i)}
+                      aria-label={t('backTo', { page: labelOf(stackUnder[i], t) })}
+                    />
+                  )
+                })}
+              </div>
+            )}
             {!mobile && shownUnder && !searchShown && (
               <div className="rail-crumb">
                 <button className="back-link rail-back" onClick={goBack} title={t('back')}>

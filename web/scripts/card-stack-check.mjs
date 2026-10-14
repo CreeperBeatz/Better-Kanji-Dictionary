@@ -1,7 +1,8 @@
 // Usage: node scripts/card-stack-check.mjs [base=http://localhost:8000] [shots dir]
-// Phone card stack: the edges of the pages under the open one (none on the first
-// card, over the search), pull down = back with the page under it showing, a tap
-// on an edge goes back to it, pull down on the first card = the keyboard.
+// Phone card stack: copies of the cards under the open one lie behind it, their
+// tops showing (none on the first card, over the search); pull down = back, the
+// card under it coming forward into the open card's place; a tap on a rim goes
+// back to that card; pull down on the first card = the keyboard.
 import { chromium, devices } from 'playwright'
 
 const BASE = process.argv[2] ?? 'http://localhost:8000'
@@ -43,14 +44,15 @@ async function swipe(x0, y0, x1, y1, steps = 12, rest = 200) {
 const out = (k, v) => console.log(k.padEnd(34), v)
 const shot = async (name) => SHOTS && page.screenshot({ path: `${SHOTS}/${name}.png` })
 const where = () => page.evaluate(() => decodeURIComponent(location.pathname + location.search))
-const near = () => page.locator('.rail-body:not([data-ghost]) .stack-near').textContent().catch(() => null)
-// The page under a card being pulled is a copy, with a card of its own.
-const card = () => page.locator('.rail-body:not([data-ghost]) .page-card')
+const rim = () => page.locator('.rail-body:not([data-ghost]) .stack-rim').last()
+const near = () => rim().getAttribute('aria-label').catch(() => null)
+// The open card, not the copies of the ones under it.
+const card = () => page.locator('.rail-body:not([data-ghost]) .page-card:not([data-copy])')
+const nearest = () => page.locator('.stack-copies > .page-card').last()
 const layers = () => page.locator('.phone-tabs .tab-layer').count()
 const barShown = () => page.locator('.rail-body:not([data-ghost]) .page-head[data-collapsed]').count()
-// The copy of the page under a card waits out of sight; only a visible one counts.
-const underShown = () => page.locator('[data-under]').evaluateAll((es) => es.filter((e) => Number(getComputedStyle(e).opacity) > 0.05).length)
-const edges = () => page.locator('.rail-body:not([data-ghost]) .card-stack > button').count()
+const edges = () => page.locator('.rail-body:not([data-ghost]) .stack-rim').count()
+const copies = () => page.locator('.stack-copies > .page-card').count()
 
 await page.goto(BASE + '/', { waitUntil: 'networkidle' })
 await wait(600)
@@ -87,22 +89,25 @@ await shot('3-depth3')
 
 await page.locator('.rail-body:not([data-ghost])').evaluate((e) => (e.scrollTop = 0))
 await wait(200)
-// Pulled part way and held: the card follows, the one under it lights up.
+out('copies under / rims', `${await copies()} / ${await edges()}`)
+const restBefore = await nearest().evaluate((e) => e.style.transform)
+// Pulled part way and held: the card follows, the one under it comes forward.
 await touch('touchStart', 200, 330)
 for (let i = 1; i <= 10; i++) {
   await touch('touchMove', 200, 330 + i * 15)
   await wait(16)
 }
 await wait(100)
+const restAt = restBefore
 out('card follows finger', await card().evaluate((e) => e.style.transform))
-out('armed', await page.locator('.rail-body:not([data-ghost]) .card-stack').getAttribute('data-armed'))
-out('page under shows', await underShown())
+out('card under comes forward', `${restAt} -> ${await nearest().evaluate((e) => e.style.transform)}`)
+out('nothing fades', await page.locator('.stack-copies > .page-card').evaluateAll((es) => es.every((e) => getComputedStyle(e).opacity === '1')))
 await shot('4-pulling')
 await touch('touchEnd')
 await wait(90)
 await shot('4b-dropping')
 await wait(900)
-out('copy gone, page quiet', `${await underShown()} / ${await card().getAttribute('data-quiet')}`)
+out('copies left / page quiet', `${await copies()} / ${await card().getAttribute('data-quiet')}`)
 out('pull down -> back', await where())
 out('card transform cleared', JSON.stringify(await card().evaluate((e) => e.style.transform)))
 out('edges / near', `${await edges()} / ${await near()}`)
@@ -114,7 +119,7 @@ await wait(600)
 out('short pull stays', (await where()) === before)
 
 await page.locator('.rail-body:not([data-ghost])').evaluate((e) => (e.scrollTop = 0))
-await tapEl(page.locator('.rail-body:not([data-ghost]) .stack-near'))
+await tapEl(rim())
 await wait(120)
 await shot('5a-tap-back')
 await wait(800)
@@ -136,7 +141,7 @@ for (let i = 1; i <= 10; i++) {
   await wait(16)
 }
 await wait(100)
-out('first card gives, nothing under', await underShown())
+out('first card gives, no stack', await copies())
 await shot('6-pull-first-card')
 await touch('touchEnd')
 await wait(900)

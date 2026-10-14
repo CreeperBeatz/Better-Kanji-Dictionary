@@ -17,7 +17,7 @@ const touch = (type, x, y) =>
 
 await page.goto(BASE + '/kanji/%E6%98%8E', { waitUntil: 'networkidle' })
 await wait(800)
-const card = '.rail-body:not([data-ghost]) .page-card'
+const card = '.rail-body:not([data-ghost]) .page-card:not([data-copy])'
 for (let round = 0; round < 3; round++) {
   // A word from the page, scrolled part way, as reading does.
   const row = page.locator(`${card} .vocab-row`).nth(3)
@@ -58,7 +58,7 @@ for (let round = 0; round < 3; round++) {
   }
   await mark('release')
   await touch('touchEnd')
-  await page.waitForFunction(() => ![...document.querySelectorAll('[data-under]')].some((e) => Number(getComputedStyle(e).opacity) > 0.05), null, { timeout: 5000 })
+  await page.waitForFunction(() => !document.querySelector('.page-card[data-moving]'), null, { timeout: 5000 })
   await mark('swapped')
   await wait(400)
   await mark('end')
