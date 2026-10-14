@@ -1107,9 +1107,9 @@ export function App() {
     cameBack.current = performance.now()
     pop()
   })
-  /** A card pulled off, and the page under it brought back without a slide. */
+  /** A card pulled off: the page under it is in sight already, so nothing slides. */
   const dropped = useRef(false)
-  /** Back through history: the page comes back as it was, without arriving. */
+  /** Back, by any way: the page was seen already, so it does not arrive again. */
   const returning = useRef(false)
   /** Which top the copy of the page under it is being put in place for, ahead of a pull. */
   const parkFor = useRef(0)
@@ -1119,6 +1119,7 @@ export function App() {
   const popBy = useStable((k: number, still: boolean = false) => {
     cameBack.current = performance.now()
     dropped.current = still
+    returning.current = true
     if (depth >= k || still) pop(k)
     else animateNav('back', () => pop(k))
   })
@@ -1356,14 +1357,14 @@ export function App() {
     const k = entries.length - 1 - at
     if (!dropOver(copyAt(at, entries[at]), () => popBy(k, true))) popBy(k)
   }
-  // The page left at each step forward, copied, to lie under the card that
-  // replaced it as that card is pulled off: `at` is where it is in the stack.
+  // The card left at each step forward, copied at its top, to lie under the
+  // card that replaced it as that one is pulled off: `at` is where it is in
+  // the stack. Not the search: the first card is not pulled off it.
   const underCopies = useRef<{ page: Page; at: number; copy: Copy }[]>([])
   function keepUnder() {
     const el = scroller.current
-    if (!mobile || onStageRef.current || !el) return
-    // From the search tab, what is left is the search, at the bottom.
-    const at = searchShown ? 0 : entries.length - 1
+    if (!onCard || onStageRef.current || !el) return
+    const at = entries.length - 1
     underCopies.current = underCopies.current.filter((u) => u.at < at)
     underCopies.current.push({ page: entries[at], at, copy: copyOf(el, undefined, true) })
   }
@@ -1822,7 +1823,6 @@ export function App() {
     const g = layUnder(copy)
     if (!g) return false
     card.dataset.moving = ''
-    sinkUnder(g, 0)
     dropCard(card, g, 0, commit)
     return true
   }
@@ -2040,8 +2040,7 @@ export function App() {
     if (to) {
       // The page going was taller when the tabs are arriving with this one:
       // no more of it shows than the room this one has.
-      const room = h
-      for (const g of how.ghosts) if (g.offsetHeight > room) g.style.height = `${room}px`
+      for (const g of how.ghosts) if (g.offsetHeight > h) g.style.height = `${h}px`
       // The page coming in is over the one going, forward; under it, back.
       to.style.zIndex = fwd ? '5' : ''
       const frames = fwd ? [{ transform: `translateY(${h}px)` }, { transform: 'none' }] : [SUNK, { transform: 'none', opacity: 1 }]
@@ -2056,7 +2055,6 @@ export function App() {
     else if (how.tabs) how.ghosts.push(how.tabs)
     for (const g of how.ghosts) {
       g.style.zIndex = fwd ? '1' : '6'
-      // A card pulled down is copied where the finger left it, and falls on from there.
       const a = g.animate(
         fwd ? [{ transform: 'none', opacity: 1 }, SUNK] : [{ transform: 'none' }, { transform: `translateY(${h}px)` }],
         { duration: PAGE_MS, easing: EASE },
@@ -2076,7 +2074,7 @@ export function App() {
       card.getAnimations().forEach((a) => a.cancel())
       card.style.transform = ''
       delete card.dataset.moving
-      card.toggleAttribute('data-quiet', dropped.current || returning.current)
+      card.toggleAttribute('data-quiet', returning.current)
     }
     returning.current = false
     dropped.current = false
