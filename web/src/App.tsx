@@ -2104,7 +2104,7 @@ export function App() {
                 </button>
               </div>
             )}
-            <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
+            <div className="page-card" ref={cardRef} data-stacked={onCard || undefined}>
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}

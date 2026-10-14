@@ -34,8 +34,6 @@ export interface Place {
   y: number
   s: number
   p: number
-  /** How far it has become the first card, which lies flat on the search. */
-  flat: number
 }
 
 /** How tall the cards under the open one stand above it, `m` of them. */
@@ -55,36 +53,23 @@ export function rest(m: number, i: number, fold: number): Place {
   // The ones below those shown lie under the bottom one shown.
   const k = Math.max(0, i - (m - shown))
   const s = 1 - 0.04 * (shown - k)
-  return { y: PAD + RIM * k - s * fold, s, p: 1, flat: 0 }
+  return { y: PAD + RIM * k - s * fold, s, p: 1 }
 }
 
 /** The open card's place, with `m` cards under it. */
 function open(m: number): Place {
-  return { y: stackHeight(m), s: 1, p: 0, flat: m === 0 ? 1 : 0 }
+  return { y: stackHeight(m), s: 1, p: 0 }
 }
 
 function mix(a: Place, b: Place, t: number): Place {
   const at = (x: number, y: number) => x + (y - x) * t
-  return { y: at(a.y, b.y), s: at(a.s, b.s), p: at(a.p, b.p), flat: at(a.flat, b.flat) }
+  return { y: at(a.y, b.y), s: at(a.s, b.s), p: at(a.p, b.p) }
 }
 
 /** Puts a card where `at` says. Only the card and its head change: nothing inherits from them. */
 export function put(u: Under, at: Place) {
   u.el.style.transform = `translateY(${at.y}px) scale(${at.s})`
   u.head?.style.setProperty('--p', at.p.toFixed(3))
-  // Lying flat, it has no rounded top, no edge and no shadow, and the page's colour.
-  const f = at.flat
-  if (f === 0 && !u.el.style.background) return
-  const round = `${14 * (1 - f)}px ${14 * (1 - f)}px 0 0`
-  const ground = `color-mix(in srgb, var(--sumi-sunk) ${(f * 100).toFixed(1)}%, var(--sumi))`
-  u.el.style.borderRadius = round
-  u.el.style.background = ground
-  u.el.style.borderTopColor = `color-mix(in srgb, transparent ${(f * 100).toFixed(1)}%, var(--rule-bright))`
-  u.el.style.boxShadow = `0 -10px 28px rgb(0 0 0 / ${(0.55 * (1 - f)).toFixed(3)})`
-  if (u.head) {
-    u.head.style.borderRadius = round
-    u.head.style.background = ground
-  }
 }
 
 /** A card's move: from where it lies to where it goes. */
