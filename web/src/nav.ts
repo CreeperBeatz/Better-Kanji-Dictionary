@@ -170,7 +170,7 @@ function write(entry: Entry, how: 'push' | 'replace') {
 }
 
 /** The pages to restore a scroll position to, once they have drawn. */
-function restoreScroll(el: HTMLElement | null, to: number) {
+export function restoreScroll(el: HTMLElement | null, to: number) {
   if (!el) return
   // Lists fill in over a frame or two; try again as they do.
   el.scrollTop = to

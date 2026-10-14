@@ -6557,6 +6557,13 @@ html {
     border-color: var(--ai-deep);
   }
 
+  /* Solid, so nothing shows through it as it comes and goes. On the search
+     it lies flat, the same as the page; on other cards it is lighter, with
+     an edge of its own. */
+  .page-card {
+    background: var(--sumi-sunk);
+  }
+
   .page-card[data-stacked] {
     position: relative;
     background: var(--sumi);
@@ -6564,10 +6571,32 @@ html {
     border-radius: 14px 14px 0 0;
   }
 
+  /* Pulled down, a card is a card, over the copy of the page under it. */
+  .page-card[data-moving] {
+    position: relative;
+    z-index: 5;
+    border-top: 1px solid var(--rule-bright);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.55);
+  }
+
+  /* The page that was under a card pulled off: already in sight, so it does
+     not arrive again. */
+  .page-card[data-quiet] * {
+    animation: none !important;
+  }
+
   /* The edges stay put as a card comes and goes over them. */
   html[data-nav='forward'] .card-stack,
   html[data-nav='back'] .card-stack {
     view-transition-name: stack;
+  }
+
+  /* A card coming up, or one going down in full sight, is a picture of its
+     own, which moves whole (App.tsx sets data-card on the side it is on). */
+  html[data-card='coming'] .page-card,
+  html[data-card='going'] .page-card {
+    view-transition-name: card;
   }
 }
 
@@ -6622,8 +6651,8 @@ html {
   mix-blend-mode: normal;
 }
 
-/* Forward: the new page comes up from the bottom over the old, which sinks
-   back and dims, a card on a stack. */
+/* Forward: the new card comes up from the bottom over the old page, which
+   sinks back and dims, as it does under a card being pulled off. */
 html[data-nav='forward']::view-transition-old(page) {
   animation-name: vt-sink;
   transform-origin: top center;
@@ -6631,6 +6660,45 @@ html[data-nav='forward']::view-transition-old(page) {
 
 html[data-nav='forward']::view-transition-new(page) {
   animation-name: vt-rise;
+}
+
+/* With the card its own picture, what is left of the new page is the floor
+   under it, which darkens over the old page as the card arrives. */
+html[data-card='coming']::view-transition-new(page) {
+  animation-name: vt-floor;
+}
+
+html[data-nav='forward']::view-transition-group(page),
+html[data-nav='forward']::view-transition-old(page),
+html[data-nav='forward']::view-transition-new(page),
+html[data-nav='forward']::view-transition-group(card),
+html[data-nav='forward']::view-transition-group(stack),
+html[data-nav='forward']::view-transition-old(stack),
+html[data-nav='forward']::view-transition-new(stack) {
+  animation-duration: 400ms;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* The card moves whole, a rounded top and a shadow on it; its picture
+   inside does not fade, as a picture alone would. */
+::view-transition-group(card) {
+  border-radius: 14px 14px 0 0;
+  overflow: clip;
+  box-shadow: 0 -10px 28px rgb(0 0 0 / 0.55);
+}
+
+::view-transition-old(card),
+::view-transition-new(card) {
+  animation: none;
+}
+
+html[data-card='coming']::view-transition-group(card) {
+  animation-name: vt-card-rise;
+  animation-fill-mode: both;
+}
+
+html[data-card='gone']::view-transition-group(card) {
+  animation: vt-card-drop 300ms cubic-bezier(0.4, 0, 0.8, 0.6) both;
 }
 
 /* Back: the old page drops off the bottom over the one under it, which
@@ -6643,6 +6711,13 @@ html[data-nav='back']::view-transition-old(page) {
 html[data-nav='back']::view-transition-new(page) {
   animation-name: vt-unsink;
   transform-origin: top center;
+}
+
+/* The card going is a picture of its own: the old page is only the floor
+   under it, and the page coming forward is over that. */
+html[data-card='gone']::view-transition-old(page) {
+  animation-name: none;
+  z-index: auto;
 }
 
 ::view-transition-group(stack),
@@ -6735,6 +6810,34 @@ html[data-nav]::view-transition-old(tabs):only-child {
   }
   to {
     transform: translateY(100%);
+  }
+}
+
+/* `translate`, not `transform`: the group's transform is where it stands. */
+@keyframes vt-card-rise {
+  from {
+    translate: 0 100vh;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes vt-card-drop {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 100vh;
+  }
+}
+
+@keyframes vt-floor {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

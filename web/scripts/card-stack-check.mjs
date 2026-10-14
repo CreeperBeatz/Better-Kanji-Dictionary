@@ -1,6 +1,7 @@
 // Usage: node scripts/card-stack-check.mjs [base=http://localhost:8000] [shots dir]
-// Phone card stack: the edges of the pages under the open one, pull down = back,
-// pull down on the last card = the search, a tap on an edge goes back to it.
+// Phone card stack: the edges of the pages under the open one (none on the first
+// card, over the search), pull down = back with the page under it showing, a tap
+// on an edge goes back to it, pull down on the first card = the keyboard.
 import { chromium, devices } from 'playwright'
 
 const BASE = process.argv[2] ?? 'http://localhost:8000'
@@ -42,8 +43,10 @@ async function swipe(x0, y0, x1, y1, steps = 12, rest = 200) {
 const out = (k, v) => console.log(k.padEnd(34), v)
 const shot = async (name) => SHOTS && page.screenshot({ path: `${SHOTS}/${name}.png` })
 const where = () => page.evaluate(() => decodeURIComponent(location.pathname + location.search))
-const near = () => page.locator('.stack-near').textContent().catch(() => null)
-const edges = () => page.locator('.card-stack > button').count()
+const near = () => page.locator('.rail-body:not([data-ghost]) .stack-near').textContent().catch(() => null)
+// The page under a card being pulled is a copy, with a card of its own.
+const card = () => page.locator('.rail-body:not([data-ghost]) .page-card')
+const edges = () => page.locator('.rail-body:not([data-ghost]) .card-stack > button').count()
 
 await page.goto(BASE + '/', { waitUntil: 'networkidle' })
 await wait(600)
@@ -61,7 +64,9 @@ const two = await page
   .locator('.page-card .vocab-word')
   .evaluateAll((ws) => ws.findIndex((w) => (w.textContent.match(/[一-鿿]/g) ?? []).length >= 2))
 await tapEl(page.locator('.page-card .vocab-row').nth(two))
-await wait(900)
+await wait(160)
+await shot('2a-rising')
+await wait(800)
 out('word opened', await where())
 out('edges / near', `${await edges()} / ${await near()}`)
 await shot('2-depth2')
@@ -80,13 +85,17 @@ for (let i = 1; i <= 10; i++) {
   await wait(16)
 }
 await wait(100)
-out('card follows finger', await page.locator('.page-card').evaluate((e) => e.style.transform))
-out('armed', await page.locator('.card-stack').getAttribute('data-armed'))
+out('card follows finger', await card().evaluate((e) => e.style.transform))
+out('armed', await page.locator('.rail-body:not([data-ghost]) .card-stack').getAttribute('data-armed'))
+out('page under shows', await page.locator('[data-under]').count())
 await shot('4-pulling')
 await touch('touchEnd')
+await wait(90)
+await shot('4b-dropping')
 await wait(900)
+out('copy gone, page quiet', `${await page.locator('[data-under]').count()} / ${await card().getAttribute('data-quiet')}`)
 out('pull down -> back', await where())
-out('card transform cleared', JSON.stringify(await page.locator('.page-card').evaluate((e) => e.style.transform)))
+out('card transform cleared', JSON.stringify(await card().evaluate((e) => e.style.transform)))
 out('edges / near', `${await edges()} / ${await near()}`)
 
 // A short pull comes back without going anywhere.
@@ -96,25 +105,35 @@ await wait(600)
 out('short pull stays', (await where()) === before)
 
 await page.locator('.rail-body').evaluate((e) => (e.scrollTop = 0))
-await tapEl(page.locator('.stack-near'))
-await wait(900)
+await tapEl(page.locator('.rail-body:not([data-ghost]) .stack-near'))
+await wait(120)
+await shot('5a-tap-back')
+await wait(800)
+out('first card: edges', await edges())
 out('tap near -> back', await where())
 await page.locator('.rail-body').evaluate((e) => (e.scrollTop = 0))
 await wait(200)
-await swipe(200, 330, 200, 520)
+await touch('touchStart', 200, 330)
+for (let i = 1; i <= 10; i++) {
+  await touch('touchMove', 200, 330 + i * 18)
+  await wait(16)
+}
+await wait(100)
+out('first card gives, nothing under', await page.locator('[data-under]').count())
+await shot('6-pull-first-card')
+await touch('touchEnd')
 await wait(900)
-out('pull from depth 1 -> search', await where())
-out('input focused', await page.evaluate(() => document.activeElement?.tagName))
+out('first card pull -> keyboard', `${await where()} / ${await page.evaluate(() => document.activeElement?.tagName)}`)
 
 // A page opened from a link has only a new search under it.
 await page.goto(BASE + '/kanji/%E6%97%A5', { waitUntil: 'networkidle' })
 await wait(800)
 out('link: edges / near', `${await edges()} / ${await near()}`)
-await shot('5-link')
+await shot('7-link')
 await swipe(200, 330, 200, 520)
 await wait(700)
 out('link pull -> stays, search up', `${await where()} / ${await page.evaluate(() => document.activeElement?.tagName)}`)
-out('link card back in place', JSON.stringify(await page.locator('.page-card').evaluate((e) => e.style.transform)))
+out('link card back in place', JSON.stringify(await card().evaluate((e) => e.style.transform)))
 
 out('errors', errors.length ? errors.join('\n') : 'none')
 await browser.close()
