@@ -29,6 +29,7 @@ import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
 import { InstallNote } from '../install/InstallGuide'
+import { warmKanji, warmWord } from '../warm'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -299,7 +300,7 @@ function WordRowView({
   // The whole card opens the entry; its kanji are one tap further, on the entry's page.
   return (
     <li className="word">
-      <button className="word-card" onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
+      <button className="word-card" {...warmWord(w.id)} onClick={() => onWord(w)} title={t('open')} aria-current={open || undefined}>
         <span className="word-head">
           <span className="word-spelling">
             <span className="word-forms">{w.headword}</span>
@@ -376,6 +377,7 @@ function KanjiChipView({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string
     <button
       className="kanji-hit"
       aria-current={open || undefined}
+      {...warmKanji(k.char)}
       onClick={() => onKanji(k.char)}
       title={m.value.slice(0, 3).join(', ')}
       data-fallback={m.fallback || undefined}
@@ -819,7 +821,7 @@ function HomePage({
       case 'kanji': {
         const m = v.meanings ? meaningsOf({ meanings: v.meanings, meaningsBg: v.meaningsBg }, lang).value : []
         return (
-          <button onClick={() => onKanji(v.char)}>
+          <button {...warmKanji(v.char)} onClick={() => onKanji(v.char)}>
             <span className="recent-head" lang="ja">
               {v.char}
             </span>
@@ -830,7 +832,7 @@ function HomePage({
       case 'word': {
         const w = v.word
         return (
-          <button onClick={() => onWord(w)}>
+          <button {...warmWord(w.id)} onClick={() => onWord(w)}>
             <span className="recent-head" lang="ja">
               {w.headword}
             </span>
@@ -934,6 +936,7 @@ function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: str
             <button
               key={k.char}
               className="level-cell"
+              {...warmKanji(k.char)}
               onClick={() => onKanji(k.char)}
               title={meanings(k)}
               aria-current={open === k.char || undefined}
@@ -956,6 +959,7 @@ function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: str
                 key={k.char}
                 className="level-cell"
                 data-faint="true"
+                {...warmKanji(k.char)}
                 onClick={() => onKanji(k.char)}
                 title={meanings(k) || t('bound')}
               >

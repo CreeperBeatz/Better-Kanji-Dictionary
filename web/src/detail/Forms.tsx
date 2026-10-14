@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { api, onDataChanged, type FormItem, type FormsResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
+import { warmKanji } from '../warm'
 
 const S = strings(
   {
@@ -110,7 +111,7 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
   const glyph = (i: FormItem) => {
     const meaning = meaningsOf(i, lang).value[0]
     return i.known ? (
-      <button key={i.char} className="similar-glyph small" onClick={() => onKanji(i.char)} title={meaning ?? i.char} lang="ja">
+      <button key={i.char} className="similar-glyph small" {...warmKanji(i.char)} onClick={() => onKanji(i.char)} title={meaning ?? i.char} lang="ja">
         {i.char}
       </button>
     ) : (

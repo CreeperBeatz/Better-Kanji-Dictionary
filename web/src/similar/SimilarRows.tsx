@@ -14,6 +14,7 @@ import { api, type KanjiNode, type SimilarResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { isCommon, whyText } from './why'
+import { warmKanji } from '../warm'
 
 const S = strings(
   {
@@ -86,7 +87,7 @@ export function LooksLike({ items, onKanji }: Block) {
       <h3>{t('looksLike')}</h3>
       <div className="similar-glyphs">
         {items.map((n) => (
-          <button key={n.char} className="similar-glyph" onClick={() => onKanji(n.char)} title={title(n)}>
+          <button key={n.char} className="similar-glyph" {...warmKanji(n.char)} onClick={() => onKanji(n.char)} title={title(n)}>
             {n.char}
           </button>
         ))}
@@ -117,7 +118,7 @@ export function Related({
           const why = whyText(n.why, lang)
           return (
             <li key={n.char}>
-              <button className="vocab-row similar-row" onClick={() => onKanji(n.char)} title={title(n)}>
+              <button className="vocab-row similar-row" {...warmKanji(n.char)} onClick={() => onKanji(n.char)} title={title(n)}>
                 <span className="vocab-word">{n.char}</span>
                 <span className="vocab-gloss">{meaningsOf(n, lang).value.slice(0, 2).join(', ')}</span>
                 {why && (

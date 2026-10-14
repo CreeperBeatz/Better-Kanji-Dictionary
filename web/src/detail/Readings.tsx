@@ -13,6 +13,7 @@ import { strings, useLang } from '../i18n'
 import { glossOf } from '../i18n/content'
 import { hiraganaToKatakana, plainReading as plain } from '../local/japanese'
 import { ValencyMark } from '../search/Valency'
+import { warmWord } from '../warm'
 
 const S = strings(
   {
@@ -141,7 +142,7 @@ function ReadingGroup({
             <li key={r} className="reading-row" data-rare={rare || undefined}>
               <span className="reading-kana" lang="ja" title={rare ? t('rare') : undefined}>
                 {formed ? (
-                  <button className="yomi-link" onClick={() => onWord(formed)} title={t('open', { word: formed.headword, reading: formed.reading })}>
+                  <button className="yomi-link" {...warmWord(formed.id)} onClick={() => onWord(formed)} title={t('open', { word: formed.headword, reading: formed.reading })}>
                     {kana}
                   </button>
                 ) : (
@@ -157,6 +158,7 @@ function ReadingGroup({
                     key={w.id}
                     className="reading-example"
                     lang="ja"
+                    {...warmWord(w.id)}
                     onClick={() => onWord(w)}
                     title={t('open', { word: w.headword, reading: w.reading })}
                   >

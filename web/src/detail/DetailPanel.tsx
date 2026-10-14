@@ -16,6 +16,7 @@ import { Valency } from '../search/Valency'
 import { MarkedReading } from '../search/MarkedReading'
 import { Readings, SpecialReadings } from './Readings'
 import { Meanings } from './MeaningCards'
+import { warmWord } from '../warm'
 
 const S = strings(
   {
@@ -239,7 +240,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const special = here?.data.special ?? []
   const vocabRow = (w: Word) => (
     <li key={`${w.id}-${w.headword}`}>
-      <button className="vocab-row" onClick={() => onWord(w)} title={t('openEntry')}>
+      <button className="vocab-row" {...warmWord(w.id)} onClick={() => onWord(w)} title={t('openEntry')}>
         <span className="vocab-word">{w.headword}</span>
         <span className="vocab-reading">
           <MarkedReading reading={w.reading} mark={w.mark} />
