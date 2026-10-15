@@ -336,6 +336,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         {unit ? (
           <Meanings
             page={unit}
+            self={data.focus}
             onYomi={n.onYomi}
             kunYomi={n.kunYomi}
             onKanji={onKanji}

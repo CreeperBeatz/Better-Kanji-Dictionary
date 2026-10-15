@@ -64,8 +64,6 @@ const S = strings(
     openAt: 'Open {char} at this meaning',
     mixups: 'Easy to mix up',
     mixupsHint: 'Other kanji with the same kun reading.',
-    tellApart: 'Which one to write',
-    usageSource: 'From the Agency for Cultural Affairs’ list of kanji that share a reading (異字同訓).',
     more_one: '{n} more word',
     more_other: '{n} more words',
     sound: 'For its sound only',
@@ -82,8 +80,6 @@ const S = strings(
     openAt: 'Отворете {char} на това значение',
     mixups: 'Лесно се бъркат',
     mixupsHint: 'Други канджи със същото кун четене.',
-    tellApart: 'Кое да се пише',
-    usageSource: 'От списъка на Агенцията по културата за канджи с еднакво четене (異字同訓).',
     more_one: 'още {n} дума',
     more_other: 'още {n} думи',
     sound: 'Само заради звука',
@@ -93,6 +89,7 @@ const S = strings(
 
 export function Meanings({
   page,
+  self,
   onYomi,
   kunYomi,
   onKanji,
@@ -100,6 +97,8 @@ export function Meanings({
   row,
 }: {
   page: KanjiPage
+  /** The page's kanji and what it means, for the mix-ups to name it beside the others. */
+  self: KanjiLite
   onYomi: string[]
   kunYomi: string[]
   onKanji: (c: string) => void
@@ -129,7 +128,7 @@ export function Meanings({
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
-        <Meaning key={m.id} m={m} n={i + 1} self={page.char} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+        <Meaning key={m.id} m={m} n={i + 1} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -145,7 +144,7 @@ export function Meanings({
       {page.mixups.length > 0 && (
         <div className="meaning-mixups">
           {page.mixups.map((x) => (
-            <MixUpLine key={x.reading} x={x} self={page.char} onKanji={onKanji} />
+            <MixUpLine key={x.reading} x={x} self={self} onKanji={onKanji} />
           ))}
         </div>
       )}
@@ -163,8 +162,7 @@ function Meaning({
 }: {
   m: KanjiMeaning
   n: number
-  /** The page's kanji. */
-  self: string
+  self: KanjiLite
   onKanji: (c: string) => void
   onWordsWith?: () => void
   row: (w: Word) => ReactNode
@@ -263,16 +261,6 @@ function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c
   )
 }
 
-function KanjiChip({ k, lang, onKanji }: { k: KanjiLite; lang: Lang; onKanji: (c: string) => void }) {
-  const meaning = meaningsOf(k, lang).value[0]
-  return (
-    <button className="kanji-chip" {...warmKanji(k.char)} onClick={() => onKanji(k.char)} title={meaning}>
-      <span lang="ja">{k.char}</span>
-      {meaning && <span className="kanji-chip-meaning">{meaning}</span>}
-    </button>
-  )
-}
-
 /** A side block's title: its icon, then what it is -- ≈ synonyms, ! easy to mix up. */
 function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
   return (
@@ -285,85 +273,72 @@ function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
   )
 }
 
-/** (!) Easy to mix up · あげる: 挙 raise, 揚 hoist -- and, open, the card that says which one to write. */
-function MixUpLine({ x, self, onKanji }: { x: MixUp; self: string; onKanji: (c: string) => void }) {
+/**
+ * (!) Easy to mix up: this kanji and the others with the same reading, one
+ * item each -- the spelling, how it reads, its kanji's keyword -- and, where
+ * the 異字同訓 card has them, what each is for and an example. A heading
+ * opens its kanji; the page's own is marked, not a link.
+ */
+function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (c: string) => void }) {
   const lang = useLang()
   const t = S(lang)
+  const items: { spelling: string; k: KanjiLite | undefined; spelled?: UsageCard['spellings'][number] }[] = x.usage
+    ? x.usage.spellings.map((s) => ({
+        spelling: s.kanji,
+        k: s.kanji.includes(self.char) ? self : x.kanji.find((k) => s.kanji.includes(k.char)),
+        spelled: s,
+      }))
+    : [self, ...x.kanji].map((k) => ({ spelling: k.char, k }))
   return (
     <section className="aside-block mixup" title={t('mixupsHint')}>
-      <AsideTitle icon="!">
-        {t('mixups')}
-        <span className="mixup-reading" lang="ja">
-          {x.reading}
-        </span>
-      </AsideTitle>
-      {x.usage ? (
-        <>
-          <p className="usage-title">{t('tellApart')}</p>
-          <Usage card={x.usage} kanji={x.kanji} self={self} lang={lang} onKanji={onKanji} />
-          <p className="hint usage-source">{t('usageSource')}</p>
-        </>
-      ) : (
-        <p className="mixup-kanji">
-          {x.kanji.map((k) => (
-            <KanjiChip key={k.char} k={k} lang={lang} onKanji={onKanji} />
-          ))}
-        </p>
-      )}
+      <AsideTitle icon="!">{t('mixups')}</AsideTitle>
+      <ul className="usage-spellings">
+        {items.map(({ spelling, k, spelled }) => {
+          const own = k?.char === self.char
+          const keyword = k && meaningsOf(k, lang).value[0]
+          const head = (
+            <>
+              <span className="usage-spelling" lang="ja">
+                {spelling}
+              </span>
+              <span className="usage-reading" lang="ja">
+                {x.usage ? readingOf(spelling, x.usage.reading) : x.reading}
+              </span>
+              {keyword && <span className="usage-keyword">{keyword}</span>}
+            </>
+          )
+          return (
+            <li key={spelling} data-self={own || undefined}>
+              {k && !own ? (
+                <button className="usage-head" {...warmKanji(k.char)} onClick={() => onKanji(k.char)}>
+                  {head}
+                </button>
+              ) : (
+                <p className="usage-head">{head}</p>
+              )}
+              {spelled && <p className="spelling-def">{(lang === 'bg' && spelled.defBg) || spelled.defEn || spelled.def}</p>}
+              {spelled?.examples.slice(0, 1).map((e) => (
+                <p key={e.ja} className="usage-example">
+                  <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(lang === 'bg' && e.bg) || e.en}</span>
+                </p>
+              ))}
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }
 
 /**
- * Each spelling an item of its own: the spelling and its kanji's keyword
- * (the heading opens that kanji), what it is for, an example. The page's
- * own kanji is marked, not a link.
+ * How a spelling reads, of a card's readings: 揚がる・揚げる of あがる・あげる
+ * is あがる・あげる, 上る of のぼる is のぼる -- each part by its okurigana.
  */
-function Usage({
-  card,
-  kanji,
-  self,
-  lang,
-  onKanji,
-}: {
-  card: UsageCard
-  kanji: KanjiLite[]
-  self: string
-  lang: Lang
-  onKanji: (c: string) => void
-}) {
-  return (
-    <ul className="usage-spellings">
-      {card.spellings.map((s) => {
-        const own = s.kanji.includes(self)
-        const k = own ? null : kanji.find((k) => s.kanji.includes(k.char))
-        const keyword = k && meaningsOf(k, lang).value[0]
-        const head = (
-          <>
-            <span className="usage-spelling" lang="ja">
-              {s.kanji}
-            </span>
-            {keyword && <span className="usage-keyword">{keyword}</span>}
-          </>
-        )
-        return (
-          <li key={s.kanji} data-self={own || undefined}>
-            {k ? (
-              <button className="usage-head" {...warmKanji(k.char)} onClick={() => onKanji(k.char)}>
-                {head}
-              </button>
-            ) : (
-              <p className="usage-head">{head}</p>
-            )}
-            <p className="spelling-def">{(lang === 'bg' && s.defBg) || s.defEn || s.def}</p>
-            {s.examples.slice(0, 1).map((e) => (
-              <p key={e.ja} className="usage-example">
-                <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(lang === 'bg' && e.bg) || e.en}</span>
-              </p>
-            ))}
-          </li>
-        )
-      })}
-    </ul>
-  )
+function readingOf(spelling: string, reading: string): string {
+  const readings = reading.split('・')
+  const parts = spelling.split('・').map((part) => {
+    const okuri = part.match(/[ぁ-ゟ]*$/)?.[0] ?? ''
+    return readings.find((r) => r.endsWith(okuri)) ?? readings[0]
+  })
+  return [...new Set(parts)].join('・')
 }

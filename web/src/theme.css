@@ -864,14 +864,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   line-height: 1;
 }
 
-.mixup-kanji {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 14px;
-  margin: 2px 0 4px;
-}
-
 /* Leftover mix-ups, on readings no meaning has: after the cards. */
 .meaning-mixups {
   margin-top: 16px;
@@ -946,49 +938,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   animation: meaning-flash 2.2s var(--ease) 0.25s both;
 }
 
-/* A kanji named beside a meaning: close to it, or easy to mix up with it. */
-.kanji-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 0;
-  font-size: calc(12px * var(--type));
-  color: var(--paper-dim);
-  background: none;
-  border: 0;
-  cursor: pointer;
-}
-
-.kanji-chip [lang='ja'] {
-  font-family: var(--mincho);
-  font-size: calc(16px * var(--type));
-  color: var(--paper);
-}
-
-.kanji-chip:hover [lang='ja'],
-.kanji-chip:focus-visible [lang='ja'] {
-  color: var(--ai);
-}
-
-.mixup-reading {
-  font-family: var(--mincho);
-  font-size: calc(15px * var(--type));
-  font-weight: 500;
-  color: var(--paper);
-}
-
-/* Which one to write: the usage card, open, one item a spelling. */
-.usage-title {
-  margin: 6px 0 2px;
-  font-size: calc(11px * var(--type));
-  color: var(--muted);
-}
-
-.usage-source {
-  margin: 6px 0 0;
-  font-size: calc(10.5px * var(--type));
-}
-
+/* Easy to mix up: one item a spelling, the page's kanji among them. */
 .usage-spellings {
   list-style: none;
   margin: 0;
@@ -1029,6 +979,12 @@ button.usage-head {
 button.usage-head:hover .usage-spelling,
 button.usage-head:focus-visible .usage-spelling {
   color: var(--ai);
+}
+
+.usage-reading {
+  font-family: var(--mincho);
+  font-size: calc(13px * var(--type));
+  color: var(--paper-dim);
 }
 
 .usage-keyword {
