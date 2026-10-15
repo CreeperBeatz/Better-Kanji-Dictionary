@@ -4,8 +4,12 @@
  * then the on words -- each word saying its own reading, so no reading is
  * named twice. An on reading the meaning has in only a word or two is faded
  * at the end of its on words; its special readings are its exceptions. Then
- * the kanji close to it in meaning, and the kanji easy to mix up on one of
- * its readings, with the 異字同訓 card that tells them apart.
+ * the kanji close to it in meaning (≈), and the kanji easy to mix up on one
+ * of its readings (!), with the 異字同訓 card that tells them apart, open.
+ *
+ * A few words each way, not all: "more words" has the rest. Each card's
+ * title holds to the top while the card is read, so the page says where
+ * you are without reading back.
  *
  * First its Readings, every one at a glance (a rare one, in no common word,
  * faded). Then its Meanings, opening with how they follow from each other,
@@ -22,6 +26,31 @@ import { meaningsOf } from '../i18n/content'
 import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { ReadingsLine, SpecialReadings } from './Readings'
 import { warmKanji } from '../warm'
+
+/** At most this many kun words, and on words, on a meaning's card. */
+const LANE_WORDS = 3
+
+/**
+ * Up to `n` of the lists' items, taken a round at a time, so that each list
+ * gives one before any gives two -- every on reading keeps a word -- and
+ * back in their lists' order.
+ */
+function fewest<T>(lists: T[][], n: number): T[] {
+  const take = lists.map(() => 0)
+  let left = Math.max(n, lists.length)
+  for (let round = 0; left > 0; round++) {
+    let any = false
+    lists.forEach((l, i) => {
+      if (left > 0 && l.length > round) {
+        take[i]++
+        left--
+        any = true
+      }
+    })
+    if (!any) break
+  }
+  return lists.flatMap((l, i) => l.slice(0, take[i]))
+}
 
 const S = strings(
   {
@@ -100,7 +129,7 @@ export function Meanings({
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
-        <Meaning key={m.id} m={m} n={i + 1} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+        <Meaning key={m.id} m={m} n={i + 1} self={page.char} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -115,10 +144,8 @@ export function Meanings({
 
       {page.mixups.length > 0 && (
         <div className="meaning-mixups">
-          <h4>{t('mixups')}</h4>
-          <p className="hint">{t('mixupsHint')}</p>
           {page.mixups.map((x) => (
-            <MixUpLine key={x.reading} x={x} onKanji={onKanji} />
+            <MixUpLine key={x.reading} x={x} self={page.char} onKanji={onKanji} />
           ))}
         </div>
       )}
@@ -129,12 +156,15 @@ export function Meanings({
 function Meaning({
   m,
   n,
+  self,
   onKanji,
   onWordsWith,
   row,
 }: {
   m: KanjiMeaning
   n: number
+  /** The page's kanji. */
+  self: string
   onKanji: (c: string) => void
   onWordsWith?: () => void
   row: (w: Word) => ReactNode
@@ -143,11 +173,17 @@ function Meaning({
   const t = S(lang)
   const label = (lang === 'bg' && m.bg) || m.en
   const about = (lang === 'bg' && m.aboutBg) || m.about
-  const on = m.on.flatMap((o) => o.words)
-  const now = m.also.flatMap((a) => a.words)
-  const more = m.total - (m.kun?.words.length ?? 0) - on.length - now.length - m.exceptions.length
+  const kun = m.kun?.words.slice(0, LANE_WORDS) ?? []
+  const on = fewest(
+    m.on.map((o) => o.words),
+    LANE_WORDS,
+  )
+  // One word for a reading it has only now and then.
+  const now = m.also.flatMap((a) => a.words.slice(0, 1))
+  const more = m.total - kun.length - on.length - now.length - m.exceptions.length
   return (
     <article className="meaning" id={meaningAnchor(m.id)}>
+      {/* Held to the top while the card is read: where you are. */}
       <header>
         <span className="meaning-n">{n}</span>
         <h4>{label}</h4>
@@ -155,10 +191,10 @@ function Meaning({
       {about && <p className="meaning-about">{about}</p>}
 
       {/* Its words by how they read the kanji; each word says its own reading. */}
-      {m.kun && (
+      {kun.length > 0 && (
         <div className="lane">
           <p className="lane-kind">{t('kun')}</p>
-          <ul className="meaning-words">{m.kun.words.map(row)}</ul>
+          <ul className="meaning-words">{kun.map(row)}</ul>
         </div>
       )}
       {on.length + now.length > 0 && (
@@ -182,23 +218,19 @@ function Meaning({
           {t.plural('more', more)} →
         </button>
       )}
-      {(m.similar.length > 0 || m.mixups.length > 0) && (
-        <footer>
-          {m.similar.length > 0 && (
-            <div className="meaning-similar">
-              <p className="meaning-aside">{t('similar')}</p>
-              <ul>
-                {m.similar.map((k) => (
-                  <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
-                ))}
-              </ul>
-            </div>
-          )}
-          {m.mixups.map((x) => (
-            <MixUpLine key={x.reading} x={x} onKanji={onKanji} label />
-          ))}
-        </footer>
+      {m.similar.length > 0 && (
+        <section className="aside-block meaning-similar">
+          <AsideTitle icon="≈">{t('similar')}</AsideTitle>
+          <ul>
+            {m.similar.map((k) => (
+              <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
+            ))}
+          </ul>
+        </section>
       )}
+      {m.mixups.map((x) => (
+        <MixUpLine key={x.reading} x={x} self={self} onKanji={onKanji} />
+      ))}
     </article>
   )
 }
@@ -241,42 +273,56 @@ function KanjiChip({ k, lang, onKanji }: { k: KanjiLite; lang: Lang; onKanji: (c
   )
 }
 
-/** あげる: 挙 raise, 揚 hoist -- and, folded, the card that says which one to write. */
-function MixUpLine({ x, onKanji, label = false }: { x: MixUp; onKanji: (c: string) => void; label?: boolean }) {
+/** A side block's title: its icon, then what it is -- ≈ synonyms, ! easy to mix up. */
+function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
+  return (
+    <p className="aside-title">
+      <span className="aside-icon" aria-hidden>
+        {icon}
+      </span>
+      {children}
+    </p>
+  )
+}
+
+/** (!) Easy to mix up · あげる: 挙 raise, 揚 hoist -- and, open, the card that says which one to write. */
+function MixUpLine({ x, self, onKanji }: { x: MixUp; self: string; onKanji: (c: string) => void }) {
   const lang = useLang()
   const t = S(lang)
   return (
-    <div className="mixup">
-      <p>
-        {label && <span className="meaning-aside">{t('mixups')}</span>}
+    <section className="aside-block mixup" title={t('mixupsHint')}>
+      <AsideTitle icon="!">
+        {t('mixups')}
         <span className="mixup-reading" lang="ja">
           {x.reading}
         </span>
+      </AsideTitle>
+      <p className="mixup-kanji">
         {x.kanji.map((k) => (
           <KanjiChip key={k.char} k={k} lang={lang} onKanji={onKanji} />
         ))}
       </p>
       {x.usage && (
-        <details className="usage">
-          <summary>{t('tellApart')}</summary>
-          <Usage card={x.usage} lang={lang} />
+        <div className="usage">
+          <p className="usage-title">{t('tellApart')}</p>
+          <Usage card={x.usage} self={self} lang={lang} />
           <p className="hint">{t('usageSource')}</p>
-        </details>
+        </div>
       )}
-    </div>
+    </section>
   )
 }
 
-/** Each spelling with what it is for and an example or two, in the page's language. */
-function Usage({ card, lang }: { card: UsageCard; lang: Lang }) {
+/** Each spelling with what it is for and an example, in the page's language; the page's own kanji marked. */
+function Usage({ card, self, lang }: { card: UsageCard; self: string; lang: Lang }) {
   return (
     <dl className="usage-spellings">
       {card.spellings.map((s) => (
-        <div key={s.kanji}>
+        <div key={s.kanji} data-self={s.kanji.includes(self) || undefined}>
           <dt lang="ja">{s.kanji}</dt>
           <dd>
             <p>{(lang === 'bg' && s.defBg) || s.defEn || s.def}</p>
-            {s.examples.slice(0, 2).map((e) => (
+            {s.examples.slice(0, 1).map((e) => (
               <p key={e.ja} className="usage-example">
                 <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(lang === 'bg' && e.bg) || e.en}</span>
               </p>

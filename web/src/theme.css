@@ -7,6 +7,7 @@
  *   paper     the character itself
  *   indigo    everything beneath it -- components and the edges down to them
  *   vermilion the seal on the focused character, and nothing else
+ *   ochre     a warning: kanji easy to mix up with this one
  */
 
 /* The fonts are linked from index.html, so they load beside the script rather than after this file. */
@@ -28,6 +29,9 @@
   --ai-wash: #22303f;
 
   --shu: #d0452b;
+
+  --odo: #c9a04e;
+  --odo-wash: #241d10;
 
   /* Shippori has no Cyrillic, and Yu Mincho's is full-width: a proportional
      serif in between catches Bulgarian before it reaches the Japanese faces. */
@@ -709,30 +713,46 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* One meaning: what it is, its words by reading, what is close to it. */
 .meaning {
-  margin-top: 10px;
-  padding: 8px 12px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
+  margin-top: 16px;
+  padding: 0 12px 12px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 6px;
   background: var(--sumi-sunk);
 }
 
+/* Its number and name, held under the folded page head (44px) while the
+   card is read, so the page says which meaning you are in. */
 .meaning header {
+  position: sticky;
+  top: 44px;
+  z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -12px;
+  padding: 9px 12px 7px;
+  border-radius: 6px 6px 0 0;
+  background: var(--sumi-sunk);
 }
 
 .meaning-n {
-  font-size: calc(11.5px * var(--type));
-  color: var(--muted);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(22px * var(--type));
+  height: calc(22px * var(--type));
+  border-radius: 50%;
+  font-size: calc(12px * var(--type));
+  font-weight: 600;
+  color: var(--sumi);
+  background: var(--paper-dim);
   font-variant-numeric: tabular-nums;
 }
 
 .meaning h4 {
   margin: 0;
-  font-size: calc(14px * var(--type));
-  font-weight: 500;
+  font-size: calc(15.5px * var(--type));
+  font-weight: 600;
   color: var(--paper);
 }
 
@@ -761,6 +781,32 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
+/* In a card, each kind of word opens with a ruled line: KUN ────── */
+.meaning .lane-kind {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0 2px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+
+.meaning .lane-kind .hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.meaning .lane-kind::after {
+  content: '';
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  background: var(--rule);
+}
+
 /* On words of a reading the meaning has only now and then. */
 .lane-now {
   opacity: 0.55;
@@ -781,32 +827,62 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-underline-offset: 2px;
 }
 
-.meaning footer {
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid var(--rule);
+/* What sits beside a meaning, each in a block of its own colour with an
+   icon, so it is known before it is read: ≈ synonyms in indigo, ! easy to
+   mix up in ochre. */
+.aside-block {
+  --tone: var(--ai);
+  margin-top: 12px;
+  padding: 7px 10px 8px;
+  border-left: 3px solid var(--tone);
+  border-radius: 0 4px 4px 0;
+  background: color-mix(in srgb, var(--tone) 7%, var(--sumi-sunk));
 }
 
-.meaning footer p,
-.meaning-mixups p {
+.aside-block.mixup {
+  --tone: var(--odo);
+  background: var(--odo-wash);
+}
+
+.aside-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+  font-size: calc(12px * var(--type));
+  font-weight: 600;
+  color: var(--tone);
+}
+
+.aside-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(18px * var(--type));
+  height: calc(18px * var(--type));
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: calc(12px * var(--type));
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mixup-kanji {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 2px 10px;
-  margin: 2px 0;
+  gap: 2px 14px;
+  margin: 2px 0 4px;
 }
 
-.meaning-aside {
-  font-size: calc(11.5px * var(--type));
-  color: var(--muted);
+/* Leftover mix-ups, on readings no meaning has: after the cards. */
+.meaning-mixups {
+  margin-top: 16px;
 }
 
 /* Synonyms: one row a kanji -- the kanji, its keyword, and the
    meaning of it that is close. */
-.meaning-similar > .meaning-aside {
-  margin: 2px 0;
-}
-
 .meaning-similar ul {
   list-style: none;
   margin: 0 0 4px;
@@ -900,20 +976,41 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .mixup-reading {
   font-family: var(--mincho);
-  font-size: calc(14px * var(--type));
+  font-size: calc(15px * var(--type));
+  font-weight: 500;
+  color: var(--paper);
+}
+
+/* Which one to write: the usage card, open. */
+.usage {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--odo) 25%, transparent);
+}
+
+.usage-title {
+  margin: 2px 0 0;
+  font-size: calc(11.5px * var(--type));
   color: var(--paper-dim);
 }
 
-/* Which one to write: the usage card, folded. */
-.usage summary {
-  margin: 2px 0;
-  font-size: calc(11.5px * var(--type));
-  color: var(--ai);
-  cursor: pointer;
+.usage .hint {
+  margin: 4px 0 0;
+  font-size: calc(10.5px * var(--type));
 }
 
 .usage-spellings {
-  margin: 4px 0;
+  margin: 2px 0;
+}
+
+/* Beside a meaning the column is narrow: each spelling over what it is for. */
+.mixup .usage-spellings > div {
+  grid-template-columns: 1fr;
+}
+
+/* The page's own kanji among the spellings. */
+.usage-spellings > [data-self] dt {
+  color: var(--odo);
 }
 
 .usage-spellings > div {
@@ -948,16 +1045,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-.meaning-plain h4,
-.meaning-mixups h4 {
+.meaning-plain {
+  padding-top: 9px;
+}
+
+.meaning-plain h4 {
   margin: 0;
   font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
-}
-
-.meaning-mixups {
-  margin-top: 18px;
 }
 
 .meanings-all {
