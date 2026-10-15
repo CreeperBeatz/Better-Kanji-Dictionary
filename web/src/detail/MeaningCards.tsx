@@ -9,7 +9,9 @@
  *
  * A few words each way, not all: "more words" has the rest. Each card's
  * title holds to the top while the card is read, so the page says where
- * you are without reading back.
+ * you are without reading back. A card folds to its title and what it
+ * says, its words and the rest under it; "fold all" makes every card that
+ * way, and is remembered.
  *
  * First its Readings, every one at a glance (a rare one, in no common word,
  * faded). Then its Meanings, opening with how they follow from each other,
@@ -18,7 +20,7 @@
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
  */
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { reducedMotion } from '../media'
 import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
@@ -29,6 +31,17 @@ import { warmKanji } from '../warm'
 
 /** At most this many kun words, and on words, on a meaning's card. */
 const LANE_WORDS = 3
+
+/** Remembers "fold all": '1' while every card is folded. */
+const FOLD_KEY = 'meanings-folded'
+
+function rememberedFold(): boolean {
+  try {
+    return localStorage.getItem(FOLD_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 /**
  * Up to `n` of the lists' items, taken a round at a time, so that each list
@@ -55,6 +68,8 @@ function fewest<T>(lists: T[][], n: number): T[] {
 const S = strings(
   {
     meanings: 'Meanings',
+    foldAll: 'Fold all',
+    openAll: 'Open all',
     on: 'On',
     kun: 'Kun',
     exceptions: 'Exceptions',
@@ -71,6 +86,8 @@ const S = strings(
   },
   {
     meanings: 'Значения',
+    foldAll: 'Свийте всички',
+    openAll: 'Разгънете всички',
     on: 'Он',
     kun: 'Кун',
     exceptions: 'Изключения',
@@ -109,26 +126,69 @@ export function Meanings({
   const lang = useLang()
   const t = S(lang)
   const link = (lang === 'bg' && page.linkBg) || page.link
-  // Opened from a "synonyms" row: that meaning comes into view and glows a moment.
+  const [allFolded, setAllFolded] = useState(rememberedFold)
+  // The cards turned the other way from all of them, on this kanji's page.
+  const [turned, setTurned] = useState<{ char: string; ids: ReadonlySet<string> }>({ char: page.char, ids: new Set() })
+  const ids = turned.char === page.char ? turned.ids : new Set<string>()
+  const isOpen = (id: string) => allFolded === ids.has(id)
+  const turn = (id: string, open: boolean) =>
+    setTurned((was) => {
+      const next = new Set(was.char === page.char ? was.ids : [])
+      if (open === allFolded) next.add(id)
+      else next.delete(id)
+      return { char: page.char, ids: next }
+    })
+  const foldAll = (fold: boolean) => {
+    setAllFolded(fold)
+    setTurned({ char: page.char, ids: new Set() })
+    try {
+      if (fold) localStorage.setItem(FOLD_KEY, '1')
+      else localStorage.removeItem(FOLD_KEY)
+    } catch {
+      // not remembered, which is fine
+    }
+  }
+
+  // Opened from a "synonyms" row: that meaning opens, comes into view and glows a moment.
   useEffect(() => {
     const id = takeMeaningFocus(page.char)
-    const card = id && document.getElementById(meaningAnchor(id))
-    if (!card) return
-    card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
-    card.classList.remove('meaning-flash')
-    void card.offsetWidth // so the glow starts again on a second visit
-    card.classList.add('meaning-flash')
+    if (!id) return
+    turn(id, true)
+    const frame = requestAnimationFrame(() => {
+      const card = document.getElementById(meaningAnchor(id))
+      if (!card) return
+      card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
+      card.classList.remove('meaning-flash')
+      void card.offsetWidth // so the glow starts again on a second visit
+      card.classList.add('meaning-flash')
+    })
+    return () => cancelAnimationFrame(frame)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per kanji
   }, [page.char])
 
   return (
     <div className="meanings">
       <ReadingsLine on={onYomi} kun={kunYomi} info={page.readings} />
-      <h3 className="meanings-title">{t('meanings')}</h3>
+      <h3 className="meanings-title">
+        {t('meanings')}
+        {page.meanings.length > 1 && (
+          <button className="clear meanings-fold" onClick={() => foldAll(!allFolded)}>
+            {t(allFolded ? 'openAll' : 'foldAll')}
+          </button>
+        )}
+      </h3>
       {/* How they follow from each other, above them; the page opens with the kanji's gist (DetailPanel). */}
       {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
-        <Meaning key={m.id} m={m} n={i + 1} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+        <Meaning
+          key={m.id}
+          m={m}
+          n={i + 1}
+          open={isOpen(m.id)}
+          onToggle={() => turn(m.id, !isOpen(m.id))}
+          self={self}
+          onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -155,6 +215,8 @@ export function Meanings({
 function Meaning({
   m,
   n,
+  open,
+  onToggle,
   self,
   onKanji,
   onWordsWith,
@@ -162,6 +224,46 @@ function Meaning({
 }: {
   m: KanjiMeaning
   n: number
+  /** Its words and the rest shown; folded, only its title and what it says. */
+  open: boolean
+  onToggle: () => void
+  self: KanjiLite
+  onKanji: (c: string) => void
+  onWordsWith?: () => void
+  row: (w: Word) => ReactNode
+}) {
+  const lang = useLang()
+  const label = (lang === 'bg' && m.bg) || m.en
+  const about = (lang === 'bg' && m.aboutBg) || m.about
+  return (
+    <article className="meaning" id={meaningAnchor(m.id)} data-folded={!open || undefined}>
+      {/* Held to the top while the card is read: where you are. The whole of it folds the card. */}
+      <header>
+        <h4>
+          <button className="meaning-toggle" aria-expanded={open} onClick={onToggle}>
+            <span className="meaning-n">{n}</span>
+            <span className="meaning-label">{label}</span>
+            <svg className="meaning-caret" viewBox="0 0 12 12" aria-hidden>
+              <path d="M4 2.5 7.5 6 4 9.5" />
+            </svg>
+          </button>
+        </h4>
+      </header>
+      {about && <p className="meaning-about">{about}</p>}
+      {open && <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />}
+    </article>
+  )
+}
+
+/** A meaning's words by how they read the kanji, its synonyms and its mix-ups: what folds away. */
+function MeaningBody({
+  m,
+  self,
+  onKanji,
+  onWordsWith,
+  row,
+}: {
+  m: KanjiMeaning
   self: KanjiLite
   onKanji: (c: string) => void
   onWordsWith?: () => void
@@ -169,8 +271,6 @@ function Meaning({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const label = (lang === 'bg' && m.bg) || m.en
-  const about = (lang === 'bg' && m.aboutBg) || m.about
   const kun = m.kun?.words.slice(0, LANE_WORDS) ?? []
   const on = fewest(
     m.on.map((o) => o.words),
@@ -180,13 +280,7 @@ function Meaning({
   const now = m.also.flatMap((a) => a.words.slice(0, 1))
   const more = m.total - kun.length - on.length - now.length - m.exceptions.length
   return (
-    <article className="meaning" id={meaningAnchor(m.id)}>
-      {/* Held to the top while the card is read: where you are. */}
-      <header>
-        <span className="meaning-n">{n}</span>
-        <h4>{label}</h4>
-      </header>
-      {about && <p className="meaning-about">{about}</p>}
+    <>
 
       {/* Its words by how they read the kanji; each word says its own reading. */}
       {kun.length > 0 && (
@@ -229,7 +323,7 @@ function Meaning({
       {m.mixups.map((x) => (
         <MixUpLine key={x.reading} x={x} self={self} onKanji={onKanji} />
       ))}
-    </article>
+    </>
   )
 }
 

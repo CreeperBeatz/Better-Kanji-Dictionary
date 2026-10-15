@@ -669,7 +669,23 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .meanings > .meanings-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 18px;
+}
+
+/* Fold all / open all, at the right of the Meanings title. */
+.meanings-fold {
+  font-size: calc(11.5px * var(--type));
+  font-weight: 400;
+  color: var(--paper-dim);
+}
+
+.meanings-fold:hover,
+.meanings-fold:focus-visible {
+  color: var(--paper);
 }
 
 /* In a word's reading, the kana that are this kanji's: じょう in じょうしょう. */
@@ -745,10 +761,61 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .meaning h4 {
+  flex: 1;
   margin: 0;
   font-size: calc(15.5px * var(--type));
   font-weight: 600;
   color: var(--paper);
+}
+
+/* The whole title folds and opens its card; the caret at its end says which. */
+.meaning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.meaning-label {
+  flex: 1;
+}
+
+.meaning-caret {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms var(--ease);
+}
+
+.meaning-toggle[aria-expanded='true'] .meaning-caret {
+  transform: rotate(90deg);
+}
+
+.meaning-toggle:hover .meaning-caret,
+.meaning-toggle:focus-visible .meaning-caret {
+  stroke: var(--paper);
+}
+
+.meaning-toggle:focus-visible {
+  outline: 1px solid var(--ai);
+  outline-offset: 2px;
+}
+
+/* Folded: its title and what it says. */
+.meaning[data-folded] {
+  padding-bottom: 6px;
 }
 
 .meaning-about {
