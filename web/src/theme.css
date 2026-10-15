@@ -31,7 +31,6 @@
   --shu: #d0452b;
 
   --odo: #c9a04e;
-  --odo-wash: #241d10;
 
   /* Shippori has no Cyrillic, and Yu Mincho's is full-width: a proportional
      serif in between catches Bulgarian before it reaches the Japanese faces. */
@@ -827,21 +826,18 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-underline-offset: 2px;
 }
 
-/* What sits beside a meaning, each in a block of its own colour with an
-   icon, so it is known before it is read: ≈ synonyms in indigo, ! easy to
-   mix up in ochre. */
+/* What sits beside a meaning, each marked by a line and an icon in its own
+   colour, so it is known before it is read: ≈ synonyms in indigo, ! easy
+   to mix up in ochre. No fill: the words stay on the card's ground. */
 .aside-block {
   --tone: var(--ai);
-  margin-top: 12px;
-  padding: 7px 10px 8px;
-  border-left: 3px solid var(--tone);
-  border-radius: 0 4px 4px 0;
-  background: color-mix(in srgb, var(--tone) 7%, var(--sumi-sunk));
+  margin-top: 14px;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--tone);
 }
 
 .aside-block.mixup {
   --tone: var(--odo);
-  background: var(--odo-wash);
 }
 
 .aside-title {
@@ -981,63 +977,83 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-/* Which one to write: the usage card, open. */
-.usage {
-  margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid color-mix(in srgb, var(--odo) 25%, transparent);
-}
-
+/* Which one to write: the usage card, open, one item a spelling. */
 .usage-title {
-  margin: 2px 0 0;
-  font-size: calc(11.5px * var(--type));
-  color: var(--paper-dim);
+  margin: 6px 0 2px;
+  font-size: calc(11px * var(--type));
+  color: var(--muted);
 }
 
-.usage .hint {
-  margin: 4px 0 0;
+.usage-source {
+  margin: 6px 0 0;
   font-size: calc(10.5px * var(--type));
 }
 
 .usage-spellings {
-  margin: 2px 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-/* Beside a meaning the column is narrow: each spelling over what it is for. */
-.mixup .usage-spellings > div {
-  grid-template-columns: 1fr;
+.usage-spellings > li {
+  padding: 8px 0;
 }
 
-/* The page's own kanji among the spellings. */
-.usage-spellings > [data-self] dt {
-  color: var(--odo);
+.usage-spellings > li + li {
+  border-top: 1px solid var(--rule);
 }
 
-.usage-spellings > div {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0 12px;
-  padding: 4px 0;
+/* The spelling and its kanji's keyword; a button that opens that kanji. */
+.usage-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 2px;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
 }
 
-.usage-spellings > div + div {
-  border-top: 1px dashed var(--rule);
+button.usage-head {
+  cursor: pointer;
 }
 
-.usage-spellings dt {
+.usage-spelling {
   font-family: var(--mincho);
-  font-size: calc(16px * var(--type));
+  font-size: calc(17px * var(--type));
   color: var(--paper);
 }
 
-.usage-spellings dd {
-  margin: 0;
-  font-size: calc(12.5px * var(--type));
+button.usage-head:hover .usage-spelling,
+button.usage-head:focus-visible .usage-spelling {
+  color: var(--ai);
+}
+
+.usage-keyword {
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
 }
 
-.usage-spellings dd p {
-  margin: 0 0 2px;
+/* The page's own kanji among the spellings. */
+.usage-spellings > [data-self] .usage-spelling {
+  color: var(--odo);
+}
+
+.spelling-def {
+  margin: 0;
+  font-size: calc(12.5px * var(--type));
+  line-height: 1.5;
+  color: var(--paper-dim);
+}
+
+/* Its example, set off under what it is for. */
+.usage-example {
+  margin: 4px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--rule-bright);
+  font-size: calc(12px * var(--type));
 }
 
 .usage-example [lang='ja'] {

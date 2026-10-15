@@ -297,39 +297,73 @@ function MixUpLine({ x, self, onKanji }: { x: MixUp; self: string; onKanji: (c: 
           {x.reading}
         </span>
       </AsideTitle>
-      <p className="mixup-kanji">
-        {x.kanji.map((k) => (
-          <KanjiChip key={k.char} k={k} lang={lang} onKanji={onKanji} />
-        ))}
-      </p>
-      {x.usage && (
-        <div className="usage">
+      {x.usage ? (
+        <>
           <p className="usage-title">{t('tellApart')}</p>
-          <Usage card={x.usage} self={self} lang={lang} />
-          <p className="hint">{t('usageSource')}</p>
-        </div>
+          <Usage card={x.usage} kanji={x.kanji} self={self} lang={lang} onKanji={onKanji} />
+          <p className="hint usage-source">{t('usageSource')}</p>
+        </>
+      ) : (
+        <p className="mixup-kanji">
+          {x.kanji.map((k) => (
+            <KanjiChip key={k.char} k={k} lang={lang} onKanji={onKanji} />
+          ))}
+        </p>
       )}
     </section>
   )
 }
 
-/** Each spelling with what it is for and an example, in the page's language; the page's own kanji marked. */
-function Usage({ card, self, lang }: { card: UsageCard; self: string; lang: Lang }) {
+/**
+ * Each spelling an item of its own: the spelling and its kanji's keyword
+ * (the heading opens that kanji), what it is for, an example. The page's
+ * own kanji is marked, not a link.
+ */
+function Usage({
+  card,
+  kanji,
+  self,
+  lang,
+  onKanji,
+}: {
+  card: UsageCard
+  kanji: KanjiLite[]
+  self: string
+  lang: Lang
+  onKanji: (c: string) => void
+}) {
   return (
-    <dl className="usage-spellings">
-      {card.spellings.map((s) => (
-        <div key={s.kanji} data-self={s.kanji.includes(self) || undefined}>
-          <dt lang="ja">{s.kanji}</dt>
-          <dd>
-            <p>{(lang === 'bg' && s.defBg) || s.defEn || s.def}</p>
+    <ul className="usage-spellings">
+      {card.spellings.map((s) => {
+        const own = s.kanji.includes(self)
+        const k = own ? null : kanji.find((k) => s.kanji.includes(k.char))
+        const keyword = k && meaningsOf(k, lang).value[0]
+        const head = (
+          <>
+            <span className="usage-spelling" lang="ja">
+              {s.kanji}
+            </span>
+            {keyword && <span className="usage-keyword">{keyword}</span>}
+          </>
+        )
+        return (
+          <li key={s.kanji} data-self={own || undefined}>
+            {k ? (
+              <button className="usage-head" {...warmKanji(k.char)} onClick={() => onKanji(k.char)}>
+                {head}
+              </button>
+            ) : (
+              <p className="usage-head">{head}</p>
+            )}
+            <p className="spelling-def">{(lang === 'bg' && s.defBg) || s.defEn || s.def}</p>
             {s.examples.slice(0, 1).map((e) => (
               <p key={e.ja} className="usage-example">
                 <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(lang === 'bg' && e.bg) || e.en}</span>
               </p>
             ))}
-          </dd>
-        </div>
-      ))}
-    </dl>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
