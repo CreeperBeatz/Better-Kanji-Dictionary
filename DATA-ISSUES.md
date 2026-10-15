@@ -270,6 +270,17 @@ Source: the Bulgarian meaning labels (`mt:claude-sonnet-5`).
 **Status: in review.** The labels are on the Bulgarian cards. The hero
 sentences used the right words.
 
+### D-025 · A verb with two meanings placed in one group only
+*Found 2026-10-15* (mix-ups on the kanji page).
+揚げる is in 揚's "deep-fry" group only. Its first meaning is "raise, hoist"
+(国旗を揚げる), and 揚 has a "raise, lift up" group. 揚がる is in no group.
+The mix-up on 上 (あげる) now names each kanji's group for the reading, so
+it says 揚 "deep-fry" beside 上 and 挙.
+Source: the meanings drafts (`ai:claude-sonnet`); 揚's groups are not
+reviewed yet.
+**Status: in review.** 揚 is in the meanings queue. A word goes into one
+group only, so a verb with two meanings needs a decision on its board.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
