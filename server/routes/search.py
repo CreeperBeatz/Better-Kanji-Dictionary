@@ -954,8 +954,35 @@ def kanji_page(char: str) -> dict:
         n = nodes.get(c) or {}
         return {"char": c, "meanings": n.get("meanings") or [], "meaningsBg": n.get("meaningsBg")}
 
+    def read_as(c: str, reading: str) -> dict | None:
+        """Which of `c`'s meanings it has when read `reading` (あがる・あげる is
+        either): the one the word the reading forms is in -- 鳴く's "cry, shout"
+        for なく, not 鳴る's "sound, ring" -- else the one with the most words
+        read so."""
+        if not has_readings:
+            return None
+        site_c = review.site_meanings(c)
+        groups = {g["id"]: g for g in site_c["senses"] or [] if g["id"] != review.CATCH_ALL}
+        kana = reading.split("・")
+
+        def plain(r: str) -> str:
+            return katakana_to_hiragana(r.replace(".", "").strip("-"))
+
+        forms = {plain(r): w["id"] for r, w in reading_words(c)["words"].items()}
+        g = next((g for k in kana if (g := site_c["placed"].get(forms.get(k))) in groups), None)
+        if g is None:
+            count: dict[str, int] = {}
+            for r in query("SELECT word_id, reading FROM word_reading WHERE char = ? AND main = 1 AND reading IS NOT NULL", (c,)):
+                p = site_c["placed"].get(r["word_id"])
+                if p in groups and plain(r["reading"]) in kana:
+                    count[p] = count.get(p, 0) + 1
+            g = max(count, key=count.get, default=None)
+        return g and {"id": g, "en": groups[g].get("en"), "bg": groups[g].get("bg")}
+
+    # Each kanji with the meaning it has on that reading, this one (`self`) too.
     mixups = [
-        {"reading": r, "kanji": [lite(c) for c in dict.fromkeys(cs)], "usage": card_of.get(r.split("・")[0])}
+        {"reading": r, "self": read_as(char, r), "kanji": [{**lite(c), "sense": read_as(c, r)} for c in dict.fromkeys(cs)],
+         "usage": card_of.get(r.split("・")[0])}
         for r, cs in mix.items() if cs
     ]
 
@@ -1006,7 +1033,9 @@ def kanji_page(char: str) -> dict:
         placed_special |= {r["word_id"] for r in exceptions}
         # A reading's kana as a word says it: あ.げる is あげる.
         kana = {katakana_to_hiragana(r.replace(".", "")) for r in by}
-        here = [m for m in mixups if set(m["reading"].split("・")) & kana and m["reading"] not in claimed]
+        # On a meaning's card, this kanji's meaning there is that meaning.
+        here = [{**m, "self": {"id": s["id"], "en": s.get("en"), "bg": s.get("bg")}}
+                for m in mixups if set(m["reading"].split("・")) & kana and m["reading"] not in claimed]
         claimed |= {m["reading"] for m in here}
         # A kanji easy to mix up with it here is not listed again as close in meaning.
         mixed = {k["char"] for m in here for k in m["kanji"]}

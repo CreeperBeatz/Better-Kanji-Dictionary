@@ -213,7 +213,10 @@ export interface CloseKanji extends KanjiLite {
 export interface MixUp {
   /** As a word reads it: あげる; a usage card's may be two, あがる・あげる. */
   reading: string
-  kanji: KanjiLite[]
+  /** The page's kanji's meaning on that reading; missing in a pack from before it. */
+  self?: CloseKanji['sense']
+  /** Each with its meaning on that reading. */
+  kanji: (KanjiLite & { sense?: CloseKanji['sense'] })[]
   usage: UsageCard | null
 }
 

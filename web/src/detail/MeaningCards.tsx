@@ -205,8 +205,8 @@ function Meaning({
       )}
       {m.exceptions.length > 0 && (
         <div className="lane">
-          <p className="lane-kind">
-            {t('exceptions')} <span className="hint">{t('exceptionsHint')}</span>
+          <p className="lane-kind" title={t('exceptionsHint')}>
+            {t('exceptions')}
           </p>
           <ul className="meaning-words">{m.exceptions.map(row)}</ul>
         </div>
@@ -275,27 +275,30 @@ function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
 
 /**
  * (!) Easy to mix up: this kanji and the others with the same reading, one
- * item each -- the spelling, how it reads, its kanji's keyword -- and, where
- * the 異字同訓 card has them, what each is for and an example. A heading
- * opens its kanji; the page's own is marked, not a link.
+ * item each -- the spelling, how it reads, the kanji's meaning on that
+ * reading (揚: "raise, hoist", not its keyword) -- and, where the 異字同訓
+ * card has them, what each is for and an example. A heading opens its
+ * kanji; the page's own is marked, not a link.
  */
 function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (c: string) => void }) {
   const lang = useLang()
   const t = S(lang)
-  const items: { spelling: string; k: KanjiLite | undefined; spelled?: UsageCard['spellings'][number] }[] = x.usage
+  const me = { ...self, sense: x.self }
+  const items: { spelling: string; k: MixUp['kanji'][number] | undefined; spelled?: UsageCard['spellings'][number] }[] = x.usage
     ? x.usage.spellings.map((s) => ({
         spelling: s.kanji,
-        k: s.kanji.includes(self.char) ? self : x.kanji.find((k) => s.kanji.includes(k.char)),
+        k: s.kanji.includes(self.char) ? me : x.kanji.find((k) => s.kanji.includes(k.char)),
         spelled: s,
       }))
-    : [self, ...x.kanji].map((k) => ({ spelling: k.char, k }))
+    : [me, ...x.kanji].map((k) => ({ spelling: k.char, k }))
   return (
     <section className="aside-block mixup" title={t('mixupsHint')}>
       <AsideTitle icon="!">{t('mixups')}</AsideTitle>
       <ul className="usage-spellings">
         {items.map(({ spelling, k, spelled }) => {
           const own = k?.char === self.char
-          const keyword = k && meaningsOf(k, lang).value[0]
+          // Its meaning on this reading; the keyword where it has no meanings drawn up.
+          const keyword = k && ((k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)) || meaningsOf(k, lang).value[0])
           const head = (
             <>
               <span className="usage-spelling" lang="ja">

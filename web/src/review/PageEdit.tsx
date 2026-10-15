@@ -1,5 +1,5 @@
 /**
- * One "Edit" (reviewers) or "Suggest changes" (everyone else) at the bottom of
+ * One "Edit" (reviewers) or "Saw a mistake?" (everyone else) at the bottom of
  * a kanji's or a word's page, in place of a "change it" link on every block
  * (Dani, 2026-10-05). The dialog shows all that can be changed, and the person
  * ticks what needs changing:
@@ -40,7 +40,7 @@ import { MeaningsBoard } from './MeaningsBoard'
 
 const S = strings(
   {
-    suggest: 'Suggest changes',
+    suggest: 'Saw a mistake?',
     edit: 'Edit',
     titleSuggest: 'Suggest changes to {x}',
     titleEdit: 'Edit {x}',
@@ -89,7 +89,7 @@ const S = strings(
     failed: 'could not send this',
   },
   {
-    suggest: 'Предложете промени',
+    suggest: 'Видяхте грешка?',
     edit: 'Редактирайте',
     titleSuggest: 'Предложете промени по {x}',
     titleEdit: 'Редактиране на {x}',

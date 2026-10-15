@@ -62,6 +62,9 @@ from .db import DB_PATH
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
 # 6: the kanji pages (pages.json); each file's hash in the manifest.
 FORMAT = 6
+# Bump when a kanji page's shape changes (search.kanji_page): rebuilds pages.json alone.
+# 2: each mix-up's kanji with its meaning on that reading.
+PAGES_FORMAT = 2
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -103,7 +106,7 @@ def source_key(fresh: bool = False) -> tuple[str, str]:
 
     whole, pages = pack_key(fresh)
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", pages
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", f"{PAGES_FORMAT}|{pages}"
 
 
 def _on_disk() -> dict | None:

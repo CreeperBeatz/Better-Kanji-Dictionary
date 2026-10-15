@@ -626,10 +626,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-.special-readings .hint {
-  margin: -4px 0 6px;
-}
-
 /* ---------------------------------------------------------------- a kanji's meanings, as one unit */
 
 .meanings {
@@ -792,12 +788,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper-dim);
 }
 
-.meaning .lane-kind .hint {
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .meaning .lane-kind::after {
   content: '';
   flex: 1;
@@ -954,10 +944,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 /* The spelling and its kanji's keyword; a button that opens that kanji. */
+/* Wraps whole pieces: a spelling or a reading is never broken. */
 .usage-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
+  gap: 0 10px;
   margin: 0 0 2px;
   padding: 0;
   font: inherit;
@@ -971,6 +963,7 @@ button.usage-head {
 }
 
 .usage-spelling {
+  white-space: nowrap;
   font-family: var(--mincho);
   font-size: calc(17px * var(--type));
   color: var(--paper);
@@ -982,6 +975,7 @@ button.usage-head:focus-visible .usage-spelling {
 }
 
 .usage-reading {
+  white-space: nowrap;
   font-family: var(--mincho);
   font-size: calc(13px * var(--type));
   color: var(--paper-dim);
