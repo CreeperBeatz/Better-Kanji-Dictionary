@@ -10114,6 +10114,12 @@ button.review-part {
   scroll-margin-top: 44px;
 }
 
+/* A kanji's meaning brought into view (a synonym's) stops under the
+   folded page head, 44px, not behind it. */
+.page-card .meanings .meaning {
+  scroll-margin-top: 44px;
+}
+
 .words-with .meaning[data-dashed] {
   border-style: dashed;
   background: none;
