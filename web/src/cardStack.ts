@@ -11,6 +11,11 @@
  * up a place. At the end the page itself takes the place of its copy, in
  * the same spot. Every position comes from `rest` and `open`, so the stack
  * App draws when it is still and the one moved here agree.
+ *
+ * A card left read down its page comes back read down it: its copy keeps its
+ * page down to there, and coming forward it stands where it stood, only its
+ * head moving, from its line on the stack to the top of the screen, where it
+ * was held (`left`, `comeOff`). Then the page takes its place scrolled so.
  */
 
 /** How tall a card's head is folded into a line. */
@@ -28,6 +33,18 @@ export interface Under {
   head: HTMLElement | null
   fold: number
   edge: HTMLElement | null
+  /** Where its page was when it was left; none for one never on the screen. */
+  left?: Left
+}
+
+/**
+ * Where a page stood when it was left for the next: its card's top down the
+ * screen (above it, read down), its head folded `p`, the page scrolled `scroll`.
+ */
+export interface Left {
+  top: number
+  p: number
+  scroll: number
 }
 
 /** Where a card lies: moved down `y`, at `s` of its width, its head folded `p`. */
@@ -150,15 +167,28 @@ export interface Move {
  * The cards under the open one as `k` cards come off, the open one with them
  * (it moves by itself, in App): the ones over the card gone back to fall with
  * it, that card comes into the open card's place, and the ones under it each
- * move up as many places. `h` is how far down falling is.
+ * move up as many places. `h` is how far down falling is; `scrolled`, how far
+ * the open card is scrolled, which the cards' box is scrolled with.
+ *
+ * A card gone back to that was left read down its page comes back as it was
+ * left: it stands there from the start -- covered but for its line, which
+ * stays where it shows -- and only its head moves, to where it was held.
  */
-export function comeOff(unders: Under[], k: number, h: number): Move[] {
+export function comeOff(unders: Under[], k: number, h: number, scrolled = 0): Move[] {
   const m = unders.length
   return unders.map((u, i) => {
     const from = rest(m, i, u.fold)
     if (i > m - k) return { u, from, to: { ...from, y: from.y + h } }
-    if (i === m - k) return { u, from, to: open(m - k) }
-    return { u, from, to: rest(m - k, i, u.fold) }
+    if (i < m - k) return { u, from, to: rest(m - k, i, u.fold) }
+    const l = u.left
+    if (!l || l.scroll <= 0) return { u, from, to: open(m - k) }
+    const y = l.top + scrolled
+    const line = from.y + from.s * u.fold
+    return {
+      u,
+      from: { ...from, y, s: 1, p: 1, lift: line - y - u.fold },
+      to: { ...open(m - k), y, p: l.p, lift: Math.max(0, -u.fold - l.top) },
+    }
   })
 }
 
@@ -243,14 +273,23 @@ export function fallTime(way: number, speed: number): number {
 }
 
 const ROWS = '.rail-section, .word, .comment, .vocab-row'
+/** Held to the top of the page while their box is read: a meaning card's title. */
+const PINNED = '.meaning > header'
 
 /**
- * A copy of the open card as it is at its top, to lie under the next one:
- * what is below the first screen is left out, and its head is unfolded.
+ * A copy of the open card, to lie under the next one: down to `screen` from
+ * its top -- where it was read, and a screen more -- with its head unfolded,
+ * and a title held to the top where it stood (a copy holds nothing itself).
  */
 export function copyCard(card: HTMLElement, screen: number): HTMLElement {
   const g = card.cloneNode(true) as HTMLElement
   const top = card.getBoundingClientRect().top
+  const pins = g.querySelectorAll<HTMLElement>(PINNED)
+  card.querySelectorAll<HTMLElement>(PINNED).forEach((pin, i) => {
+    const box = pin.parentElement!
+    const by = pin.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop
+    if (by > 0.5) pins[i]?.style.setProperty('translate', `0 ${by.toFixed(1)}px`)
+  })
   // Not the head's: it is sticky, and where the page was scrolled, it stands
   // as far down the card as the card went up.
   const into = g.querySelectorAll(ROWS)
@@ -293,9 +332,15 @@ export function liveCard(): HTMLElement {
   return withEdge(g)
 }
 
-/** A card put in the stack: its head, and how far that folds up to leave its line on top. */
+/** Notes on a copy where its page was when it was left (see `Left`), for `underOf`. */
+export function markLeft(g: HTMLElement, left: Left) {
+  g.dataset.left = JSON.stringify(left)
+}
+
+/** A card put in the stack: its head, how far that folds up to leave its line on top, and where its page was left. */
 export function underOf(el: HTMLElement): Under {
   const head = el.querySelector<HTMLElement>('.page-head')
   const edge = el.querySelector<HTMLElement>(':scope > .copy-edge')
-  return { el, head, edge, fold: Math.max(0, (head?.offsetHeight ?? LINE) - LINE) }
+  const left = el.dataset.left ? (JSON.parse(el.dataset.left) as Left) : undefined
+  return { el, head, edge, fold: Math.max(0, (head?.offsetHeight ?? LINE) - LINE), left }
 }

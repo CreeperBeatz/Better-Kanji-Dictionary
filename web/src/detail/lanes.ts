@@ -11,12 +11,12 @@ export const OPEN_UPTO = 20
 
 /**
  * Up to `n` items of the lists, shared out by how long each list is: each
- * list gives one first -- every reading keeps a word -- and then each next
- * item goes to the list whose share is furthest behind (kun 12, on 6, n 6:
- * 4 and 2). Each list's part, in its order.
+ * list gives one first -- every reading keeps a word -- or its first `least`,
+ * and then each next item goes to the list whose share is furthest behind
+ * (kun 12, on 6, n 6: 4 and 2). Each list's part, in its order.
  */
-export function share<T>(lists: T[][], n: number): T[][] {
-  const take: number[] = lists.map((l) => (l.length ? 1 : 0))
+export function share<T>(lists: T[][], n: number, least: number[] = []): T[][] {
+  const take: number[] = lists.map((l, i) => Math.min(l.length, Math.max(l.length ? 1 : 0, least[i] ?? 0)))
   let left = n - take.reduce((a, b) => a + b, 0)
   while (left > 0) {
     let best = -1

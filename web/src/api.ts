@@ -189,6 +189,8 @@ export interface Word {
   lane?: 'kun' | 'on' | 'special'
   /** And the reading it gives the kanji (じょう); none for a special reading. */
   as?: string | null
+  /** On a kanji's page and in its words: one of its meaning's best examples, the words to know it by. */
+  star?: boolean
 }
 
 /** One of a kanji's readings on its page (server: search.kanji_readings). */

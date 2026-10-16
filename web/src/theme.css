@@ -2101,13 +2101,16 @@ button.usage-head:focus-visible .usage-spelling {
   white-space: nowrap;
 }
 
-/* How common the word is (top 4k), as the search rows say it: always the last column. */
-.vocab-rank {
+/* One of its meaning's best examples: a star, always in the last column. */
+.vocab-star,
+.word-star {
+  font-size: calc(12px * var(--type));
+  line-height: 1;
+  color: var(--paper);
+}
+
+.vocab-star {
   grid-column: -2 / -1;
-  font-size: calc(10.5px * var(--type));
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- draw pad */
@@ -6734,6 +6737,12 @@ html {
 
   /* A copy's head is where it lies, not held to the top of the page. */
   [data-copy] .page-head[data-folding] {
+    position: relative;
+    top: auto;
+  }
+
+  /* Nor a meaning card's title: the copy moves it where it stood (cardStack.ts copyCard). */
+  [data-copy] .meaning > header {
     position: relative;
     top: auto;
   }

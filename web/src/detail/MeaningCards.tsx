@@ -36,6 +36,12 @@ import { warmKanji } from '../warm'
 /** Remembers "fold all": '1' while every card is folded. */
 const FOLD_KEY = 'meanings-folded'
 
+// Kept for each page while the app is open, so back finds a page as it was
+// left, as long as its copy on the stack shows it: the cards turned the
+// other way from all of them, by kanji, and how many words each card shows.
+const turnedOn = new Map<string, ReadonlySet<string>>()
+const budgetOf = new Map<string, number>()
+
 function rememberedFold(): boolean {
   try {
     return localStorage.getItem(FOLD_KEY) === '1'
@@ -102,18 +108,22 @@ export function Meanings({
   const link = (lang === 'bg' && page.linkBg) || page.link
   const [allFolded, setAllFolded] = useState(rememberedFold)
   // The cards turned the other way from all of them, on this kanji's page.
-  const [turned, setTurned] = useState<{ char: string; ids: ReadonlySet<string> }>({ char: page.char, ids: new Set() })
-  const ids = turned.char === page.char ? turned.ids : new Set<string>()
+  const kept = (): ReadonlySet<string> => turnedOn.get(page.char) ?? new Set()
+  const [turned, setTurned] = useState(() => ({ char: page.char, ids: kept() }))
+  const ids = turned.char === page.char ? turned.ids : kept()
   const isOpen = (id: string) => allFolded === ids.has(id)
   const turn = (id: string, open: boolean) =>
     setTurned((was) => {
-      const next = new Set(was.char === page.char ? was.ids : [])
+      const next = new Set(was.char === page.char ? was.ids : kept())
       if (open === allFolded) next.add(id)
       else next.delete(id)
+      turnedOn.set(page.char, next)
       return { char: page.char, ids: next }
     })
   const foldAll = (fold: boolean) => {
     setAllFolded(fold)
+    // Turned from how all were, every page's: all of them start over.
+    turnedOn.clear()
     setTurned({ char: page.char, ids: new Set() })
     try {
       if (fold) localStorage.setItem(FOLD_KEY, '1')
@@ -247,9 +257,18 @@ function MeaningBody({
   const lang = useLang()
   const t = S(lang)
   // A few words at first, shared between kun and on by how many each has; more in place.
-  const [budget, setBudget] = useState(FIRST_WORDS)
+  const [budget, setBudget] = useState(() => budgetOf.get(m.id) ?? FIRST_WORDS)
+  const showMore = () => {
+    budgetOf.set(m.id, budget + MORE_WORDS)
+    setBudget(budget + MORE_WORDS)
+  }
   const lists = [m.kun?.words ?? [], ...m.on.map((o) => o.words)]
-  const [kun, ...ons] = share(lists, budget)
+  // Its starred words, the best examples, at the top of their parts: always shown.
+  const [kun, ...ons] = share(
+    lists,
+    budget,
+    lists.map((l) => l.filter((w) => w.star).length),
+  )
   const on = ons.flat()
   // One word for a reading it has only now and then.
   const now = m.also.flatMap((a) => a.words.slice(0, 1))
@@ -259,7 +278,7 @@ function MeaningBody({
     <>
       <WordLanes kun={kun} on={on} now={now} exceptions={m.exceptions} row={row} />
       {unseen > 0 && budget < OPEN_UPTO ? (
-        <button className="clear meaning-more" onClick={() => setBudget(budget + MORE_WORDS)}>
+        <button className="clear meaning-more" onClick={showMore}>
           {t('showMore', { n: Math.min(MORE_WORDS, unseen) })}
         </button>
       ) : (

@@ -738,7 +738,9 @@ def words_with(
                 in_group.setdefault(placed[wid], []).append(wid)
         fetched = _laned(char, _marked(char, _fetch_words([w for ws in in_group.values() for w in ws])))
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
-            words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
+            # Its best examples, starred: the words to know it by.
+            best = set(s.get("examples") or [])
+            words = [{**fetched[w], "star": True} if w in best else fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
             if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})
     rest = [w for w in ids if w not in placed]
@@ -1063,13 +1065,19 @@ def kanji_page(char: str) -> dict:
         claimed |= {m["reading"] for m in here}
         # A kanji easy to mix up with it here is not listed again as close in meaning.
         mixed = {k["char"] for m in here for k in m["kanji"]}
+
+        def starred(word: dict, wid: int) -> dict:
+            """The word, starred if it is one of the meaning's best examples: the words to know it by."""
+            return {**word, "star": True} if wid in first else word
+
         out["meanings"].append({
             "id": s["id"], "en": s.get("en"), "bg": s.get("bg"), "about": s.get("about"), "aboutBg": s.get("aboutBg"),
             "total": len(ids),
-            "kun": {"words": [marked(w) for w in pick(kun_ids, [*formed_here, *first])]} if kun_ids else None,
-            "on": [{"reading": r, "words": [marked(w) for w in pick(by[r], first)]} for r in on],
-            "also": [{"reading": r, "words": [marked(w) for w in by[r][:ALSO_WORDS]]} for r in also],
-            "exceptions": [as_here(r) for r in exceptions],
+            # Starred first in each part, then the words the readings form, then the rest.
+            "kun": {"words": [starred(marked(w), w) for w in pick(kun_ids, [*first, *formed_here])]} if kun_ids else None,
+            "on": [{"reading": r, "words": [starred(marked(w), w) for w in pick(by[r], first)]} for r in on],
+            "also": [{"reading": r, "words": [starred(marked(w), w) for w in by[r][:ALSO_WORDS]]} for r in also],
+            "exceptions": [starred(as_here(r), r["word_id"]) for r in exceptions],
             "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
             "mixups": here,
         })

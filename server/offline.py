@@ -65,7 +65,8 @@ FORMAT = 6
 # Bump when a kanji page's shape changes (search.kanji_page): rebuilds pages.json alone.
 # 2: each mix-up's kanji with its meaning on that reading.
 # 3: up to 26 words a reading on each meaning, the rest after the key words.
-PAGES_FORMAT = 3
+# 4: a meaning's best examples starred, first in each part.
+PAGES_FORMAT = 4
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"

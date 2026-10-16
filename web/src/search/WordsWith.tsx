@@ -67,16 +67,34 @@ export function wordsWithKey(char: string, common: boolean): string {
   return `${char}|${common ? 'true' : 'false'}|${REST_FIRST}`
 }
 
+/**
+ * How a kanji's word cards stand: the card it was opened at, if any (that one
+ * open, the others folded), which ask that was, the cards turned from how they
+ * start, and how many words each shows.
+ */
+interface View {
+  char: string
+  at: string | null
+  n: number
+  turned: Set<string>
+  shown: Record<string, number>
+}
+
+/** Each kanji's, while the app is open. */
+const viewOf = new Map<string, View>()
+
 /** Where a meaning's card is in the words. */
 const cardAnchor = (id: string) => `words-${id}`
 
 /**
  * A group's words by lane: kun, the on readings each in a list of its own,
- * the readings most of its words have first, and the special readings.
- * Null when the words say no lane: a database from before the readings stage.
+ * the readings most of its words have first, and the special readings. The
+ * starred words, the meaning's best examples, lead each. Null when the words
+ * say no lane: a database from before the readings stage.
  */
-function lanesOf(words: Word[]): { kun: Word[]; ons: Word[][]; special: Word[] } | null {
-  if (!words.some((w) => w.lane)) return null
+function lanesOf(list: Word[]): { kun: Word[]; ons: Word[][]; special: Word[] } | null {
+  if (!list.some((w) => w.lane)) return null
+  const words = [...list.filter((w) => w.star), ...list.filter((w) => !w.star)]
   const by = new Map<string, Word[]>()
   for (const w of words) {
     if (w.lane === 'kun' || w.lane === 'special') continue
@@ -158,26 +176,21 @@ export function WordsWith({
   const [data, setData] = useState<WordsWithResponse | null>(() => api.wordsWithFirst.peek(wordsWithKey(char, common)) ?? null)
   const [offline, setOffline] = useState(false)
   const [more, setMore] = useState(false)
-  // Per card: how many words are shown, and the cards turned the other way from how they start.
-  const [shown, setShown] = useState<Record<string, number>>({})
-  const [turned, setTurned] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    setShown({})
-    setTurned(new Set())
-  }, [char])
-  // The card it was opened at, if any: that one open, the others folded. Read
-  // as the page draws (peek) and let go of after (take), so a second draw finds
-  // it too; a new ask on the same kanji starts the cards over.
+  // How the cards stand, kept for the kanji so back finds them as they were
+  // left. The card to open at is read as the page draws (peek) and let go of
+  // after (take), so a second draw finds it too; a new ask starts them over.
   const asked = peekWordsFocus(char)
-  const [focus, setFocus] = useState(() => ({ char, id: asked?.id ?? null, n: asked?.n ?? 0 }))
-  if (focus.char !== char || (asked && asked.n !== focus.n)) {
-    setFocus({ char, id: asked?.id ?? null, n: asked?.n ?? 0 })
-    setTurned(new Set())
-  }
-  const at = focus.char === char ? focus.id : null
+  const start = (): View => (!asked && viewOf.get(char)) || { char, at: asked?.id ?? null, n: asked?.n ?? 0, turned: new Set(), shown: {} }
+  const [view, setView] = useState(start)
+  if (view.char !== char || (asked && asked.n !== view.n)) setView(start())
   useEffect(() => takeWordsFocus(char))
-  const isOpen = (id: string) => (at ? id === at : true) !== turned.has(id)
-  const toggle = (id: string) => setTurned((s) => toggled(s, id))
+  const change = (next: View) => {
+    viewOf.set(char, next)
+    setView(next)
+  }
+  const at = view.char === char ? view.at : null
+  const isOpen = (id: string) => (at ? id === at : true) !== view.turned.has(id)
+  const toggle = (id: string) => change({ ...view, turned: toggled(view.turned, id) })
 
   useEffect(() => {
     let stale = false
@@ -220,7 +233,7 @@ export function WordsWith({
     return () => {
       gone = true
     }
-  }, [ready, at, focus.n])
+  }, [ready, at, view.n])
 
   async function loadMore() {
     if (!data) return
@@ -240,11 +253,11 @@ export function WordsWith({
 
   /** A card's words: by lane where the words say theirs, else one list; a page at a time. */
   function words(id: string, list: Word[]) {
-    const n = shown[id] ?? FIRST
+    const n = view.shown[id] ?? FIRST
     const lanes = lanesOf(list)
     const moreButton = (left: number) =>
       left > 0 && (
-        <button className="clear words-more" onClick={() => setShown({ ...shown, [id]: n + MORE })}>
+        <button className="clear words-more" onClick={() => change({ ...view, shown: { ...view.shown, [id]: n + MORE } })}>
           {t('more')} ({left})
         </button>
       )
@@ -256,7 +269,12 @@ export function WordsWith({
         </>
       )
     }
-    const [kun, ...ons] = share([lanes.kun, ...lanes.ons], n)
+    const lists = [lanes.kun, ...lanes.ons]
+    const [kun, ...ons] = share(
+      lists,
+      n,
+      lists.map((l) => l.filter((w) => w.star).length),
+    )
     const on = ons.flat()
     return (
       <>

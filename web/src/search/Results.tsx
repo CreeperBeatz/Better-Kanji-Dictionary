@@ -52,6 +52,7 @@ const S = strings(
     jlptDesc: 'N1 first',
     jlpt: 'On the JLPT N{n} vocabulary list (Jonathan Waller, a community reconstruction)',
     news: 'top {n}',
+    star: 'One of the best examples of this meaning',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
     open: 'Open this entry',
     notTranslated: 'not translated into Bulgarian yet',
@@ -99,6 +100,7 @@ const S = strings(
     jlptDesc: 'Първо N1',
     jlpt: 'В списъка с думи за JLPT N{n} (Джонатан Уолър, реконструкция на общността)',
     news: 'топ {n}',
+    star: 'Един от най-добрите примери за това значение',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
     open: 'Отворете статията',
     notTranslated: 'още не е преведено на български',
@@ -313,6 +315,12 @@ function WordRowView({
             )}
           </span>
           <Valency word={w} />
+          {/* In a kanji's words: one of its meaning's best examples. */}
+          {w.star && (
+            <span className="word-star" title={t('star')} aria-label={t('star')}>
+              ★
+            </span>
+          )}
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
           </span>
