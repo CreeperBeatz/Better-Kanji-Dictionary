@@ -450,54 +450,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 2px 0;
 }
 
-/* Its top line: common or not, then the chip that turns the card to the
-   other language. */
-.head-meta-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.card-lang {
-  position: relative;
-  padding: 1px 4px;
-  border: 1px solid var(--rule-bright);
-  border-radius: 3px;
-  background: none;
-  color: var(--muted);
-  font-family: var(--gothic);
-  font-size: calc(10.5px * var(--type));
-  letter-spacing: 0.04em;
-  line-height: 1.2;
-  cursor: pointer;
-}
-
-/* A finger's worth to hit, more than it shows. */
-.card-lang::before {
-  content: '';
-  position: absolute;
-  inset: -12px -8px;
-}
-
-/* Boxed, so it reads as a switch, not as the word's own language. On: in
-   the accent, at the same size, so nothing moves. */
-.card-lang[aria-pressed='true'] {
-  border-color: var(--ai-deep);
-  background: var(--ai-wash);
-  color: var(--ai);
-}
-
-.card-lang:disabled {
-  cursor: default;
-}
-
-@media (hover: hover) {
-  .card-lang:not(:disabled):hover {
-    color: var(--paper);
-    border-color: var(--ai-deep);
-  }
-}
-
 .see-components {
   display: inline-flex;
   align-items: center;
@@ -5955,7 +5907,7 @@ html {
 /* ---------------------------------------------------------------- press and hold (touch) */
 
 /* A long press shows a card, not the browser's selection or callout; on
-   Dictionary it turns the card's language. */
+   Dictionary, a menu. */
 .graph-svg,
 .map-canvas,
 .phone-tabs button {
@@ -6111,25 +6063,47 @@ html {
   color: var(--paper);
 }
 
-/* Dictionary held down: the card in the other language, over the tab. */
+/* Dictionary held down: the dictionary in the other language, over the tab. */
 .tab-menu {
   bottom: calc(100% + 8px);
   left: calc(100% / var(--n) * (var(--i) + 0.5));
   transform: translateX(-50%);
 }
 
-/* Inside the tab bar, but not a tab: a row, in full colour. */
-.phone-tabs .tab-menu button {
-  flex: none;
-  flex-direction: row;
+/* Its one item: a row, the switch the finger lands on laid over all of it. */
+.tab-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
   gap: 10px;
   padding: 10px 14px;
+  border-radius: 2px;
   color: var(--paper);
+  font-family: var(--gothic);
   font-size: calc(14px * var(--type));
+  white-space: nowrap;
 }
 
-/* The language, boxed as the label in the card's head is. */
+.tab-menu-item:active,
+.tab-menu-item:has(.haptic-switch:focus-visible) {
+  background: var(--ai-wash);
+}
+
+/* A real switch, unseen, where the finger lands: an iPhone ticks only for
+   a tap on one (haptics.ts). Its own look stays under the zero opacity. */
+.haptic-switch {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* The language it switches to, boxed. */
 .graph-menu .tab-menu-lang {
+  color: var(--ai);
   padding: 1px 4px;
   border: 1px solid var(--ai-deep);
   border-radius: 3px;
@@ -6314,8 +6288,7 @@ html {
 
   .word-news,
   .word-common,
-  .word-jlpt,
-  .card-lang {
+  .word-jlpt {
     font-size: calc(11px * var(--type));
   }
 
@@ -6988,8 +6961,8 @@ html {
 }
 
 /* How common it is stays, in a line at the line's right end: "common"
-   and the language chip come down, the level and rank go up to their left. */
-.page-head[data-folding] .head-meta > .head-meta-top {
+   comes down, the level and rank go up to its left. */
+.page-head[data-folding] .head-meta > .word-common {
   transform: translateY(calc(var(--cy, 0px) * var(--p, 0)));
 }
 

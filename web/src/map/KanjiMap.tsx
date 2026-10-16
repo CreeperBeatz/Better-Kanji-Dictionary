@@ -21,7 +21,7 @@ import { quadtree, type Quadtree } from 'd3-quadtree'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
 import type { KanjiNode } from '../api'
 import type { ContainerFilter } from '../graph/KanjiGraph'
-import { strings, useLang, type Translate } from '../i18n'
+import { getContentLang, strings, useLang, type Translate } from '../i18n'
 import { mapMeaning } from '../i18n/content'
 import type { LayoutMessage, LayoutRequest } from './layout.worker'
 import { GlyphAtlas, type SpriteStyle } from './glyphs'
@@ -845,7 +845,7 @@ function KanjiMapView({ scope, focus, focusNode, onSelect, onDeselect, onOpen, o
         ? `translate(${px}px, ${py - 28}px) translate(-50%, -100%)`
         : `translate(${px + 14}px, ${py + 12}px)`
       const tt = tRef.current
-      const meaning = mapMeaning(d, i, tt.lang).value || (d.target[i] ? tt('none') : tt('component'))
+      const meaning = mapMeaning(d, i, getContentLang()).value || (d.target[i] ? tt('none') : tt('component'))
       tip.innerHTML = ''
       const g = document.createElement('b')
       g.textContent = d.chars[i]

@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 import type { KanjiNode } from '../api'
 import { levelOf } from '../detail/DetailPanel'
-import { strings, useLang } from '../i18n'
+import { strings, useLang, useContentLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 
 const HALF_WIDTH = 130
@@ -36,8 +36,9 @@ export const HoldCard = forwardRef<HTMLDivElement, Props>(function HoldCard(
   ref,
 ) {
   const lang = useLang()
+  const say = useContentLang()
   const t = S(lang)
-  const [lead, ...rest] = meaningsOf(node, lang).value
+  const [lead, ...rest] = meaningsOf(node, say).value
   const left = Math.min(Math.max(x, HALF_WIDTH + 8), Math.max(HALF_WIDTH + 8, width - HALF_WIDTH - 8))
   return (
     <div

@@ -16,7 +16,7 @@
  * `getLang()`, which does not re-render anything when the language changes.
  */
 
-import { Fragment, createContext, createElement, useContext, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, createElement, useSyncExternalStore, type ReactNode } from 'react'
 
 export type Lang = 'en' | 'bg'
 
@@ -46,6 +46,7 @@ export const localeOf = (lang: Lang) => (lang === 'bg' ? 'bg-BG' : 'en-GB')
 export function setLang(lang: Lang): void {
   if (lang === current) return
   current = lang
+  keepDict(null)
   try {
     localStorage.setItem(KEY, lang)
   } catch {
@@ -76,17 +77,51 @@ export function useLang(): Lang {
 /** The language that is not `lang`. */
 export const otherLang = (lang: Lang): Lang => (lang === 'bg' ? 'en' : 'bg')
 
-/**
- * The open card's language: `shown` is the other one when the card is turned
- * to it (null as the interface's), and `flip` turns it there and back. Only
- * the dictionary's content follows it; the interface stays as it is.
- */
-export const CardLang = createContext<{ shown: Lang | null; flip: (() => void) | null }>({ shown: null, flip: null })
+// The dictionary's own language, where it is not the interface's: picked from
+// the phone's Dictionary tab, held down (App.tsx), or T. Remembered; the
+// interface switch puts the dictionary back in step with it.
+const DICT_KEY = 'betterrtk:dict-lang'
+let dictOwn: Lang | null = (() => {
+  try {
+    const saved = localStorage.getItem(DICT_KEY)
+    return saved === 'en' || saved === 'bg' ? saved : null
+  } catch {
+    return null
+  }
+})()
 
-/** The language a card's dictionary content is shown in: the interface's, unless the card is turned to the other. */
+function keepDict(lang: Lang | null): void {
+  dictOwn = lang
+  try {
+    if (lang) localStorage.setItem(DICT_KEY, lang)
+    else localStorage.removeItem(DICT_KEY)
+  } catch {
+    // not remembered across visits, but still switched now
+  }
+}
+
+/** The language the dictionary's content is shown in: the interface's, unless another is picked. */
+export function getContentLang(): Lang {
+  return dictOwn ?? current
+}
+
+/** Shows the dictionary's content in `lang`, whatever the interface is in. */
+export function setContentLang(lang: Lang): void {
+  if (lang === getContentLang()) return
+  keepDict(lang === current ? null : lang)
+  for (const l of listeners) l()
+}
+
+/** The dictionary's language, for its content: meanings, senses, notes. Labels and buttons follow `useLang`. */
 export function useContentLang(): Lang {
-  const lang = useLang()
-  return useContext(CardLang).shown ?? lang
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l)
+      return () => listeners.delete(l)
+    },
+    getContentLang,
+    getContentLang,
+  )
 }
 
 type Vars = Record<string, string | number>

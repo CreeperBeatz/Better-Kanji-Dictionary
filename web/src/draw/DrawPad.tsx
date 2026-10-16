@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrawCandidate } from '../api'
-import { strings, useLang } from '../i18n'
+import { strings, useLang, useContentLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { classify, merge, warmClassifier } from './classifier'
 
@@ -37,6 +37,7 @@ type Stroke = [number, number][]
 
 export function DrawPad({ onPick }: Props) {
   const lang = useLang()
+  const say = useContentLang()
   const t = S(lang)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const strokes = useRef<Stroke[]>([])
@@ -215,8 +216,8 @@ export function DrawPad({ onPick }: Props) {
                 }}
                 title={
                   c.strokes
-                    ? t('candidate', { m: meaningsOf(c, lang).value[0] ?? t('noEntry'), n: c.strokes })
-                    : (meaningsOf(c, lang).value[0] ?? t('noEntry'))
+                    ? t('candidate', { m: meaningsOf(c, say).value[0] ?? t('noEntry'), n: c.strokes })
+                    : (meaningsOf(c, say).value[0] ?? t('noEntry'))
                 }
               >
                 {c.char}

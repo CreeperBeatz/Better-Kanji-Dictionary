@@ -8,7 +8,7 @@ import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
-import { CardLang, otherLang, strings, useLang, type Translate } from './i18n'
+import { getContentLang, otherLang, setContentLang, strings, useContentLang, useLang, type Translate } from './i18n'
 import { haptic } from './haptics'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
@@ -80,8 +80,8 @@ const S = strings(
     howGraph: 'How to read the graph',
     legend: 'Legend',
     openCards: '{n} cards open',
-    cardIn: 'Show this card in Bulgarian',
-    cardBack: 'Back to English',
+    dictBg: 'Dictionary in Bulgarian',
+    dictEn: 'Dictionary in English',
     wordsWith: 'Words with {c}',
   },
   {
@@ -107,8 +107,8 @@ const S = strings(
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
     openCards: '{n} отворени карти',
-    cardIn: 'Покажи картата на английски',
-    cardBack: 'Обратно на български',
+    dictBg: 'Речник на български',
+    dictEn: 'Речник на английски',
     wordsWith: 'Думи с {c}',
   },
 )
@@ -579,11 +579,11 @@ const META_GAP = 12
 
 /**
  * How common a card's subject is stays in its folded line, along the right
- * end, in the middle of it: "common" and the language chip come down, and
- * the level and rank go up beside them, to their left. Returns where they then start, from the left.
+ * end, in the middle of it: "common" comes down, and the level and rank go
+ * up beside it, to its left. Returns where they then start, from the left.
  */
 function measureMeta(head: HTMLElement, h: number): number {
-  const common = head.querySelector<HTMLElement>('.head-meta > .head-meta-top')
+  const common = head.querySelector<HTMLElement>('.head-meta > .word-common')
   if (!common) return Infinity
   const mid = h - FOLDED / 2
   const c = offsetIn(common, head)
@@ -1164,8 +1164,6 @@ export function App() {
   // Back `k` pages at once, sliding: as history slides it, when it goes
   // through history, or here when the pages come off in place. `still`: the
   // card has gone already, pulled off, and the page under it is in sight.
-  // Turns the open card to the other language and back (set below, with the card).
-  const flipCard = useRef<(() => void) | null>(null)
   const popBy = useStable((k: number, still: boolean = false) => {
     cameBack.current = performance.now()
     dropped.current = still
@@ -1190,7 +1188,8 @@ export function App() {
       if (document.querySelector('.overlay')) return
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
-      if (e.key === 't' || e.key === 'T') flipCard.current?.()
+      // The dictionary in the other language, and back.
+      if (e.key === 't' || e.key === 'T') setContentLang(otherLang(getContentLang()))
       if ('dDfF'.includes(e.key)) setView('focus')
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
@@ -1350,22 +1349,7 @@ export function App() {
   const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
   const subjectKey = subject?.key ?? null
-  // The card shown in the other language, by its subject: from the chip by
-  // "common" in its head, or T. That card only, while it is in the stack;
-  // opened anew, it is in the interface's language again.
-  const [flipped, setFlipped] = useState<string | null>(null)
-  const flippedIn = flipped !== null && stack.some((p) => subjectOf(p)?.key === flipped)
-  useEffect(() => {
-    if (flipped !== null && !flippedIn) setFlipped(null)
-  }, [flipped, flippedIn])
-  const cardLang = useMemo(
-    () => ({
-      shown: subjectKey !== null && flipped === subjectKey ? otherLang(t.lang) : null,
-      flip: subjectKey === null ? null : () => setFlipped((f) => (f === subjectKey ? null : subjectKey)),
-    }),
-    [subjectKey, flipped, t.lang],
-  )
-  flipCard.current = cardLang.flip
+  const contentLang = useContentLang()
   // The page shows its dictionary, or its associations when it is their page.
   const notesShown = hasNotes(shownTop)
   // Its associations are mounted under its dictionary too, unseen, for their
@@ -1601,9 +1585,9 @@ export function App() {
       sc.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(frame)
     }
-    // Measured again in the other language: the head may keep its height
+    // Measured again in another language: the head may keep its height
     // while its lines move inside it.
-  }, [folding, shownTop, searchShown, onStage, foldHead, cardLang.shown, t.lang])
+  }, [folding, shownTop, searchShown, onStage, foldHead, contentLang, t.lang])
   // A page's associations, from beside its first title: a page of their own
   // -- on a phone, a card -- over its dictionary, back from which is the
   // dictionary again.
@@ -1636,8 +1620,6 @@ export function App() {
   // A tap on the folded line goes to the card's top, whatever it is on.
   function onHeadTap(e: React.MouseEvent) {
     if (!headRef.current?.hasAttribute('data-collapsed')) return
-    // The language chip in it does its own thing.
-    if ((e.target as Element).closest('.card-lang')) return
     e.preventDefault()
     e.stopPropagation()
     toCardTop()
@@ -2139,8 +2121,8 @@ export function App() {
       </button>
     )
   }
-  // Dictionary held down opens a menu over it: the open card in the other
-  // language, as the label in its head turns it. The tap the press ends in
+  // Dictionary held down opens a menu over it: the dictionary in the other
+  // language, everywhere, the interface as it is. The tap the press ends in
   // does nothing more.
   const press = useRef<{ x: number; y: number; timer: number } | null>(null)
   const [tabMenu, setTabMenu] = useState(false)
@@ -2159,18 +2141,18 @@ export function App() {
       window.removeEventListener('keydown', esc)
     }
   }, [tabMenu])
-  // Picked, the card turns, and is gone to from another tab.
-  function pickCardLang() {
+  // Picked, the dictionary turns at once; the menu goes a beat later, so an
+  // iPhone has toggled the switch under the finger (and ticked) before it does.
+  function pickDictLang() {
     haptic()
-    setTabMenu(false)
-    flipCard.current?.()
-    if (phoneTab !== 'dictionary') tapPhoneTab('dictionary')
+    setContentLang(otherLang(contentLang))
+    window.setTimeout(() => setTabMenu(false), 150)
   }
   const heldAt = useRef(0)
   const held = (p: PhoneTab) => p === 'dictionary' && performance.now() - heldAt.current < 800
   const holdDictionary = {
     start(e: React.TouchEvent) {
-      if (!flipCard.current || e.touches.length !== 1) return
+      if (e.touches.length !== 1) return
       const { clientX: x, clientY: y } = e.touches[0]
       const timer = window.setTimeout(() => {
         press.current = null
@@ -2624,7 +2606,6 @@ export function App() {
               style={stackShown ? { minHeight: `calc(100% - ${stackHeight(stackUnder.length)}px + ${SLOT_ROOM}px)` } : undefined}
             >
             <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
-            <CardLang.Provider value={cardLang}>
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
@@ -2673,7 +2654,6 @@ export function App() {
                   </div>
                 )}
               </div>
-            </CardLang.Provider>
             </div>
             </div>
           </div>
@@ -2699,12 +2679,22 @@ export function App() {
                   role="menu"
                   style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
                 >
-                  <button role="menuitem" onClick={pickCardLang}>
+                  <div className="tab-menu-item">
                     <span className="tab-menu-lang" aria-hidden="true">
-                      {(cardLang.shown ? t.lang : otherLang(t.lang)) === 'bg' ? 'БГ' : 'EN'}
+                      {otherLang(contentLang) === 'bg' ? 'БГ' : 'EN'}
                     </span>
-                    {t(cardLang.shown ? 'cardBack' : 'cardIn')}
-                  </button>
+                    {t(otherLang(contentLang) === 'bg' ? 'dictBg' : 'dictEn')}
+                    {/* What the finger lands on: a switch, unseen, which an
+                        iPhone ticks for as it is tapped (see haptics.ts). */}
+                    <input
+                      type="checkbox"
+                      className="haptic-switch"
+                      role="menuitem"
+                      aria-label={t(otherLang(contentLang) === 'bg' ? 'dictBg' : 'dictEn')}
+                      {...{ switch: '' }}
+                      onChange={pickDictLang}
+                    />
+                  </div>
                 </div>
               )}
             </nav>

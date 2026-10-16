@@ -1,22 +1,14 @@
 /**
- * A light tick felt in the hand. Android has the Vibration API. Safari has
- * none, but since iOS 18 a switch checkbox ticks as it is toggled, so a
- * hidden one is toggled through its label. That is not an API: an update
- * may take it away, and then this does nothing.
+ * A light tick felt in the hand, where the Vibration API is: Android.
+ *
+ * Safari has none. An iPhone ticks as a switch (`<input type="checkbox"
+ * switch>`) is toggled, but since iOS 26.5 only when a finger taps the
+ * switch itself, not when a script clicks it (WebKit bug 309082), and never
+ * from a timer. So what should tick on an iPhone puts a switch, unseen
+ * (`.haptic-switch` in theme.css), where the finger lands, and acts on its
+ * change. It keeps its own look under the zero opacity: a switch stripped
+ * of it does not tick.
  */
 export function haptic(): void {
-  if (typeof navigator.vibrate === 'function') {
-    navigator.vibrate(10)
-    return
-  }
-  const label = document.createElement('label')
-  label.ariaHidden = 'true'
-  label.style.display = 'none'
-  const input = document.createElement('input')
-  input.type = 'checkbox'
-  input.setAttribute('switch', '')
-  label.appendChild(input)
-  document.head.appendChild(label)
-  label.click()
-  label.remove()
+  if (typeof navigator.vibrate === 'function') navigator.vibrate(10)
 }

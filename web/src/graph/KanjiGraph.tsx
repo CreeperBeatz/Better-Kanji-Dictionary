@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo, useLayoutEffect } from 'react'
 import { api, type GraphResponse, type KanjiNode } from '../api'
-import { strings, useLang, type Translate } from '../i18n'
+import { strings, useLang, type Lang, type Translate, useContentLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { HoldCard } from './HoldCard'
 import { radicalNumber } from './radicals'
@@ -88,8 +88,8 @@ function levelOf(n: { jlpt: number | null; joyo: boolean; fanout: number | null 
 }
 
 /** "水 — water, liquid" as a node's tooltip names it. */
-function titleMeanings(n: { meanings: string[]; meaningsBg?: string[] | null }, t: T): string {
-  const m = meaningsOf(n, t.lang).value
+function titleMeanings(n: { meanings: string[]; meaningsBg?: string[] | null }, lang: Lang): string {
+  const m = meaningsOf(n, lang).value
   return m.length > 0 ? ` - ${m.slice(0, 3).join(', ')}` : ''
 }
 
@@ -215,6 +215,7 @@ export const KanjiGraph = memo(KanjiGraphView)
 
 function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legend, locked = false, onLock, simple = false }: Props) {
   const t = S(useLang())
+  const say = useContentLang()
   // The filter applies only upward. Going down is never limited: the parts a
   // character is made of are not optional, whatever level they happen to be.
   // A container outside the level stays if it leads up to something inside it.
@@ -691,7 +692,7 @@ function KanjiGraphView({ data, filter, open, onOpen, onRecentre, onHover, legen
       >
         <title>
           {n.char}
-          {titleMeanings(n, t)}
+          {titleMeanings(n, say)}
           {`
 ${levelOf(n, t)}`}
           {n.root && `
@@ -927,6 +928,7 @@ function PeekLayer({
   handlers: (char: string) => React.DOMAttributes<SVGGElement>
 }) {
   const t = S(useLang())
+  const say = useContentLang()
   const { host: h, items } = peek
   const reach = items.reduce((m, it) => Math.max(m, Math.hypot(it.x - h.x, it.y - h.y) + it.radius), 0) + 26
   // The cone the peek fans out in, from the host away from the focus. It is
@@ -989,7 +991,7 @@ function PeekLayer({
         >
           <title>
             {it.char}
-            {titleMeanings(it.node, t)}
+            {titleMeanings(it.node, say)}
             {`
 ${levelOf(it.node, t)}`}
             {peek.via.has(it.char) && `
@@ -1001,7 +1003,7 @@ ${t('via')}`}
             {it.char}
           </text>
           <text className="peek-meaning" y={it.radius + 10}>
-            {(meaningsOf(it.node, t.lang).value[0] ?? '').toLowerCase().slice(0, 14)}
+            {(meaningsOf(it.node, say).value[0] ?? '').toLowerCase().slice(0, 14)}
           </text>
         </g>
       ))}
