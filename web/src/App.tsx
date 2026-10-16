@@ -79,6 +79,8 @@ const S = strings(
     howGraph: 'How to read the graph',
     legend: 'Legend',
     openCards: '{n} cards open',
+    cardIn: 'Show this card in Bulgarian',
+    cardBack: 'Back to English',
     wordsWith: 'Words with {c}',
   },
   {
@@ -104,6 +106,8 @@ const S = strings(
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
     openCards: '{n} отворени карти',
+    cardIn: 'Покажи картата на английски',
+    cardBack: 'Обратно на български',
     wordsWith: 'Думи с {c}',
   },
 )
@@ -331,7 +335,7 @@ const RISE_MS = 400
 /** How long a tab tapped takes to turn. */
 const TAP_TURN_MS = 260
 
-/** How long a press on Dictionary is held to turn the card's language. */
+/** How long a press on Dictionary is held for its menu. */
 const HOLD_MS = 450
 
 /** Whether pages slide at all: on a phone, unless the system asks for less motion. */
@@ -2134,10 +2138,32 @@ export function App() {
       </button>
     )
   }
-  // Dictionary held down turns the open card to the other language, as the
-  // chip in its head does, and goes to it from another tab. The tap the
-  // press ends in does nothing more.
+  // Dictionary held down opens a menu over it: the open card in the other
+  // language, as the label in its head turns it. The tap the press ends in
+  // does nothing more.
   const press = useRef<{ x: number; y: number; timer: number } | null>(null)
+  const [tabMenu, setTabMenu] = useState(false)
+  const tabMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => setTabMenu(false), [subjectKey])
+  useEffect(() => {
+    if (!tabMenu) return
+    const off = (e: PointerEvent) => {
+      if (!tabMenuRef.current?.contains(e.target as Node)) setTabMenu(false)
+    }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setTabMenu(false)
+    document.addEventListener('pointerdown', off, true)
+    window.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', off, true)
+      window.removeEventListener('keydown', esc)
+    }
+  }, [tabMenu])
+  // Picked, the card turns, and is gone to from another tab.
+  function pickCardLang() {
+    setTabMenu(false)
+    flipCard.current?.()
+    if (phoneTab !== 'dictionary') tapPhoneTab('dictionary')
+  }
   const heldAt = useRef(0)
   const held = (p: PhoneTab) => p === 'dictionary' && performance.now() - heldAt.current < 800
   const holdDictionary = {
@@ -2147,9 +2173,8 @@ export function App() {
       const timer = window.setTimeout(() => {
         press.current = null
         heldAt.current = performance.now()
-        flipCard.current?.()
         navigator.vibrate?.(10)
-        if (phoneTabRef.current !== 'dictionary') tapPhoneTab('dictionary')
+        setTabMenu(true)
       }, HOLD_MS)
       press.current = { x, y, timer }
     },
@@ -2163,8 +2188,6 @@ export function App() {
       press.current = null
     },
   }
-  const phoneTabRef = useRef(phoneTab)
-  phoneTabRef.current = phoneTab
   // A tab tapped turns the same way, from where the page stands.
   function tapPhoneTab(to: PhoneTab) {
     if (to !== phoneTab) turn(to, 0, TAP_TURN_MS)
@@ -2667,6 +2690,21 @@ export function App() {
               <span className="phone-tab-mark" aria-hidden />
               {/* On Dictionary, how many cards are open. */}
               {PHONE_TABS.map((p) => phoneTabButton(p))}
+              {tabMenu && (
+                <div
+                  ref={tabMenuRef}
+                  className="graph-menu tab-menu"
+                  role="menu"
+                  style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
+                >
+                  <button role="menuitem" onClick={pickCardLang}>
+                    <span className="tab-menu-lang" aria-hidden="true">
+                      {(cardLang.shown ? t.lang : otherLang(t.lang)) === 'bg' ? 'БГ' : 'EN'}
+                    </span>
+                    {t(cardLang.shown ? 'cardBack' : 'cardIn')}
+                  </button>
+                </div>
+              )}
             </nav>
           )}
         </aside>

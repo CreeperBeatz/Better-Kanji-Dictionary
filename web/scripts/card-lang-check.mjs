@@ -61,8 +61,8 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     console.log(name, 'T ->', await text(page, '.card-slot > .page-card > .page-head .detail-meanings'))
   }
   if (mobile) {
-    // Dictionary held down turns the card; from Components it goes to the
-    // card too; a short tap does not turn it.
+    // Dictionary held down opens a menu; its one item turns the card (and goes
+    // to it from Components); a short tap or a tap elsewhere does not.
     const cdp = await ctx.newCDPSession(page)
     const tab = page.locator('.phone-tabs button').filter({ hasText: /Dictionary/ })
     const hold = async (ms) => {
@@ -74,16 +74,30 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
       await page.waitForTimeout(400)
     }
     const pressed = () => page.locator('.card-slot > .page-card > .page-head .card-lang').getAttribute('aria-pressed')
+    const menu = () => page.locator('.tab-menu').count()
+    const tapAt = async (loc) => {
+      const bb = await loc.boundingBox()
+      await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2)
+      await page.waitForTimeout(400)
+    }
     await hold(80)
-    console.log(name, 'dictionary tap   -> pressed', await pressed())
+    console.log(name, 'dictionary tap   -> menu', await menu(), 'pressed', await pressed())
     await hold(650)
-    console.log(name, 'dictionary held  -> pressed', await pressed(), '| head', await text(page, '.card-slot > .page-card > .page-head .detail-meanings'))
+    console.log(name, 'dictionary held  -> menu', await menu(), 'pressed', await pressed(), '|', JSON.stringify(await text(page, '.tab-menu')))
+    await page.screenshot({ path: `${SHOTS}/lang-${name}-tab-menu.png`, clip: { x: 0, y: viewport.height - 160, width: viewport.width, height: 160 } })
+    await tapAt(page.locator('.card-slot > .page-card > .page-head .detail-meanings'))
+    console.log(name, 'tap elsewhere    -> menu', await menu(), 'pressed', await pressed())
+    await hold(650)
+    await tapAt(page.locator('.tab-menu button'))
+    console.log(name, 'menu picked      -> menu', await menu(), 'pressed', await pressed(), '| head', await text(page, '.card-slot > .page-card > .page-head .detail-meanings'))
     await page.locator('.phone-tabs button').filter({ hasText: /Components|Graph|Parts/ }).first().click()
     await page.waitForTimeout(500)
     const selected = () => page.locator('.phone-tabs button[aria-selected="true"]').innerText()
     console.log(name, 'on tab', JSON.stringify(await selected()))
     await hold(650)
-    console.log(name, 'held from there  -> tab', JSON.stringify(await selected()), 'pressed', await pressed())
+    console.log(name, 'held there       -> tab', JSON.stringify(await selected()), 'menu', JSON.stringify(await text(page, '.tab-menu')))
+    await tapAt(page.locator('.tab-menu button'))
+    console.log(name, 'picked there     -> tab', JSON.stringify(await selected()), 'pressed', await pressed())
     await cdp.detach()
   }
   // A word, flipped; then a kanji opened from it is in the interface's language.

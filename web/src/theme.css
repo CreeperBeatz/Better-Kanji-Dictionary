@@ -6111,6 +6111,33 @@ html {
   color: var(--paper);
 }
 
+/* Dictionary held down: the card in the other language, over the tab. */
+.tab-menu {
+  bottom: calc(100% + 8px);
+  left: calc(100% / var(--n) * (var(--i) + 0.5));
+  transform: translateX(-50%);
+}
+
+/* Inside the tab bar, but not a tab: a row, in full colour. */
+.phone-tabs .tab-menu button {
+  flex: none;
+  flex-direction: row;
+  gap: 10px;
+  padding: 10px 14px;
+  color: var(--paper);
+  font-size: calc(14px * var(--type));
+}
+
+/* The language, boxed as the label in the card's head is. */
+.graph-menu .tab-menu-lang {
+  padding: 1px 4px;
+  border: 1px solid var(--ai-deep);
+  border-radius: 3px;
+  font-size: calc(11px * var(--type));
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hold-card,
   .graph-menu {
