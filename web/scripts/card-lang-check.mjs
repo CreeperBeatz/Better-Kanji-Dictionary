@@ -1,6 +1,6 @@
 // Usage: node scripts/card-lang-check.mjs [base=http://localhost:8000] [shots=C:/tmp/shots]
 // The dictionary's language, apart from the interface's: on a phone, Dictionary held down
-// opens a menu whose one item (a switch the finger lands on, for an iPhone's tick) turns
+// opens a menu (a switch under the finger then, for an iPhone's tick on the lift) whose one item turns
 // the dictionary to the other language everywhere -- cards, search -- and is remembered;
 // T does it on a desktop; the interface switch puts the dictionary back in step with it.
 import { chromium } from 'playwright'
@@ -39,13 +39,27 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     const menu = () => page.locator('.tab-menu').count()
     await hold(80)
     console.log(name, 'tap             -> menu', await menu())
+    // Held, the finger is on a switch over the tab (an iPhone ticks as it lifts);
+    // a moment after the lift the tab is a tab again.
+    const under = () => page.evaluate(() => {
+      const r = [...document.querySelectorAll('.phone-tabs > button')].find((b) => /Dictionary/.test(b.textContent)).getBoundingClientRect()
+      const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+      return e.tagName + (e.hasAttribute('switch') ? '[switch]' : '')
+    })
+    {
+      const bb = await tab.boundingBox()
+      const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 }]
+      console.log(name, 'under finger    before', await under())
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt })
+      await page.waitForTimeout(650)
+      console.log(name, 'under finger    held', await under(), 'menu', await menu())
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      await page.waitForTimeout(700)
+      console.log(name, 'under finger    after', await under(), 'menu', await menu())
+      await tapAt(page.locator('.card-slot > .page-card > .page-head'))
+    }
     await hold(650)
     console.log(name, 'held            -> menu', await menu(), JSON.stringify(await text(page, '.tab-menu')))
-    console.log(name, 'finger lands on ', await page.evaluate(() => {
-      const r = document.querySelector('.tab-menu-item').getBoundingClientRect()
-      const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
-      return e.tagName + '.' + e.className + (e.hasAttribute('switch') ? ' [switch]' : '')
-    }))
     await page.screenshot({ path: `${SHOTS}/dict-${name}-tab-menu.png`, clip: { x: 0, y: viewport.height - 160, width: viewport.width, height: 160 } })
     await tapAt(page.locator('.tab-menu-item'))
     await page.waitForTimeout(200)

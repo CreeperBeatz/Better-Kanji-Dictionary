@@ -6070,35 +6070,39 @@ html {
   transform: translateX(-50%);
 }
 
-/* Its one item: a row, the switch the finger lands on laid over all of it. */
-.tab-menu-item {
-  position: relative;
-  display: flex;
-  align-items: center;
+/* Its one item: a row. Inside the tab bar, but not a tab. */
+.phone-tabs .tab-menu-item {
+  flex: none;
+  flex-direction: row;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 2px;
   color: var(--paper);
-  font-family: var(--gothic);
   font-size: calc(14px * var(--type));
-  white-space: nowrap;
 }
 
-.tab-menu-item:active,
-.tab-menu-item:has(.haptic-switch:focus-visible) {
+.phone-tabs .tab-menu-item:active {
   background: var(--ai-wash);
 }
 
-/* A real switch, unseen, where the finger lands: an iPhone ticks only for
-   a tap on one (haptics.ts). Its own look stays under the zero opacity. */
+/* A real switch, unseen: an iPhone ticks only for a finger on one
+   (haptics.ts). Its own look stays under the zero opacity. */
 .haptic-switch {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
   margin: 0;
   opacity: 0;
-  cursor: pointer;
+}
+
+/* Over Dictionary, and only once it has been held: the lift lands on it. */
+.tab-hold-switch {
+  top: 0;
+  left: calc(100% / var(--n) * var(--i));
+  width: calc(100% / var(--n));
+  height: 100%;
+  pointer-events: none;
+}
+
+.tab-hold-switch[data-armed] {
+  pointer-events: auto;
 }
 
 /* The language it switches to, boxed. */

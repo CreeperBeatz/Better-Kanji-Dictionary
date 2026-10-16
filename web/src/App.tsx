@@ -2141,13 +2141,15 @@ export function App() {
       window.removeEventListener('keydown', esc)
     }
   }, [tabMenu])
-  // Picked, the dictionary turns at once; the menu goes a beat later, so an
-  // iPhone has toggled the switch under the finger (and ticked) before it does.
   function pickDictLang() {
-    haptic()
+    setTabMenu(false)
     setContentLang(otherLang(contentLang))
-    window.setTimeout(() => setTabMenu(false), 150)
   }
+  // As the menu opens, a tick in the hand. An iPhone ticks only for a finger
+  // on a switch (haptics.ts), never from the hold's timer: so once held, a
+  // switch, unseen, lies under the finger on the tab, and the lift ticks.
+  const [armed, setArmed] = useState(false)
+  const disarm = useRef(0)
   const heldAt = useRef(0)
   const held = (p: PhoneTab) => p === 'dictionary' && performance.now() - heldAt.current < 800
   const holdDictionary = {
@@ -2158,6 +2160,8 @@ export function App() {
         press.current = null
         heldAt.current = performance.now()
         haptic()
+        window.clearTimeout(disarm.current)
+        setArmed(true)
         setTabMenu(true)
       }, HOLD_MS)
       press.current = { x, y, timer }
@@ -2170,6 +2174,8 @@ export function App() {
     end() {
       if (press.current) window.clearTimeout(press.current.timer)
       press.current = null
+      // Long enough for the lift's tap to reach the switch, then the tab is a tab again.
+      disarm.current = window.setTimeout(() => setArmed(false), 400)
     },
   }
   // A tab tapped turns the same way, from where the page stands.
@@ -2672,6 +2678,15 @@ export function App() {
               <span className="phone-tab-mark" aria-hidden />
               {/* On Dictionary, how many cards are open. */}
               {PHONE_TABS.map((p) => phoneTabButton(p))}
+              <input
+                type="checkbox"
+                className="haptic-switch tab-hold-switch"
+                aria-hidden="true"
+                tabIndex={-1}
+                data-armed={armed || undefined}
+                style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
+                {...{ switch: '' }}
+              />
               {tabMenu && (
                 <div
                   ref={tabMenuRef}
@@ -2679,22 +2694,12 @@ export function App() {
                   role="menu"
                   style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
                 >
-                  <div className="tab-menu-item">
+                  <button className="tab-menu-item" role="menuitem" onClick={pickDictLang}>
                     <span className="tab-menu-lang" aria-hidden="true">
                       {otherLang(contentLang) === 'bg' ? 'БГ' : 'EN'}
                     </span>
                     {t(otherLang(contentLang) === 'bg' ? 'dictBg' : 'dictEn')}
-                    {/* What the finger lands on: a switch, unseen, which an
-                        iPhone ticks for as it is tapped (see haptics.ts). */}
-                    <input
-                      type="checkbox"
-                      className="haptic-switch"
-                      role="menuitem"
-                      aria-label={t(otherLang(contentLang) === 'bg' ? 'dictBg' : 'dictEn')}
-                      {...{ switch: '' }}
-                      onChange={pickDictLang}
-                    />
-                  </div>
+                  </button>
                 </div>
               )}
             </nav>
