@@ -1,6 +1,6 @@
 // Usage: node scripts/card-lang-check.mjs [base=http://localhost:8000] [shots=C:/tmp/shots]
-// One language for the app: on a phone, Dictionary held down opens a menu (a switch under
-// the finger then, for an iPhone's tick on the lift) whose one item turns the app, interface
+// One language for the app: on a phone, Dictionary held down opens a menu whose one item
+// turns the app, interface
 // and dictionary, to the other language -- the same setting as the profile's switch,
 // remembered; T does it on a desktop.
 import { chromium } from 'playwright'
@@ -39,25 +39,7 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     const menu = () => page.locator('.tab-menu').count()
     await hold(80)
     console.log(name, 'tap             -> menu', await menu())
-    // Held, the finger is on a switch over the tab (an iPhone ticks as it lifts);
-    // a moment after the lift the tab is a tab again.
-    const under = () => page.evaluate(() => {
-      const r = document.querySelectorAll('.phone-tabs > button')[1].getBoundingClientRect()
-      const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
-      return e.tagName + (e.hasAttribute('switch') ? '[switch]' : '')
-    })
-    {
-      const bb = await tab.boundingBox()
-      const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 }]
-      console.log(name, 'under finger    before', await under())
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt })
-      await page.waitForTimeout(650)
-      console.log(name, 'under finger    held', await under(), 'menu', await menu())
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-      await page.waitForTimeout(700)
-      console.log(name, 'under finger    after', await under(), 'menu', await menu())
-      await tapAt(page.locator('.card-slot > .page-card > .page-head'))
-    }
+    // The switch over the tab, tap and hold both ways: scripts/tab-hold-check.mjs.
     await hold(650)
     console.log(name, 'held            -> menu', await menu(), JSON.stringify(await text(page, '.tab-menu')))
     await page.screenshot({ path: `${SHOTS}/dict-${name}-tab-menu.png`, clip: { x: 0, y: viewport.height - 160, width: viewport.width, height: 160 } })

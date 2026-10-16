@@ -5910,7 +5910,8 @@ html {
    Dictionary, a menu. */
 .graph-svg,
 .map-canvas,
-.phone-tabs button {
+.phone-tabs button,
+.tab-hold-switch {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -6092,17 +6093,31 @@ html {
   opacity: 0;
 }
 
-/* Over Dictionary, and only once it has been held: the lift lands on it. */
+/* Over Dictionary, taking its touches (App.tsx holdSwitch). */
 .tab-hold-switch {
   top: 0;
   left: calc(100% / var(--n) * var(--i));
   width: calc(100% / var(--n));
   height: 100%;
-  pointer-events: none;
 }
 
-.tab-hold-switch[data-armed] {
-  pointer-events: auto;
+/* Under the switch the tab gets no :active; pressed, it looks it. Held long
+   enough, its icon rises: let go for the menu. */
+.phone-tabs button[data-press] {
+  opacity: 0.72;
+}
+
+.phone-tabs button .phone-tab-icon {
+  transition: transform 160ms var(--ease);
+}
+
+.phone-tabs button[data-press='ready'] {
+  opacity: 1;
+  color: var(--paper);
+}
+
+.phone-tabs button[data-press='ready'] .phone-tab-icon {
+  transform: translateY(-3px) scale(1.18);
 }
 
 /* The language it switches to, boxed. */

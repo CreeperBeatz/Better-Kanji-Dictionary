@@ -263,7 +263,8 @@ const nearEdge = (x: number) => x < EDGE || x > window.innerWidth - EDGE
  */
 function movesItself(el: Element | null, within: Element): boolean {
   for (let at = el; at && at !== within; at = at.parentElement) {
-    if (at.matches('input, textarea, canvas, [contenteditable], .excalidraw')) return true
+    // Not the switch over the Dictionary tab: it is the tab, to the finger.
+    if (at.matches('input:not(.tab-hold-switch), textarea, canvas, [contenteditable], .excalidraw')) return true
     const x = getComputedStyle(at).overflowX
     if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
   }
@@ -2094,19 +2095,14 @@ export function App() {
     input.setSelectionRange(0, input.value.length)
   }
   function phoneTabButton(p: PhoneTab) {
-    const hold = p === 'dictionary' ? holdDictionary : undefined
     return (
       <button
         key={p}
         role="tab"
         aria-selected={phoneTab === p}
         disabled={tabOff(p)}
-        onClick={() => !held(p) && tapPhoneTab(p)}
-        onTouchStart={hold?.start}
-        onTouchMove={hold?.move}
-        onTouchEnd={hold?.end}
-        onTouchCancel={hold?.end}
-        onContextMenu={hold && ((e) => e.preventDefault())}
+        data-press={(p === 'dictionary' && holding) || undefined}
+        onClick={() => tapPhoneTab(p)}
       >
         <span className="phone-tab-icon">
           <PhoneTabIcon tab={p} />
@@ -2121,9 +2117,7 @@ export function App() {
     )
   }
   // Dictionary held down opens a menu over it: the app in the other language,
-  // the same switch as the profile's. The tap the press ends in does nothing
-  // more.
-  const press = useRef<{ x: number; y: number; timer: number } | null>(null)
+  // the same switch as the profile's.
   const [tabMenu, setTabMenu] = useState(false)
   const tabMenuRef = useRef<HTMLDivElement>(null)
   useEffect(() => setTabMenu(false), [subjectKey])
@@ -2144,37 +2138,71 @@ export function App() {
     setTabMenu(false)
     setLang(otherLang(t.lang))
   }
-  // As the menu opens, a tick in the hand. An iPhone ticks only for a finger
-  // on a switch (haptics.ts), never from the hold's timer: so once held, a
-  // switch, unseen, lies under the finger on the tab, and the lift ticks.
-  const [armed, setArmed] = useState(false)
-  const disarm = useRef(0)
-  const heldAt = useRef(0)
-  const held = (p: PhoneTab) => p === 'dictionary' && performance.now() - heldAt.current < 800
-  const holdDictionary = {
-    start(e: React.TouchEvent) {
+  // The menu opens with a tick in the hand. An iPhone ticks only as a finger
+  // lifts off a switch, which then clicks itself (WebKit's CheckboxInputType),
+  // never from a timer (haptics.ts). So a switch, unseen, lies over the tab
+  // and takes its touches. A tap: the switch is turned off before WebKit sees
+  // the lift, so it neither clicks nor ticks, and the tab is gone to. Held
+  // long enough (the tab says so), the lift clicks it, it ticks, and the
+  // click opens the menu. Where the Vibration API is (Android), the menu
+  // opens as the hold is long enough, buzzing.
+  const press = useRef<{ x: number; y: number; timer: number; ready: boolean; moved: boolean } | null>(null)
+  const [holding, setHolding] = useState<'press' | 'ready' | null>(null)
+  const liftedAt = useRef(0)
+  const tickBySwitch = typeof navigator.vibrate !== 'function'
+  // Off until the browser is done with this touch: no click, no tick.
+  const quiet = (el: HTMLInputElement) => {
+    el.disabled = true
+    window.setTimeout(() => (el.disabled = false), 400)
+  }
+  const holdSwitch = {
+    start(e: React.TouchEvent<HTMLInputElement>) {
       if (e.touches.length !== 1) return
       const { clientX: x, clientY: y } = e.touches[0]
-      const timer = window.setTimeout(() => {
-        press.current = null
-        heldAt.current = performance.now()
-        haptic()
-        window.clearTimeout(disarm.current)
-        setArmed(true)
-        setTabMenu(true)
-      }, HOLD_MS)
-      press.current = { x, y, timer }
+      const p = {
+        x,
+        y,
+        ready: false,
+        moved: false,
+        timer: window.setTimeout(() => {
+          p.ready = true
+          setHolding('ready')
+          if (!tickBySwitch) {
+            haptic()
+            setTabMenu(true)
+          }
+        }, HOLD_MS),
+      }
+      press.current = p
+      setHolding('press')
     },
-    move(e: React.TouchEvent) {
+    // A swipe along the bar: no hold, and no click at its end. The switch
+    // stays on while it moves: off, it would get the rest of the swipe no
+    // more, nor would the bar, which turns the tabs by it.
+    move(e: React.TouchEvent<HTMLInputElement>) {
       const p = press.current
       const t0 = e.touches[0]
-      if (p && t0 && Math.hypot(t0.clientX - p.x, t0.clientY - p.y) > 10) holdDictionary.end()
+      if (!p || p.moved || !t0 || Math.hypot(t0.clientX - p.x, t0.clientY - p.y) <= 10) return
+      p.moved = true
+      window.clearTimeout(p.timer)
+      setHolding(null)
     },
-    end() {
-      if (press.current) window.clearTimeout(press.current.timer)
+    end(e: React.TouchEvent<HTMLInputElement>) {
+      const p = press.current
       press.current = null
-      // Long enough for the lift's tap to reach the switch, then the tab is a tab again.
-      disarm.current = window.setTimeout(() => setArmed(false), 400)
+      setHolding(null)
+      if (!p) return
+      window.clearTimeout(p.timer)
+      if (p.ready && !p.moved && tickBySwitch && e.type === 'touchend') {
+        liftedAt.current = performance.now()
+        return
+      }
+      quiet(e.currentTarget)
+      if (!p.ready && !p.moved && e.type === 'touchend') tapPhoneTab('dictionary')
+    },
+    // WebKit's click, from the lift after a hold: it has ticked; the menu.
+    click() {
+      if (performance.now() - liftedAt.current < 500) setTabMenu(true)
     },
   }
   // A tab tapped turns the same way, from where the page stands.
@@ -2677,15 +2705,23 @@ export function App() {
               <span className="phone-tab-mark" aria-hidden />
               {/* On Dictionary, how many cards are open. */}
               {PHONE_TABS.map((p) => phoneTabButton(p))}
-              <input
-                type="checkbox"
-                className="haptic-switch tab-hold-switch"
-                aria-hidden="true"
-                tabIndex={-1}
-                data-armed={armed || undefined}
-                style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
-                {...{ switch: '' }}
-              />
+              {/* Over Dictionary, taking its touches: see holdSwitch. */}
+              {!tabOff('dictionary') && (
+                <input
+                  type="checkbox"
+                  className="haptic-switch tab-hold-switch"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
+                  {...{ switch: '' }}
+                  onTouchStart={holdSwitch.start}
+                  onTouchMove={holdSwitch.move}
+                  onTouchEnd={holdSwitch.end}
+                  onTouchCancel={holdSwitch.end}
+                  onClick={holdSwitch.click}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+              )}
               {tabMenu && (
                 <div
                   ref={tabMenuRef}
