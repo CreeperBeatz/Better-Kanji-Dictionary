@@ -1,10 +1,12 @@
 // Usage: node scripts/tab-hold-check.mjs [base=http://localhost:8000]
 // The phone's Dictionary tab under its unseen switch (App.tsx holdSwitch), both ways:
 //  android -- the Vibration API: held 450 ms, the menu opens at once (with a buzz);
-//  ios     -- no Vibration API: held, the tab rises; at the lift the switch is left on, so
-//             WebKit clicks it (and ticks), and that click opens the menu -- replayed here,
-//             as Chromium sends no click after a long press. A tap: the switch is off by the
-//             lift (no click, no tick) and the tab is gone to. A swipe: off, no menu.
+//  ios     -- no Vibration API: held, the switch keeps the finger near its off end (8px in);
+//             at 450 ms the menu opens and the switch jumps to have the finger near its on end,
+//             so the finger's next stir drags its thumb across: WebKit's tick. At the lift the
+//             switch is left on (the lift ticks if the finger never stirred). A tap: the
+//             switch is off by the lift (no click, no tick), the tab is gone to. A swipe: the
+//             finger stays near the off end all along (no tick), no menu, the bar turns.
 import { chromium } from 'playwright'
 const BASE = process.argv[2] ?? 'http://localhost:8000'
 const browser = await chromium.launch()
@@ -19,6 +21,13 @@ for (const mode of ['android', 'ios']) {
   await page.waitForSelector('.meaning')
   // What the switch is at each lift, once the app has had it (after React, before the browser's own).
   await page.evaluate(() => window.addEventListener('touchend', (e) => (window.__lift = e.target.disabled), false))
+  // Where the finger is along the switch as each move is handled (after the app, before WebKit).
+  await page.evaluate(() =>
+    window.addEventListener('touchmove', (e) => {
+      const r = document.querySelector('.tab-hold-switch').getBoundingClientRect()
+      window.__along = `${Math.round(e.touches[0].clientX - r.left)}/${Math.round(r.width)}`
+    }),
+  )
   const cdp = await ctx.newCDPSession(page)
   const tabs = page.locator('.phone-tabs > button')
   const at = async (i) => {
@@ -39,6 +48,8 @@ for (const mode of ['android', 'ios']) {
   }
   const selected = () => page.evaluate(() => [...document.querySelectorAll('.phone-tabs > button')].findIndex((b) => b.getAttribute('aria-selected') === 'true'))
   const menu = () => page.locator('.tab-menu').count()
+  // Where the finger is along the switch, as WebKit measures it (its layout, moves included).
+  const along = (x) => page.evaluate((x) => { const r = document.querySelector('.tab-hold-switch').getBoundingClientRect(); return `${Math.round(x - r.left)}/${Math.round(r.width)}` }, x)
   const dict = await at(1)
   console.log(mode, 'on the tab      ', await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y); return e.tagName + (e.hasAttribute('switch') ? '[switch]' : '') }, [dict.x, dict.y]))
   // A tap on Dictionary from Components: the tab, no menu, the switch off by the lift.
@@ -52,13 +63,18 @@ for (const mode of ['android', 'ios']) {
   await page.waitForTimeout(450)
   await touch(dict, 300)
   const pressed = await tabs.nth(1).getAttribute('data-press')
+  const early = await along(dict.x)
+  // A finger at rest still stirs: a fraction of a pixel.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: dict.x + 0.4, y: dict.y }] })
+  const stirred = await along(dict.x + 0.4)
   await page.waitForTimeout(350)
-  console.log(mode, 'holding         at 300ms', pressed, '| at 650ms', await tabs.nth(1).getAttribute('data-press'), '| menu', await menu())
+  console.log(mode, 'holding         300ms: pressed', pressed, 'finger at', early, 'stirred', stirred, '| 650ms: finger at', await along(dict.x + 0.4), 'menu', await menu())
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: dict.x, y: dict.y }] })
+  console.log(mode, 'stirs after     finger at', await along(dict.x), 'menu', await menu())
   await lift()
   const off = await page.evaluate(() => window.__lift)
-  if (mode === 'ios') await page.evaluate(() => document.querySelector('.tab-hold-switch').click()) // WebKit's click on the lift
   await page.waitForTimeout(250)
-  console.log(mode, 'lifted          switch off at lift', off, '| menu', await menu(), JSON.stringify(await page.locator('.tab-menu').innerText().catch(() => '')), '| tab', await selected())
+  console.log(mode, 'lifted          switch off at lift', off, '| back over the tab', await page.evaluate(() => document.querySelector('.tab-hold-switch').style.transform === ''), '| menu', await menu(), JSON.stringify(await page.locator('.tab-menu').innerText().catch(() => '')), '| tab', await selected())
   await page.locator('.tab-menu-item').tap().catch(() => {})
   await page.waitForTimeout(400)
   console.log(mode, 'picked          menu', await menu(), '| ui', JSON.stringify(await page.locator('.facts-title').first().innerText()))
@@ -66,10 +82,11 @@ for (const mode of ['android', 'ios']) {
   await page.waitForTimeout(450)
   const search = await at(0)
   await touch(dict, 300, search)
+  const swiped = await page.evaluate(() => window.__along)
   await page.waitForTimeout(500)
   await lift()
   await page.waitForTimeout(400)
-  console.log(mode, 'swipe           menu', await menu(), '| switch off at lift', await page.evaluate(() => window.__lift), '| tab', await selected())
+  console.log(mode, 'swipe           finger at', swiped, '| menu', await menu(), '| switch off at lift', await page.evaluate(() => window.__lift), '| tab', await selected())
   await cdp.detach()
   await ctx.close()
 }

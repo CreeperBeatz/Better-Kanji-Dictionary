@@ -2138,71 +2138,97 @@ export function App() {
     setTabMenu(false)
     setLang(otherLang(t.lang))
   }
-  // The menu opens with a tick in the hand. An iPhone ticks only as a finger
-  // lifts off a switch, which then clicks itself (WebKit's CheckboxInputType),
-  // never from a timer (haptics.ts). So a switch, unseen, lies over the tab
-  // and takes its touches. A tap: the switch is turned off before WebKit sees
-  // the lift, so it neither clicks nor ticks, and the tab is gone to. Held
-  // long enough (the tab says so), the lift clicks it, it ticks, and the
-  // click opens the menu. Where the Vibration API is (Android), the menu
-  // opens as the hold is long enough, buzzing.
-  const press = useRef<{ x: number; y: number; timer: number; ready: boolean; moved: boolean } | null>(null)
-  const [holding, setHolding] = useState<'press' | 'ready' | null>(null)
-  const liftedAt = useRef(0)
-  const tickBySwitch = typeof navigator.vibrate !== 'function'
+  // The menu opens with a tick in the hand. An iPhone ticks for a switch
+  // only (haptics.ts), and not from a timer: as a finger drags its thumb
+  // across, or as a lift clicks it (WebKit's CheckboxInputType). So a switch,
+  // unseen, lies over the tab and takes its touches. Where the finger is on
+  // it is measured on its layout, moves included: held, the switch is kept
+  // with the finger at its "off" end; as the menu opens it jumps to have the
+  // finger at its "on" end, and the finger's next stir, however slight, is a
+  // drag across: the tick. Should the finger not stir, the lift ticks
+  // instead (once: the drag already turned it). A tap: the switch is off
+  // before WebKit sees the lift, so it neither clicks nor ticks, and the tab
+  // is gone to. With the Vibration API (Android) the menu opens buzzing.
+  const press = useRef<{
+    x: number
+    y: number
+    timer: number
+    ready: boolean
+    moved: boolean
+    shift: number
+    width: number
+  } | null>(null)
+  const [holding, setHolding] = useState(false)
   // Off until the browser is done with this touch: no click, no tick.
   const quiet = (el: HTMLInputElement) => {
     el.disabled = true
     window.setTimeout(() => (el.disabled = false), 400)
   }
+  /** Where along the switch the finger is to be: near its off end, or, once held, its on end. */
+  const SWITCH_END = 8
+  const pin = (el: HTMLInputElement, x: number) => {
+    const p = press.current
+    if (!p) return
+    const at = p.ready && !p.moved ? p.width - SWITCH_END : SWITCH_END
+    // From where it is now, less its own move: the bar slides under a swipe.
+    const left = el.getBoundingClientRect().left - p.shift
+    p.shift = x - left - at
+    el.style.transform = `translateX(${p.shift}px)`
+    // Laid out now: WebKit measures the finger on the switch's layout as
+    // this touch is handled, without laying it out itself.
+    el.getBoundingClientRect()
+  }
   const holdSwitch = {
     start(e: React.TouchEvent<HTMLInputElement>) {
       if (e.touches.length !== 1) return
+      const el = e.currentTarget
       const { clientX: x, clientY: y } = e.touches[0]
+      el.style.transform = ''
       const p = {
         x,
         y,
         ready: false,
         moved: false,
+        shift: 0,
+        width: el.getBoundingClientRect().width,
         timer: window.setTimeout(() => {
           p.ready = true
-          setHolding('ready')
-          if (!tickBySwitch) {
-            haptic()
-            setTabMenu(true)
-          }
+          pin(el, p.x)
+          haptic()
+          setTabMenu(true)
         }, HOLD_MS),
       }
       press.current = p
-      setHolding('press')
+      pin(el, x)
+      setHolding(true)
     },
-    // A swipe along the bar: no hold, and no click at its end. The switch
-    // stays on while it moves: off, it would get the rest of the swipe no
-    // more, nor would the bar, which turns the tabs by it.
+    // Kept where it was put under a finger that stirs. A swipe along the bar
+    // is no hold and ends in no click; the switch stays on while it moves
+    // (off, it would get the rest of the swipe no more, nor would the bar).
     move(e: React.TouchEvent<HTMLInputElement>) {
       const p = press.current
       const t0 = e.touches[0]
-      if (!p || p.moved || !t0 || Math.hypot(t0.clientX - p.x, t0.clientY - p.y) <= 10) return
-      p.moved = true
-      window.clearTimeout(p.timer)
-      setHolding(null)
+      if (!p || !t0) return
+      if (!p.moved && Math.hypot(t0.clientX - p.x, t0.clientY - p.y) > 10) {
+        p.moved = true
+        window.clearTimeout(p.timer)
+        setHolding(false)
+      }
+      if (!p.ready || p.moved) p.x = t0.clientX
+      pin(e.currentTarget, t0.clientX)
     },
     end(e: React.TouchEvent<HTMLInputElement>) {
       const p = press.current
+      const el = e.currentTarget
       press.current = null
-      setHolding(null)
+      setHolding(false)
+      // Back over the tab once WebKit is done with the lift.
+      window.setTimeout(() => (el.style.transform = ''), 0)
       if (!p) return
       window.clearTimeout(p.timer)
-      if (p.ready && !p.moved && tickBySwitch && e.type === 'touchend') {
-        liftedAt.current = performance.now()
-        return
-      }
-      quiet(e.currentTarget)
+      if (p.ready && !p.moved && e.type === 'touchend') return
+      quiet(el)
       if (!p.ready && !p.moved && e.type === 'touchend') tapPhoneTab('dictionary')
-    },
-    // WebKit's click, from the lift after a hold: it has ticked; the menu.
-    click() {
-      if (performance.now() - liftedAt.current < 500) setTabMenu(true)
     },
   }
   // A tab tapped turns the same way, from where the page stands.
@@ -2718,7 +2744,6 @@ export function App() {
                   onTouchMove={holdSwitch.move}
                   onTouchEnd={holdSwitch.end}
                   onTouchCancel={holdSwitch.end}
-                  onClick={holdSwitch.click}
                   onContextMenu={(e) => e.preventDefault()}
                 />
               )}

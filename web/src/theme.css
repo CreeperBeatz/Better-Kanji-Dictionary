@@ -6101,23 +6101,9 @@ html {
   height: 100%;
 }
 
-/* Under the switch the tab gets no :active; pressed, it looks it. Held long
-   enough, its icon rises: let go for the menu. */
+/* Under the switch the tab gets no :active; pressed, it looks it. */
 .phone-tabs button[data-press] {
   opacity: 0.72;
-}
-
-.phone-tabs button .phone-tab-icon {
-  transition: transform 160ms var(--ease);
-}
-
-.phone-tabs button[data-press='ready'] {
-  opacity: 1;
-  color: var(--paper);
-}
-
-.phone-tabs button[data-press='ready'] .phone-tab-icon {
-  transform: translateY(-3px) scale(1.18);
 }
 
 /* The language it switches to, boxed. */
