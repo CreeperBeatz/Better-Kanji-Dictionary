@@ -288,9 +288,12 @@ function WordRowView({
   why,
   open,
   extra,
+  starSlot = false,
 }: {
   w: Word
   onWord: (w: Word) => void
+  /** A place for the star at the end of its head: in a kanji's words, where some have one. */
+  starSlot?: boolean
   why?: string | null
   /** Open beside the list right now. */
   open?: boolean
@@ -315,15 +318,16 @@ function WordRowView({
             )}
           </span>
           <Valency word={w} />
-          {/* In a kanji's words: one of its meaning's best examples. */}
-          {w.star && (
-            <span className="word-star" title={t('star')} aria-label={t('star')}>
-              ★
-            </span>
-          )}
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
           </span>
+          {/* In a kanji's words: one of its meaning's best examples. Its place
+              is kept on every row there, so the rows line up. */}
+          {starSlot && (
+            <span className="word-star" title={w.star ? t('star') : undefined} aria-label={w.star ? t('star') : undefined}>
+              {w.star && '★'}
+            </span>
+          )}
         </span>
         {w.inflection && w.inflection.length > 0 && (
           <span className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</span>
@@ -514,7 +518,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
             <CommonFilter on={common} onToggle={toggleCommon} t={t} />
           </div>
         }
-        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} />}
+        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} starSlot />}
       />
     )
 

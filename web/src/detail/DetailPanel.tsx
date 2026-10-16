@@ -250,12 +250,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </span>
         <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
         <Valency word={w} />
-        {/* One of its meaning's best examples: the words to know it by. */}
-        {w.star && (
-          <span className="vocab-star" title={t('star')} aria-label={t('star')}>
-            ★
-          </span>
-        )}
+        {/* One of its meaning's best examples: the words to know it by. Its
+            place is kept on every row, so the rows line up. */}
+        <span className="vocab-star" title={w.star ? t('star') : undefined} aria-label={w.star ? t('star') : undefined}>
+          {w.star && '★'}
+        </span>
       </button>
     </li>
   )
