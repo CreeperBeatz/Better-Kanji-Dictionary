@@ -1,7 +1,6 @@
 // Usage: node scripts/card-lang-check.mjs [base=http://localhost:8000] [shots=C:/tmp/shots]
-// One language for the app: on a phone, Dictionary held down opens a menu whose one item
-// turns the app, interface
-// and dictionary, to the other language -- the same setting as the profile's switch,
+// One language for the app: on a phone, Dictionary tapped on Dictionary opens a menu whose
+// one item turns the app, interface and dictionary, to the other language -- the same setting as the profile's switch,
 // remembered; T does it on a desktop.
 import { chromium } from 'playwright'
 const BASE = process.argv[2] ?? 'http://localhost:8000'
@@ -21,27 +20,16 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
   const state = async () => JSON.stringify({ head: await text(page, HEAD), ui: await text(page, '.facts-title') })
   console.log(name, 'start           ', await state(), '| label in head', await page.locator('.card-lang').count())
   if (mobile) {
-    const cdp = await ctx.newCDPSession(page)
-    const tab = page.locator('.phone-tabs > button').nth(1)
-    const hold = async (ms) => {
-      const bb = await tab.boundingBox()
-      const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 }]
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt })
-      await page.waitForTimeout(ms)
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-      await page.waitForTimeout(400)
-    }
     const tapAt = async (loc) => {
       const bb = await loc.boundingBox()
       await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2)
       await page.waitForTimeout(400)
     }
+    const tab = page.locator('.phone-tabs > button').nth(1)
     const menu = () => page.locator('.tab-menu').count()
-    await hold(80)
-    console.log(name, 'tap             -> menu', await menu())
-    // The switch over the tab, tap and hold both ways: scripts/tab-hold-check.mjs.
-    await hold(650)
-    console.log(name, 'held            -> menu', await menu(), JSON.stringify(await text(page, '.tab-menu')))
+    // The switch over the tab, both ways, swipes too: scripts/tab-switch-check.mjs.
+    await tapAt(tab)
+    console.log(name, 'tap, on it      -> menu', await menu(), JSON.stringify(await text(page, '.tab-menu')))
     await page.screenshot({ path: `${SHOTS}/dict-${name}-tab-menu.png`, clip: { x: 0, y: viewport.height - 160, width: viewport.width, height: 160 } })
     await tapAt(page.locator('.tab-menu-item'))
     await page.waitForTimeout(200)
@@ -51,12 +39,11 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     await page.goto(`${BASE}/word/1588410`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(600)
     console.log(name, 'reload, a word  ', JSON.stringify(await text(page, HEAD)))
-    await hold(650)
-    console.log(name, 'held again      -> ', JSON.stringify(await text(page, '.tab-menu')))
+    await tapAt(tab)
+    console.log(name, 'tap again       -> ', JSON.stringify(await text(page, '.tab-menu')))
     await tapAt(page.locator('.tab-menu-item'))
     await page.waitForTimeout(200)
     console.log(name, 'picked          -> ', JSON.stringify(await text(page, HEAD)))
-    await cdp.detach()
   } else {
     await page.keyboard.press('t')
     await page.waitForTimeout(200)

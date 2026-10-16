@@ -5906,12 +5906,11 @@ html {
 
 /* ---------------------------------------------------------------- press and hold (touch) */
 
-/* A long press shows a card, not the browser's selection or callout; on
-   Dictionary, a menu. */
+/* A long press shows a card, not the browser's selection or callout. */
 .graph-svg,
 .map-canvas,
 .phone-tabs button,
-.tab-hold-switch {
+.tab-switch {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -6064,7 +6063,7 @@ html {
   color: var(--paper);
 }
 
-/* Dictionary held down: the app in the other language, over the tab. */
+/* Dictionary tapped on Dictionary: the app in the other language, over the tab. */
 .tab-menu {
   bottom: calc(100% + 8px);
   left: calc(100% / var(--n) * (var(--i) + 0.5));
@@ -6093,18 +6092,14 @@ html {
   opacity: 0;
 }
 
-/* Over Dictionary, taking its touches (App.tsx holdSwitch). */
-.tab-hold-switch {
+/* Over Dictionary, on it, taking the tap that opens its menu (App.tsx tabSwitch). */
+.tab-switch {
   top: 0;
   left: calc(100% / var(--n) * var(--i));
   width: calc(100% / var(--n));
   height: 100%;
 }
 
-/* Under the switch the tab gets no :active; pressed, it looks it. */
-.phone-tabs button[data-press] {
-  opacity: 0.72;
-}
 
 /* The language it switches to, boxed. */
 .graph-menu .tab-menu-lang {
