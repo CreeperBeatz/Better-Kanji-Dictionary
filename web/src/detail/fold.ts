@@ -14,7 +14,7 @@ import { reducedMotion } from '../media'
 const FOLD_MS = 150
 
 /** The box `el` scrolls in: the nearest one up that scrolls. */
-function scrollerOf(el: HTMLElement): HTMLElement | null {
+export function scrollerOf(el: HTMLElement): HTMLElement | null {
   for (let n = el.parentElement; n; n = n.parentElement) {
     const y = getComputedStyle(n).overflowY
     if ((y === 'auto' || y === 'scroll') && n.scrollHeight > n.clientHeight) return n
