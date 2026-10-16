@@ -8,7 +8,7 @@ import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
-import { strings, useLang, type Translate } from './i18n'
+import { getLang, setLang, strings, useLang, type Lang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { loadNotes } from './detail/NoteContent'
@@ -262,7 +262,8 @@ const nearEdge = (x: number) => x < EDGE || x > window.innerWidth - EDGE
  */
 function movesItself(el: Element | null, within: Element): boolean {
   for (let at = el; at && at !== within; at = at.parentElement) {
-    if (at.matches('input, textarea, canvas, [contenteditable], .excalidraw')) return true
+    // Not the switch over the Dictionary tab: it is the tab, to the finger.
+    if (at.matches('input:not(.tab-switch), textarea, canvas, [contenteditable], .excalidraw')) return true
     const x = getComputedStyle(at).overflowX
     if ((x === 'auto' || x === 'scroll') && at.scrollWidth > at.clientWidth + 1) return true
   }
@@ -330,6 +331,10 @@ const RISE_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
 const RISE_MS = 400
 /** How long a tab tapped takes to turn. */
 const TAP_TURN_MS = 260
+
+/** The other language, and each language by its own name, for the Dictionary tab's menu. */
+const otherLang = (lang: Lang): Lang => (lang === 'bg' ? 'en' : 'bg')
+const LANG_NAME: Record<Lang, string> = { en: 'English', bg: 'Български' }
 
 /** Whether pages slide at all: on a phone, unless the system asks for less motion. */
 const pagesSlide = () => matches(MOBILE) && !reducedMotion()
@@ -1180,6 +1185,8 @@ export function App() {
       if (document.querySelector('.overlay')) return
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
+      // The app in the other language, and back, as the switch in the profile does.
+      if (e.key === 't' || e.key === 'T') setLang(otherLang(getLang()))
       if ('dDfF'.includes(e.key)) setView('focus')
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
@@ -1574,7 +1581,9 @@ export function App() {
       sc.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(frame)
     }
-  }, [folding, shownTop, searchShown, onStage, foldHead])
+    // Measured again in another language: the head may keep its height
+    // while its lines move inside it.
+  }, [folding, shownTop, searchShown, onStage, foldHead, t.lang])
   // A page's associations, from beside its first title: a page of their own
   // -- on a phone, a card -- over its dictionary, back from which is the
   // dictionary again.
@@ -2096,9 +2105,66 @@ export function App() {
       </button>
     )
   }
-  // A tab tapped turns the same way, from where the page stands.
+  // Dictionary tapped again, on Dictionary, opens a menu over it: the app in
+  // the other language, the same switch as the profile's.
+  const [tabMenu, setTabMenu] = useState(false)
+  const tabMenuRef = useRef<HTMLDivElement>(null)
+  useEffect(() => setTabMenu(false), [subjectKey])
+  useEffect(() => {
+    if (!tabMenu) return
+    const off = (e: PointerEvent) => {
+      // Not the tap on Dictionary again: that shuts it as it opened it.
+      const at = e.target as Element
+      if (!tabMenuRef.current?.contains(at) && !at.closest('.tab-switch')) setTabMenu(false)
+    }
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setTabMenu(false)
+    document.addEventListener('pointerdown', off, true)
+    window.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('pointerdown', off, true)
+      window.removeEventListener('keydown', esc)
+    }
+  }, [tabMenu])
+  function pickLang() {
+    setTabMenu(false)
+    setLang(otherLang(t.lang))
+  }
+  // It opens with a tick in the hand. Android has the Vibration API; Safari
+  // has none, but an iPhone ticks as a finger's tap toggles a switch
+  // (<input type="checkbox" switch>) -- not a script's click (iOS 26.5),
+  // nor anything on a timer. So on Dictionary an unseen switch lies over its
+  // tab and takes the tap: WebKit ticks as it clicks it, and the click opens
+  // the menu. A swipe begun on it is no tap: the switch is off by its end, so
+  // that WebKit, which clicks a switch at any lift, neither clicks nor ticks.
+  const swipeOnSwitch = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const tabSwitch = {
+    start(e: React.TouchEvent<HTMLInputElement>) {
+      const t0 = e.touches[0]
+      swipeOnSwitch.current = t0 ? { x: t0.clientX, y: t0.clientY, moved: false } : null
+    },
+    move(e: React.TouchEvent<HTMLInputElement>) {
+      const p = swipeOnSwitch.current
+      const t0 = e.touches[0]
+      if (p && t0 && Math.hypot(t0.clientX - p.x, t0.clientY - p.y) > 10) p.moved = true
+    },
+    end(e: React.TouchEvent<HTMLInputElement>) {
+      const p = swipeOnSwitch.current
+      swipeOnSwitch.current = null
+      if (!p?.moved && e.type === 'touchend') return
+      const el = e.currentTarget
+      el.disabled = true
+      window.setTimeout(() => (el.disabled = false), 400)
+    },
+    click() {
+      if (!tabMenu) navigator.vibrate?.(10)
+      setTabMenu((open) => !open)
+    },
+  }
+  // A tab tapped turns the same way, from where the page stands. Dictionary,
+  // on it, opens its menu (a keyboard's way here; a finger's is tabSwitch).
   function tapPhoneTab(to: PhoneTab) {
     if (to !== phoneTab) turn(to, 0, TAP_TURN_MS)
+    else if (to === 'dictionary') setTabMenu((open) => !open)
   }
   useLayoutEffect(() => {
     const how = turning.current
@@ -2596,6 +2662,38 @@ export function App() {
               <span className="phone-tab-mark" aria-hidden />
               {/* On Dictionary, how many cards are open. */}
               {PHONE_TABS.map((p) => phoneTabButton(p))}
+              {/* On Dictionary, over its tab, taking the tap that opens its menu: see tabSwitch. */}
+              {phoneTab === 'dictionary' && !tabOff('dictionary') && (
+                <input
+                  type="checkbox"
+                  className="tab-switch"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
+                  {...{ switch: '' }}
+                  onTouchStart={tabSwitch.start}
+                  onTouchMove={tabSwitch.move}
+                  onTouchEnd={tabSwitch.end}
+                  onTouchCancel={tabSwitch.end}
+                  onClick={tabSwitch.click}
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+              )}
+              {tabMenu && (
+                <div
+                  ref={tabMenuRef}
+                  className="graph-menu tab-menu"
+                  role="menu"
+                  style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
+                >
+                  <button className="tab-menu-item" role="menuitem" lang={otherLang(t.lang)} onClick={pickLang}>
+                    <span className="tab-menu-lang" aria-hidden="true">
+                      {otherLang(t.lang) === 'bg' ? 'БГ' : 'EN'}
+                    </span>
+                    {LANG_NAME[otherLang(t.lang)]}
+                  </button>
+                </div>
+              )}
             </nav>
           )}
         </aside>

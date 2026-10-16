@@ -5908,7 +5908,8 @@ html {
 
 /* A long press shows a card, not the browser's selection or callout. */
 .graph-svg,
-.map-canvas {
+.map-canvas,
+.tab-switch {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -6059,6 +6060,51 @@ html {
 .hold-card dd.yomi {
   font-family: var(--mincho);
   color: var(--paper);
+}
+
+/* Dictionary tapped on Dictionary: the app in the other language, over the tab. */
+.tab-menu {
+  bottom: calc(100% + 8px);
+  left: calc(100% / var(--n) * (var(--i) + 0.5));
+  transform: translateX(-50%);
+}
+
+/* Its one item: a row. Inside the tab bar, but not a tab. */
+.phone-tabs .tab-menu-item {
+  flex: none;
+  flex-direction: row;
+  gap: 10px;
+  padding: 10px 14px;
+  color: var(--paper);
+  font-size: calc(14px * var(--type));
+}
+
+.phone-tabs .tab-menu-item:active {
+  background: var(--ai-wash);
+}
+
+/* On Dictionary, a real switch, unseen, over its tab, taking the tap that
+   opens its menu: an iPhone ticks for a finger on one (App.tsx tabSwitch).
+   Its own look stays under the zero opacity: stripped of it, it ticks not. */
+.tab-switch {
+  position: absolute;
+  top: 0;
+  left: calc(100% / var(--n) * var(--i));
+  width: calc(100% / var(--n));
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+
+/* The language it switches to, boxed. */
+.graph-menu .tab-menu-lang {
+  color: var(--ai);
+  padding: 1px 4px;
+  border: 1px solid var(--ai-deep);
+  border-radius: 3px;
+  font-size: calc(11px * var(--type));
+  letter-spacing: 0.04em;
+  line-height: 1.2;
 }
 
 @media (prefers-reduced-motion: reduce) {
