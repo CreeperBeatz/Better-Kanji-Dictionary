@@ -60,6 +60,32 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     await page.waitForTimeout(150)
     console.log(name, 'T ->', await text(page, '.card-slot > .page-card > .page-head .detail-meanings'))
   }
+  if (mobile) {
+    // Dictionary held down turns the card; from Components it goes to the
+    // card too; a short tap does not turn it.
+    const cdp = await ctx.newCDPSession(page)
+    const tab = page.locator('.phone-tabs button').filter({ hasText: /Dictionary/ })
+    const hold = async (ms) => {
+      const bb = await tab.boundingBox()
+      const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 }]
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt })
+      await page.waitForTimeout(ms)
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+      await page.waitForTimeout(400)
+    }
+    const pressed = () => page.locator('.card-slot > .page-card > .page-head .card-lang').getAttribute('aria-pressed')
+    await hold(80)
+    console.log(name, 'dictionary tap   -> pressed', await pressed())
+    await hold(650)
+    console.log(name, 'dictionary held  -> pressed', await pressed(), '| head', await text(page, '.card-slot > .page-card > .page-head .detail-meanings'))
+    await page.locator('.phone-tabs button').filter({ hasText: /Components|Graph|Parts/ }).first().click()
+    await page.waitForTimeout(500)
+    const selected = () => page.locator('.phone-tabs button[aria-selected="true"]').innerText()
+    console.log(name, 'on tab', JSON.stringify(await selected()))
+    await hold(650)
+    console.log(name, 'held from there  -> tab', JSON.stringify(await selected()), 'pressed', await pressed())
+    await cdp.detach()
+  }
   // A word, flipped; then a kanji opened from it is in the interface's language.
   await page.goto(`${BASE}/word/1588410`, { waitUntil: 'networkidle' })
   await page.waitForSelector('.card-lang:not([disabled])')

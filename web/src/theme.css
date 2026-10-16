@@ -460,8 +460,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .card-lang {
   position: relative;
-  padding: 0;
-  border: 0;
+  padding: 1px 4px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 3px;
   background: none;
   color: var(--muted);
   font-family: var(--gothic);
@@ -478,12 +479,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   inset: -12px -8px;
 }
 
-/* On: in the accent, underlined, at the same width, so nothing moves. */
+/* Boxed, so it reads as a switch, not as the word's own language. On: in
+   the accent, at the same size, so nothing moves. */
 .card-lang[aria-pressed='true'] {
+  border-color: var(--ai-deep);
+  background: var(--ai-wash);
   color: var(--ai);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
 }
 
 .card-lang:disabled {
@@ -493,6 +494,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 @media (hover: hover) {
   .card-lang:not(:disabled):hover {
     color: var(--paper);
+    border-color: var(--ai-deep);
   }
 }
 
@@ -5952,9 +5954,11 @@ html {
 
 /* ---------------------------------------------------------------- press and hold (touch) */
 
-/* A long press shows a card, not the browser's selection or callout. */
+/* A long press shows a card, not the browser's selection or callout; on
+   Dictionary it turns the card's language. */
 .graph-svg,
-.map-canvas {
+.map-canvas,
+.phone-tabs button {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;

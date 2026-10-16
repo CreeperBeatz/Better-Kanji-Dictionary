@@ -331,6 +331,9 @@ const RISE_MS = 400
 /** How long a tab tapped takes to turn. */
 const TAP_TURN_MS = 260
 
+/** How long a press on Dictionary is held to turn the card's language. */
+const HOLD_MS = 450
+
 /** Whether pages slide at all: on a phone, unless the system asks for less motion. */
 const pagesSlide = () => matches(MOBILE) && !reducedMotion()
 /** Whether the browser animates a change itself, photographing the page it leaves. */
@@ -2105,8 +2108,20 @@ export function App() {
     input.setSelectionRange(0, input.value.length)
   }
   function phoneTabButton(p: PhoneTab) {
+    const hold = p === 'dictionary' ? holdDictionary : undefined
     return (
-      <button key={p} role="tab" aria-selected={phoneTab === p} disabled={tabOff(p)} onClick={() => tapPhoneTab(p)}>
+      <button
+        key={p}
+        role="tab"
+        aria-selected={phoneTab === p}
+        disabled={tabOff(p)}
+        onClick={() => !held(p) && tapPhoneTab(p)}
+        onTouchStart={hold?.start}
+        onTouchMove={hold?.move}
+        onTouchEnd={hold?.end}
+        onTouchCancel={hold?.end}
+        onContextMenu={hold && ((e) => e.preventDefault())}
+      >
         <span className="phone-tab-icon">
           <PhoneTabIcon tab={p} />
           {p === 'dictionary' && openCards > 1 && (
@@ -2119,6 +2134,37 @@ export function App() {
       </button>
     )
   }
+  // Dictionary held down turns the open card to the other language, as the
+  // chip in its head does, and goes to it from another tab. The tap the
+  // press ends in does nothing more.
+  const press = useRef<{ x: number; y: number; timer: number } | null>(null)
+  const heldAt = useRef(0)
+  const held = (p: PhoneTab) => p === 'dictionary' && performance.now() - heldAt.current < 800
+  const holdDictionary = {
+    start(e: React.TouchEvent) {
+      if (!flipCard.current || e.touches.length !== 1) return
+      const { clientX: x, clientY: y } = e.touches[0]
+      const timer = window.setTimeout(() => {
+        press.current = null
+        heldAt.current = performance.now()
+        flipCard.current?.()
+        navigator.vibrate?.(10)
+        if (phoneTabRef.current !== 'dictionary') tapPhoneTab('dictionary')
+      }, HOLD_MS)
+      press.current = { x, y, timer }
+    },
+    move(e: React.TouchEvent) {
+      const p = press.current
+      const t0 = e.touches[0]
+      if (p && t0 && Math.hypot(t0.clientX - p.x, t0.clientY - p.y) > 10) holdDictionary.end()
+    },
+    end() {
+      if (press.current) window.clearTimeout(press.current.timer)
+      press.current = null
+    },
+  }
+  const phoneTabRef = useRef(phoneTab)
+  phoneTabRef.current = phoneTab
   // A tab tapped turns the same way, from where the page stands.
   function tapPhoneTab(to: PhoneTab) {
     if (to !== phoneTab) turn(to, 0, TAP_TURN_MS)
