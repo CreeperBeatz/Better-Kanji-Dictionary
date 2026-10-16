@@ -185,6 +185,10 @@ export interface Word {
   inflection?: string[]
   /** On a kanji's page: which kana of `reading` are that kanji's, [from, to): じょう in じょうしょう. */
   mark?: [number, number] | null
+  /** In all the words with a kanji: how the word reads it -- kun, on, or a special reading (今日 きょう). */
+  lane?: 'kun' | 'on' | 'special'
+  /** And the reading it gives the kanji (じょう); none for a special reading. */
+  as?: string | null
 }
 
 /** One of a kanji's readings on its page (server: search.kanji_readings). */

@@ -679,6 +679,25 @@ def _marked(char: str, words: dict[int, dict]) -> dict[int, dict]:
     return words
 
 
+def _laned(char: str, words: dict[int, dict]) -> dict[int, dict]:
+    """The words, each with how it reads `char`, for the meaning cards' lanes: `lane`
+    kun, on, or special (its kana go over more than the kanji: 今日 きょう), and `as`,
+    the reading (じょう). Left as they are on a database from before the readings stage."""
+    if not words or not _has_readings():
+        return words
+    row = query_one("SELECT on_yomi FROM kanji WHERE char = ?", (char,))
+    on = {r.strip("-") for r in json.loads((row and row["on_yomi"]) or "[]")}
+    ids = list(words)
+    for r in query(
+        f"SELECT word_id, reading FROM word_reading WHERE char = ? AND main = 1 AND word_id IN ({','.join('?' * len(ids))})",
+        (char, *ids),
+    ):
+        w = words[r["word_id"]]
+        w["lane"] = "special" if r["reading"] is None else "on" if r["reading"] in on else "kun"
+        w["as"] = r["reading"]
+    return words
+
+
 @router.get("/words-with/{char}")
 def words_with(
     char: str,
@@ -717,7 +736,7 @@ def words_with(
         for wid in ids:
             if wid in placed:
                 in_group.setdefault(placed[wid], []).append(wid)
-        fetched = _marked(char, _fetch_words([w for ws in in_group.values() for w in ws]))
+        fetched = _laned(char, _marked(char, _fetch_words([w for ws in in_group.values() for w in ws])))
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
             words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
             if words:  # a group with none of the words shown (common only) is left out
@@ -805,11 +824,14 @@ def reading_words(char: str) -> dict:
 
 
 # At most: common words beside each reading, special readings, words in each
-# part of a meaning, and words beside a reading a meaning has only now and then.
+# part of a meaning (the card shows a few and opens more of them in place),
+# words beside a reading a meaning has only now and then, and words where the
+# kanji is there for its sound.
 READING_EXAMPLES = 2
 SPECIAL_READINGS = 12
-LANE_WORDS = 5
+LANE_WORDS = 26
 ALSO_WORDS = 2
+SOUND_WORDS = 5
 
 
 # Words too common in the meanings' wording to say two meanings are alike.
@@ -932,10 +954,12 @@ def kanji_page(char: str) -> dict:
     on_readings = {r.strip("-") for r in json.loads((on_row and on_row["on_yomi"]) or "[]")}
 
     def pick(ids: list[int], first: list[int], n: int = LANE_WORDS) -> list[int]:
-        """`first` that are among `ids`, then the key words; else the commonest. At most `n`."""
+        """`first` that are among `ids`, then the key words, then the rest, commonest
+        first: what the card shows first leads. At most `n`."""
         chosen = [w for w in dict.fromkeys(first) if w in ids]
         chosen += [w for w in ids if w not in chosen and _key_word(words[w])]
-        return (chosen or ids[:1])[:n]
+        chosen += [w for w in ids if w not in chosen]
+        return chosen[:n]
 
     # Kanji easy to mix up, by the reading they share, each with the usage card
     # (異字同訓) for that reading, where there is one; a card can cover two
@@ -1051,7 +1075,7 @@ def kanji_page(char: str) -> dict:
         })
     sound = [w for w in in_group.get(review.CATCH_ALL, []) if w not in special_ids]
     if sound:
-        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [])]}
+        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [], SOUND_WORDS)]}
     out["hero"], out["heroBg"] = extras.get("hero"), extras.get("heroBg")
     out["link"], out["linkBg"] = extras.get("link"), extras.get("linkBg")
     out["mixups"] = [m for m in mixups if m["reading"] not in claimed]

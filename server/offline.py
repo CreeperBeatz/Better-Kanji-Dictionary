@@ -64,7 +64,8 @@ from .db import DB_PATH
 FORMAT = 6
 # Bump when a kanji page's shape changes (search.kanji_page): rebuilds pages.json alone.
 # 2: each mix-up's kanji with its meaning on that reading.
-PAGES_FORMAT = 2
+# 3: up to 26 words a reading on each meaning, the rest after the key words.
+PAGES_FORMAT = 3
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"

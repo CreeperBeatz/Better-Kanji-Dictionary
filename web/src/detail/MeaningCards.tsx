@@ -7,7 +7,9 @@
  * the kanji close to it in meaning (≈), and the kanji easy to mix up on one
  * of its readings (!), with the 異字同訓 card that tells them apart, open.
  *
- * A few words each way, not all: "more words" has the rest. Each card's
+ * A few words at first, shared between kun and on by how many each has
+ * (detail/lanes.ts); "show more" adds more in place, and past twenty the
+ * card opens all the kanji's words at itself. Each card's
  * title holds to the top while the card is read, so the page says where
  * you are without reading back. A card folds to its title and what it
  * says, its words and the rest under it; "fold all" makes every card that
@@ -26,11 +28,10 @@ import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, 
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
+import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
 import { ReadingsLine, SpecialReadings } from './Readings'
+import { WordLanes } from './WordLanes'
 import { warmKanji } from '../warm'
-
-/** At most this many kun words, and on words, on a meaning's card. */
-const LANE_WORDS = 3
 
 /** Remembers "fold all": '1' while every card is folded. */
 const FOLD_KEY = 'meanings-folded'
@@ -43,44 +44,19 @@ function rememberedFold(): boolean {
   }
 }
 
-/**
- * Up to `n` of the lists' items, taken a round at a time, so that each list
- * gives one before any gives two -- every on reading keeps a word -- and
- * back in their lists' order.
- */
-function fewest<T>(lists: T[][], n: number): T[] {
-  const take = lists.map(() => 0)
-  let left = Math.max(n, lists.length)
-  for (let round = 0; left > 0; round++) {
-    let any = false
-    lists.forEach((l, i) => {
-      if (left > 0 && l.length > round) {
-        take[i]++
-        left--
-        any = true
-      }
-    })
-    if (!any) break
-  }
-  return lists.flatMap((l, i) => l.slice(0, take[i]))
-}
-
 const S = strings(
   {
     meanings: 'Meanings',
     foldAll: 'Fold all',
     openAll: 'Open all',
-    on: 'On',
-    kun: 'Kun',
-    exceptions: 'Exceptions',
-    exceptionsHint: 'read as one word, not kanji by kanji',
     similar: 'Synonyms',
     withMeaning: 'With the meaning: {m}',
     openAt: 'Open {char} at this meaning',
     mixups: 'Easy to mix up',
     mixupsHint: 'Other kanji with the same kun reading.',
-    more_one: '{n} more word',
-    more_other: '{n} more words',
+    showMore: 'Show {n} more',
+    all_one: 'All {n} word',
+    all_other: 'All {n} words',
     sound: 'For its sound only',
     soundHint: 'In these words the kanji brings no meaning.',
   },
@@ -88,17 +64,14 @@ const S = strings(
     meanings: 'Значения',
     foldAll: 'Свийте всички',
     openAll: 'Разгънете всички',
-    on: 'Он',
-    kun: 'Кун',
-    exceptions: 'Изключения',
-    exceptionsHint: 'четат се като цяла дума, не канджи по канджи',
     similar: 'Синоними',
     withMeaning: 'Със значение: {m}',
     openAt: 'Отворете {char} на това значение',
     mixups: 'Лесно се бъркат',
     mixupsHint: 'Други канджи със същото кун четене.',
-    more_one: 'още {n} дума',
-    more_other: 'още {n} думи',
+    showMore: 'Покажете още {n}',
+    all_one: 'Всичките {n} дума',
+    all_other: 'Всичките {n} думи',
     sound: 'Само заради звука',
     soundHint: 'В тези думи канджито не внася значение.',
   },
@@ -119,7 +92,8 @@ export function Meanings({
   onYomi: string[]
   kunYomi: string[]
   onKanji: (c: string) => void
-  onWordsWith?: () => void
+  /** All the kanji's words, at this meaning. */
+  onWordsWith?: (meaning: string) => void
   /** The page's word row, so words look the same everywhere on it. */
   row: (w: Word) => ReactNode
 }) {
@@ -229,7 +203,8 @@ function Meaning({
   onToggle: () => void
   self: KanjiLite
   onKanji: (c: string) => void
-  onWordsWith?: () => void
+  /** All the kanji's words, at this meaning. */
+  onWordsWith?: (meaning: string) => void
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
@@ -266,49 +241,34 @@ function MeaningBody({
   m: KanjiMeaning
   self: KanjiLite
   onKanji: (c: string) => void
-  onWordsWith?: () => void
+  onWordsWith?: (meaning: string) => void
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
   const t = S(lang)
-  const kun = m.kun?.words.slice(0, LANE_WORDS) ?? []
-  const on = fewest(
-    m.on.map((o) => o.words),
-    LANE_WORDS,
-  )
+  // A few words at first, shared between kun and on by how many each has; more in place.
+  const [budget, setBudget] = useState(FIRST_WORDS)
+  const lists = [m.kun?.words ?? [], ...m.on.map((o) => o.words)]
+  const [kun, ...ons] = share(lists, budget)
+  const on = ons.flat()
   // One word for a reading it has only now and then.
   const now = m.also.flatMap((a) => a.words.slice(0, 1))
-  const more = m.total - kun.length - on.length - now.length - m.exceptions.length
+  const unseen = lists.reduce((n, l) => n + l.length, 0) - kun.length - on.length
+  const shown = kun.length + on.length + now.length + m.exceptions.length
   return (
     <>
-
-      {/* Its words by how they read the kanji; each word says its own reading. */}
-      {kun.length > 0 && (
-        <div className="lane">
-          <p className="lane-kind">{t('kun')}</p>
-          <ul className="meaning-words">{kun.map(row)}</ul>
-        </div>
-      )}
-      {on.length + now.length > 0 && (
-        <div className="lane">
-          <p className="lane-kind">{t('on')}</p>
-          <ul className="meaning-words">{on.map(row)}</ul>
-          {/* A reading it has in only a word or two: faded, so it does not read as a rule. */}
-          {now.length > 0 && <ul className="meaning-words lane-now">{now.map(row)}</ul>}
-        </div>
-      )}
-      {m.exceptions.length > 0 && (
-        <div className="lane">
-          <p className="lane-kind" title={t('exceptionsHint')}>
-            {t('exceptions')}
-          </p>
-          <ul className="meaning-words">{m.exceptions.map(row)}</ul>
-        </div>
-      )}
-      {more > 0 && onWordsWith && (
-        <button className="clear meaning-more" onClick={onWordsWith}>
-          {t.plural('more', more)} →
+      <WordLanes kun={kun} on={on} now={now} exceptions={m.exceptions} row={row} />
+      {unseen > 0 && budget < OPEN_UPTO ? (
+        <button className="clear meaning-more" onClick={() => setBudget(budget + MORE_WORDS)}>
+          {t('showMore', { n: Math.min(MORE_WORDS, unseen) })}
         </button>
+      ) : (
+        m.total > shown &&
+        onWordsWith && (
+          <button className="clear meaning-more" onClick={() => onWordsWith(m.id)}>
+            {t.plural('all', m.total)} →
+          </button>
+        )
       )}
       {m.similar.length > 0 && (
         <section className="aside-block meaning-similar">

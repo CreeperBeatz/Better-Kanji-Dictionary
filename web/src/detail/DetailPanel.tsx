@@ -14,6 +14,8 @@ import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency } from '../search/Valency'
 import { MarkedReading } from '../search/MarkedReading'
+import { newsRank } from '../search/Results'
+import { focusWordsNext } from './meaningFocus'
 import { Readings, SpecialReadings } from './Readings'
 import { Meanings } from './MeaningCards'
 import { warmWord } from '../warm'
@@ -47,6 +49,8 @@ const S = strings(
     shape: 'a shape: “{name}”',
     shapeNone: 'no meaning of its own',
     openEntry: 'Open this entry',
+    news: 'top {n}',
+    newsTitle: 'Among the {n} most frequent words',
   },
   {
     grade: 'учи се в {n} клас',
@@ -76,6 +80,8 @@ const S = strings(
     shape: 'форма: „{name}“',
     shapeNone: 'няма свое значение',
     openEntry: 'Отворете тази статия',
+    news: 'топ {n}',
+    newsTitle: 'Сред {n}-те най-чести думи',
   },
 )
 
@@ -247,6 +253,12 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </span>
         <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
         <Valency word={w} />
+        {/* How common it is, as the search rows say it: top 4k. */}
+        {w.nf && (
+          <span className="vocab-rank" title={t('newsTitle', { n: (w.nf * 500).toLocaleString(lang) })}>
+            {t('news', { n: newsRank(w.nf) })}
+          </span>
+        )}
       </button>
     </li>
   )
@@ -340,7 +352,13 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             onYomi={n.onYomi}
             kunYomi={n.kunYomi}
             onKanji={onKanji}
-            onWordsWith={onWordsWith && (() => onWordsWith(data.focus.char))}
+            onWordsWith={
+              onWordsWith &&
+              ((meaning: string) => {
+                focusWordsNext(data.focus.char, meaning)
+                onWordsWith(data.focus.char)
+              })
+            }
             row={vocabRow}
           />
         ) : (

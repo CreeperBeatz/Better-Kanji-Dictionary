@@ -5,13 +5,21 @@
  * accepted the kanji's meaning groups and placed the word. The kanji page
  * shows only the most common few and opens this for the rest.
  *
+ * Each meaning is a card as on the kanji's page, with the same number: its
+ * words by how they read the kanji, kun, on, then the special readings. Opened
+ * from one card's "all words", that card is open and in view, the others folded.
+ *
  * Words not placed yet follow the groups, common first, a page at a time;
  * before any group is accepted they are the whole list. Offline, the device
  * knows only the kanji's most common words, so those are shown, and said to be.
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
+import { share } from '../detail/lanes'
+import { peekWordsFocus, takeWordsFocus } from '../detail/meaningFocus'
+import { WordLanes } from '../detail/WordLanes'
 import { strings, useLang } from '../i18n'
+import { reducedMotion } from '../media'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 import { toggled } from '../sets'
 import { warmKanji } from '../warm'
@@ -45,42 +53,85 @@ const S = strings(
   },
 )
 
-// Words shown per group at first, and how many more each "more" shows.
-const FIRST = 8
+// Words shown per card at first, and how many more each "more" shows.
+const FIRST = 20
 const MORE = 20
+// The words in no group: the first page asked for, then a page a "more".
+const REST_FIRST = 8
 const REST = 'rest'
-
-/** A meaning group's title bar, which folds it: a chevron, > when folded, pointing down when open. */
-function GroupToggle({
-  open,
-  onToggle,
-  label,
-  n,
-  children,
-}: {
-  open: boolean
-  onToggle: () => void
-  label: ReactNode
-  /** How many words it holds. */
-  n: number
-  /** After the count: a note, a hint. */
-  children?: ReactNode
-}) {
-  return (
-    <button className="meaning-group-toggle" aria-expanded={open} onClick={onToggle}>
-      <svg className="meaning-group-caret" viewBox="0 0 12 12" aria-hidden>
-        <path d="M4 2.5 7.5 6 4 9.5" />
-      </svg>
-      <span className="meaning-group-label">{label}</span>
-      <span className="hint">{n}</span>
-      {children}
-    </button>
-  )
-}
+// How long the card it was opened at waits for the page to stop moving before it comes into view, in ms.
+const RISE_WAIT = 900
 
 /** What the list asks for first, kept by the api: for opening it whole (App.tsx warm). */
 export function wordsWithKey(char: string, common: boolean): string {
-  return `${char}|${common ? 'true' : 'false'}|${FIRST}`
+  return `${char}|${common ? 'true' : 'false'}|${REST_FIRST}`
+}
+
+/** Where a meaning's card is in the words. */
+const cardAnchor = (id: string) => `words-${id}`
+
+/**
+ * A group's words by lane: kun, the on readings each in a list of its own,
+ * the readings most of its words have first, and the special readings.
+ * Null when the words say no lane: a database from before the readings stage.
+ */
+function lanesOf(words: Word[]): { kun: Word[]; ons: Word[][]; special: Word[] } | null {
+  if (!words.some((w) => w.lane)) return null
+  const by = new Map<string, Word[]>()
+  for (const w of words) {
+    if (w.lane === 'kun' || w.lane === 'special') continue
+    const key = w.as ?? ''
+    by.set(key, [...(by.get(key) ?? []), w])
+  }
+  return {
+    kun: words.filter((w) => w.lane === 'kun'),
+    ons: [...by.values()].sort((a, b) => b.length - a.length),
+    special: words.filter((w) => w.lane === 'special'),
+  }
+}
+
+/** A card: its number, title and count, a caret; what it says under it; its words, folded away. */
+function Card({
+  id,
+  n,
+  label,
+  count,
+  about,
+  open,
+  onToggle,
+  dashed = false,
+  children,
+}: {
+  id: string
+  /** The meaning's number, as on the kanji's page; none on the cards that are not a meaning. */
+  n?: number
+  label: ReactNode
+  count: number
+  about?: ReactNode
+  open: boolean
+  onToggle: () => void
+  /** The words in no group: not a meaning. */
+  dashed?: boolean
+  children: ReactNode
+}) {
+  return (
+    <article className="meaning" id={cardAnchor(id)} data-folded={!open || undefined} data-dashed={dashed || undefined}>
+      <header>
+        <h3>
+          <button className="meaning-toggle" aria-expanded={open} onClick={onToggle}>
+            {n !== undefined && <span className="meaning-n">{n}</span>}
+            <span className="meaning-label">{label}</span>
+            <span className="meaning-count">{count}</span>
+            <svg className="meaning-caret" viewBox="0 0 12 12" aria-hidden>
+              <path d="M4 2.5 7.5 6 4 9.5" />
+            </svg>
+          </button>
+        </h3>
+      </header>
+      {about}
+      {open && children}
+    </article>
+  )
 }
 
 export function WordsWith({
@@ -107,20 +158,26 @@ export function WordsWith({
   const [data, setData] = useState<WordsWithResponse | null>(() => api.wordsWithFirst.peek(wordsWithKey(char, common)) ?? null)
   const [offline, setOffline] = useState(false)
   const [more, setMore] = useState(false)
-  // Per group: how many words are shown, and whether it is folded.
+  // Per card: how many words are shown, and the cards turned the other way from how they start.
   const [shown, setShown] = useState<Record<string, number>>({})
-  const [shut, setShut] = useState<Set<string>>(new Set())
+  const [turned, setTurned] = useState<Set<string>>(new Set())
   useEffect(() => {
     setShown({})
-    setShut(new Set())
+    setTurned(new Set())
   }, [char])
-  const head = (id: string, n: number, label: ReactNode, extra?: ReactNode) => (
-    <h3>
-      <GroupToggle open={!shut.has(id)} onToggle={() => setShut((s) => toggled(s, id))} label={label} n={n}>
-        {extra}
-      </GroupToggle>
-    </h3>
-  )
+  // The card it was opened at, if any: that one open, the others folded. Read
+  // as the page draws (peek) and let go of after (take), so a second draw finds
+  // it too; a new ask on the same kanji starts the cards over.
+  const asked = peekWordsFocus(char)
+  const [focus, setFocus] = useState(() => ({ char, id: asked?.id ?? null, n: asked?.n ?? 0 }))
+  if (focus.char !== char || (asked && asked.n !== focus.n)) {
+    setFocus({ char, id: asked?.id ?? null, n: asked?.n ?? 0 })
+    setTurned(new Set())
+  }
+  const at = focus.char === char ? focus.id : null
+  useEffect(() => takeWordsFocus(char))
+  const isOpen = (id: string) => (at ? id === at : true) !== turned.has(id)
+  const toggle = (id: string) => setTurned((s) => toggled(s, id))
 
   useEffect(() => {
     let stale = false
@@ -149,6 +206,22 @@ export function WordsWith({
     }
   }, [char, common])
 
+  // The card it was opened at comes into view, once its words are there.
+  // On a phone the list is a card rising into place: measured while it rises, the
+  // card would land off by the rise, so it waits for the page to stand still (at most RISE_WAIT).
+  const ready = !!data && data.groups.some((g) => g.id === at)
+  useEffect(() => {
+    if (!ready || !at) return
+    let gone = false
+    const moving = document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity)
+    Promise.race([Promise.allSettled(moving.map((a) => a.finished)), new Promise((r) => setTimeout(r, RISE_WAIT))]).then(() => {
+      if (!gone) document.getElementById(cardAnchor(at))?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
+    })
+    return () => {
+      gone = true
+    }
+  }, [ready, at, focus.n])
+
   async function loadMore() {
     if (!data) return
     setMore(true)
@@ -162,6 +235,36 @@ export function WordsWith({
 
   const senses: MeaningGroup[] | null = data?.senses ?? null
   const total = data ? data.groups.reduce((n, g) => n + g.words.length, 0) + data.rest.total : 0
+  // Each meaning's number, as the kanji's page has it: the catch-all is not one.
+  const number = new Map((senses ?? []).filter((s) => s.id !== CATCH_ALL).map((s, i) => [s.id, i + 1]))
+
+  /** A card's words: by lane where the words say theirs, else one list; a page at a time. */
+  function words(id: string, list: Word[]) {
+    const n = shown[id] ?? FIRST
+    const lanes = lanesOf(list)
+    const moreButton = (left: number) =>
+      left > 0 && (
+        <button className="clear words-more" onClick={() => setShown({ ...shown, [id]: n + MORE })}>
+          {t('more')} ({left})
+        </button>
+      )
+    if (!lanes) {
+      return (
+        <>
+          <ol className="words">{list.slice(0, n).map((w) => row(w))}</ol>
+          {moreButton(list.length - n)}
+        </>
+      )
+    }
+    const [kun, ...ons] = share([lanes.kun, ...lanes.ons], n)
+    const on = ons.flat()
+    return (
+      <>
+        <WordLanes kun={kun} on={on} exceptions={lanes.special} row={(w) => row(w)} />
+        {moreButton(list.length - lanes.special.length - kun.length - on.length)}
+      </>
+    )
+  }
 
   return (
     <section className="rail-section search-page words-with" aria-label={t('title', { char })} aria-busy={!data}>
@@ -177,63 +280,73 @@ export function WordsWith({
               {t('count', { n: total })} · {offline ? t('offline') : senses ? t('byMeaning', { char }) : t('notYet', { char })}
             </p>
           )}
-
         </div>
       </header>
       {tools}
       {!data && <p className="hint">{t('loading')}</p>}
 
       {data?.groups.map((g) => {
-        const n = shown[g.id] ?? FIRST
+        const about = (lang === 'bg' && g.aboutBg) || g.about
+        const catchAll = g.id === CATCH_ALL
         return (
-          <div key={g.id} className="meaning-group" data-shut={shut.has(g.id) || undefined}>
-            {head(
-              g.id,
-              g.words.length,
-              g.id === CATCH_ALL ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang),
-              <>
-                {((lang === 'bg' && g.aboutBg) || g.about) && <span className="hint">{(lang === 'bg' && g.aboutBg) || g.about}</span>}
-                {g.id === CATCH_ALL && <span className="hint meaning-group-hint">{t('noMeaningHint')}</span>}
-              </>,
-            )}
-            {!shut.has(g.id) && (
-              <>
-                <ol className="words">{g.words.slice(0, n).map((w) => row(w))}</ol>
-                {g.words.length > n && (
-                  <button className="clear words-more" onClick={() => setShown({ ...shown, [g.id]: n + MORE })}>
-                    {t('more')} ({g.words.length - n})
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+          <Card
+            key={g.id}
+            id={g.id}
+            n={number.get(g.id)}
+            label={catchAll ? t('noMeaning', { char }) : groupLabel(g.id, senses, lang)}
+            count={g.words.length}
+            about={
+              catchAll ? (
+                <p className="meaning-about hint">{t('noMeaningHint')}</p>
+              ) : (
+                about && <p className="meaning-about">{about}</p>
+              )
+            }
+            open={isOpen(g.id)}
+            onToggle={() => toggle(g.id)}
+          >
+            {words(g.id, g.words)}
+          </Card>
         )
       })}
 
-      {/* Always there once there are groups, even empty: the end of the list. */}
-      {data && (data.rest.words.length > 0 || data.groups.length > 0) && (
-        <div
-          className="meaning-group"
-          data-shut={shut.has(REST) || undefined}
-          // The words in no group, after the groups; or, with no groups, the one list there is.
-          data-rest={data.groups.length > 0 ? 'after' : 'alone'}
-        >
-          {data.groups.length > 0 && head(REST, data.rest.total, t('others'))}
-          {!shut.has(REST) && (
-            <>
-              <ol className="words">
-                {data.rest.words.map((w) => row(w))}
-              </ol>
-              {!offline && data.rest.words.length < data.rest.total && (
-                <button className="clear words-more" disabled={more} onClick={loadMore}>
-                  {t('more')} ({data.rest.total - data.rest.words.length})
-                </button>
-              )}
-            </>
-          )}
-        </div>
+      {/* After the groups, even empty: the end of the list. With no groups, the one list there is. */}
+      {data && data.groups.length > 0 && (
+        <Card id={REST} label={t('others')} count={data.rest.total} open={isOpen(REST)} onToggle={() => toggle(REST)} dashed>
+          <RestWords data={data} offline={offline} more={more} onMore={loadMore} row={row} label={t('more')} />
+        </Card>
       )}
-
+      {data && data.groups.length === 0 && data.rest.words.length > 0 && (
+        <RestWords data={data} offline={offline} more={more} onMore={loadMore} row={row} label={t('more')} />
+      )}
     </section>
+  )
+}
+
+/** The words in no group, common first, a page at a time from the server. */
+function RestWords({
+  data,
+  offline,
+  more,
+  onMore,
+  row,
+  label,
+}: {
+  data: WordsWithResponse
+  offline: boolean
+  more: boolean
+  onMore: () => void
+  row: (w: Word) => ReactNode
+  label: string
+}) {
+  return (
+    <>
+      <ol className="words">{data.rest.words.map((w) => row(w))}</ol>
+      {!offline && data.rest.words.length < data.rest.total && (
+        <button className="clear words-more" disabled={more} onClick={onMore}>
+          {label} ({data.rest.total - data.rest.words.length})
+        </button>
+      )}
+    </>
   )
 }
