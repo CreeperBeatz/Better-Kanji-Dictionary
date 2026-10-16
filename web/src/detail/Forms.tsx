@@ -9,7 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import { api, onDataChanged, type FormItem, type FormsResponse } from '../api'
-import { strings, useLang, useContentLang } from '../i18n'
+import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { warmKanji } from '../warm'
 
@@ -102,7 +102,6 @@ export function useForms(char: string, wanted = true): FormsResponse | null {
 
 export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: string) => void }) {
   const lang = useLang()
-  const shown = useContentLang()
   const t = S(lang)
   const rows = ROWS.filter(([k]) => data[k].length > 0)
   // With nothing to show the block is left out; a missing link (龰 is a form
@@ -110,7 +109,7 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
   if (!rows.length) return null
 
   const glyph = (i: FormItem) => {
-    const meaning = meaningsOf(i, shown).value[0]
+    const meaning = meaningsOf(i, lang).value[0]
     return i.known ? (
       <button key={i.char} className="similar-glyph small" {...warmKanji(i.char)} onClick={() => onKanji(i.char)} title={meaning ?? i.char} lang="ja">
         {i.char}
@@ -140,8 +139,8 @@ export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: 
                 <span key={i.char} className="forms-item">
                   {glyph(i)}
                   {(k === 'old' || k === 'new') && <FormSource source={i.source} />}
-                  {(k === 'formOf' || k === 'looksLike' || k === 'kin') && meaningsOf(i, shown).value[0] && (
-                    <span className="forms-meaning">{meaningsOf(i, shown).value[0]}</span>
+                  {(k === 'formOf' || k === 'looksLike' || k === 'kin') && meaningsOf(i, lang).value[0] && (
+                    <span className="forms-meaning">{meaningsOf(i, lang).value[0]}</span>
                   )}
                   {i.note && <span className="forms-note">{i.note}</span>}
                 </span>

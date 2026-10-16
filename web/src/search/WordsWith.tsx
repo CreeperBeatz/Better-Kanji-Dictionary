@@ -19,7 +19,7 @@ import { useFold } from '../detail/fold'
 import { share } from '../detail/lanes'
 import { peekWordsFocus, takeWordsFocus } from '../detail/meaningFocus'
 import { WordLanes } from '../detail/WordLanes'
-import { strings, useLang, useContentLang } from '../i18n'
+import { strings, useLang } from '../i18n'
 import { reducedMotion } from '../media'
 import { CATCH_ALL, groupLabel } from '../review/editors'
 import { toggled } from '../sets'
@@ -178,7 +178,6 @@ export function WordsWith({
   back?: ReactNode
 }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   // Asked for already, as opening its card does: there at once.
   const [data, setData] = useState<WordsWithResponse | null>(() => api.wordsWithFirst.peek(wordsWithKey(char, common)) ?? null)
@@ -312,7 +311,7 @@ export function WordsWith({
       {!data && <p className="hint">{t('loading')}</p>}
 
       {data?.groups.map((g) => {
-        const about = (say === 'bg' && g.aboutBg) || g.about
+        const about = (lang === 'bg' && g.aboutBg) || g.about
         const catchAll = g.id === CATCH_ALL
         return (
           <Card

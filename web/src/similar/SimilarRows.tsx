@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react'
 import { api, type KanjiNode, type SimilarResponse } from '../api'
-import { strings, useLang, useContentLang } from '../i18n'
+import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { isCommon, whyText } from './why'
 import { warmKanji } from '../warm'
@@ -66,9 +66,9 @@ export function useSimilar(char: string, common: boolean): Similar | null {
 }
 
 function useTitle() {
-  const shown = useContentLang()
+  const lang = useLang()
   return (n: KanjiNode) => {
-    const m = meaningsOf(n, shown).value.slice(0, 3).join(', ')
+    const m = meaningsOf(n, lang).value.slice(0, 3).join(', ')
     return m ? `${n.char} - ${m}` : n.char
   }
 }
@@ -107,7 +107,6 @@ export function Related({
   onKanji: (char: string) => void
 }) {
   const lang = useLang()
-  const shown = useContentLang()
   const t = S(lang)
   const title = useTitle()
   if (!items.length) return null
@@ -116,12 +115,12 @@ export function Related({
       <h3>{t(kind === 'read' ? 'readsLike' : 'meansLike')}</h3>
       <ul>
         {items.map((n) => {
-          const why = whyText(n.why, shown)
+          const why = whyText(n.why, lang)
           return (
             <li key={n.char}>
               <button className="vocab-row similar-row" {...warmKanji(n.char)} onClick={() => onKanji(n.char)} title={title(n)}>
                 <span className="vocab-word">{n.char}</span>
-                <span className="vocab-gloss">{meaningsOf(n, shown).value.slice(0, 2).join(', ')}</span>
+                <span className="vocab-gloss">{meaningsOf(n, lang).value.slice(0, 2).join(', ')}</span>
                 {why && (
                   <span className="similar-why" lang={n.why && !('gloss' in n.why) ? 'ja' : undefined}>
                     {why}

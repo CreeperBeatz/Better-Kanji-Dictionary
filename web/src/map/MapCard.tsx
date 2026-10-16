@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { api, type KanjiNode } from '../api'
 import { levelOf } from '../detail/DetailPanel'
-import { strings, useLang, useContentLang } from '../i18n'
+import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { local } from '../local/local'
 
@@ -29,7 +29,6 @@ const S = strings(
 
 export function MapCard({ char, onOpen, onClose }: { char: string; onOpen: () => void; onClose: () => void }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   const [node, setNode] = useState<KanjiNode | null>(null)
 
@@ -51,7 +50,7 @@ export function MapCard({ char, onOpen, onClose }: { char: string; onOpen: () =>
     }
   }, [char])
 
-  const meanings = node ? meaningsOf(node, say).value.slice(0, 4) : []
+  const meanings = node ? meaningsOf(node, lang).value.slice(0, 4) : []
   const level = node ? levelOf(node, lang) : null
 
   return (

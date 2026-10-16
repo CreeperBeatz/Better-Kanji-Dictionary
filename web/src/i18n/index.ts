@@ -46,7 +46,6 @@ export const localeOf = (lang: Lang) => (lang === 'bg' ? 'bg-BG' : 'en-GB')
 export function setLang(lang: Lang): void {
   if (lang === current) return
   current = lang
-  keepDict(null)
   try {
     localStorage.setItem(KEY, lang)
   } catch {
@@ -71,56 +70,6 @@ export function useLang(): Lang {
     },
     getLang,
     getLang,
-  )
-}
-
-/** The language that is not `lang`. */
-export const otherLang = (lang: Lang): Lang => (lang === 'bg' ? 'en' : 'bg')
-
-// The dictionary's own language, where it is not the interface's: picked from
-// the phone's Dictionary tab, held down (App.tsx), or T. Remembered; the
-// interface switch puts the dictionary back in step with it.
-const DICT_KEY = 'betterrtk:dict-lang'
-let dictOwn: Lang | null = (() => {
-  try {
-    const saved = localStorage.getItem(DICT_KEY)
-    return saved === 'en' || saved === 'bg' ? saved : null
-  } catch {
-    return null
-  }
-})()
-
-function keepDict(lang: Lang | null): void {
-  dictOwn = lang
-  try {
-    if (lang) localStorage.setItem(DICT_KEY, lang)
-    else localStorage.removeItem(DICT_KEY)
-  } catch {
-    // not remembered across visits, but still switched now
-  }
-}
-
-/** The language the dictionary's content is shown in: the interface's, unless another is picked. */
-export function getContentLang(): Lang {
-  return dictOwn ?? current
-}
-
-/** Shows the dictionary's content in `lang`, whatever the interface is in. */
-export function setContentLang(lang: Lang): void {
-  if (lang === getContentLang()) return
-  keepDict(lang === current ? null : lang)
-  for (const l of listeners) l()
-}
-
-/** The dictionary's language, for its content: meanings, senses, notes. Labels and buttons follow `useLang`. */
-export function useContentLang(): Lang {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l)
-      return () => listeners.delete(l)
-    },
-    getContentLang,
-    getContentLang,
   )
 }
 

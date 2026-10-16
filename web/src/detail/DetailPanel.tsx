@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type GraphResponse, type KanjiNode, type KanjiPage, type ReadingInfo, type Word } from '../api'
-import { getLang, strings, useLang, type Lang, useContentLang } from '../i18n'
+import { getLang, strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { plainReading } from '../local/japanese'
 import { local } from '../local/local'
@@ -120,19 +120,18 @@ export function levelOf(n: KanjiNode, lang: Lang = getLang()): string | null {
 /** A character as it looks, and what it means: the top of its page, above both tabs. */
 export function KanjiHead({ node }: { node: KanjiNode }) {
   const lang = useLang()
-  const shown = useContentLang()
   const t = S(lang)
   // KANJIDIC files a radical's name where a meaning would be ("Radical Number 9");
   // such a part borrows the meaning of the kanji it is a form of, when it is one.
-  const own = meaningsOf({ meanings: realMeanings(node.meanings), meaningsBg: node.meaningsBg }, shown).value
+  const own = meaningsOf({ meanings: realMeanings(node.meanings), meaningsBg: node.meaningsBg }, lang).value
   const forms = useForms(node.char, own.length === 0)
   const [lead, ...rest] = own
   // A reviewed part meaning (server/review.py), or a shape's name: before anything borrowed.
   const part = own.length === 0 ? forms?.part : null
   const borrowed = own.length === 0 && !part ? forms?.meaning : null
-  const lent = borrowed ? meaningsOf(borrowed, shown).value : []
-  const partLabel = part && ((shown === 'bg' && part.bg) || part.en)
-  const partNote = part && ((shown === 'bg' && part.noteBg) || part.note)
+  const lent = borrowed ? meaningsOf(borrowed, lang).value : []
+  const partLabel = part && ((lang === 'bg' && part.bg) || part.en)
+  const partNote = part && ((lang === 'bg' && part.noteBg) || part.note)
   return (
     <div className="detail-head">
       <span className="detail-glyph">{node.char}</span>
@@ -168,7 +167,6 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
 
 export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith, notes }: Props) {
   const lang = useLang()
-  const shown = useContentLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
   // Its meanings with their readings and words, special readings and radical.
@@ -250,7 +248,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         <span className="vocab-reading">
           <MarkedReading reading={w.reading} mark={w.mark} />
         </span>
-        <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], shown).value.split(';')[0]}</span>
+        <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
         <Valency word={w} />
         {/* One of its meaning's best examples: the words to know it by. Its
             place is kept on every row, so the rows line up. */}
@@ -271,7 +269,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const saysMixups = !!unit && (unit.mixups.length > 0 || unit.meanings.some((m) => m.mixups.length > 0))
   const mean = similar && !saysSimilar ? similar.mean : []
   const read = similar && !saysMixups ? similar.read : []
-  const hero = unit && ((shown === 'bg' && unit.heroBg) || unit.hero)
+  const hero = unit && ((lang === 'bg' && unit.heroBg) || unit.hero)
 
   return (
     <section className="rail-section kanji-page">

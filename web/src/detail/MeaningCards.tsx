@@ -25,7 +25,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { reducedMotion } from '../media'
 import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
-import { strings, useLang, type Lang, useContentLang } from '../i18n'
+import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
@@ -105,9 +105,8 @@ export function Meanings({
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
-  const link = (say === 'bg' && page.linkBg) || page.link
+  const link = (lang === 'bg' && page.linkBg) || page.link
   const [allFolded, setAllFolded] = useState(rememberedFold)
   // The cards turned the other way from all of them, on this kanji's page.
   const kept = (): ReadonlySet<string> => turnedOn.get(page.char) ?? new Set()
@@ -219,9 +218,9 @@ function Meaning({
   onWordsWith?: (meaning: string) => void
   row: (w: Word) => ReactNode
 }) {
-  const say = useContentLang()
-  const label = (say === 'bg' && m.bg) || m.en
-  const about = (say === 'bg' && m.aboutBg) || m.about
+  const lang = useLang()
+  const label = (lang === 'bg' && m.bg) || m.en
+  const about = (lang === 'bg' && m.aboutBg) || m.about
   // Its body opens and shuts as a movement (fold.ts); folded once it has shut.
   const { shown, card, body } = useFold(open)
   return (
@@ -263,7 +262,6 @@ function MeaningBody({
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   // A few words at first, shared between kun and on by how many each has; more in place.
   const [budget, setBudget] = useState(() => budgetOf.get(m.id) ?? FIRST_WORDS)
@@ -303,7 +301,7 @@ function MeaningBody({
           <AsideTitle icon="≈">{t('similar')}</AsideTitle>
           <ul>
             {m.similar.map((k) => (
-              <CloseRow key={k.char} k={k} lang={lang} say={say} onKanji={onKanji} />
+              <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
             ))}
           </ul>
         </section>
@@ -319,10 +317,10 @@ function MeaningBody({
  * 典 · Code · With the meaning: ceremony -- the kanji, its keyword, and the
  * meaning of it that is close to this one. The row opens the kanji at that meaning.
  */
-function CloseRow({ k, lang, say, onKanji }: { k: CloseKanji; lang: Lang; say: Lang; onKanji: (c: string) => void }) {
+function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void }) {
   const t = S(lang)
-  const keyword = meaningsOf(k, say).value[0]
-  const sense = k.sense && ((say === 'bg' && k.sense.bg) || k.sense.en)
+  const keyword = meaningsOf(k, lang).value[0]
+  const sense = k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)
   return (
     <li>
       <button
@@ -364,7 +362,6 @@ function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
  */
 function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (c: string) => void }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   const me = { ...self, sense: x.self }
   const items: { spelling: string; k: MixUp['kanji'][number] | undefined; spelled?: UsageCard['spellings'][number] }[] = x.usage
@@ -381,7 +378,7 @@ function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (
         {items.map(({ spelling, k, spelled }) => {
           const own = k?.char === self.char
           // Its meaning on this reading; the keyword where it has no meanings drawn up.
-          const keyword = k && ((k.sense && ((say === 'bg' && k.sense.bg) || k.sense.en)) || meaningsOf(k, say).value[0])
+          const keyword = k && ((k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)) || meaningsOf(k, lang).value[0])
           const head = (
             <>
               <span className="usage-spelling" lang="ja">
@@ -402,10 +399,10 @@ function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (
               ) : (
                 <p className="usage-head">{head}</p>
               )}
-              {spelled && <p className="spelling-def">{(say === 'bg' && spelled.defBg) || spelled.defEn || spelled.def}</p>}
+              {spelled && <p className="spelling-def">{(lang === 'bg' && spelled.defBg) || spelled.defEn || spelled.def}</p>}
               {spelled?.examples.slice(0, 1).map((e) => (
                 <p key={e.ja} className="usage-example">
-                  <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(say === 'bg' && e.bg) || e.en}</span>
+                  <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(lang === 'bg' && e.bg) || e.en}</span>
                 </p>
               ))}
             </li>

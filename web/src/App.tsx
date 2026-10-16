@@ -8,7 +8,7 @@ import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
-import { getContentLang, otherLang, setContentLang, strings, useContentLang, useLang, type Translate } from './i18n'
+import { getLang, setLang, strings, useLang, type Lang, type Translate } from './i18n'
 import { haptic } from './haptics'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
@@ -80,8 +80,6 @@ const S = strings(
     howGraph: 'How to read the graph',
     legend: 'Legend',
     openCards: '{n} cards open',
-    dictBg: 'Dictionary in Bulgarian',
-    dictEn: 'Dictionary in English',
     wordsWith: 'Words with {c}',
   },
   {
@@ -107,8 +105,6 @@ const S = strings(
     howGraph: 'Как се чете графът',
     legend: 'Легенда',
     openCards: '{n} отворени карти',
-    dictBg: 'Речник на български',
-    dictEn: 'Речник на английски',
     wordsWith: 'Думи с {c}',
   },
 )
@@ -335,6 +331,10 @@ const RISE_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)'
 const RISE_MS = 400
 /** How long a tab tapped takes to turn. */
 const TAP_TURN_MS = 260
+
+/** The other language, and each language by its own name, for the Dictionary tab's menu. */
+const otherLang = (lang: Lang): Lang => (lang === 'bg' ? 'en' : 'bg')
+const LANG_NAME: Record<Lang, string> = { en: 'English', bg: 'Български' }
 
 /** How long a press on Dictionary is held for its menu. */
 const HOLD_MS = 450
@@ -1188,8 +1188,8 @@ export function App() {
       if (document.querySelector('.overlay')) return
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
-      // The dictionary in the other language, and back.
-      if (e.key === 't' || e.key === 'T') setContentLang(otherLang(getContentLang()))
+      // The app in the other language, and back, as the switch in the profile does.
+      if (e.key === 't' || e.key === 'T') setLang(otherLang(getLang()))
       if ('dDfF'.includes(e.key)) setView('focus')
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
@@ -1349,7 +1349,6 @@ export function App() {
   const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
   const subjectKey = subject?.key ?? null
-  const contentLang = useContentLang()
   // The page shows its dictionary, or its associations when it is their page.
   const notesShown = hasNotes(shownTop)
   // Its associations are mounted under its dictionary too, unseen, for their
@@ -1587,7 +1586,7 @@ export function App() {
     }
     // Measured again in another language: the head may keep its height
     // while its lines move inside it.
-  }, [folding, shownTop, searchShown, onStage, foldHead, contentLang, t.lang])
+  }, [folding, shownTop, searchShown, onStage, foldHead, t.lang])
   // A page's associations, from beside its first title: a page of their own
   // -- on a phone, a card -- over its dictionary, back from which is the
   // dictionary again.
@@ -2121,9 +2120,9 @@ export function App() {
       </button>
     )
   }
-  // Dictionary held down opens a menu over it: the dictionary in the other
-  // language, everywhere, the interface as it is. The tap the press ends in
-  // does nothing more.
+  // Dictionary held down opens a menu over it: the app in the other language,
+  // the same switch as the profile's. The tap the press ends in does nothing
+  // more.
   const press = useRef<{ x: number; y: number; timer: number } | null>(null)
   const [tabMenu, setTabMenu] = useState(false)
   const tabMenuRef = useRef<HTMLDivElement>(null)
@@ -2141,9 +2140,9 @@ export function App() {
       window.removeEventListener('keydown', esc)
     }
   }, [tabMenu])
-  function pickDictLang() {
+  function pickLang() {
     setTabMenu(false)
-    setContentLang(otherLang(contentLang))
+    setLang(otherLang(t.lang))
   }
   // As the menu opens, a tick in the hand. An iPhone ticks only for a finger
   // on a switch (haptics.ts), never from the hold's timer: so once held, a
@@ -2694,11 +2693,11 @@ export function App() {
                   role="menu"
                   style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
                 >
-                  <button className="tab-menu-item" role="menuitem" onClick={pickDictLang}>
+                  <button className="tab-menu-item" role="menuitem" lang={otherLang(t.lang)} onClick={pickLang}>
                     <span className="tab-menu-lang" aria-hidden="true">
-                      {otherLang(contentLang) === 'bg' ? 'БГ' : 'EN'}
+                      {otherLang(t.lang) === 'bg' ? 'БГ' : 'EN'}
                     </span>
-                    {t(otherLang(contentLang) === 'bg' ? 'dictBg' : 'dictEn')}
+                    {LANG_NAME[otherLang(t.lang)]}
                   </button>
                 </div>
               )}

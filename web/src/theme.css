@@ -6063,7 +6063,7 @@ html {
   color: var(--paper);
 }
 
-/* Dictionary held down: the dictionary in the other language, over the tab. */
+/* Dictionary held down: the app in the other language, over the tab. */
 .tab-menu {
   bottom: calc(100% + 8px);
   left: calc(100% / var(--n) * (var(--i) + 0.5));

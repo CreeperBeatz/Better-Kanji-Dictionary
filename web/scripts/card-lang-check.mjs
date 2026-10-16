@@ -1,8 +1,8 @@
 // Usage: node scripts/card-lang-check.mjs [base=http://localhost:8000] [shots=C:/tmp/shots]
-// The dictionary's language, apart from the interface's: on a phone, Dictionary held down
-// opens a menu (a switch under the finger then, for an iPhone's tick on the lift) whose one item turns
-// the dictionary to the other language everywhere -- cards, search -- and is remembered;
-// T does it on a desktop; the interface switch puts the dictionary back in step with it.
+// One language for the app: on a phone, Dictionary held down opens a menu (a switch under
+// the finger then, for an iPhone's tick on the lift) whose one item turns the app, interface
+// and dictionary, to the other language -- the same setting as the profile's switch,
+// remembered; T does it on a desktop.
 import { chromium } from 'playwright'
 const BASE = process.argv[2] ?? 'http://localhost:8000'
 const SHOTS = process.argv[3] ?? 'C:/tmp/shots'
@@ -22,7 +22,7 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
   console.log(name, 'start           ', await state(), '| label in head', await page.locator('.card-lang').count())
   if (mobile) {
     const cdp = await ctx.newCDPSession(page)
-    const tab = page.locator('.phone-tabs button').filter({ hasText: /Dictionary/ })
+    const tab = page.locator('.phone-tabs > button').nth(1)
     const hold = async (ms) => {
       const bb = await tab.boundingBox()
       const pt = [{ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 }]
@@ -42,7 +42,7 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     // Held, the finger is on a switch over the tab (an iPhone ticks as it lifts);
     // a moment after the lift the tab is a tab again.
     const under = () => page.evaluate(() => {
-      const r = [...document.querySelectorAll('.phone-tabs > button')].find((b) => /Dictionary/.test(b.textContent)).getBoundingClientRect()
+      const r = document.querySelectorAll('.phone-tabs > button')[1].getBoundingClientRect()
       const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
       return e.tagName + (e.hasAttribute('switch') ? '[switch]' : '')
     })
@@ -64,7 +64,7 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     await tapAt(page.locator('.tab-menu-item'))
     await page.waitForTimeout(200)
     console.log(name, 'picked          -> menu', await menu(), await state())
-    await tapAt(page.locator('.phone-tabs button').filter({ hasText: /Search/ }))
+    await tapAt(page.locator('.phone-tabs > button').nth(0))
     console.log(name, 'search tab      ', JSON.stringify((await text(page, '.vocab-gloss, .word-gloss, .recent-gloss, .kanji-hit')).slice(0, 60)))
     await page.goto(`${BASE}/word/1588410`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(600)
@@ -82,15 +82,13 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
     await page.goto(`${BASE}/word/1588410`, { waitUntil: 'networkidle' })
     await page.waitForTimeout(600)
     console.log(name, 'reload, a word  ', JSON.stringify(await text(page, HEAD)))
+    // The profile's switch is the same setting: from Bulgarian, one tap is English again.
     await page.locator('.profile-button').first().click()
-    await page.locator('.lang-switch').first().click()
-    await page.waitForTimeout(300)
-    console.log(name, 'interface -> bg ', JSON.stringify(await text(page, HEAD)), JSON.stringify(await text(page, '.entry-machine')))
     await page.locator('.lang-switch').first().click()
     await page.waitForTimeout(300)
     await page.keyboard.press('Escape')
     await page.waitForTimeout(200)
-    console.log(name, 'interface -> en ', JSON.stringify(await text(page, HEAD)))
+    console.log(name, 'profile switch  ', JSON.stringify(await text(page, HEAD)), JSON.stringify(await text(page, '.entry-rank-line')))
   }
   await ctx.close()
 }

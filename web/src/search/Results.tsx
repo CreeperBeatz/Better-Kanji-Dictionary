@@ -17,7 +17,7 @@ import {
   type Word,
 } from '../api'
 import { clearHistory, useHistory, type Visit } from '../history'
-import { strings, useLang, type Lang, useContentLang } from '../i18n'
+import { strings, useLang, type Lang } from '../i18n'
 import { isCommon } from '../similar/why'
 import { ToMap } from '../StageControls'
 import { SearchHelp } from './SearchHelp'
@@ -301,7 +301,6 @@ function WordRowView({
   extra?: ReactNode
 }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   // The whole card opens the entry; its kanji are one tap further, on the entry's page.
   return (
@@ -336,7 +335,7 @@ function WordRowView({
         <span className="word-foot">
           <span className="word-gloss">
             {w.senses.slice(0, 3).map((s, i) => {
-              const g = glossOf(s, say)
+              const g = glossOf(s, lang)
               return (
                 <span key={i} className="sense" data-fallback={g.fallback || undefined}>
                   {w.senses.length > 1 && <b>{i + 1}</b>}
@@ -384,9 +383,8 @@ const KanjiChip = memo(KanjiChipView)
 
 function KanjiChipView({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
-  const m = meaningsOf(k, say)
+  const m = meaningsOf(k, lang)
   return (
     <button
       className="kanji-hit"
@@ -813,7 +811,6 @@ function HomePage({
   open?: string
 }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   const history = useHistory()
   // A level is searched in place: its kanji open under the buttons, and stay
@@ -834,7 +831,7 @@ function HomePage({
           </button>
         )
       case 'kanji': {
-        const m = v.meanings ? meaningsOf({ meanings: v.meanings, meaningsBg: v.meaningsBg }, say).value : []
+        const m = v.meanings ? meaningsOf({ meanings: v.meanings, meaningsBg: v.meaningsBg }, lang).value : []
         return (
           <button {...warmKanji(v.char)} onClick={() => onKanji(v.char)}>
             <span className="recent-head" lang="ja">
@@ -856,7 +853,7 @@ function HomePage({
                 {w.reading}
               </span>
             )}
-            {w.senses[0] && <span className="recent-gloss">{glossOf(w.senses[0], say).value}</span>}
+            {w.senses[0] && <span className="recent-gloss">{glossOf(w.senses[0], lang).value}</span>}
           </button>
         )
       }
@@ -913,7 +910,6 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
 /** A level's kanji, and the parts they are built from. `open` is marked. */
 function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: string) => void; open?: string }) {
   const lang = useLang()
-  const say = useContentLang()
   const t = S(lang)
   const [data, setData] = useState(() => levels.get(level) ?? null)
 
@@ -938,7 +934,7 @@ function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: str
     }
   }, [level])
 
-  const meanings = (k: KanjiNode) => meaningsOf(k, say).value.slice(0, 3).join(', ')
+  const meanings = (k: KanjiNode) => meaningsOf(k, lang).value.slice(0, 3).join(', ')
 
   return (
     <div className="level-block">
