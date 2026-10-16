@@ -460,19 +460,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .card-lang {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 6px;
-  border: 1px solid var(--rule-bright);
-  border-radius: 9px;
+  padding: 0;
+  border: 0;
   background: none;
   color: var(--muted);
   font-family: var(--gothic);
-  font-size: calc(10px * var(--type));
-  font-weight: 600;
+  font-size: calc(10.5px * var(--type));
   letter-spacing: 0.04em;
-  line-height: 1;
+  line-height: 1.2;
   cursor: pointer;
 }
 
@@ -483,10 +478,12 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   inset: -12px -8px;
 }
 
+/* On: in the accent, underlined, at the same width, so nothing moves. */
 .card-lang[aria-pressed='true'] {
-  border-color: var(--ai-deep);
-  background: var(--ai-wash);
   color: var(--ai);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .card-lang:disabled {
@@ -496,7 +493,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 @media (hover: hover) {
   .card-lang:not(:disabled):hover {
     color: var(--paper);
-    border-color: var(--ai-deep);
   }
 }
 
@@ -6287,7 +6283,8 @@ html {
 
   .word-news,
   .word-common,
-  .word-jlpt {
+  .word-jlpt,
+  .card-lang {
     font-size: calc(11px * var(--type));
   }
 
