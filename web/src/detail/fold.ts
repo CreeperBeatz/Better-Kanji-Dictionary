@@ -6,11 +6,12 @@
  * title stood, at the top of the screen: not some other card.
  */
 import { useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { run } from '../cardStack'
 import { reducedMotion } from '../media'
 
 /** How long a card takes to open or shut, in ms. */
-const FOLD_MS = 240
+const FOLD_MS = 150
 
 /** The box `el` scrolls in: the nearest one up that scrolls. */
 function scrollerOf(el: HTMLElement): HTMLElement | null {
@@ -46,25 +47,29 @@ export function useFold(open: boolean) {
       return
     }
     const ms = reducedMotion() ? 0 : FOLD_MS
-    const done = (more: () => void = () => {}) => () => {
-      el.style.height = ''
-      el.style.opacity = ''
-      el.style.overflow = ''
-      stop.current = null
-      more()
-    }
-    // From where it stands, should it be moving still.
+    // From where it stands, should it be moving still. The room under it
+    // moves inside the height (the box would not go below it otherwise).
     const from = el.style.height ? el.offsetHeight : open ? 0 : el.offsetHeight
+    el.style.paddingBottom = ''
+    const to = open ? el.scrollHeight : 0
     el.style.overflow = 'hidden'
+    el.style.paddingBottom = '0'
+    // Where it starts, before the frame is drawn: a body just put in would
+    // show whole for a frame before its first step.
+    el.style.height = `${from}px`
+    if (open && !el.style.opacity) el.style.opacity = '0'
     if (open) {
-      const to = el.scrollHeight
       stop.current = run(
         ms,
         (e) => {
           el.style.height = `${from + (to - from) * e}px`
           el.style.opacity = String(e)
         },
-        done(),
+        () => {
+          // Open, as tall as it is: what it was moving to.
+          el.removeAttribute('style')
+          stop.current = null
+        },
       )
       return
     }
@@ -85,10 +90,13 @@ export function useFold(open: boolean) {
         el.style.opacity = String(1 - e)
         if (sc && above > 0.5) sc.scrollTop = start - above * e
       },
-      done(() => {
+      () => {
+        // Shut, it goes as it is, nothing in it, in this same frame: given its
+        // height back first, it would show whole for the frame before it went.
+        stop.current = null
         anchor(true)
-        setShown(false)
-      }),
+        flushSync(() => setShown(false))
+      },
     )
     stop.current = () => {
       halt()
