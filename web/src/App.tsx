@@ -9,6 +9,7 @@ import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
 import { CardLang, otherLang, strings, useLang, type Translate } from './i18n'
+import { haptic } from './haptics'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { loadNotes } from './detail/NoteContent'
@@ -2160,6 +2161,7 @@ export function App() {
   }, [tabMenu])
   // Picked, the card turns, and is gone to from another tab.
   function pickCardLang() {
+    haptic()
     setTabMenu(false)
     flipCard.current?.()
     if (phoneTab !== 'dictionary') tapPhoneTab('dictionary')
@@ -2173,7 +2175,7 @@ export function App() {
       const timer = window.setTimeout(() => {
         press.current = null
         heldAt.current = performance.now()
-        navigator.vibrate?.(10)
+        haptic()
         setTabMenu(true)
       }, HOLD_MS)
       press.current = { x, y, timer }
