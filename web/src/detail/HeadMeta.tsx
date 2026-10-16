@@ -1,7 +1,8 @@
 /**
  * How much a character or word is worth learning, down the right of the top
- * of its page as down a search result: common or not at the top; newspaper
- * rank and JLPT level, in its colour, at the bottom.
+ * of its page as down a search result: common or not at the top; JLPT level,
+ * in its colour, and newspaper rank at the bottom. Folded, the head keeps
+ * them in a line at its right end: level, rank, common.
  */
 
 import type { KanjiNode, Word } from '../api'
@@ -49,14 +50,14 @@ function HeadMeta({ m }: { m: Meta }) {
       </span>
       {(m.news || m.jlpt) && (
         <span className="word-meta">
-          {m.news && (
-            <span className="word-news" title={m.newsTitle}>
-              {t('news', { n: m.news })}
-            </span>
-          )}
           {m.jlpt && (
             <span className="word-jlpt" data-level={m.jlpt} title={t('jlpt', { n: m.jlpt })}>
               N{m.jlpt}
+            </span>
+          )}
+          {m.news && (
+            <span className="word-news" title={m.newsTitle}>
+              {t('news', { n: m.news })}
             </span>
           )}
         </span>

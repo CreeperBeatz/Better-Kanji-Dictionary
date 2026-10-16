@@ -526,14 +526,16 @@ function warm(p: Page): Promise<unknown> | null {
 /**
  * Measures a card's head for folding (read by theme.css): the character ends
  * at the line's left, as tall as the line allows, in the middle of it -- the
- * bottom of the head, which is what shows -- and its first meaning beside it.
- * Returns how tall the head is.
+ * bottom of the head, which is what shows -- its first meaning beside it,
+ * and how common it is at the right end. Returns how tall the head is.
  */
 function measureFold(head: HTMLElement): number {
   const h = head.offsetHeight
   head.style.setProperty('--head-h', `${h}px`)
   const glyph = head.querySelector<HTMLElement>('.detail-glyph, .entry-head')
   if (!glyph) return h
+  const metaLeft = measureMeta(head, h)
+  head.removeAttribute('data-cut')
   const { x, y } = offsetIn(glyph, head)
   const gh = glyph.offsetHeight || 1
   const gs = Math.min(1, FOLDED_GLYPH / gh)
@@ -554,8 +556,37 @@ function measureFold(head: HTMLElement): number {
     head.style.setProperty('--ms', String(ms))
     head.style.setProperty('--mx', `${16 + chars * gs + 10 - at.x}px`)
     head.style.setProperty('--my', `${h - FOLDED / 2 - at.y - (lh * ms) / 2}px`)
+    // Where it would run under how common it is, it fades out before.
+    const over = 16 + chars * gs + 10 + lead.offsetWidth * ms - (metaLeft - META_GAP)
+    if (over > 0) {
+      head.setAttribute('data-cut', '')
+      head.style.setProperty('--mr', `${over / ms}px`)
+    }
   }
   return h
+}
+
+/** Between the first meaning and how common it is, in a card's folded line. */
+const META_GAP = 12
+
+/**
+ * How common a card's subject is stays in its folded line, along the right
+ * end, in the middle of it: "common" comes down, and the level and rank go
+ * up beside it, to its left. Returns where they then start, from the left.
+ */
+function measureMeta(head: HTMLElement, h: number): number {
+  const common = head.querySelector<HTMLElement>('.head-meta > .word-common')
+  if (!common) return Infinity
+  const mid = h - FOLDED / 2
+  const c = offsetIn(common, head)
+  head.style.setProperty('--cy', `${mid - c.y - common.offsetHeight / 2}px`)
+  const rest = head.querySelector<HTMLElement>('.head-meta > .word-meta')
+  if (!rest) return c.x
+  const r = offsetIn(rest, head)
+  const left = c.x - 8 - rest.offsetWidth
+  head.style.setProperty('--wx', `${left - r.x}px`)
+  head.style.setProperty('--wy', `${mid - r.y - rest.offsetHeight / 2}px`)
+  return left
 }
 
 /** A kanji or a word, as picked from a list. */
