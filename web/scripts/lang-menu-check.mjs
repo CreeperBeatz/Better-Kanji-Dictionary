@@ -1,4 +1,4 @@
-// Usage: node scripts/card-lang-check.mjs [base=http://localhost:8000] [shots=C:/tmp/shots]
+// Usage: node scripts/lang-menu-check.mjs [base=http://localhost:8000] [shots=C:/tmp/shots]
 // One language for the app: on a phone, Dictionary tapped on Dictionary opens a menu whose
 // one item turns the app, interface and dictionary, to the other language -- the same setting as the profile's switch,
 // remembered; T does it on a desktop.
@@ -18,7 +18,7 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 844 }, t
   await page.waitForSelector('.meaning')
   await page.waitForTimeout(500)
   const state = async () => JSON.stringify({ head: await text(page, HEAD), ui: await text(page, '.facts-title') })
-  console.log(name, 'start           ', await state(), '| label in head', await page.locator('.card-lang').count())
+  console.log(name, 'start           ', await state())
   if (mobile) {
     const tapAt = async (loc) => {
       const bb = await loc.boundingBox()

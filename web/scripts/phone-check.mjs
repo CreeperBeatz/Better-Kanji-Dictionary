@@ -76,11 +76,7 @@ await wait(700)
 out('graph centre', (await page.locator('.graph-svg .node[data-kind="focus"] text').first().textContent())?.trim())
 out('relocked on return', await page.locator('.graph-lock').getAttribute('aria-pressed'))
 // associations, a card from the page, render markdown
-// A tap at the spot: an unseen switch over Dictionary takes its touches (App.tsx holdSwitch).
-{
-  const bb = await page.locator('.phone-tabs button', { hasText: 'Dictionary' }).boundingBox()
-  await page.touchscreen.tap(bb.x + bb.width / 2, bb.y + bb.height / 2)
-}
+await page.locator('.phone-tabs button', { hasText: 'Dictionary' }).click()
 await wait(900)
 await page.locator('.page-card:not([data-copy]) .notes-chip').first().click()
 await wait(1200)

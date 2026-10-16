@@ -5909,7 +5909,6 @@ html {
 /* A long press shows a card, not the browser's selection or callout. */
 .graph-svg,
 .map-canvas,
-.phone-tabs button,
 .tab-switch {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -6084,22 +6083,18 @@ html {
   background: var(--ai-wash);
 }
 
-/* A real switch, unseen: an iPhone ticks only for a finger on one
-   (haptics.ts). Its own look stays under the zero opacity. */
-.haptic-switch {
-  position: absolute;
-  margin: 0;
-  opacity: 0;
-}
-
-/* Over Dictionary, on it, taking the tap that opens its menu (App.tsx tabSwitch). */
+/* On Dictionary, a real switch, unseen, over its tab, taking the tap that
+   opens its menu: an iPhone ticks for a finger on one (App.tsx tabSwitch).
+   Its own look stays under the zero opacity: stripped of it, it ticks not. */
 .tab-switch {
+  position: absolute;
   top: 0;
   left: calc(100% / var(--n) * var(--i));
   width: calc(100% / var(--n));
   height: 100%;
+  margin: 0;
+  opacity: 0;
 }
-
 
 /* The language it switches to, boxed. */
 .graph-menu .tab-menu-lang {

@@ -9,7 +9,6 @@ import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
 import { getLang, setLang, strings, useLang, type Lang, type Translate } from './i18n'
-import { haptic } from './haptics'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { loadNotes } from './detail/NoteContent'
@@ -1346,12 +1345,12 @@ export function App() {
   // A page the tabs treat as a card: a kanji, a word, or every word with a kanji.
   const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
-  const subjectKey = subject?.key ?? null
   // The page shows its dictionary, or its associations when it is their page.
   const notesShown = hasNotes(shownTop)
   // Its associations are mounted under its dictionary too, unseen, for their
   // count, but only once the page has come to rest: comments rendered behind
   // a page sliding in cost it frames.
+  const subjectKey = subject?.key ?? null
   const [settled, setSettled] = useState<string | null>(null)
   useEffect(() => {
     if (!subjectKey) return
@@ -2093,13 +2092,7 @@ export function App() {
   }
   function phoneTabButton(p: PhoneTab) {
     return (
-      <button
-        key={p}
-        role="tab"
-        aria-selected={phoneTab === p}
-        disabled={tabOff(p)}
-        onClick={() => tapPhoneTab(p)}
-      >
+      <button key={p} role="tab" aria-selected={phoneTab === p} disabled={tabOff(p)} onClick={() => tapPhoneTab(p)}>
         <span className="phone-tab-icon">
           <PhoneTabIcon tab={p} />
           {p === 'dictionary' && openCards > 1 && (
@@ -2136,12 +2129,13 @@ export function App() {
     setTabMenu(false)
     setLang(otherLang(t.lang))
   }
-  // It opens with a tick in the hand. An iPhone ticks only for a switch a
-  // finger taps (haptics.ts), so on Dictionary an unseen switch lies over its
+  // It opens with a tick in the hand. Android has the Vibration API; Safari
+  // has none, but an iPhone ticks as a finger's tap toggles a switch
+  // (<input type="checkbox" switch>) -- not a script's click (iOS 26.5),
+  // nor anything on a timer. So on Dictionary an unseen switch lies over its
   // tab and takes the tap: WebKit ticks as it clicks it, and the click opens
-  // the menu. Android buzzes. A swipe begun on it is no tap: the switch is
-  // off by its end, so that WebKit, which clicks a switch at any lift,
-  // neither clicks nor ticks.
+  // the menu. A swipe begun on it is no tap: the switch is off by its end, so
+  // that WebKit, which clicks a switch at any lift, neither clicks nor ticks.
   const swipeOnSwitch = useRef<{ x: number; y: number; moved: boolean } | null>(null)
   const tabSwitch = {
     start(e: React.TouchEvent<HTMLInputElement>) {
@@ -2162,7 +2156,7 @@ export function App() {
       window.setTimeout(() => (el.disabled = false), 400)
     },
     click() {
-      if (!tabMenu) haptic()
+      if (!tabMenu) navigator.vibrate?.(10)
       setTabMenu((open) => !open)
     },
   }
@@ -2672,7 +2666,7 @@ export function App() {
               {phoneTab === 'dictionary' && !tabOff('dictionary') && (
                 <input
                   type="checkbox"
-                  className="haptic-switch tab-switch"
+                  className="tab-switch"
                   aria-hidden="true"
                   tabIndex={-1}
                   style={{ '--i': PHONE_TABS.indexOf('dictionary') } as React.CSSProperties}
