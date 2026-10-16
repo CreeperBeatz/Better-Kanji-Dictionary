@@ -52,6 +52,7 @@ const S = strings(
     jlptDesc: 'N1 first',
     jlpt: 'On the JLPT N{n} vocabulary list (Jonathan Waller, a community reconstruction)',
     news: 'top {n}',
+    star: 'One of the best examples of this meaning',
     newsTitle: 'Newspaper frequency: among the {n} most frequent words (JMdict nf{b} of 48)',
     open: 'Open this entry',
     notTranslated: 'not translated into Bulgarian yet',
@@ -99,6 +100,7 @@ const S = strings(
     jlptDesc: 'Първо N1',
     jlpt: 'В списъка с думи за JLPT N{n} (Джонатан Уолър, реконструкция на общността)',
     news: 'топ {n}',
+    star: 'Един от най-добрите примери за това значение',
     newsTitle: 'Честота във вестниците: сред {n} най-чести думи (JMdict nf{b} от 48)',
     open: 'Отворете статията',
     notTranslated: 'още не е преведено на български',
@@ -286,9 +288,12 @@ function WordRowView({
   why,
   open,
   extra,
+  starSlot = false,
 }: {
   w: Word
   onWord: (w: Word) => void
+  /** A place for the star at the end of its head: in a kanji's words, where some have one. */
+  starSlot?: boolean
   why?: string | null
   /** Open beside the list right now. */
   open?: boolean
@@ -316,6 +321,13 @@ function WordRowView({
           <span className="word-common" data-common={w.common || undefined} title={w.common ? t('commonTitle') : undefined}>
             {w.common ? t('common') : t('uncommon')}
           </span>
+          {/* In a kanji's words: one of its meaning's best examples. Its place
+              is kept on every row there, so the rows line up. */}
+          {starSlot && (
+            <span className="word-star" title={w.star ? t('star') : undefined} aria-label={w.star ? t('star') : undefined}>
+              {w.star && '★'}
+            </span>
+          )}
         </span>
         {w.inflection && w.inflection.length > 0 && (
           <span className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</span>
@@ -506,7 +518,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
             <CommonFilter on={common} onToggle={toggleCommon} t={t} />
           </div>
         }
-        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} />}
+        row={(w, extra) => <WordRow key={w.id} w={w} onWord={onWord} open={open?.word === w.id} extra={extra} starSlot />}
       />
     )
 

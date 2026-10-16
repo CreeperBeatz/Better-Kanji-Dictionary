@@ -14,6 +14,7 @@ import { LooksLike, Related, useSimilar } from '../similar/SimilarRows'
 import { isCommon } from '../similar/why'
 import { Valency } from '../search/Valency'
 import { MarkedReading } from '../search/MarkedReading'
+import { focusWordsNext } from './meaningFocus'
 import { Readings, SpecialReadings } from './Readings'
 import { Meanings } from './MeaningCards'
 import { warmWord } from '../warm'
@@ -47,6 +48,7 @@ const S = strings(
     shape: 'a shape: “{name}”',
     shapeNone: 'no meaning of its own',
     openEntry: 'Open this entry',
+    star: 'One of the best examples of this meaning',
   },
   {
     grade: 'учи се в {n} клас',
@@ -76,6 +78,7 @@ const S = strings(
     shape: 'форма: „{name}“',
     shapeNone: 'няма свое значение',
     openEntry: 'Отворете тази статия',
+    star: 'Един от най-добрите примери за това значение',
   },
 )
 
@@ -247,6 +250,11 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </span>
         <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
         <Valency word={w} />
+        {/* One of its meaning's best examples: the words to know it by. Its
+            place is kept on every row, so the rows line up. */}
+        <span className="vocab-star" title={w.star ? t('star') : undefined} aria-label={w.star ? t('star') : undefined}>
+          {w.star && '★'}
+        </span>
       </button>
     </li>
   )
@@ -336,10 +344,17 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         {unit ? (
           <Meanings
             page={unit}
+            self={data.focus}
             onYomi={n.onYomi}
             kunYomi={n.kunYomi}
             onKanji={onKanji}
-            onWordsWith={onWordsWith && (() => onWordsWith(data.focus.char))}
+            onWordsWith={
+              onWordsWith &&
+              ((meaning: string) => {
+                focusWordsNext(data.focus.char, meaning)
+                onWordsWith(data.focus.char)
+              })
+            }
             row={vocabRow}
           />
         ) : (

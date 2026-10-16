@@ -7,6 +7,7 @@
  *   paper     the character itself
  *   indigo    everything beneath it -- components and the edges down to them
  *   vermilion the seal on the focused character, and nothing else
+ *   ochre     a warning: kanji easy to mix up with this one
  */
 
 /* The fonts are linked from index.html, so they load beside the script rather than after this file. */
@@ -28,6 +29,8 @@
   --ai-wash: #22303f;
 
   --shu: #d0452b;
+
+  --odo: #c9a04e;
 
   /* Shippori has no Cyrillic, and Yu Mincho's is full-width: a proportional
      serif in between catches Bulgarian before it reaches the Japanese faces. */
@@ -623,10 +626,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-.special-readings .hint {
-  margin: -4px 0 6px;
-}
-
 /* ---------------------------------------------------------------- a kanji's meanings, as one unit */
 
 .meanings {
@@ -670,7 +669,23 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .meanings > .meanings-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 18px;
+}
+
+/* Fold all / open all, at the right of the Meanings title. */
+.meanings-fold {
+  font-size: calc(11.5px * var(--type));
+  font-weight: 400;
+  color: var(--paper-dim);
+}
+
+.meanings-fold:hover,
+.meanings-fold:focus-visible {
+  color: var(--paper);
 }
 
 /* In a word's reading, the kana that are this kanji's: じょう in じょうしょう. */
@@ -709,31 +724,101 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 /* One meaning: what it is, its words by reading, what is close to it. */
 .meaning {
-  margin-top: 10px;
-  padding: 8px 12px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
+  margin-top: 16px;
+  padding: 0 12px 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 6px;
   background: var(--sumi-sunk);
 }
 
+/* Its number and name, held under the folded page head (44px) while the
+   card is read, so the page says which meaning you are in. */
 .meaning header {
+  position: sticky;
+  top: 44px;
+  z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -12px;
+  padding: 9px 12px 7px;
+  border-radius: 6px 6px 0 0;
+  background: var(--sumi-sunk);
 }
 
 .meaning-n {
-  font-size: calc(11.5px * var(--type));
-  color: var(--muted);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(22px * var(--type));
+  height: calc(22px * var(--type));
+  border-radius: 50%;
+  font-size: calc(12px * var(--type));
+  font-weight: 600;
+  color: var(--sumi);
+  background: var(--paper-dim);
   font-variant-numeric: tabular-nums;
 }
 
-.meaning h4 {
+.meaning header :is(h3, h4) {
+  flex: 1;
   margin: 0;
-  font-size: calc(14px * var(--type));
-  font-weight: 500;
+  font-size: calc(15.5px * var(--type));
+  font-weight: 600;
   color: var(--paper);
+}
+
+/* The whole title folds and opens its card; the caret at its end says which. */
+.meaning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.meaning-label {
+  flex: 1;
+}
+
+.meaning-caret {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 140ms var(--ease);
+}
+
+.meaning-toggle[aria-expanded='true'] .meaning-caret {
+  transform: rotate(90deg);
+}
+
+.meaning-toggle:hover .meaning-caret,
+.meaning-toggle:focus-visible .meaning-caret {
+  stroke: var(--paper);
+}
+
+.meaning-toggle:focus-visible {
+  outline: 1px solid var(--ai);
+  outline-offset: 2px;
+}
+
+/* What folds away under a card's title and what it says (detail/fold.ts),
+   the room under it with it, so the card shuts to its title in one
+   movement. Its own block: the margins in it do not change as it moves. */
+.meaning-body {
+  display: flow-root;
+  padding-bottom: 6px;
 }
 
 .meaning-about {
@@ -761,6 +846,26 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
+/* In a card, each kind of word opens with a ruled line: KUN ────── */
+.meaning .lane-kind {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0 2px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-dim);
+}
+
+.meaning .lane-kind::after {
+  content: '';
+  flex: 1;
+  align-self: center;
+  height: 1px;
+  background: var(--rule);
+}
+
 /* On words of a reading the meaning has only now and then. */
 .lane-now {
   opacity: 0.55;
@@ -781,32 +886,51 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   text-underline-offset: 2px;
 }
 
-.meaning footer {
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid var(--rule);
+/* What sits beside a meaning, each marked by a line and an icon in its own
+   colour, so it is known before it is read: ≈ synonyms in indigo, ! easy
+   to mix up in ochre. No fill: the words stay on the card's ground. */
+.aside-block {
+  --tone: var(--ai);
+  margin-top: 14px;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--tone);
 }
 
-.meaning footer p,
-.meaning-mixups p {
+.aside-block.mixup {
+  --tone: var(--odo);
+}
+
+.aside-title {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 10px;
-  margin: 2px 0;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 0 0 4px;
+  font-size: calc(12px * var(--type));
+  font-weight: 600;
+  color: var(--tone);
 }
 
-.meaning-aside {
-  font-size: calc(11.5px * var(--type));
-  color: var(--muted);
+.aside-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: calc(18px * var(--type));
+  height: calc(18px * var(--type));
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: calc(12px * var(--type));
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Leftover mix-ups, on readings no meaning has: after the cards. */
+.meaning-mixups {
+  margin-top: 16px;
 }
 
 /* Synonyms: one row a kanji -- the kanji, its keyword, and the
    meaning of it that is close. */
-.meaning-similar > .meaning-aside {
-  margin: 2px 0;
-}
-
 .meaning-similar ul {
   list-style: none;
   margin: 0 0 4px;
@@ -874,73 +998,82 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   animation: meaning-flash 2.2s var(--ease) 0.25s both;
 }
 
-/* A kanji named beside a meaning: close to it, or easy to mix up with it. */
-.kanji-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+/* Easy to mix up: one item a spelling, the page's kanji among them. */
+.usage-spellings {
+  list-style: none;
+  margin: 0;
   padding: 0;
-  font-size: calc(12px * var(--type));
-  color: var(--paper-dim);
+}
+
+.usage-spellings > li {
+  padding: 8px 0;
+}
+
+.usage-spellings > li + li {
+  border-top: 1px solid var(--rule);
+}
+
+/* The spelling and its kanji's keyword; a button that opens that kanji. */
+/* Wraps whole pieces: a spelling or a reading is never broken. */
+.usage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  margin: 0 0 2px;
+  padding: 0;
+  font: inherit;
+  text-align: left;
   background: none;
   border: 0;
+}
+
+button.usage-head {
   cursor: pointer;
 }
 
-.kanji-chip [lang='ja'] {
+.usage-spelling {
+  white-space: nowrap;
   font-family: var(--mincho);
-  font-size: calc(16px * var(--type));
+  font-size: calc(17px * var(--type));
   color: var(--paper);
 }
 
-.kanji-chip:hover [lang='ja'],
-.kanji-chip:focus-visible [lang='ja'] {
+button.usage-head:hover .usage-spelling,
+button.usage-head:focus-visible .usage-spelling {
   color: var(--ai);
 }
 
-.mixup-reading {
+.usage-reading {
+  white-space: nowrap;
   font-family: var(--mincho);
-  font-size: calc(14px * var(--type));
+  font-size: calc(13px * var(--type));
   color: var(--paper-dim);
 }
 
-/* Which one to write: the usage card, folded. */
-.usage summary {
-  margin: 2px 0;
-  font-size: calc(11.5px * var(--type));
-  color: var(--ai);
-  cursor: pointer;
+.usage-keyword {
+  font-size: calc(12px * var(--type));
+  color: var(--paper-dim);
 }
 
-.usage-spellings {
-  margin: 4px 0;
+/* The page's own kanji among the spellings. */
+.usage-spellings > [data-self] .usage-spelling {
+  color: var(--odo);
 }
 
-.usage-spellings > div {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0 12px;
-  padding: 4px 0;
-}
-
-.usage-spellings > div + div {
-  border-top: 1px dashed var(--rule);
-}
-
-.usage-spellings dt {
-  font-family: var(--mincho);
-  font-size: calc(16px * var(--type));
-  color: var(--paper);
-}
-
-.usage-spellings dd {
+.spelling-def {
   margin: 0;
   font-size: calc(12.5px * var(--type));
+  line-height: 1.5;
   color: var(--paper-dim);
 }
 
-.usage-spellings dd p {
-  margin: 0 0 2px;
+/* Its example, set off under what it is for. */
+.usage-example {
+  margin: 4px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--rule-bright);
+  font-size: calc(12px * var(--type));
 }
 
 .usage-example [lang='ja'] {
@@ -948,16 +1081,15 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--paper);
 }
 
-.meaning-plain h4,
-.meaning-mixups h4 {
+.meaning-plain {
+  padding-top: 9px;
+}
+
+.meaning-plain h4 {
   margin: 0;
   font-size: calc(12.5px * var(--type));
   font-weight: 500;
   color: var(--muted);
-}
-
-.meaning-mixups {
-  margin-top: 18px;
 }
 
 .meanings-all {
@@ -1930,7 +2062,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .vocab-row {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto auto;
   align-items: baseline;
   gap: 8px;
   width: calc(100% + 12px);
@@ -1970,6 +2102,22 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* One of its meaning's best examples: a star, in a place every row keeps,
+   empty where there is none, so the rows line up. */
+.vocab-star,
+.word-star {
+  flex: none;
+  width: 1em;
+  font-size: calc(12px * var(--type));
+  line-height: 1;
+  text-align: center;
+  color: var(--paper);
+}
+
+.vocab-star {
+  grid-column: -2 / -1;
 }
 
 /* ---------------------------------------------------------------- draw pad */
@@ -6600,6 +6748,12 @@ html {
     top: auto;
   }
 
+  /* Nor a meaning card's title: the copy moves it where it stood (cardStack.ts copyCard). */
+  [data-copy] .meaning > header {
+    position: relative;
+    top: auto;
+  }
+
   /* Every word with a kanji, as a card: its name held along its top. */
   .page-card:not([data-copy]) > .words-head {
     position: sticky;
@@ -7835,15 +7989,10 @@ html[data-nav]::view-transition-old(tabs):only-child {
   flex: 1 1 auto;
 }
 
-.board-fixed .hint,
-.meaning-group-hint {
+.board-fixed .hint {
   display: block;
   margin-top: 2px;
   font-size: calc(12px * var(--type));
-}
-
-.meaning-group-hint {
-  font-weight: 400;
 }
 
 .board-count {
@@ -9944,106 +10093,47 @@ button.review-part {
   border-color: var(--rule-bright);
 }
 
-.meaning-group {
-  margin-top: 14px;
-}
-
-/* A group's whole title bar folds it away. */
-.meaning-group h3 {
-  margin: 0 0 4px;
-  font-size: calc(13px * var(--type));
-  font-weight: 500;
-  color: var(--paper-dim);
-  border-bottom: 1px solid var(--rule);
-}
-
 .words-more {
   margin-top: 8px;
 }
 
-.meaning-group-toggle {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-  width: 100%;
-  padding: 2px 4px 5px 0;
-  background: none;
-  border: 0;
-  border-radius: 3px;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+/* All words with a kanji: each meaning a card as on the kanji's page, its
+   number the same. Its title holds to the top of the list: of the card on a
+   phone, under the card's name (44px). The words in no group are a card in
+   dashes: they are not a meaning. */
+.words-with .meaning header {
+  top: 0;
 }
 
-.meaning-group-toggle:hover {
-  color: var(--paper);
-  background: var(--sumi-lift);
+.page-card .words-with .meaning header {
+  top: 44px;
 }
 
-.meaning-group-toggle:focus-visible {
-  outline: 1px solid var(--ai);
+/* Brought into view, a card stops under that name, not behind it. */
+.page-card .words-with .meaning {
+  scroll-margin-top: 44px;
 }
 
-.meaning-group-caret {
-  flex: none;
-  align-self: center;
-  width: 12px;
-  height: 12px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: transform 140ms var(--ease);
-}
-
-.meaning-group-toggle[aria-expanded='true'] .meaning-group-caret {
-  transform: rotate(90deg);
-}
-
-.meaning-group-label {
-  font-weight: 500;
-}
-
-.meaning-group[data-shut] h3 {
-  margin-bottom: 0;
-}
-
-/* All words with a kanji: each meaning a box of its own, as on the kanji's
-   page, its title bar ruled off. The words in no group are boxed in dashes:
-   they are not a meaning. One list alone needs no box. */
-.words-with .meaning-group:not([data-rest='alone']) {
-  margin-top: 12px;
-  padding: 0 12px 10px;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  background: var(--sumi-sunk);
-}
-
-.words-with .meaning-group[data-rest='after'] {
+.words-with .meaning[data-dashed] {
   border-style: dashed;
   background: none;
 }
 
-.words-with .meaning-group:not([data-rest='alone']) h3 {
-  margin: 0 -12px;
-  padding: 6px 12px 4px;
-  font-size: calc(14px * var(--type));
-  color: var(--paper);
+.words-with .meaning[data-dashed] header {
+  background: var(--sumi);
 }
 
-.words-with .meaning-group[data-shut]:not([data-rest='alone']) {
-  padding-bottom: 0;
+.words-with .meaning .words {
+  margin-top: 6px;
 }
 
-.words-with .meaning-group[data-shut] h3 {
-  border-bottom: 0;
-}
-
-.words-with .meaning-group .words {
-  margin-top: 10px;
+/* How many words a card holds, before its caret. */
+.meaning-count {
+  flex: none;
+  font-size: calc(11.5px * var(--type));
+  font-weight: 400;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Under a search's kanji, once one is open beside it: its words, by meaning. */

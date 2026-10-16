@@ -42,6 +42,8 @@ import {
   run,
   stackHeight,
   underOf,
+  markLeft,
+  type Left,
   type Move,
   type Under,
 } from './cardStack'
@@ -583,12 +585,15 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null)
   // Filled in below: what to do as back or forward arrives, before the page changes.
   const beforePop = useRef<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>(null)
-  // On a phone back comes to the top of the page, which the copy under a
-  // card shows; a desktop keeps where it was.
+  // Back comes to where the page was left. On a phone only to the card right
+  // under the open one, whose copy keeps its page down to there (see
+  // keepUnder): the ones further down come back at their top.
+  const backScroll = useRef<((stack: Stack) => number | null) | null>(null)
   const { stack, stage, depth, push, reset, replaceTop, openOver, rebase, pop, enterStage, leaveStage } = useNav(
     scroller,
     beforePop,
     keepScrollOnBack,
+    backScroll,
   )
   const top = stack[stack.length - 1]
   const root = stack[0]
@@ -1408,10 +1413,28 @@ export function App() {
       underCopies.current = kept
       return
     }
-    // Down to where it was read, for going on the stack from there (see stackOn).
-    const past = Math.max(0, sc.getBoundingClientRect().top - card.getBoundingClientRect().top)
-    underCopies.current = [...kept.filter((u) => u.at < at), { page, at, el: copyCard(card, sc.clientHeight + past) }]
+    // Down to where it was read, for going on the stack from there (see stackOn)
+    // and coming back to it there (cardStack.ts comeOff).
+    const top = card.getBoundingClientRect().top - sc.getBoundingClientRect().top
+    const past = Math.max(0, -top)
+    const el = copyCard(card, sc.clientHeight + past)
+    markLeft(el, { top, p: parseFloat(headRef.current?.style.getPropertyValue('--p') || '0') || 0, scroll: sc.scrollTop })
+    // Only the card right under the open one comes back where it was left:
+    // the ones further down forget, and keep only their top.
+    const deeper = kept.filter((u) => u.at < at)
+    for (const u of deeper) {
+      if (u.el.dataset.left === undefined) continue
+      delete u.el.dataset.left
+      trimCard(u.el, sc.clientHeight)
+    }
+    underCopies.current = [...deeper, { page, at, el }]
   }
+  /** Where the page at `at` was scrolled when it was left, if it is to come back there: the card right under the open one. */
+  function leftScroll(at: number, page: Page | undefined): number | null {
+    const c = page && underCopies.current.find((u) => u.at === at && samePage(u.page, page))
+    return c?.el.dataset.left ? (JSON.parse(c.el.dataset.left) as Left).scroll : null
+  }
+  backScroll.current = (to: Stack) => (mobile ? (leftScroll(to.length - 1, to[to.length - 1]) ?? 0) : null)
   /** The copy of the card at `at`, or a live one where none was kept. */
   function cardAt(at: number, page: Page) {
     const kept = underCopies.current.find((c) => c.at === at && samePage(c.page, page))
@@ -1950,7 +1973,7 @@ export function App() {
     const sc = scroller.current
     if (!card || !sc || !pagesSlide() || onStageRef.current || unders.current.length < k) return false
     const h = sc.clientHeight
-    const plan = from?.plan ?? comeOff(unders.current, k, h)
+    const plan = from?.plan ?? comeOff(unders.current, k, h, sc.scrollTop)
     const down = from?.down ?? 0
     const t0 = down / h
     card.dataset.moving = ''
@@ -1990,6 +2013,8 @@ export function App() {
     run(reducedMotion() ? 0 : 240, step, () => {
       card.style.transform = ''
       delete card.dataset.moving
+      // A card that came back read down its page stood where it was; back in the stack, it rests.
+      unders.current.forEach((u, i) => put(u, rest(unders.current.length, i, u.fold)))
     })
   }
   // A pull down at the top is the app's, not the browser's. Chrome would take
@@ -2206,7 +2231,8 @@ export function App() {
       over = true
       stacking.current = null
       settle()
-      if (nearest) trimCard(nearest.el, sc.clientHeight)
+      // Down to where it was read, and a screen more: where back brings it.
+      if (nearest) trimCard(nearest.el, sc.clientHeight + Math.max(0, -was.top))
     }
     const stop = run(reducedMotion() ? 0 : RISE_MS, (e) => moveTo(moves, e), end)
     stacking.current = () => {
@@ -2276,6 +2302,14 @@ export function App() {
       card.style.transform = ''
       delete card.dataset.moving
       card.toggleAttribute('data-quiet', returning.current)
+    }
+    // Read down when it was left, the page is where its copy stood, before
+    // it is drawn: scrolled so, its head folded so.
+    const sc = scroller.current
+    const scroll = mobile && returning.current ? leftScroll(entries.length - 1, shownTop ?? undefined) : null
+    if (scroll !== null && sc) {
+      sc.scrollTop = scroll
+      foldHead()
     }
     returning.current = false
     dropped.current = false

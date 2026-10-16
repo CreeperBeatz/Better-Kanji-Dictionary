@@ -185,6 +185,12 @@ export interface Word {
   inflection?: string[]
   /** On a kanji's page: which kana of `reading` are that kanji's, [from, to): じょう in じょうしょう. */
   mark?: [number, number] | null
+  /** In all the words with a kanji: how the word reads it -- kun, on, or a special reading (今日 きょう). */
+  lane?: 'kun' | 'on' | 'special'
+  /** And the reading it gives the kanji (じょう); none for a special reading. */
+  as?: string | null
+  /** On a kanji's page and in its words: one of its meaning's best examples, the words to know it by. */
+  star?: boolean
 }
 
 /** One of a kanji's readings on its page (server: search.kanji_readings). */
@@ -213,7 +219,10 @@ export interface CloseKanji extends KanjiLite {
 export interface MixUp {
   /** As a word reads it: あげる; a usage card's may be two, あがる・あげる. */
   reading: string
-  kanji: KanjiLite[]
+  /** The page's kanji's meaning on that reading; missing in a pack from before it. */
+  self?: CloseKanji['sense']
+  /** Each with its meaning on that reading. */
+  kanji: (KanjiLite & { sense?: CloseKanji['sense'] })[]
   usage: UsageCard | null
 }
 

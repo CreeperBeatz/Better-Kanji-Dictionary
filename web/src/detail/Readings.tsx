@@ -180,8 +180,7 @@ export function SpecialReadings({ words, row }: { words: Word[]; row: (w: Word) 
   if (!words.length) return null
   return (
     <div className="vocab special-readings">
-      <h3>{t('special')}</h3>
-      <p className="hint">{t('specialHint')}</p>
+      <h3 title={t('specialHint')}>{t('special')}</h3>
       <ul>{words.map(row)}</ul>
     </div>
   )

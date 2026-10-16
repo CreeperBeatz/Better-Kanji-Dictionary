@@ -221,6 +221,12 @@ export function useNav(
   beforePop?: React.RefObject<((e: PopStateEvent, apply: () => void, byApp: boolean) => boolean) | null>,
   /** Whether back comes to a page where it was left; else at its top. */
   keepScroll: () => boolean = () => true,
+  /**
+   * Where the page gone back to is scrolled, where the app says so (a phone's
+   * card stack, which knows only the card under the open one's); null: as
+   * `keepScroll` has it.
+   */
+  backScroll?: React.RefObject<((stack: Stack) => number | null) | null>,
 ) {
   const [entry, setEntry] = useState<Entry>(opening)
   const current = useRef(entry)
@@ -421,13 +427,13 @@ export function useNav(
       const apply = () => {
         current.current = next
         setEntry(next)
-        restoreScroll(scroller.current, next.scroll ?? 0)
+        restoreScroll(scroller.current, backScroll?.current?.(next.stack) ?? next.scroll ?? 0)
       }
       if (!beforePop?.current?.(e, apply, byApp)) apply()
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [scroller, beforePop])
+  }, [scroller, beforePop, backScroll])
 
   return {
     stack: entry.stack,

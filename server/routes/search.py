@@ -679,6 +679,25 @@ def _marked(char: str, words: dict[int, dict]) -> dict[int, dict]:
     return words
 
 
+def _laned(char: str, words: dict[int, dict]) -> dict[int, dict]:
+    """The words, each with how it reads `char`, for the meaning cards' lanes: `lane`
+    kun, on, or special (its kana go over more than the kanji: 今日 きょう), and `as`,
+    the reading (じょう). Left as they are on a database from before the readings stage."""
+    if not words or not _has_readings():
+        return words
+    row = query_one("SELECT on_yomi FROM kanji WHERE char = ?", (char,))
+    on = {r.strip("-") for r in json.loads((row and row["on_yomi"]) or "[]")}
+    ids = list(words)
+    for r in query(
+        f"SELECT word_id, reading FROM word_reading WHERE char = ? AND main = 1 AND word_id IN ({','.join('?' * len(ids))})",
+        (char, *ids),
+    ):
+        w = words[r["word_id"]]
+        w["lane"] = "special" if r["reading"] is None else "on" if r["reading"] in on else "kun"
+        w["as"] = r["reading"]
+    return words
+
+
 @router.get("/words-with/{char}")
 def words_with(
     char: str,
@@ -717,9 +736,11 @@ def words_with(
         for wid in ids:
             if wid in placed:
                 in_group.setdefault(placed[wid], []).append(wid)
-        fetched = _marked(char, _fetch_words([w for ws in in_group.values() for w in ws]))
+        fetched = _laned(char, _marked(char, _fetch_words([w for ws in in_group.values() for w in ws])))
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
-            words = [fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
+            # Its best examples, starred: the words to know it by.
+            best = set(s.get("examples") or [])
+            words = [{**fetched[w], "star": True} if w in best else fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
             if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})
     rest = [w for w in ids if w not in placed]
@@ -805,11 +826,14 @@ def reading_words(char: str) -> dict:
 
 
 # At most: common words beside each reading, special readings, words in each
-# part of a meaning, and words beside a reading a meaning has only now and then.
+# part of a meaning (the card shows a few and opens more of them in place),
+# words beside a reading a meaning has only now and then, and words where the
+# kanji is there for its sound.
 READING_EXAMPLES = 2
 SPECIAL_READINGS = 12
-LANE_WORDS = 5
+LANE_WORDS = 26
 ALSO_WORDS = 2
+SOUND_WORDS = 5
 
 
 # Words too common in the meanings' wording to say two meanings are alike.
@@ -932,10 +956,12 @@ def kanji_page(char: str) -> dict:
     on_readings = {r.strip("-") for r in json.loads((on_row and on_row["on_yomi"]) or "[]")}
 
     def pick(ids: list[int], first: list[int], n: int = LANE_WORDS) -> list[int]:
-        """`first` that are among `ids`, then the key words; else the commonest. At most `n`."""
+        """`first` that are among `ids`, then the key words, then the rest, commonest
+        first: what the card shows first leads. At most `n`."""
         chosen = [w for w in dict.fromkeys(first) if w in ids]
         chosen += [w for w in ids if w not in chosen and _key_word(words[w])]
-        return (chosen or ids[:1])[:n]
+        chosen += [w for w in ids if w not in chosen]
+        return chosen[:n]
 
     # Kanji easy to mix up, by the reading they share, each with the usage card
     # (異字同訓) for that reading, where there is one; a card can cover two
@@ -954,8 +980,35 @@ def kanji_page(char: str) -> dict:
         n = nodes.get(c) or {}
         return {"char": c, "meanings": n.get("meanings") or [], "meaningsBg": n.get("meaningsBg")}
 
+    def read_as(c: str, reading: str) -> dict | None:
+        """Which of `c`'s meanings it has when read `reading` (あがる・あげる is
+        either): the one the word the reading forms is in -- 鳴く's "cry, shout"
+        for なく, not 鳴る's "sound, ring" -- else the one with the most words
+        read so."""
+        if not has_readings:
+            return None
+        site_c = review.site_meanings(c)
+        groups = {g["id"]: g for g in site_c["senses"] or [] if g["id"] != review.CATCH_ALL}
+        kana = reading.split("・")
+
+        def plain(r: str) -> str:
+            return katakana_to_hiragana(r.replace(".", "").strip("-"))
+
+        forms = {plain(r): w["id"] for r, w in reading_words(c)["words"].items()}
+        g = next((g for k in kana if (g := site_c["placed"].get(forms.get(k))) in groups), None)
+        if g is None:
+            count: dict[str, int] = {}
+            for r in query("SELECT word_id, reading FROM word_reading WHERE char = ? AND main = 1 AND reading IS NOT NULL", (c,)):
+                p = site_c["placed"].get(r["word_id"])
+                if p in groups and plain(r["reading"]) in kana:
+                    count[p] = count.get(p, 0) + 1
+            g = max(count, key=count.get, default=None)
+        return g and {"id": g, "en": groups[g].get("en"), "bg": groups[g].get("bg")}
+
+    # Each kanji with the meaning it has on that reading, this one (`self`) too.
     mixups = [
-        {"reading": r, "kanji": [lite(c) for c in dict.fromkeys(cs)], "usage": card_of.get(r.split("・")[0])}
+        {"reading": r, "self": read_as(char, r), "kanji": [{**lite(c), "sense": read_as(c, r)} for c in dict.fromkeys(cs)],
+         "usage": card_of.get(r.split("・")[0])}
         for r, cs in mix.items() if cs
     ]
 
@@ -1006,23 +1059,31 @@ def kanji_page(char: str) -> dict:
         placed_special |= {r["word_id"] for r in exceptions}
         # A reading's kana as a word says it: あ.げる is あげる.
         kana = {katakana_to_hiragana(r.replace(".", "")) for r in by}
-        here = [m for m in mixups if set(m["reading"].split("・")) & kana and m["reading"] not in claimed]
+        # On a meaning's card, this kanji's meaning there is that meaning.
+        here = [{**m, "self": {"id": s["id"], "en": s.get("en"), "bg": s.get("bg")}}
+                for m in mixups if set(m["reading"].split("・")) & kana and m["reading"] not in claimed]
         claimed |= {m["reading"] for m in here}
         # A kanji easy to mix up with it here is not listed again as close in meaning.
         mixed = {k["char"] for m in here for k in m["kanji"]}
+
+        def starred(word: dict, wid: int) -> dict:
+            """The word, starred if it is one of the meaning's best examples: the words to know it by."""
+            return {**word, "star": True} if wid in first else word
+
         out["meanings"].append({
             "id": s["id"], "en": s.get("en"), "bg": s.get("bg"), "about": s.get("about"), "aboutBg": s.get("aboutBg"),
             "total": len(ids),
-            "kun": {"words": [marked(w) for w in pick(kun_ids, [*formed_here, *first])]} if kun_ids else None,
-            "on": [{"reading": r, "words": [marked(w) for w in pick(by[r], first)]} for r in on],
-            "also": [{"reading": r, "words": [marked(w) for w in by[r][:ALSO_WORDS]]} for r in also],
-            "exceptions": [as_here(r) for r in exceptions],
+            # Starred first in each part, then the words the readings form, then the rest.
+            "kun": {"words": [starred(marked(w), w) for w in pick(kun_ids, [*first, *formed_here])]} if kun_ids else None,
+            "on": [{"reading": r, "words": [starred(marked(w), w) for w in pick(by[r], first)]} for r in on],
+            "also": [{"reading": r, "words": [starred(marked(w), w) for w in by[r][:ALSO_WORDS]]} for r in also],
+            "exceptions": [starred(as_here(r), r["word_id"]) for r in exceptions],
             "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
             "mixups": here,
         })
     sound = [w for w in in_group.get(review.CATCH_ALL, []) if w not in special_ids]
     if sound:
-        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [])]}
+        out["soundOnly"] = {"words": [marked(w) for w in pick(sound, [], SOUND_WORDS)]}
     out["hero"], out["heroBg"] = extras.get("hero"), extras.get("heroBg")
     out["link"], out["linkBg"] = extras.get("link"), extras.get("linkBg")
     out["mixups"] = [m for m in mixups if m["reading"] not in claimed]
