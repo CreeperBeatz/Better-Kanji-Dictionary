@@ -27,7 +27,7 @@ import { reducedMotion } from '../media'
 import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
-import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
+import { bringToTop, focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
 import { ReadingsLine, SpecialReadings } from './Readings'
 import { useFold } from './fold'
@@ -134,20 +134,17 @@ export function Meanings({
     }
   }
 
-  // Opened from a "synonyms" row: that meaning opens, comes into view and glows a moment.
+  // Opened from a "synonyms" row: that meaning opens, comes into view at the
+  // top of the screen, to be read from its start, and glows a moment.
   useEffect(() => {
     const id = takeMeaningFocus(page.char)
     if (!id) return
     turn(id, true)
-    const frame = requestAnimationFrame(() => {
-      const card = document.getElementById(meaningAnchor(id))
-      if (!card) return
-      card.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' })
+    return bringToTop(meaningAnchor(id), !reducedMotion(), (card) => {
       card.classList.remove('meaning-flash')
       void card.offsetWidth // so the glow starts again on a second visit
       card.classList.add('meaning-flash')
     })
-    return () => cancelAnimationFrame(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per kanji
   }, [page.char])
 

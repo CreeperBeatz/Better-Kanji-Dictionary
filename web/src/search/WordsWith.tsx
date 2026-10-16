@@ -17,7 +17,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
 import { useFold } from '../detail/fold'
 import { share } from '../detail/lanes'
-import { peekWordsFocus, takeWordsFocus } from '../detail/meaningFocus'
+import { bringToTop, peekWordsFocus, takeWordsFocus } from '../detail/meaningFocus'
 import { WordLanes } from '../detail/WordLanes'
 import { strings, useLang } from '../i18n'
 import { reducedMotion } from '../media'
@@ -60,8 +60,6 @@ const MORE = 20
 // The words in no group: the first page asked for, then a page a "more".
 const REST_FIRST = 8
 const REST = 'rest'
-// How long the card it was opened at waits for the page to stop moving before it comes into view, in ms.
-const RISE_WAIT = 900
 
 /** What the list asks for first, kept by the api: for opening it whole (App.tsx warm). */
 export function wordsWithKey(char: string, common: boolean): string {
@@ -227,19 +225,10 @@ export function WordsWith({
   }, [char, common])
 
   // The card it was opened at comes into view, once its words are there.
-  // On a phone the list is a card rising into place: measured while it rises, the
-  // card would land off by the rise, so it waits for the page to stand still (at most RISE_WAIT).
   const ready = !!data && data.groups.some((g) => g.id === at)
   useEffect(() => {
     if (!ready || !at) return
-    let gone = false
-    const moving = document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity)
-    Promise.race([Promise.allSettled(moving.map((a) => a.finished)), new Promise((r) => setTimeout(r, RISE_WAIT))]).then(() => {
-      if (!gone) document.getElementById(cardAnchor(at))?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
-    })
-    return () => {
-      gone = true
-    }
+    return bringToTop(cardAnchor(at), !reducedMotion())
   }, [ready, at, view.n])
 
   async function loadMore() {
