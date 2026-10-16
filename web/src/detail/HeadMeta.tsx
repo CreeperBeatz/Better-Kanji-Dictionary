@@ -2,11 +2,13 @@
  * How much a character or word is worth learning, down the right of the top
  * of its page as down a search result: common or not at the top; JLPT level,
  * in its colour, and newspaper rank at the bottom. Folded, the head keeps
- * them in a line at its right end: level, rank, common.
+ * them in a line at its right end: level, rank, common. Beside "common",
+ * a chip turns the card to the other language.
  */
 
 import type { KanjiNode, Word } from '../api'
-import { strings, useLang } from '../i18n'
+import { useContext } from 'react'
+import { CardLang, otherLang, strings, useLang } from '../i18n'
 
 const S = strings(
   {
@@ -19,6 +21,8 @@ const S = strings(
     kanjiNewsTitle: 'Newspaper frequency: number {n} of the 2,500 most used kanji',
     wordNewsTitle: 'Newspaper frequency: among the {n} most frequent words',
     jlpt: 'JLPT N{n}',
+    showIn: 'Show this card in Bulgarian (T)',
+    backTo: 'Back to English (T)',
   },
   {
     common: 'честа',
@@ -30,6 +34,8 @@ const S = strings(
     kanjiNewsTitle: 'Честота във вестниците: № {n} от 2500-те най-използвани йероглифа',
     wordNewsTitle: 'Честота във вестниците: сред {n}-те най-чести думи',
     jlpt: 'JLPT N{n}',
+    showIn: 'Покажи картата на английски (T)',
+    backTo: 'Обратно на български (T)',
   },
 )
 
@@ -45,8 +51,11 @@ function HeadMeta({ m }: { m: Meta }) {
   const t = S(useLang())
   return (
     <div className="head-meta">
-      <span className="word-common" data-common={m.common || undefined} title={m.commonTitle}>
-        {m.common ? t('common') : t('uncommon')}
+      <span className="head-meta-top">
+        <span className="word-common" data-common={m.common || undefined} title={m.commonTitle}>
+          {m.common ? t('common') : t('uncommon')}
+        </span>
+        <LangChip />
       </span>
       {(m.news || m.jlpt) && (
         <span className="word-meta">
@@ -63,6 +72,30 @@ function HeadMeta({ m }: { m: Meta }) {
         </span>
       )}
     </div>
+  )
+}
+
+/**
+ * The other language, for this card only: its meanings, senses and notes
+ * turn to it, and back with a second tap. Always in its place, so the head
+ * does not move; a card under the open one shows it but cannot turn.
+ */
+function LangChip() {
+  const lang = useLang()
+  const t = S(lang)
+  const { shown, flip } = useContext(CardLang)
+  const to = otherLang(lang)
+  return (
+    <button
+      type="button"
+      className="card-lang"
+      aria-pressed={shown !== null}
+      disabled={!flip}
+      onClick={flip ?? undefined}
+      title={t(shown ? 'backTo' : 'showIn')}
+    >
+      {to === 'bg' ? 'БГ' : 'EN'}
+    </button>
   )
 }
 

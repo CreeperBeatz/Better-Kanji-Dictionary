@@ -9,7 +9,7 @@
  */
 import type { ReactNode } from 'react'
 import type { ReadingInfo, Word } from '../api'
-import { strings, useLang } from '../i18n'
+import { strings, useLang, useContentLang } from '../i18n'
 import { glossOf } from '../i18n/content'
 import { hiraganaToKatakana, plainReading as plain } from '../local/japanese'
 import { ValencyMark } from '../search/Valency'
@@ -126,6 +126,7 @@ function ReadingGroup({
   kun?: boolean
 }) {
   const lang = useLang()
+  const shown = useContentLang()
   const t = S(lang)
   // うえ and -うえ are one line.
   const readings = [...new Set(list.map(plain))]
@@ -151,7 +152,7 @@ function ReadingGroup({
               </span>
               <span className="reading-about">
                 {/* An on reading's own word (上 read じょう) rarely means what the kanji does: its words say it. */}
-                {kun && formed?.senses[0] && <span className="reading-gloss">{glossOf(formed.senses[0], lang).value.split(';')[0]}</span>}
+                {kun && formed?.senses[0] && <span className="reading-gloss">{glossOf(formed.senses[0], shown).value.split(';')[0]}</span>}
                 {kun && formed && <ValencyMark word={formed} />}
                 {it?.examples.map((w) => (
                   <button

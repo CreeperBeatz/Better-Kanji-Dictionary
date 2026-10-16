@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react'
 import { api, type Word, type WordEntry } from '../api'
-import { strings, useLang, type Lang } from '../i18n'
+import { strings, useLang, type Lang, useContentLang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { tagLabel } from '../i18n/grammar'
 import { local } from '../local/local'
@@ -105,8 +105,9 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
  */
 export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: string) => void }) {
   const lang = useLang()
+  const shown = useContentLang()
   const t = S(lang)
-  const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], lang).value.split(';').map((g) => g.trim()) : []
+  const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], shown).value.split(';').map((g) => g.trim()) : []
   // From five characters (電子計算機, アイスクリーム) the word wants the row: its sense goes under it.
   return (
     <div className="word-head" data-long={[...w.headword].length >= 5 || undefined}>
@@ -140,6 +141,7 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
 
 export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: Props) {
   const lang = useLang()
+  const shown = useContentLang()
   const t = S(lang)
   // Known already, it is there at once, as on a page come back to.
   const [entry, setEntry] = useState<WordEntry | null>(() => api.word.peek(id) ?? null)
@@ -173,8 +175,8 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
     )
   }
   const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
-  const glosses = w.senses.map((s) => glossOf(s, lang))
-  const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
+  const glosses = w.senses.map((s) => glossOf(s, shown))
+  const machine = shown === 'bg' && glosses.some((g) => !g.fallback)
   const rank = rankOf(w, lang)
 
   return (
@@ -261,7 +263,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                 </button>
                 <div>
                   <p className="entry-kanji-meaning">
-                    {kanjiMeaning(k, lang)}
+                    {kanjiMeaning(k, shown)}
                     {k.jlpt && <span className="entry-kanji-level">N{k.jlpt}</span>}
                   </p>
                   <p className="entry-kanji-yomi">

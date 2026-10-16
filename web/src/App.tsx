@@ -8,7 +8,7 @@ import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
 import { Workbench } from './review/Workbench'
-import { strings, useLang, type Translate } from './i18n'
+import { CardLang, otherLang, strings, useLang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
 import { loadNotes } from './detail/NoteContent'
@@ -571,11 +571,11 @@ const META_GAP = 12
 
 /**
  * How common a card's subject is stays in its folded line, along the right
- * end, in the middle of it: "common" comes down, and the level and rank go
- * up beside it, to its left. Returns where they then start, from the left.
+ * end, in the middle of it: "common" and the language chip come down, and
+ * the level and rank go up beside them, to their left. Returns where they then start, from the left.
  */
 function measureMeta(head: HTMLElement, h: number): number {
-  const common = head.querySelector<HTMLElement>('.head-meta > .word-common')
+  const common = head.querySelector<HTMLElement>('.head-meta > .head-meta-top')
   if (!common) return Infinity
   const mid = h - FOLDED / 2
   const c = offsetIn(common, head)
@@ -1156,6 +1156,8 @@ export function App() {
   // Back `k` pages at once, sliding: as history slides it, when it goes
   // through history, or here when the pages come off in place. `still`: the
   // card has gone already, pulled off, and the page under it is in sight.
+  // Turns the open card to the other language and back (set below, with the card).
+  const flipCard = useRef<(() => void) | null>(null)
   const popBy = useStable((k: number, still: boolean = false) => {
     cameBack.current = performance.now()
     dropped.current = still
@@ -1180,6 +1182,7 @@ export function App() {
       if (document.querySelector('.overlay')) return
       if (e.key === 'Escape') setLegendOpen(false)
       if (e.key === 'm' || e.key === 'M') setView('map')
+      if (e.key === 't' || e.key === 'T') flipCard.current?.()
       if ('dDfF'.includes(e.key)) setView('focus')
       // Backspace goes back a page. Escape is left to whichever overlay is open.
       if (e.key === 'Backspace') {
@@ -1338,12 +1341,28 @@ export function App() {
   // A page the tabs treat as a card: a kanji, a word, or every word with a kanji.
   const carded = subject !== null || shownTop?.kind === 'words'
   const notesCount = subject && assocCount.key === subject.key ? assocCount.n : 0
+  const subjectKey = subject?.key ?? null
+  // The card shown in the other language, by its subject: from the chip by
+  // "common" in its head, or T. That card only, while it is in the stack;
+  // opened anew, it is in the interface's language again.
+  const [flipped, setFlipped] = useState<string | null>(null)
+  const flippedIn = flipped !== null && stack.some((p) => subjectOf(p)?.key === flipped)
+  useEffect(() => {
+    if (flipped !== null && !flippedIn) setFlipped(null)
+  }, [flipped, flippedIn])
+  const cardLang = useMemo(
+    () => ({
+      shown: subjectKey !== null && flipped === subjectKey ? otherLang(t.lang) : null,
+      flip: subjectKey === null ? null : () => setFlipped((f) => (f === subjectKey ? null : subjectKey)),
+    }),
+    [subjectKey, flipped, t.lang],
+  )
+  flipCard.current = cardLang.flip
   // The page shows its dictionary, or its associations when it is their page.
   const notesShown = hasNotes(shownTop)
   // Its associations are mounted under its dictionary too, unseen, for their
   // count, but only once the page has come to rest: comments rendered behind
   // a page sliding in cost it frames.
-  const subjectKey = subject?.key ?? null
   const [settled, setSettled] = useState<string | null>(null)
   useEffect(() => {
     if (!subjectKey) return
@@ -1574,7 +1593,9 @@ export function App() {
       sc.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(frame)
     }
-  }, [folding, shownTop, searchShown, onStage, foldHead])
+    // Measured again in the other language: the head may keep its height
+    // while its lines move inside it.
+  }, [folding, shownTop, searchShown, onStage, foldHead, cardLang.shown, t.lang])
   // A page's associations, from beside its first title: a page of their own
   // -- on a phone, a card -- over its dictionary, back from which is the
   // dictionary again.
@@ -1607,6 +1628,8 @@ export function App() {
   // A tap on the folded line goes to the card's top, whatever it is on.
   function onHeadTap(e: React.MouseEvent) {
     if (!headRef.current?.hasAttribute('data-collapsed')) return
+    // The language chip in it does its own thing.
+    if ((e.target as Element).closest('.card-lang')) return
     e.preventDefault()
     e.stopPropagation()
     toCardTop()
@@ -2530,6 +2553,7 @@ export function App() {
               style={stackShown ? { minHeight: `calc(100% - ${stackHeight(stackUnder.length)}px + ${SLOT_ROOM}px)` } : undefined}
             >
             <div className="page-card" ref={cardRef} data-stacked={stackShown || undefined}>
+            <CardLang.Provider value={cardLang}>
               {subject && !searchShown && (
                 <div className="page-head" ref={headRef} data-folding={folding || undefined} onClickCapture={onHeadTap}>
                   {pageHead()}
@@ -2578,6 +2602,7 @@ export function App() {
                   </div>
                 )}
               </div>
+            </CardLang.Provider>
             </div>
             </div>
           </div>

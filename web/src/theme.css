@@ -450,6 +450,56 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 2px 0;
 }
 
+/* Its top line: common or not, then the chip that turns the card to the
+   other language. */
+.head-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-lang {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--rule-bright);
+  border-radius: 9px;
+  background: none;
+  color: var(--muted);
+  font-family: var(--gothic);
+  font-size: calc(10px * var(--type));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* A finger's worth to hit, more than it shows. */
+.card-lang::before {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
+}
+
+.card-lang[aria-pressed='true'] {
+  border-color: var(--ai-deep);
+  background: var(--ai-wash);
+  color: var(--ai);
+}
+
+.card-lang:disabled {
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .card-lang:not(:disabled):hover {
+    color: var(--paper);
+    border-color: var(--ai-deep);
+  }
+}
+
 .see-components {
   display: inline-flex;
   align-items: center;
@@ -6910,8 +6960,8 @@ html {
 }
 
 /* How common it is stays, in a line at the line's right end: "common"
-   comes down, the level and rank go up to its left. */
-.page-head[data-folding] .head-meta > .word-common {
+   and the language chip come down, the level and rank go up to their left. */
+.page-head[data-folding] .head-meta > .head-meta-top {
   transform: translateY(calc(var(--cy, 0px) * var(--p, 0)));
 }
 

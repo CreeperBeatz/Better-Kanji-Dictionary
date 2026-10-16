@@ -16,7 +16,7 @@
  * `getLang()`, which does not re-render anything when the language changes.
  */
 
-import { Fragment, createElement, useSyncExternalStore, type ReactNode } from 'react'
+import { Fragment, createContext, createElement, useContext, useSyncExternalStore, type ReactNode } from 'react'
 
 export type Lang = 'en' | 'bg'
 
@@ -71,6 +71,22 @@ export function useLang(): Lang {
     getLang,
     getLang,
   )
+}
+
+/** The language that is not `lang`. */
+export const otherLang = (lang: Lang): Lang => (lang === 'bg' ? 'en' : 'bg')
+
+/**
+ * The open card's language: `shown` is the other one when the card is turned
+ * to it (null as the interface's), and `flip` turns it there and back. Only
+ * the dictionary's content follows it; the interface stays as it is.
+ */
+export const CardLang = createContext<{ shown: Lang | null; flip: (() => void) | null }>({ shown: null, flip: null })
+
+/** The language a card's dictionary content is shown in: the interface's, unless the card is turned to the other. */
+export function useContentLang(): Lang {
+  const lang = useLang()
+  return useContext(CardLang).shown ?? lang
 }
 
 type Vars = Record<string, string | number>
