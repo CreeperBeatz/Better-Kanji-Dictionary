@@ -1891,7 +1891,8 @@ button.usage-head:focus-visible .usage-spelling {
   line-height: 1.5;
 }
 
-/* Bottom right: newspaper frequency, then the JLPT level in its colour. */
+/* Bottom right: newspaper frequency, then the JLPT level in its colour
+   (a page's head has the level first: HeadMeta.tsx). */
 .word-meta {
   display: flex;
   align-items: center;
@@ -6867,12 +6868,13 @@ html {
     scale(calc(1 - (1 - var(--gs, 1)) * var(--p, 0)));
 }
 
-/* All but the character and the first meaning squeeze and fade away. */
+/* All but the character, the first meaning and how common it is squeeze
+   and fade away. */
 .page-head[data-folding]
   :is(
-    .detail-head > :not(.detail-glyph):not(:has(.detail-meanings)),
-    .detail-head > div > :not(.detail-meanings),
-    .word-head > :not(:first-child):not(.detail-meanings),
+    .detail-head > :not(.detail-glyph):not(:has(.detail-meanings)):not(.head-meta),
+    .detail-head > div:not(.head-meta) > :not(.detail-meanings),
+    .word-head > :not(:first-child):not(.detail-meanings):not(.head-meta),
     .word-head > :first-child > :not(.entry-head)
   ) {
   transform-origin: left center;
@@ -6896,6 +6898,25 @@ html {
 
 .page-head[data-folding] .detail-meanings .rest {
   opacity: calc(1 - 2 * var(--p, 0));
+}
+
+/* Long enough to run under how common it is, it fades out before it. */
+.page-head[data-folding][data-cut] .detail-meanings {
+  mask-image: linear-gradient(
+    to left,
+    transparent calc(var(--p, 0) * var(--mr, 0px)),
+    #000 calc(var(--p, 0) * (var(--mr, 0px) + 24px))
+  );
+}
+
+/* How common it is stays, in a line at the line's right end: "common"
+   comes down, the level and rank go up to its left. */
+.page-head[data-folding] .head-meta > .word-common {
+  transform: translateY(calc(var(--cy, 0px) * var(--p, 0)));
+}
+
+.page-head[data-folding] .head-meta > .word-meta {
+  transform: translate(calc(var(--wx, 0px) * var(--p, 0)), calc(var(--wy, 0px) * var(--p, 0)));
 }
 
 .page-head[data-collapsed] {
