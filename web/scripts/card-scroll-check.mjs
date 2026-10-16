@@ -18,7 +18,7 @@ await p.goto(`${BASE}/kanji/%E4%B8%8A`, { waitUntil: 'networkidle' })
 await p.waitForSelector('.meaning')
 await wait(800)
 const cards = await p.locator('.kanji-page .meaning').evaluateAll((els) =>
-  els.filter((e) => e.querySelector('.meaning-label')).map((e) => `${e.querySelectorAll('.vocab-star').length}/${e.querySelectorAll('.meaning-words > li').length}`),
+  els.filter((e) => e.querySelector('.meaning-label')).map((e) => `${[...e.querySelectorAll('.vocab-star')].filter((s) => s.textContent).length}/${e.querySelectorAll('.meaning-words > li').length}`),
 )
 line('stars / words shown per card', cards.join(' '))
 

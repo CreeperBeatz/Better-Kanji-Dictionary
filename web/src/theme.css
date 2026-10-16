@@ -725,7 +725,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 /* One meaning: what it is, its words by reading, what is close to it. */
 .meaning {
   margin-top: 16px;
-  padding: 0 12px 12px;
+  padding: 0 12px 6px;
   border: 1px solid var(--rule-bright);
   border-radius: 6px;
   background: var(--sumi-sunk);
@@ -813,8 +813,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   outline-offset: 2px;
 }
 
-/* Folded: its title and what it says. */
-.meaning[data-folded] {
+/* What folds away under a card's title and what it says (detail/fold.ts),
+   the room under it with it, so the card shuts to its title in one
+   movement. Its own block: the margins in it do not change as it moves. */
+.meaning-body {
+  display: flow-root;
   padding-bottom: 6px;
 }
 

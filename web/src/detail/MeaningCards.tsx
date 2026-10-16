@@ -30,6 +30,7 @@ import { meaningsOf } from '../i18n/content'
 import { focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
 import { ReadingsLine, SpecialReadings } from './Readings'
+import { useFold } from './fold'
 import { WordLanes } from './WordLanes'
 import { warmKanji } from '../warm'
 
@@ -220,8 +221,10 @@ function Meaning({
   const lang = useLang()
   const label = (lang === 'bg' && m.bg) || m.en
   const about = (lang === 'bg' && m.aboutBg) || m.about
+  // Its body opens and shuts as a movement (fold.ts); folded once it has shut.
+  const { shown, card, body } = useFold(open)
   return (
-    <article className="meaning" id={meaningAnchor(m.id)} data-folded={!open || undefined}>
+    <article className="meaning" id={meaningAnchor(m.id)} data-folded={!shown || undefined} ref={card}>
       {/* Held to the top while the card is read: where you are. The whole of it folds the card. */}
       <header>
         <h4>
@@ -235,7 +238,11 @@ function Meaning({
         </h4>
       </header>
       {about && <p className="meaning-about">{about}</p>}
-      {open && <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />}
+      {shown && (
+        <div className="meaning-body" ref={body}>
+          <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+        </div>
+      )}
     </article>
   )
 }

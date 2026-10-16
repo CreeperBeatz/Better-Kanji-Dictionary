@@ -15,6 +15,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type MeaningGroup, type Word, type WordsWithResponse } from '../api'
+import { useFold } from '../detail/fold'
 import { share } from '../detail/lanes'
 import { peekWordsFocus, takeWordsFocus } from '../detail/meaningFocus'
 import { WordLanes } from '../detail/WordLanes'
@@ -132,8 +133,10 @@ function Card({
   dashed?: boolean
   children: ReactNode
 }) {
+  // Its words open and shut as a movement (detail/fold.ts); folded once shut.
+  const { shown, card, body } = useFold(open)
   return (
-    <article className="meaning" id={cardAnchor(id)} data-folded={!open || undefined} data-dashed={dashed || undefined}>
+    <article className="meaning" id={cardAnchor(id)} data-folded={!shown || undefined} data-dashed={dashed || undefined} ref={card}>
       <header>
         <h3>
           <button className="meaning-toggle" aria-expanded={open} onClick={onToggle}>
@@ -147,7 +150,11 @@ function Card({
         </h3>
       </header>
       {about}
-      {open && children}
+      {shown && (
+        <div className="meaning-body" ref={body}>
+          {children}
+        </div>
+      )}
     </article>
   )
 }
