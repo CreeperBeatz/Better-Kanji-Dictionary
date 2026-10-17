@@ -925,8 +925,8 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 /* Uses: part of the meaning itself, not beside it, so in the paper's own
-   tone. Each use a line -- its name, then what it is -- and its words as
-   small chips under it, a word and its reading; a chip opens the word. */
+   tone. Each use a line -- its name, then what it is -- and its words under
+   it, one a row, as the card lists them. */
 .aside-block.meaning-uses {
   --tone: var(--paper-dim);
 }
@@ -958,46 +958,9 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   font-size: calc(12px * var(--type));
 }
 
+/* A use's words are the page's own rows, one a row; a little in from its name. */
 .use-words {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 6px;
-}
-
-.use-word {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 2px 7px;
-  font: inherit;
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  cursor: pointer;
-  transition:
-    background 120ms var(--ease),
-    border-color 120ms var(--ease);
-}
-
-.use-word:hover,
-.use-word:focus-visible {
-  background: var(--sumi-lift);
-  border-color: var(--rule-bright);
-}
-
-.use-word:disabled {
-  cursor: default;
-}
-
-.use-word-head {
-  font-family: var(--mincho);
-  font-size: calc(15px * var(--type));
-  color: var(--paper);
-}
-
-.use-word-reading {
-  font-size: calc(11px * var(--type));
-  color: var(--paper-dim);
+  margin: 0;
 }
 
 /* Leftover mix-ups, on readings no meaning has: after the cards. */

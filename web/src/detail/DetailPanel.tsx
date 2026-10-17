@@ -371,7 +371,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
                 onWordsWith(data.focus.char)
               })
             }
-            onWord={onWord}
             row={vocabRow}
           />
         ) : (

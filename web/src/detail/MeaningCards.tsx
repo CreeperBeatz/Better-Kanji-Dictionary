@@ -32,8 +32,7 @@ import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
 import { ReadingsLine, SpecialReadings } from './Readings'
 import { useFold } from './fold'
 import { WordLanes } from './WordLanes'
-import { warmKanji, warmWord } from '../warm'
-import { MarkedReading } from '../search/MarkedReading'
+import { warmKanji } from '../warm'
 
 /** Remembers "fold all": '1' while every card is folded. */
 const FOLD_KEY = 'meanings-folded'
@@ -96,7 +95,6 @@ export function Meanings({
   kunYomi,
   onKanji,
   onWordsWith,
-  onWord,
   row,
 }: {
   page: KanjiPage
@@ -107,8 +105,6 @@ export function Meanings({
   onKanji: (c: string) => void
   /** All the kanji's words, at this meaning. */
   onWordsWith?: (meaning: string) => void
-  /** Opens a word's entry: a use's words. */
-  onWord?: (w: Word) => void
   /** The page's word row, so words look the same everywhere on it. */
   row: (w: Word) => ReactNode
 }) {
@@ -178,7 +174,7 @@ export function Meanings({
           open={isOpen(m.id)}
           onToggle={() => turn(m.id, !isOpen(m.id))}
           self={self}
-          onKanji={onKanji} onWordsWith={onWordsWith} onWord={onWord} row={row} />
+          onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -210,7 +206,6 @@ function Meaning({
   self,
   onKanji,
   onWordsWith,
-  onWord,
   row,
 }: {
   m: KanjiMeaning
@@ -222,7 +217,6 @@ function Meaning({
   onKanji: (c: string) => void
   /** All the kanji's words, at this meaning. */
   onWordsWith?: (meaning: string) => void
-  onWord?: (w: Word) => void
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
@@ -247,7 +241,7 @@ function Meaning({
       {about && <p className="meaning-about">{about}</p>}
       {shown && (
         <div className="meaning-body" ref={body}>
-          <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} onWord={onWord} row={row} />
+          <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
         </div>
       )}
     </article>
@@ -260,14 +254,12 @@ function MeaningBody({
   self,
   onKanji,
   onWordsWith,
-  onWord,
   row,
 }: {
   m: KanjiMeaning
   self: KanjiLite
   onKanji: (c: string) => void
   onWordsWith?: (meaning: string) => void
-  onWord?: (w: Word) => void
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
@@ -305,7 +297,7 @@ function MeaningBody({
           </button>
         )
       )}
-      {m.uses && m.uses.length > 0 && <Uses uses={m.uses} lang={lang} onWord={onWord} />}
+      {m.uses && m.uses.length > 0 && <Uses uses={m.uses} lang={lang} row={row} />}
       {m.similar.length > 0 && (
         <section className="aside-block meaning-similar">
           <AsideTitle icon="≈">{t('similar')}</AsideTitle>
@@ -326,9 +318,9 @@ function MeaningBody({
 /**
  * ⑂ Uses: the patterns the kanji builds words in with this meaning, Kodansha's
  * 1a, 1b -- 〜人 "a person from …" -- each named, said in a line, and shown by
- * a few words. A word opens its entry.
+ * a few words, one a row as everywhere on the page.
  */
-function Uses({ uses, lang, onWord }: { uses: MeaningUse[]; lang: Lang; onWord?: (w: Word) => void }) {
+function Uses({ uses, lang, row }: { uses: MeaningUse[]; lang: Lang; row: (w: Word) => ReactNode }) {
   const t = S(lang)
   return (
     <section className="aside-block meaning-uses" title={t('usesHint')}>
@@ -342,18 +334,7 @@ function Uses({ uses, lang, onWord }: { uses: MeaningUse[]; lang: Lang; onWord?:
                 <span className="use-label">{(lang === 'bg' && u.bg) || u.en}</span>
                 {about && <span className="use-about">{about}</span>}
               </p>
-              <span className="use-words">
-                {u.words.map((w) => (
-                  <button key={w.id} className="use-word" {...warmWord(w.id)} onClick={() => onWord?.(w)} disabled={!onWord}>
-                    <span className="use-word-head" lang="ja">
-                      {w.headword}
-                    </span>
-                    <span className="use-word-reading" lang="ja">
-                      <MarkedReading reading={w.reading} mark={w.mark} />
-                    </span>
-                  </button>
-                ))}
-              </span>
+              <ul className="meaning-words use-words">{u.words.map(row)}</ul>
             </li>
           )
         })}
