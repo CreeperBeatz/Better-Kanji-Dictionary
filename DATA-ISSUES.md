@@ -281,6 +281,20 @@ reviewed yet.
 **Status: in review.** 揚 is in the meanings queue. A word goes into one
 group only, so a verb with two meanings needs a decision on its board.
 
+### D-026 · Core words in no meaning group
+*Found 2026-10-17* (Dani, on the dictionary: some kun readings are missing
+from every meaning card).
+Of the common words of the 2,394 kanji with meanings, 30% of the kun words
+and 24% of the on words are in no group. The kanji page does not show them.
+In 204 kanji, a kun reading has no word on any card: 焼く, 守る, 育つ, 打つ,
+放つ, 加わる, 明かす.
+Source: the meanings drafts (`ai:claude-sonnet`). The site shows a drafted
+word only when both runs agree with confidence ≥ 0.8 (`DRAFT_WORD_MIN`).
+10,925 words have agreeing runs below 0.8; 2,067 have runs that disagree.
+Often the runs agree but are unsure because the word has two of the
+kanji's meanings: 焼く is "burn" and "bake" (see D-025).
+**Status: open.**
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
