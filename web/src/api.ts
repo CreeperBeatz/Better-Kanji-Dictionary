@@ -191,6 +191,11 @@ export interface Word {
   as?: string | null
   /** On a kanji's page and in its words: one of its meaning's best examples, the words to know it by. */
   star?: boolean
+  /** Under a meaning: the sense of the word that has it (0-based), where not its first --
+   *  焼く under "bake" is sense 2, "to roast; to grill; to bake". */
+  senseAt?: number
+  /** Under a meaning that is not the word's main one: that main one (焼く: "burn"). */
+  alsoOf?: { id: string; en: string | null; bg: string | null }
 }
 
 /** One of a kanji's readings on its page (server: search.kanji_readings). */

@@ -736,11 +736,16 @@ def words_with(
         for wid in ids:
             if wid in placed:
                 in_group.setdefault(placed[wid], []).append(wid)
+        also_in = _also_in(ids, meanings)
         fetched = _laned(char, _marked(char, _fetch_words([w for ws in in_group.values() for w in ws])))
         for s in [*senses, {"id": review.CATCH_ALL, "en": None, "bg": None}]:
-            # Its best examples, starred: the words to know it by.
+            # Its best examples, starred: the words to know it by. Then the words that
+            # have this meaning in another of their senses (焼く under "bake").
             best = set(s.get("examples") or [])
-            words = [{**fetched[w], "star": True} if w in best else fetched[w] for w in in_group.get(s["id"], []) if w in fetched]
+            words = [
+                _in_card(fetched[w], w, s["id"], meanings, senses, best)
+                for w in [*in_group.get(s["id"], []), *also_in.get(s["id"], [])] if w in fetched
+            ]
             if words:  # a group with none of the words shown (common only) is left out
                 groups.append({**s, "words": words})
     rest = [w for w in ids if w not in placed]
@@ -756,6 +761,29 @@ def words_with(
         "groups": groups,
         "rest": {"total": len(rest), "offset": offset, "words": [fetched[w] for w in page if w in fetched]},
     }
+
+
+def _also_in(ids: list[int], meanings: dict) -> dict[str, list[int]]:
+    """group -> the words of `ids` that have it beside their main group, in the order of `ids`."""
+    out: dict[str, list[int]] = {}
+    for wid in ids:
+        for g in meanings.get("also", {}).get(wid, []):
+            out.setdefault(g, []).append(wid)
+    return out
+
+
+def _in_card(word: dict, wid: int, group: str, meanings: dict, senses: list[dict], best: set[int] | list[int]) -> dict:
+    """A word as a meaning's card lists it: starred if one of the meaning's best examples;
+    `senseAt`, the sense of the word that has this meaning, where not its first (焼く's
+    "to roast; to bake" under "bake"); `alsoOf`, the word's main meaning, where this is
+    another of its meanings."""
+    out = {**word, "star": True} if wid in best else dict(word)
+    if n := meanings.get("at", {}).get(wid, {}).get(group):
+        out["senseAt"] = n
+    main = meanings["placed"].get(wid)
+    if main != group and (g := next((x for x in senses if x["id"] == main), None)):
+        out["alsoOf"] = {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")}
+    return out
 
 
 def reading_forms(char: str, reading: str, on: bool) -> list[tuple[str, str]]:
@@ -947,6 +975,8 @@ def kanji_page(char: str) -> dict:
     for wid in common:
         if wid in placed:
             in_group.setdefault(placed[wid], []).append(wid)
+    # The words that have a meaning in another of their senses (焼く: "burn", also "bake").
+    also_in = _also_in(common, site)
     special_ids = {r["word_id"] for r in special}
     words = _fetch_words(
         list({*(w for ws in in_group.values() for w in ws), *special_ids,
@@ -1037,7 +1067,8 @@ def kanji_page(char: str) -> dict:
     for s in senses:
         if s["id"] == review.CATCH_ALL:
             continue
-        ids = in_group.get(s["id"], [])
+        own = in_group.get(s["id"], [])
+        ids = [*own, *(w for w in also_in.get(s["id"], []) if w not in own)]
         first = s.get("examples") or []
         by: dict[str, list[int]] = {}
         for w in ids:
@@ -1066,9 +1097,10 @@ def kanji_page(char: str) -> dict:
         # A kanji easy to mix up with it here is not listed again as close in meaning.
         mixed = {k["char"] for m in here for k in m["kanji"]}
 
-        def starred(word: dict, wid: int) -> dict:
-            """The word, starred if it is one of the meaning's best examples: the words to know it by."""
-            return {**word, "star": True} if wid in first else word
+        def starred(word: dict, wid: int, group: str = s["id"]) -> dict:
+            """The word as this meaning's card lists it (_in_card): starred if one of the
+            meaning's best examples, and with the sense that has this meaning."""
+            return _in_card(word, wid, group, site, senses, first)
 
         out["meanings"].append({
             "id": s["id"], "en": s.get("en"), "bg": s.get("bg"), "about": s.get("about"), "aboutBg": s.get("aboutBg"),

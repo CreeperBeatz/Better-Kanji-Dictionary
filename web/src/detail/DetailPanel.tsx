@@ -49,6 +49,8 @@ const S = strings(
     shapeNone: 'no meaning of its own',
     openEntry: 'Open this entry',
     star: 'One of the best examples of this meaning',
+    senseN: 'Meaning {n} of this word.',
+    senseAlso: 'Meaning {n} of this word. Its first meaning is under “{main}”.',
   },
   {
     grade: 'учи се в {n} клас',
@@ -79,6 +81,8 @@ const S = strings(
     shapeNone: 'няма свое значение',
     openEntry: 'Отворете тази статия',
     star: 'Един от най-добрите примери за това значение',
+    senseN: 'Значение {n} на думата.',
+    senseAlso: 'Значение {n} на думата. Първото ѝ значение е под „{main}“.',
   },
 )
 
@@ -241,23 +245,35 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         : mine
   const unit = !isPreview && here && here.data.meanings.length > 0 ? here.data : null
   const special = here?.data.special ?? []
-  const vocabRow = (w: Word) => (
-    <li key={`${w.id}-${w.headword}`}>
-      <button className="vocab-row" {...warmWord(w.id)} onClick={() => onWord(w)} title={t('openEntry')}>
-        <span className="vocab-word">{w.headword}</span>
-        <span className="vocab-reading">
-          <MarkedReading reading={w.reading} mark={w.mark} />
-        </span>
-        <span className="vocab-gloss">{w.senses[0] && glossOf(w.senses[0], lang).value.split(';')[0]}</span>
-        <Valency word={w} />
-        {/* One of its meaning's best examples: the words to know it by. Its
-            place is kept on every row, so the rows line up. */}
-        <span className="vocab-star" title={w.star ? t('star') : undefined} aria-label={w.star ? t('star') : undefined}>
-          {w.star && '★'}
-        </span>
-      </button>
-    </li>
-  )
+  const vocabRow = (w: Word) => {
+    // The sense that has this meaning: 焼く under "bake" is "to roast", its second.
+    const at = w.senseAt && w.senses[w.senseAt] ? w.senseAt : 0
+    const main = w.alsoOf && ((lang === 'bg' && w.alsoOf.bg) || w.alsoOf.en)
+    return (
+      <li key={`${w.id}-${w.headword}`}>
+        <button className="vocab-row" {...warmWord(w.id)} onClick={() => onWord(w)} title={t('openEntry')}>
+          <span className="vocab-word">{w.headword}</span>
+          <span className="vocab-reading">
+            <MarkedReading reading={w.reading} mark={w.mark} />
+          </span>
+          <span className="vocab-gloss">
+            {at > 0 && (
+              <b className="vocab-sense-n" title={main ? t('senseAlso', { n: at + 1, main }) : t('senseN', { n: at + 1 })}>
+                {at + 1}
+              </b>
+            )}
+            {w.senses[at] && glossOf(w.senses[at], lang).value.split(';')[0]}
+          </span>
+          <Valency word={w} />
+          {/* One of its meaning's best examples: the words to know it by. Its
+              place is kept on every row, so the rows line up. */}
+          <span className="vocab-star" title={w.star ? t('star') : undefined} aria-label={w.star ? t('star') : undefined}>
+            {w.star && '★'}
+          </span>
+        </button>
+      </li>
+    )
+  }
 
   const grade = gradeOf(n.grade, t)
   // A radical says so, with its number; a kanji that only contains one does not:
