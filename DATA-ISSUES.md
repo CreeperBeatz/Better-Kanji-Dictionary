@@ -297,7 +297,7 @@ kanji's meanings: 焼く is "burn" and "bake" (see D-025).
 the unsure words are placed again, one JMdict sense at a time, so a word
 can have a main group and up to two extra groups (焼く: burn, also bake).
 Pilot of 50 kanji: 231 of 565 words placed, and a skeptic found none wrong.
-Full run (2026-10-17, 1,476 kanji, 13,059 words, two Opus runs): 5,598 words
+Full run (2026-10-17, 1,476 kanji, 13,059 words, two Opus runs): 5,597 words
 placed, 531 with extra groups. A skeptic checked every placement; the 111 it
 called wrong or doubtful stay out. Words the site already shows, placed again
 unmarked, came out the same 99.6% of the time. In the sandbox, common kun words
