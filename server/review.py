@@ -2503,6 +2503,9 @@ def word_senses(char: str) -> dict[int, str]:
 # A word's drafted group shows on the site only when both drafting runs put it there this sure;
 # the rest wait, ungrouped, for a later run or a reviewer.
 DRAFT_WORD_MIN = 0.8
+# A draft placed sense by sense (pipeline/word_groups.py, `method` "senses") is loaded only once a
+# skeptic pass called it right below 0.8, so it shows from 0.7 (300 sampled: 99.3% right).
+SENSES_WORD_MIN = 0.7
 _drafts: tuple[dict | None, dict] = (None, {})
 
 
@@ -2526,7 +2529,8 @@ def _open_drafts(data: dict) -> dict:
                 latest[key] = i
         elif i["type"] == "word_sense" and isinstance(i["proposed"], str):
             ev = i.get("evidence") if isinstance(i.get("evidence"), dict) else {}
-            if ev.get("agree") and (ev.get("confidence") or 0) >= DRAFT_WORD_MIN:
+            bar = SENSES_WORD_MIN if ev.get("method") == "senses" else DRAFT_WORD_MIN
+            if ev.get("agree") and (ev.get("confidence") or 0) >= bar:
                 char, wid = i["subject"].split("|")
                 words.setdefault(char, {})[int(wid)] = i["proposed"]
                 if ev.get("also") or ev.get("at"):

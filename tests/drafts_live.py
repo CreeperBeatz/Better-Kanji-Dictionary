@@ -17,7 +17,7 @@ from server.routes import search
 check = Checks()
 
 
-def words_of(char: str, n: int = 6) -> list[int]:
+def words_of(char: str, n: int = 7) -> list[int]:
     from server.db import query
     return [r["id"] for r in query(
         "SELECT w.id FROM word_char wc JOIN word w ON w.id = wc.word_id "
@@ -56,15 +56,17 @@ def main() -> int:
             placement("水", w[3], "水.nope", 0.95),  # a group the draft doesn't have
             # Sure, and in another group too, by its second sense (D-025: 焼く is "burn" and "bake").
             placement("水", w[4], "水.water", 0.9, also=["水.wednesday", "水.nope", "水.water"], at={"水.wednesday": 1}),
+            # Placed sense by sense, checked by the skeptic: shows from 0.7. The old kind does not.
+            placement("水", w[5], "水.water", 0.75, method="senses"),
         ])
 
         print("nothing reviewed: the drafts show, marked")
         status, res = call("GET", "/api/search/words-with/%E6%B0%B4?common=true")
         check("200", status == 200, status)
         check("the drafted groups show", [s["id"] for s in res["senses"] or []] == ["水.water", "水.wednesday"], res["senses"])
-        check("marked as a draft", res["draft"] == {"senses": True, "words": 2, "extras": True}, res["draft"])
+        check("marked as a draft", res["draft"] == {"senses": True, "words": 3, "extras": True}, res["draft"])
         placed = {x["id"] for g in res["groups"] for x in g["words"]}
-        check("only the sure words are placed", placed == {w[0], w[4]}, placed)
+        check("only the sure words are placed; a sense-by-sense draft from 0.7", placed == {w[0], w[4], w[5]}, placed)
         wed = {x["id"]: x for g in res["groups"] if g["id"] == "水.wednesday" for x in g["words"]}
         check("a word shows under its other group too", w[4] in wed, list(wed))
         check("there, with the sense that has it and its main group",

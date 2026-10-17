@@ -19,10 +19,12 @@ kanji's groups. The word's **main** group is the group of its first sense; the
 groups its other senses land in are its **extra** groups.
 
 What counts (`combine`): a sense both runs put in the same group, each at
-least `SURE` (0.8, as DRAFT_WORD_MIN). The word's main group is the first such
-sense's, in JMdict's order; the later ones' are its extras (at most
-`MAX_EXTRAS`; not from senses JMdict marks archaic, obsolete or rare). A word
-with no such sense is not placed. So every group a word is shown in has a
+least `MAIN_SURE` (0.7) for the main group, `SURE` (0.8) for an extra one. The
+word's main group is the first such sense's, in JMdict's order; the later
+ones' are its extras (at most `MAX_EXTRAS`; not from senses JMdict marks
+archaic, obsolete or rare). A word with no such sense is not placed. A main
+group below 0.8 goes live only with the skeptic's `ok`: a sample of 300 at
+0.7-0.79 was 99.3% ok, as good as the 0.8 ones (2026-10-17). So every group a word is shown in has a
 sense of it that both runs were sure of: 放つ "to fire" is unsure, but
 "to set free" and "to emit" are not.
 
@@ -50,7 +52,8 @@ from proposals import CATCH_ALL, ROOT, review  # noqa: E402
 
 DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "word-groups-pilot")
 
-SURE = 0.8  # the bar a placement passes in both runs, as DRAFT_WORD_MIN
+SURE = 0.8  # the bar an extra group passes in both runs, and a main group with no skeptic verdict
+MAIN_SURE = 0.7  # the bar a main group passes in both runs, with a skeptic `ok` below SURE (review.SENSES_WORD_MIN)
 MAX_EXTRAS = 2
 NONE = "-"  # a sense no group holds: a far use of the word
 FAR = {"arch", "obs", "rare"}  # senses that never give an extra group
@@ -229,14 +232,14 @@ def derive(row: list[tuple[str, float]], senses: list[list]) -> tuple[tuple[str,
     return main, extras
 
 
-def sure_senses(runs: list[list[tuple[str, float]]], senses: list[list]) -> dict[str, int]:
+def sure_senses(runs: list[list[tuple[str, float]]], senses: list[list], bar: float = SURE) -> dict[str, int]:
     """The groups, in JMdict's order, of the senses every run puts in the same group at `SURE`
     or more, each with the first such sense (0-based): each group shown is one a sense of the
     word holds, for sure. "-" holds none."""
     out: dict[str, int] = {}
     for i, s in enumerate(senses):
         picks = {r[i][0] for r in runs}
-        if len(picks) == 1 and (g := picks.pop()) != NONE and min(r[i][1] for r in runs) >= SURE:
+        if len(picks) == 1 and (g := picks.pop()) != NONE and min(r[i][1] for r in runs) >= bar:
             if g == CATCH_ALL and out:
                 continue  # sound only in a later sense says nothing next to a real group
             if set(s[2].split(",")) & FAR and out:
@@ -251,7 +254,7 @@ def combine(runs: list[dict[int, list]], senses: dict[int, list]) -> dict[int, d
     its later ones (at most MAX_EXTRAS); a catch-all main has none. `a`, `b`: each run's own main."""
     out = {}
     for w in set(runs[0]) & set(runs[1]):
-        at = sure_senses([runs[0][w], runs[1][w]], senses[w])
+        at = sure_senses([runs[0][w], runs[1][w]], senses[w], MAIN_SURE)
         groups = list(at)
         # Its first sense leads when the runs agree on it and a sure sense holds that group too:
         # 放つ "to fire" (unsure) and "to emit" (sure) are "send out", before "to set free".
@@ -260,9 +263,12 @@ def combine(runs: list[dict[int, list]], senses: dict[int, list]) -> dict[int, d
             groups = [f, *(g for g in groups if g != f)]
             at[f] = 0
         main = groups[0] if groups else None
-        extras = [g for g in groups[1:] if g != CATCH_ALL][:MAX_EXTRAS] if main != CATCH_ALL else []
+        # Extras only from senses both runs are sure of at the full bar.
+        firm = sure_senses([runs[0][w], runs[1][w]], senses[w], SURE)
+        extras = [g for g in firm if g not in (main, CATCH_ALL)][:MAX_EXTRAS] if main and main != CATCH_ALL else []
         ma, mb = derive(runs[0][w], senses[w])[0], derive(runs[1][w], senses[w])[0]
-        out[w] = {"main": main, "extras": extras, "at": {g: at[g] for g in [main, *extras] if g and at[g]},
+        where = {**{g: firm[g] for g in extras}, **({main: at[main]} if main else {})}
+        out[w] = {"main": main, "extras": extras, "at": {g: n for g, n in where.items() if n},
                   "a": ma and ma[0], "b": mb and mb[0]}
     return out
 
@@ -422,10 +428,11 @@ SOURCE = "ai:claude-opus"
 
 
 def _backing(runs: list[list[tuple[str, float]]], group: str) -> list[float]:
-    """Each run's confidence on the first sense both are sure puts the word in `group`."""
-    for i in range(len(runs[0])):
-        if all(r[i][0] == group for r in runs) and min(r[i][1] for r in runs) >= SURE:
-            return [r[i][1] for r in runs]
+    """Each run's confidence on the first sense both put in `group`, the surest such sense."""
+    best = max((min(r[i][1] for r in runs), i) for i in range(len(runs[0])) if all(r[i][0] == group for r in runs))
+    if best[0] >= MAIN_SURE:
+        i = best[1]
+        return [r[i][1] for r in runs]
     return [r[0][1] for r in runs]
 
 
@@ -459,7 +466,7 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
         raise SystemExit(f"runs have problems ({len(pa)}, {len(pb)}): run check")
     verdicts = _skeptic()
     proposals.use_review_dir(review_dir)
-    placed = extra = kept = touched = vetoed = 0
+    placed = extra = kept = touched = vetoed = unchecked = 0
     with review._change() as data:
         latest: dict[str, dict] = {}
         for i in data["items"].values():
@@ -481,8 +488,11 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                 if verdict:
                     ev["skeptic"] = verdict
                 fields: dict = {"evidence": {**old, **ev}}
-                if r["main"] and verdict and verdict.get("main") != "ok":
-                    vetoed += 1
+                below = r["main"] and min(_backing([a[c][wid], b[c][wid]], r["main"])) < SURE
+                if r["main"] and ((verdict and verdict.get("main") != "ok") or (below and not verdict)):
+                    # The skeptic said no -- or, below 0.8, never said yes.
+                    vetoed += bool(verdict)
+                    unchecked += not verdict
                     r = {**r, "main": None}
                 elif r["main"] and verdict:
                     r = {**r, "extras": [g for g in r["extras"] if (verdict.get("extras") or {}).get(g) == "ok"]}
@@ -495,7 +505,7 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                     fields["evidence"] = {
                         **ev,
                         "runs": [{"run": "A", "sense": main, "confidence": ca}, {"run": "B", "sense": main, "confidence": cb}],
-                        "confidence": min(ca, cb), "agree": True,
+                        "confidence": min(ca, cb), "agree": True, "method": "senses",
                         "also": [proposals.sense_id(c, g) for g in r["extras"]],
                         "at": {proposals.sense_id(c, g): n for g, n in r["at"].items()},
                     }
@@ -507,8 +517,8 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                     review._update(data, item, **fields)
         if dry_run:
             raise SystemExit(f"would place {placed} ({extra} with extra groups), keep {kept} unsure ({vetoed} vetoed by "
-                             f"the skeptic), leave {touched} a person touched (dry run: nothing written)")
-    print(f"placed {placed} ({extra} with extra groups), kept {kept} unsure ({vetoed} vetoed by the skeptic), "
+                             f"the skeptic, {unchecked} below 0.8 not checked), leave {touched} a person touched (dry run: nothing written)")
+    print(f"placed {placed} ({extra} with extra groups), kept {kept} unsure ({vetoed} vetoed by the skeptic, {unchecked} unchecked), "
           f"left {touched} a person touched")
 
 
