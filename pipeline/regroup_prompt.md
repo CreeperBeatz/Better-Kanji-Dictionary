@@ -4,12 +4,14 @@ You are drafting data for a kanji dictionary for learners (English and
 Bulgarian speakers, aiming at JLPT N2). Each kanji has **meaning groups**,
 and each of its words is filed under the group the kanji has in it.
 
-The kanji in this batch already have groups (`current`), but they mix two
-different things, and that makes words impossible to place. 人 has
+The kanji in this batch already have groups (`current`), but most of them
+mix two different things, and that makes words impossible to place, or
+split one meaning into twins a learner cannot tell apart. 人 has
 "person", "person of a kind" and "counting people" as three groups, yet in
 村人, 商人 and 三人 人 simply means *person*: "of a kind" and "counting" are
 ways the kanji **builds words**, not other meanings. Your job is to draw the
-groups again, keeping the two apart:
+groups again, keeping the two apart. Where a current group is already a
+clean meaning, keep it as it is:
 
 - **A group is a meaning**: what the kanji means in the word. Test: a
   learner who knows group X understands the word's kanji without learning
@@ -38,6 +40,16 @@ Rules:
   never listed.
 - Read the words. The dictionaries are evidence, not rules; go by modern
   usage in the listed words.
+- **Leave no common word homeless.** Before you finish, go through the
+  words once more. Each should fit a group (or a use inside one), or be
+  sound only (catch-all). When several words share a meaning no group
+  holds (合 "between, gap": 合間, 沖合, 間合い), add a group for it; when
+  it is a shade of a group (大 "final" in 大晦日, 大詰め: a grand ending),
+  add a use under that group. A lean set of groups with good uses is the
+  aim, not the fewest groups at any cost.
+- **Name the hard famous words.** When a very common word is not obvious
+  (気 in 人気, 病気), put it among the examples of its group or use, so
+  that later readers file it the same way.
 
 ## Output, per kanji
 
@@ -47,6 +59,7 @@ Rules:
     "groups": [
       {"id": "person", "en": "person, people", "bg": "човек, хора",
        "about": "A human being. The kanji says the word is about a person or people.",
+       "aboutBg": "Човешко същество. Канджито казва, че думата е за човек или хора.",
        "from": ["person", "human"],
        "examples": ["<word id>", "<word id>"],
        "uses": [
@@ -55,7 +68,7 @@ Rules:
          {"id": "counter", "en": "counting people", "about": "After a number: how many people.",
           "from": ["count"], "examples": ["<id>", "<id>"]}
        ]},
-      {"id": "others", "en": "other people", "bg": "другите", "about": "…", "from": ["others"], "examples": ["…"], "uses": []}
+      {"id": "others", "en": "other people", "bg": "другите", "about": "…", "aboutBg": "…", "from": ["others"], "examples": ["…"], "uses": []}
     ],
     "why": "One or two sentences: what you merged, split or turned into a use, and why."
   }
@@ -65,11 +78,13 @@ Rules:
 - `id`: short lowercase a-z, 0-9, -; unique within the kanji (use ids only
   within their group). `en`: 1 to 4 words. `bg`: natural Bulgarian, short;
   kanji are «канджи», never «кандзи». `about`: one or two plain sentences
-  for a learner (short sentences, one fact each).
-- `examples`: 2 or 3 word ids from the list that show the group (or use)
-  best: common, clear cases.
+  for a learner (short sentences, one fact each). `aboutBg`: the same in
+  natural Bulgarian. Uses need `en` and `about` only.
+- `examples`: 2 to 4 word ids from the list that show the group (or use)
+  best: common, clear cases, plus any famous word that is hard to file.
 - `uses`: 0 to 4 per group, only patterns that cover several words.
 
 Judge yourself; do not write code to decide. Write the output file with your
-file-writing tool and reply with one line per kanji: the new groups (and
-uses), and what changed from `current`.
+file-writing tool, then run the checker you were given; it must report 0
+problems. Reply with one line per kanji: the new groups (and uses), and what
+changed from `current`.

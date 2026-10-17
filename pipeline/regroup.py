@@ -1,6 +1,7 @@
 """Draw a kanji's meaning groups again: meanings, not word-building patterns.
 
-    python pipeline/regroup.py prepare --chars 人物大出一手気立合取 [--per 2]
+    python pipeline/regroup.py prepare --chars 人物大出一手気立合取 [--size 100000]
+    python pipeline/regroup.py --drafts data/drafts/regroup prepare --chars-file chars.txt
     # one Opus subagent per in/<run>-*.json (pipeline/regroup_prompt.md), writing out/<run>-*.json
     python pipeline/regroup.py check
     python pipeline/regroup.py compare
@@ -46,7 +47,20 @@ def _october(chars: str) -> dict[str, dict]:
     return out
 
 
-def prepare(chars: str, per: int) -> None:
+def _pack(kanji: list[dict], size: int) -> list[list[dict]]:
+    """Kanji in their order, a batch closed once its JSON passes `size` characters."""
+    batches, cur, n = [], [], 0
+    for k in kanji:
+        m = len(json.dumps(k, ensure_ascii=False))
+        if cur and n + m > size:
+            batches.append(cur)
+            cur, n = [], 0
+        cur.append(k)
+        n += m
+    return batches + ([cur] if cur else [])
+
+
+def prepare(chars: str, size: int) -> None:
     if any(IN.glob("*.json")):
         raise SystemExit(f"{IN} has batches already: delete the folder to start again")
     october = _october(chars)
@@ -58,19 +72,20 @@ def prepare(chars: str, per: int) -> None:
         kanji.append({"char": c, "kanjidic": k["kanjidic"], "curated": k.get("curated"), "on": k["on"], "kun": k["kun"],
                       "current": current, "dictionaries": k.get("dictionaries"), "words": k["words"]})
     rng = random.Random(5)
+    batches = _pack(kanji, size)
     for run in ("A", "B"):
-        for i in range(0, len(kanji), per):
-            part = [{**k, "words": k["words"] if run == "A" else rng.sample(k["words"], len(k["words"]))} for k in kanji[i:i + per]]
-            path = IN / f"{run}-{i // per:03d}.json"
+        for i, part in enumerate(batches):
+            part = [{**k, "words": k["words"] if run == "A" else rng.sample(k["words"], len(k["words"]))} for k in part]
+            path = IN / f"{run}-{i:03d}.json"
             path.parent.mkdir(parents=True, exist_ok=True)
             lines = ",\n".join(json.dumps(k, ensure_ascii=False) for k in part)
-            path.write_text(f'{{"batch": "{run}-{i // per:03d}", "run": "{run}", "kanji": [\n{lines}\n]}}\n', encoding="utf-8")
-    print(f"{len(kanji)} kanji, {-(-len(kanji) // per)} batches a run -> {IN.relative_to(proposals.ROOT)}")
+            path.write_text(f'{{"batch": "{run}-{i:03d}", "run": "{run}", "kanji": [\n{lines}\n]}}\n', encoding="utf-8")
+    print(f"{len(kanji)} kanji, {len(batches)} batches a run -> {IN.relative_to(proposals.ROOT)}")
 
 
-def read_run(run: str) -> tuple[dict[str, dict], list[str]]:
+def read_run(run: str, only: str | None = None) -> tuple[dict[str, dict], list[str]]:
     good, problems = {}, []
-    for inp, batch, got in proposals.outputs(IN, OUT, f"{run}-*.json", problems):
+    for inp, batch, got in proposals.outputs(IN, OUT, f"{only or run + '-*'}.json", problems):
         for k in batch["kanji"]:
             e = (got.get("kanji") or {}).get(k["char"])
             ids = {str(w[0]) for w in k["words"]}
@@ -81,13 +96,16 @@ def read_run(run: str) -> tuple[dict[str, dict], list[str]]:
                    if str(x) not in ids]
             if bad:
                 problems.append(f"{inp.stem} {k['char']}: examples not in the list {bad[:5]}")
+            short = [g.get("id") for g in e["groups"] if not all(g.get(f) for f in ("id", "en", "bg", "about", "aboutBg"))]
+            if short:
+                problems.append(f"{inp.stem} {k['char']}: groups missing id/en/bg/about/aboutBg {short}")
             good[k["char"]] = e
     return good, problems
 
 
-def check() -> None:
-    for run in ("A", "B"):
-        good, problems = read_run(run)
+def check(only: str | None = None) -> None:
+    for run in [only.split("-")[0]] if only else ["A", "B"]:
+        good, problems = read_run(run, only)
         print(f"run {run}: {len(good)} kanji, {len(problems)} problems")
         for p in problems:
             print("   ", p)
@@ -120,16 +138,18 @@ def main() -> int:
     proposals.drafts_arg(ap, "data/drafts/regroup-pilot")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
-    p.add_argument("--chars", required=True)
-    p.add_argument("--per", type=int, default=2, help="kanji per batch")
-    sub.add_parser("check")
+    p.add_argument("--chars", help="the kanji, as one string")
+    p.add_argument("--chars-file", type=Path, help="a file holding the kanji")
+    p.add_argument("--size", type=int, default=100_000, help="characters of JSON per batch")
+    ck = sub.add_parser("check")
+    ck.add_argument("--batch", help="one batch only, e.g. A-003")
     sub.add_parser("compare")
     args = ap.parse_args()
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
-        prepare(args.chars, args.per)
+        prepare(args.chars or args.chars_file.read_text(encoding="utf-8").strip(), args.size)
     elif args.cmd == "check":
-        check()
+        check(args.batch)
     else:
         compare()
     return 0
