@@ -24,7 +24,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { reducedMotion } from '../media'
-import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
+import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MeaningUse, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { bringToTop, focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
@@ -66,6 +66,8 @@ const S = strings(
     all_other: 'All {n} words',
     sound: 'For its sound only',
     soundHint: 'In these words the kanji brings no meaning.',
+    uses: 'Uses',
+    usesHint: 'Ways the kanji builds words with this meaning.',
   },
   {
     meanings: 'Значения',
@@ -81,6 +83,8 @@ const S = strings(
     all_other: 'Всичките {n} думи',
     sound: 'Само заради звука',
     soundHint: 'В тези думи канджито не внася значение.',
+    uses: 'Употреби',
+    usesHint: 'Как канджито образува думи с това значение.',
   },
 )
 
@@ -293,6 +297,7 @@ function MeaningBody({
           </button>
         )
       )}
+      {m.uses && m.uses.length > 0 && <Uses uses={m.uses} lang={lang} row={row} />}
       {m.similar.length > 0 && (
         <section className="aside-block meaning-similar">
           <AsideTitle icon="≈">{t('similar')}</AsideTitle>
@@ -307,6 +312,34 @@ function MeaningBody({
         <MixUpLine key={x.reading} x={x} self={self} onKanji={onKanji} />
       ))}
     </>
+  )
+}
+
+/**
+ * ⑂ Uses: the patterns the kanji builds words in with this meaning, Kodansha's
+ * 1a, 1b -- 〜人 "a person from …" -- each named, said in a line, and shown by
+ * a few words, one a row as everywhere on the page.
+ */
+function Uses({ uses, lang, row }: { uses: MeaningUse[]; lang: Lang; row: (w: Word) => ReactNode }) {
+  const t = S(lang)
+  return (
+    <section className="aside-block meaning-uses" title={t('usesHint')}>
+      <AsideTitle icon="⑂">{t('uses')}</AsideTitle>
+      <ul>
+        {uses.map((u) => {
+          const about = (lang === 'bg' && u.aboutBg) || u.about
+          return (
+            <li key={u.id} className="use">
+              <p className="use-head">
+                <span className="use-label">{(lang === 'bg' && u.bg) || u.en}</span>
+                {about && <span className="use-about">{about}</span>}
+              </p>
+              <ul className="meaning-words use-words">{u.words.map(row)}</ul>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 

@@ -219,7 +219,7 @@ def read_run(run: str, only: str | None = None) -> tuple[dict[str, dict[int, lis
             if isinstance(v, str):
                 problems.append(f"{inp.stem} {k['char']}: {v}")
             else:
-                good[k["char"]] = v
+                good.setdefault(k["char"], {}).update(v)  # a kanji may span batches
     return good, problems
 
 
@@ -282,7 +282,15 @@ def combine(runs: list[dict[int, list]], senses: dict[int, list], bars: tuple[fl
 
 
 def _inputs(run: str) -> dict[str, dict]:
-    return {k["char"]: k for f in sorted(IN.glob(f"{run}-*.json")) for k in json.loads(f.read_text(encoding="utf-8"))["kanji"]}
+    """Each kanji of a run's batches, its words gathered from every batch it spans."""
+    out: dict[str, dict] = {}
+    for f in sorted(IN.glob(f"{run}-*.json")):
+        for k in json.loads(f.read_text(encoding="utf-8"))["kanji"]:
+            if k["char"] in out:
+                out[k["char"]]["words"] += k["words"]
+            else:
+                out[k["char"]] = {**k, "words": list(k["words"])}
+    return out
 
 
 def check(only: str | None = None) -> None:

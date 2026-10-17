@@ -847,6 +847,32 @@ def _group_extras(char: str, s: dict) -> dict:
         if unknown:
             raise _bad("parts_unknown", "not in the graph: {parts}", parts="".join(unknown))
         out["similar"] = list(dict.fromkeys(sim))
+    if uses := _uses(char, s.get("uses")):
+        out["uses"] = uses
+    return out
+
+
+USES_MAX = 4  # a group's uses: the patterns it builds words in (〜人 "a person from …"), Kodansha's 1a, 1b
+
+
+def _uses(char: str, value: Any) -> list[dict]:
+    """A group's uses, cleaned: each a short label, what it is, and up to 4 of the
+    kanji's words that show it. Ones with no label or no word of the kanji are dropped."""
+    if not isinstance(value, list):
+        return []
+    ids = _word_ids(char)
+    out, seen = [], set()
+    for u in value[:USES_MAX]:
+        if not isinstance(u, dict):
+            continue
+        uid = str(u.get("id") or "").strip().lower()
+        en = " ".join(str(u.get("en") or "").split())
+        ex = [int(w) for w in dict.fromkeys(u.get("examples") or []) if str(w).isdigit() and int(w) in ids][:4]
+        if not SENSE_ID.match(uid) or uid in seen or not en or not ex:
+            continue
+        seen.add(uid)
+        out.append({"id": uid, "en": en[:60], "bg": " ".join(str(u.get("bg") or "").split())[:60] or None,
+                    **{k: t for k in ("about", "aboutBg") if (t := _prose(u.get(k), 300))}, "examples": ex})
     return out
 
 
