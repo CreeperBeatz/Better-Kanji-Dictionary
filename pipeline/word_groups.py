@@ -1,11 +1,14 @@
 """Place the unsure words again, one dictionary sense at a time (D-025, D-026).
 
     python pipeline/word_groups.py prepare --pilot 50 [--size 150] [--runs A,B] [--extra-run C:250]
+    # every other kanji with unsure words, one calibration word each, into a folder of its own
+    python pipeline/word_groups.py --drafts data/drafts/word-groups prepare --all --size 250 --calibration 1         --skip data/drafts/word-groups-pilot
     # one Opus subagent per in/<run>-*.json, each reading pipeline/word_groups_prompt.md
     python pipeline/word_groups.py check [--batch A-000]
     python pipeline/word_groups.py evaluate
     python pipeline/word_groups.py sample [--n 30]
     python pipeline/word_groups.py load [--dry-run] [--review-dir DIR]
+    python pipeline/word_groups.py nofit   # words no group of their kanji holds, both runs agreeing (D-027)
 
 A drafted word shows on the site only when both drafting runs put it in one group,
 each at least 0.8 sure (server/review.py DRAFT_WORD_MIN). 13,000 common words
@@ -110,19 +113,26 @@ def _kanji(c: str, words: list[int], live: dict[int, str], fetched: dict[int, di
     return {"char": c, "groups": groups, "words": [fetched[w] for w in words if w in fetched]}
 
 
-def prepare(pilot: int, size: int, runs: list[str], extra: list[tuple[str, int]]) -> None:
+def prepare(pilot: int | None, size: int, runs: list[str], extra: list[tuple[str, int]],
+            calibration: int = CALIBRATION, skip: list[Path] = ()) -> None:
+    """Batches for `pilot` kanji (焼守… first, then at random), or with `pilot` None for every
+    kanji with unsure words but those another folder in `skip` asked about."""
     if any(IN.glob("*.json")):
         raise SystemExit(f"{IN} has batches already: delete the folder to start again")
     data = review._current()
     unsure, live = _unsure_and_live(data)
     rng = random.Random(17)
-    chars = [c for c in MUST if c in unsure]
-    chars += rng.sample(sorted(c for c in unsure if c not in chars), pilot - len(chars))
+    if pilot is None:
+        asked = {c for f in skip for c in json.loads((proposals.folders(f)[0] / "pilot.json").read_text(encoding="utf-8"))["chars"]}
+        chars = sorted((c for c in unsure if c not in asked), key=lambda c: -len(unsure[c]))
+    else:
+        chars = [c for c in MUST if c in unsure]
+        chars += rng.sample(sorted(c for c in unsure if c not in chars), pilot - len(chars))
     # Calibration: a few live words of each kanji, at random.
     calib: dict[str, list[int]] = {}
     for c in chars:
         sure = [w for w, g in live[c].items() if g != CATCH_ALL and w not in unsure[c]]
-        calib[c] = rng.sample(sure, min(CALIBRATION, len(sure)))
+        calib[c] = rng.sample(sure, min(calibration, len(sure)))
     known_ids = {w for c in chars for w in live[c]}
     for c in chars:
         for s in review.site_meanings(c)["senses"] or []:
@@ -388,6 +398,26 @@ def sample(n: int) -> None:
     print(f"{len(lines)} words -> {out.relative_to(ROOT)}")
 
 
+def nofit() -> None:
+    """The words both runs put in no group in any sense: each points to a meaning its kanji's
+    groups lack (自 "from" in 出自), or a word for a person to place. Written to nofit.json."""
+    kanji = _inputs("A")
+    a, _ = read_run("A")
+    b, _ = read_run("B")
+    out = []
+    for c, k in kanji.items():
+        groups = ", ".join(g["en"] or g["id"] for g in k["groups"])
+        for w in k["words"]:
+            ra, rb = a.get(c, {}).get(w["id"]), b.get(c, {}).get(w["id"])
+            if ra and rb and all(g == NONE for g, _ in ra) and all(g == NONE for g, _ in rb):
+                out.append({"char": c, "id": w["id"], "word": w["word"], "reading": w["reading"],
+                            "gloss": w["senses"][0][3], "groups": groups})
+    (DRAFTS / "nofit.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(out)} words in {len({r['char'] for r in out})} kanji -> {(DRAFTS / 'nofit.json').relative_to(ROOT)}")
+    for r in out:
+        print(f"  {r['char']}  {r['word']} {r['reading']}: {r['gloss'][:50]}  | groups: {r['groups'][:60]}")
+
+
 SOURCE = "ai:claude-opus"
 
 
@@ -399,20 +429,37 @@ def _backing(runs: list[list[tuple[str, float]]], group: str) -> list[float]:
     return [r[0][1] for r in runs]
 
 
+def _skeptic() -> dict[str, dict]:
+    """The skeptic pass's verdicts, by "char|word id": skeptic/out-*.json, and the pilot's
+    skeptic-out.json (keyed by word id alone; a word under two of its kanji gets the verdict on both)."""
+    out: dict[str, dict] = {}
+    for f in sorted((DRAFTS / "skeptic").glob("out-*.json")):
+        out.update(json.loads(f.read_text(encoding="utf-8"))["verdicts"])
+    single = DRAFTS / "skeptic-out.json"
+    if single.exists():
+        by_id = json.loads(single.read_text(encoding="utf-8"))["verdicts"]
+        pilot = json.loads((DRAFTS / "pilot.json").read_text(encoding="utf-8"))
+        for c, ws in pilot["unsure"].items():
+            out.update({f"{c}|{w}": by_id[str(w)] for w in ws if str(w) in by_id})
+    return out
+
+
 def load(dry_run: bool, review_dir: Path | None) -> None:
     """The unsure words placed again, into their open drafts in the review queue: a word both
     runs are sure of gets its main group as the proposal, with its extra groups and the sense
     each comes from (`also`, `at`), so the site shows it; every word keeps what the runs said
     sense by sense (`bySense`) for its reviewer, and its old evidence (`before`). Drafts a
-    person touched are left alone."""
+    person touched are left alone. Where the skeptic pass ran, a main group it did not call
+    `ok` is not placed, and only the extra groups it called `ok` are kept (`skeptic`)."""
     pilot = json.loads((DRAFTS / "pilot.json").read_text(encoding="utf-8"))
     kanji = _inputs("A")
     a, pa = read_run("A")
     b, pb = read_run("B")
     if pa or pb:
         raise SystemExit(f"runs have problems ({len(pa)}, {len(pb)}): run check")
+    verdicts = _skeptic()
     proposals.use_review_dir(review_dir)
-    placed = extra = kept = touched = 0
+    placed = extra = kept = touched = vetoed = 0
     with review._change() as data:
         latest: dict[str, dict] = {}
         for i in data["items"].values():
@@ -430,7 +477,15 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                 r = got[wid]
                 old = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
                 ev = {"bySense": {"A": a[c][wid], "B": b[c][wid]}, "before": {k: v for k, v in old.items() if k != "before"}}
+                verdict = verdicts.get(f"{c}|{wid}")
+                if verdict:
+                    ev["skeptic"] = verdict
                 fields: dict = {"evidence": {**old, **ev}}
+                if r["main"] and verdict and verdict.get("main") != "ok":
+                    vetoed += 1
+                    r = {**r, "main": None}
+                elif r["main"] and verdict:
+                    r = {**r, "extras": [g for g in r["extras"] if (verdict.get("extras") or {}).get(g) == "ok"]}
                 if r["main"]:
                     main = proposals.sense_id(c, r["main"])
                     ca, cb = _backing([a[c][wid], b[c][wid]], r["main"])
@@ -451,9 +506,10 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                 if not dry_run:
                     review._update(data, item, **fields)
         if dry_run:
-            raise SystemExit(f"would place {placed} ({extra} with extra groups), keep {kept} unsure, "
-                             f"leave {touched} a person touched (dry run: nothing written)")
-    print(f"placed {placed} ({extra} with extra groups), kept {kept} unsure, left {touched} a person touched")
+            raise SystemExit(f"would place {placed} ({extra} with extra groups), keep {kept} unsure ({vetoed} vetoed by "
+                             f"the skeptic), leave {touched} a person touched (dry run: nothing written)")
+    print(f"placed {placed} ({extra} with extra groups), kept {kept} unsure ({vetoed} vetoed by the skeptic), "
+          f"left {touched} a person touched")
 
 
 def main() -> int:
@@ -463,6 +519,9 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--pilot", type=int, default=50, help="this many kanji")
+    p.add_argument("--all", action="store_true", help="every kanji with unsure words, instead of a pilot")
+    p.add_argument("--calibration", type=int, default=CALIBRATION, help="live words per kanji placed again, unmarked")
+    p.add_argument("--skip", type=Path, action="append", default=[], help="a drafts folder whose kanji are done")
     p.add_argument("--size", type=int, default=150, help="words per batch")
     p.add_argument("--runs", default="A,B")
     p.add_argument("--extra-run", action="append", default=[], help="RUN:SIZE, another run with other batch sizes")
@@ -472,17 +531,20 @@ def main() -> int:
     sp = sub.add_parser("sample")
     sp.add_argument("--n", type=int, default=30)
     proposals.load_parser(sub, "load")
+    sub.add_parser("nofit")
     args = ap.parse_args()
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
         extra = [(r, int(n)) for r, n in (x.split(":") for x in args.extra_run)]
-        prepare(args.pilot, args.size, args.runs.split(","), extra)
+        prepare(None if args.all else args.pilot, args.size, args.runs.split(","), extra, args.calibration, args.skip)
     elif args.cmd == "check":
         check(args.batch)
     elif args.cmd == "evaluate":
         evaluate()
     elif args.cmd == "load":
         load(args.dry_run, args.review_dir)
+    elif args.cmd == "nofit":
+        nofit()
     else:
         sample(args.n)
     return 0
