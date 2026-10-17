@@ -310,6 +310,11 @@ skeptic (1,484 of 1,494 and 141 of 151 ok). Now 10,097 words are placed: kun
 words in no group 7.7%, on words 5.0%, kanji with a kun reading on no card 38.
 Not loaded into the review store yet. Left: words whose only sense sits between two groups (育つ: "raise" or
 "grow up"), for a reviewer.
+2026-10-17, with the regroup (D-028) and 21 words placed by hand: kun words in
+no group 3.3%, on words 2.9%, and kanji with a kun reading on no card 19. All
+19 are names, fixed spellings, the zodiac or rare words (静岡, 馬鹿, 申 さる);
+no learner's kun reading is missing. Dani: solved. Sandbox only until the
+regroup is loaded and deployed.
 
 ### D-027 · Meanings that no group of the kanji holds
 *Found 2026-10-17* (the word-groups pilot, D-026).
