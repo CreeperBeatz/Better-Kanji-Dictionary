@@ -5,6 +5,9 @@
     # one Opus subagent per in/<run>-*.json (pipeline/regroup_prompt.md), writing out/<run>-*.json
     python pipeline/regroup.py check
     python pipeline/regroup.py compare
+    python pipeline/regroup.py --drafts data/drafts/regroup reconcile-prepare [--per 35]
+    # one Opus subagent per reconcile/in-*.json (pipeline/regroup_reconcile_prompt.md)
+    python pipeline/regroup.py --drafts data/drafts/regroup final   # -> final.json, checked
 
 The October groups split common kanji by how they build words as well as by
 meaning: 人 has "person", "person of a kind" and "counting people", though 人
@@ -16,9 +19,12 @@ inside the meaning whose sense it carries.
 Each kanji carries what the October redraft gave it (data/drafts/meanings-v2:
 its words, KANJIDIC, Kodansha, Цалта, Wiktionary) and its groups now
 (`current`). Two runs, A and B (words shuffled), to see how stable the
-groups are. Nothing is loaded from here: the groups are shown to Dani first.
+groups are. A reconcile pass then picks each kanji's groups and uses from
+the two runs by reference ("A:join", "B:join/meet"), so no text is written
+twice, and writes the link sentence that walks through the new groups;
+`final` assembles them. Nothing is loaded from here.
 
-Drafts live in data/drafts/regroup-pilot/ (untracked).
+Drafts live in data/drafts/regroup-pilot/ and data/drafts/regroup/ (untracked).
 """
 
 from __future__ import annotations
@@ -99,6 +105,13 @@ def read_run(run: str, only: str | None = None) -> tuple[dict[str, dict], list[s
             short = [g.get("id") for g in e["groups"] if not all(g.get(f) for f in ("id", "en", "bg", "about", "aboutBg"))]
             if short:
                 problems.append(f"{inp.stem} {k['char']}: groups missing id/en/bg/about/aboutBg {short}")
+            # What the review store takes (review.validate): 1-6 groups, labels of 1-4 words, 4 examples.
+            if len(e["groups"]) > 6:
+                problems.append(f"{inp.stem} {k['char']}: {len(e['groups'])} groups, at most 6")
+            long = [g.get("id") for g in e["groups"] if len(g.get("en") or "") > 40 or len((g.get("en") or "").split()) > 4
+                    or len(g.get("bg") or "") > 40 or len(g.get("examples") or []) > 4]
+            if long:
+                problems.append(f"{inp.stem} {k['char']}: en/bg over 4 words or 40 characters, or over 4 examples {long}")
             good[k["char"]] = e
     return good, problems
 
@@ -132,6 +145,217 @@ def compare() -> None:
     print("\n".join(lines))
 
 
+def _inputs(run: str) -> dict[str, dict]:
+    return {k["char"]: k for f in sorted(IN.glob(f"{run}-*.json")) for k in json.loads(f.read_text(encoding="utf-8"))["kanji"]}
+
+
+def _brief(g: dict, words: dict[str, str]) -> dict:
+    """A group or use as the reconcile pass sees it: no Bulgarian, examples as words."""
+    out = {"id": g["id"], "en": g["en"], "about": g.get("about"), "from": g.get("from") or [],
+           "examples": [words.get(str(x), str(x)) for x in g.get("examples") or []]}
+    if "uses" in g:
+        out["uses"] = [_brief(u, words) for u in g.get("uses") or []]
+    return out
+
+
+def reconcile_prepare(per: int) -> None:
+    a, pa = read_run("A")
+    b, pb = read_run("B")
+    if pa or pb:
+        raise SystemExit(f"runs have problems ({len(pa)}, {len(pb)}): run check")
+    kanji = _inputs("A")
+    rec = DRAFTS / "reconcile"
+    if any(rec.glob("in-*.json")):
+        raise SystemExit(f"{rec} has batches already")
+    rec.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for c, k in kanji.items():
+        words = {str(w[0]): w[1] for w in k["words"]}
+        extras = review.site_meanings(c)["extras"] or {}
+        rows.append({"char": c, "current": [f"{s['id']} ({s['en']})" for s in k["current"]], "link": extras.get("link"),
+                     "A": [_brief(g, words) for g in a[c]["groups"]], "whyA": a[c].get("why"),
+                     "B": [_brief(g, words) for g in b[c]["groups"]], "whyB": b[c].get("why")})
+    for i in range(0, len(rows), per):
+        lines = ",\n".join(json.dumps(r, ensure_ascii=False) for r in rows[i:i + per])
+        (rec / f"in-{i // per:03d}.json").write_text(f'{{"batch": "{i // per:03d}", "kanji": [\n{lines}\n]}}\n', encoding="utf-8")
+    print(f"{len(rows)} kanji, {-(-len(rows) // per)} reconcile batches -> {rec.relative_to(proposals.ROOT)}")
+
+
+def _pick(ref: str, runs: dict[str, dict], c: str) -> dict:
+    """A group ("A:join") or a use ("B:join/meet") of a run, by reference."""
+    run, _, path = ref.partition(":")
+    gid, _, uid = path.partition("/")
+    g = next((g for g in runs[run][c]["groups"] if g["id"] == gid), None) if run in runs and c in runs[run] else None
+    if g is None:
+        raise KeyError(ref)
+    if not uid:
+        return g
+    u = next((u for u in g.get("uses") or [] if u["id"] == uid), None)
+    if u is None:
+        raise KeyError(ref)
+    return u
+
+
+def assemble(c: str, e: dict, runs: dict[str, dict], current: list[dict]) -> tuple[dict, list[str]]:
+    """A kanji's final groups from the reconcile pass's choices; the problems found."""
+    problems, groups, ids = [], [], set()
+    for choice in e.get("groups") or []:
+        try:
+            g = _pick(choice["take"], runs, c)
+            uses = [_pick(r, runs, c) for r in choice.get("uses") or []]
+            absorbed = [_pick(r, runs, c) for r in choice.get("absorb") or []]
+        except (KeyError, TypeError) as err:
+            problems.append(f"{c}: unknown reference {err}")
+            continue
+        gid = choice.get("id") or g["id"]
+        if gid in ids:
+            problems.append(f"{c}: group id {gid} twice")
+        ids.add(gid)
+        texts = {f: choice.get(f) or g.get(f) for f in ("en", "bg", "about", "aboutBg")}
+        uids, clean_uses = set(), []
+        for u in uses:
+            uid = u["id"] if u["id"] not in uids else f"{u['id']}-2"
+            uids.add(uid)
+            clean_uses.append({"id": uid, "en": u["en"], "about": u.get("about"), "from": u.get("from") or [],
+                               "examples": list(u.get("examples") or [])[:4]})
+        froms = list(dict.fromkeys([*(g.get("from") or []), *(f for x in absorbed for f in x.get("from") or []),
+                                    *(f for u in clean_uses for f in u["from"])]))
+        groups.append({"id": gid, **texts, "from": froms, "examples": list(g.get("examples") or [])[:4], "uses": clean_uses})
+    if not 1 <= len(groups) <= 6:
+        problems.append(f"{c}: {len(groups)} groups")
+    missing = [s["id"] for s in current if not any(s["id"] in g["from"] for g in groups)]
+    if missing:
+        problems.append(f"{c}: current groups no new group takes in (their words are placed again): {missing}")
+    if not e.get("link") or not e.get("linkBg"):
+        problems.append(f"{c}: link or linkBg missing")
+    try:
+        review.validate("kanji_senses", c, [{**g, "id": g["id"]} for g in groups])
+    except Exception as err:  # noqa: BLE001 - the store's own words for what it won't take
+        problems.append(f"{c}: the review store would refuse it: {err}")
+    return {"groups": groups, "link": e.get("link"), "linkBg": e.get("linkBg")}, problems
+
+
+def final(only: str | None = None) -> None:
+    """The reconcile pass's choices assembled into final.json (or one batch checked)."""
+    runs = {"A": read_run("A")[0], "B": read_run("B")[0]}
+    kanji = _inputs("A")
+    rec = DRAFTS / "reconcile"
+    out, problems = {}, []
+    for inp in sorted(rec.glob(f"in-{only or '*'}.json")):
+        batch = json.loads(inp.read_text(encoding="utf-8"))
+        res = rec / inp.name.replace("in-", "out-")
+        got = json.loads(res.read_text(encoding="utf-8")).get("kanji", {}) if res.exists() else {}
+        for k in batch["kanji"]:
+            c = k["char"]
+            if c not in got:
+                problems.append(f"{inp.stem} {c}: missing")
+                continue
+            out[c], p = assemble(c, got[c], runs, kanji[c]["current"])
+            problems += [f"{inp.stem} {x}" for x in p]
+    hard = [p for p in problems if "placed again" not in p]
+    print(f"{len(out)} kanji assembled, {len(hard)} problems, {len(problems) - len(hard)} notes")
+    for p in problems:
+        print("   ", p)
+    if not only and not hard:
+        (DRAFTS / "final.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"-> {(DRAFTS / 'final.json').relative_to(proposals.ROOT)}")
+
+
+PLACE_BATCH = 250  # words per placement batch, as in word_groups
+
+
+def _targets(groups: list[dict]) -> dict[str, list[str]]:
+    """Each current group id -> the new groups that take it in (`from`, uses included)."""
+    out: dict[str, list[str]] = {}
+    for g in groups:
+        for f in g["from"]:
+            out.setdefault(f, []).append(g["id"])
+    return out
+
+
+def mapped(char: str, groups: list[dict], placed: dict[int, str], also: dict[int, list[str]]) -> tuple[dict[int, dict], list[int]]:
+    """The words whose current group goes to exactly one new group, with that group (and their
+    extra groups that do too); and the words to place again: unplaced, or their group split or gone."""
+    targets = _targets(groups)
+    out, again = {}, []
+    for w, g in placed.items():
+        if g == CATCH_ALL:
+            out[w] = {"main": CATCH_ALL, "extras": []}
+            continue
+        t = targets.get(proposals.short_id(g), [])
+        if len(t) != 1:
+            again.append(w)
+            continue
+        extras = []
+        for x in also.get(w) or []:
+            tx = targets.get(proposals.short_id(x), [])
+            if len(tx) == 1 and tx[0] != t[0] and tx[0] not in extras:
+                extras.append(tx[0])
+        out[w] = {"main": t[0], "extras": extras}
+    return out, again
+
+
+def place_prepare(review_dir: Path | None) -> None:
+    """Map what can be mapped; write placement batches (word_groups format) for the rest."""
+    import word_groups as wg  # noqa: PLC0415 - its folders are set here, not at import
+    fin = json.loads((DRAFTS / "final.json").read_text(encoding="utf-8"))
+    proposals.use_review_dir(review_dir)
+    data = review._current()
+    place = DRAFTS / "place"
+    wg.DRAFTS, wg.IN, wg.OUT = proposals.folders(place)
+    if any(wg.IN.glob("*.json")):
+        raise SystemExit(f"{wg.IN} has batches already")
+    maps, kanji, stats = {}, [], {"words": 0, "mapped": 0, "again": 0, "unplaced": 0}
+    by_char: dict[str, set[int]] = {}
+    for i in data["items"].values():
+        if i["type"] == "word_sense":
+            ch, wid = i["subject"].split("|")
+            by_char.setdefault(ch, set()).add(int(wid))
+    for c, e in fin.items():
+        words = sorted(by_char.get(c, ()))
+        m = review.site_meanings(c)
+        placed = {w: g for w, g in m["placed"].items() if w in set(words)}
+        got, split = mapped(c, e["groups"], placed, m.get("also") or {})
+        todo = sorted(set(split) | {w for w in words if w not in placed})
+        stats["words"] += len(words)
+        stats["mapped"] += len(got)
+        stats["again"] += len(split)
+        stats["unplaced"] += len(todo) - len(split)
+        maps[c] = {str(w): v for w, v in got.items()}
+        if not todo:
+            continue
+        fetched = wg._words(sorted(set(todo) | {int(x) for g in e["groups"] for x in g["examples"]}))
+        groups = []
+        for g in e["groups"]:
+            uses = "; ".join(f"{u['en']} ({', '.join(fetched[int(x)]['word'] for x in u['examples'] if int(x) in fetched)})" for u in g["uses"])
+            groups.append({"id": g["id"], "en": g["en"], "about": (g.get("about") or "") + (f" Uses in this group: {uses}." if uses else ""),
+                           "known": [f"{fetched[int(x)]['word']} {fetched[int(x)]['reading']}" for x in g["examples"] if int(x) in fetched][:4]})
+        kanji.append({"char": c, "groups": groups, "words": [fetched[w] for w in todo if w in fetched]})
+    (place / "mapped.json").parent.mkdir(parents=True, exist_ok=True)
+    (place / "mapped.json").write_text(json.dumps(maps, ensure_ascii=False), encoding="utf-8")
+    (place / "pilot.json").write_text(json.dumps({"chars": [k["char"] for k in kanji], "calibration": {k["char"]: [] for k in kanji},
+                                                  "unsure": {k["char"]: [w["id"] for w in k["words"]] for k in kanji}}, ensure_ascii=False), encoding="utf-8")
+    rng = random.Random(9)
+    for run in ("A", "B"):
+        # Small kanji share a batch; a big one spans several (word_groups merges them back).
+        batches, cur, n = [], [], 0
+        for k in kanji:
+            ws = k["words"] if run == "A" else rng.sample(k["words"], len(k["words"]))
+            for i in range(0, len(ws), PLACE_BATCH):
+                part = ws[i:i + PLACE_BATCH]
+                if cur and n + len(part) > PLACE_BATCH:
+                    batches.append(cur)
+                    cur, n = [], 0
+                cur.append({**k, "words": part})
+                n += len(part)
+        batches += [cur] if cur else []
+        for i, b in enumerate(batches):
+            wg._write(wg.IN / f"{run}-{i:03d}.json", {"batch": f"{run}-{i:03d}", "run": run, "kanji": b})
+        print(f"run {run}: {len(batches)} batches")
+    print(f"{stats['words']} words: {stats['mapped']} mapped, {stats['again']} whose group split or went, "
+          f"{stats['unplaced']} unplaced -> {stats['again'] + stats['unplaced']} to place")
+
+
 def main() -> int:
     global DRAFTS, IN, OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -144,12 +368,24 @@ def main() -> int:
     ck = sub.add_parser("check")
     ck.add_argument("--batch", help="one batch only, e.g. A-003")
     sub.add_parser("compare")
+    rp = sub.add_parser("reconcile-prepare")
+    rp.add_argument("--per", type=int, default=35, help="kanji per reconcile batch")
+    fp = sub.add_parser("final")
+    fp.add_argument("--batch", help="one reconcile batch only, e.g. 003")
+    pp = sub.add_parser("place-prepare")
+    pp.add_argument("--review-dir", type=Path, help="the review store to map from (default data/review)")
     args = ap.parse_args()
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
         prepare(args.chars or args.chars_file.read_text(encoding="utf-8").strip(), args.size)
     elif args.cmd == "check":
         check(args.batch)
+    elif args.cmd == "reconcile-prepare":
+        reconcile_prepare(args.per)
+    elif args.cmd == "final":
+        final(args.batch)
+    elif args.cmd == "place-prepare":
+        place_prepare(args.review_dir)
     else:
         compare()
     return 0

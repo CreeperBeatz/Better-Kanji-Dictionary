@@ -76,7 +76,8 @@ Rules:
 ```
 
 - `id`: short lowercase a-z, 0-9, -; unique within the kanji (use ids only
-  within their group). `en`: 1 to 4 words. `bg`: natural Bulgarian, short;
+  within their group). At most 6 groups. `en`: 1 to 4 words, at most 40
+  characters. `bg`: natural Bulgarian, short (at most 40 characters);
   kanji are «канджи», never «кандзи». `about`: one or two plain sentences
   for a learner (short sentences, one fact each). `aboutBg`: the same in
   natural Bulgarian. Uses need `en` and `about` only.
