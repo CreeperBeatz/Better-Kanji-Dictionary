@@ -496,9 +496,39 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                     n["unplaced"] += 1
                 if not dry_run:
                     review._update(data, w, **fields)
+        n["manual"] = _manual(data, words, dry_run)
         if dry_run:
             raise SystemExit(f"dry run, nothing written: {n}")
     print(n)
+
+
+def _manual(data: dict, words: dict[str, dict], dry_run: bool) -> int:
+    """manual.json: words placed by hand (the kun readings no card showed), as sure drafts.
+    Like every draft, left alone when a person touched it."""
+    path = DRAFTS / "manual.json"
+    if not path.exists():
+        return 0
+    done = 0
+    drafts = _latest(data, "kanji_senses")
+    for m in json.loads(path.read_text(encoding="utf-8"))["words"]:
+        c, key = m["char"], f"{m['char']}|{m['id']}"
+        w = words.get(key)
+        if not _open(w) or key in data["live"]["word_sense"]:
+            continue
+        groups = review._senses(data, c) or (drafts.get(c) or {}).get("proposed") or []
+        ids = {s["id"] for s in groups if isinstance(s, dict)}
+        main = proposals.sense_id(c, m["main"])
+        extras = [proposals.sense_id(c, x) for x in m.get("extras") or []]
+        if main != CATCH_ALL and main not in ids or any(x not in ids for x in extras):
+            raise SystemExit(f"manual.json: {key} names a group {c} does not have")
+        old = w.get("evidence") if isinstance(w.get("evidence"), dict) else {}
+        ev = {**old, "runs": [{"run": "manual", "sense": main, "confidence": m["confidence"]}], "confidence": m["confidence"],
+              "agree": True, "method": "senses", "also": extras,
+              "at": {proposals.sense_id(c, g): x for g, x in (m.get("at") or {}).items()}, "manual": m["why"]}
+        if not dry_run:
+            review._update(data, w, proposed=main, evidence=ev, source=SOURCE_AI, reason="placed by hand: a kun reading on no card (D-026)")
+        done += 1
+    return done
 
 
 SOURCE_AI = "ai:claude-opus"

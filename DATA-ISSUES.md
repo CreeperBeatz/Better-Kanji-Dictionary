@@ -322,6 +322,10 @@ Source: the meanings drafts' groups (`ai:claude-sonnet`).
 (data/drafts/word-groups*/nofit.json): 仮名 (名 "letter, script"), 気概
 (概 "spirit"), 具合 (具 "condition"), 千尋 (尋 "fathom"), 文献 (献 "wise men"),
 and others. Each needs its kanji's groups looked at, or a person to place it.
+2026-10-17: 益 "increase, more" (益々) has no group; 益々 sits under "profit, gain"
+for now (data/drafts/regroup/manual.json). The last kun readings on no card were
+placed by hand there too: 携わる, 照れる, 却って, 丈 だけ, 居候, 雨脚, 大関 and others.
+What is left are names, the zodiac and rare words (静岡, 申 さる, 謀).
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
