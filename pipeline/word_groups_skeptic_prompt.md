@@ -17,6 +17,9 @@ For each entry, judge with your own knowledge of Japanese:
 1. Is `main` right: does this kanji carry that group's meaning in the word's
    main (first, commonest) sense? Judge what the kanji contributes to the
    word, not what the word means overall (先生: 生 is "born", not "teacher").
+   When `main` is `catch-all`, it is `ok` only if the kanji's own meaning
+   really is not felt in the word; if one of its groups explains the word
+   (大丈夫: 丈夫 "sturdy man"), it is `wrong`.
 2. Is each extra right: does another sense of the word really use the kanji
    in that group's meaning, not just as a hedge?
 

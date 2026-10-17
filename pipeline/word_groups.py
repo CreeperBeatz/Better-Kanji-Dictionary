@@ -19,12 +19,14 @@ kanji's groups. The word's **main** group is the group of its first sense; the
 groups its other senses land in are its **extra** groups.
 
 What counts (`combine`): a sense both runs put in the same group, each at
-least `MAIN_SURE` (0.7) for the main group, `SURE` (0.8) for an extra one. The
+least `MAIN_SURE` (0.6) for the main group -- at the highest of `MAIN_BARS` that gives
+one -- and `SURE` (0.8) for an extra one. The
 word's main group is the first such sense's, in JMdict's order; the later
 ones' are its extras (at most `MAX_EXTRAS`; not from senses JMdict marks
 archaic, obsolete or rare). A word with no such sense is not placed. A main
-group below 0.8 goes live only with the skeptic's `ok`: a sample of 300 at
-0.7-0.79 was 99.3% ok, as good as the 0.8 ones (2026-10-17). So every group a word is shown in has a
+group below 0.8 goes live only with the skeptic's `ok`, given for that same
+main group: samples of 300 were 99.3% ok at 0.7-0.79 and 99.0% at 0.6-0.69, as
+good as the 0.8 ones (2026-10-17). So every group a word is shown in has a
 sense of it that both runs were sure of: 放つ "to fire" is unsure, but
 "to set free" and "to emit" are not.
 
@@ -53,7 +55,8 @@ from proposals import CATCH_ALL, ROOT, review  # noqa: E402
 DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "word-groups-pilot")
 
 SURE = 0.8  # the bar an extra group passes in both runs, and a main group with no skeptic verdict
-MAIN_SURE = 0.7  # the bar a main group passes in both runs, with a skeptic `ok` below SURE (review.SENSES_WORD_MIN)
+MAIN_SURE = 0.6  # the lowest bar a main group passes in both runs, with a skeptic `ok` below SURE (review.SENSES_WORD_MIN)
+MAIN_BARS = (SURE, 0.7, MAIN_SURE)  # tried in turn: a word sure at a higher bar keeps the main group it has there
 MAX_EXTRAS = 2
 NONE = "-"  # a sense no group holds: a far use of the word
 FAR = {"arch", "obs", "rare"}  # senses that never give an extra group
@@ -248,13 +251,18 @@ def sure_senses(runs: list[list[tuple[str, float]]], senses: list[list], bar: fl
     return out
 
 
-def combine(runs: list[dict[int, list]], senses: dict[int, list]) -> dict[int, dict]:
+def combine(runs: list[dict[int, list]], senses: dict[int, list], bars: tuple[float, ...] | None = None) -> dict[int, dict]:
     """Per word: `main`, the group of its first sense both runs are sure of (or of its very first
     sense, when they agree on it and another sense makes that group sure), and `extras`, those of
     its later ones (at most MAX_EXTRAS); a catch-all main has none. `a`, `b`: each run's own main."""
     out = {}
     for w in set(runs[0]) & set(runs[1]):
-        at = sure_senses([runs[0][w], runs[1][w]], senses[w], MAIN_SURE)
+        # The highest bar that gives the word a group: lowering the bar must not change the
+        # main group of a word already placed (and checked) at a higher one.
+        at: dict[str, int] = {}
+        for bar in bars or MAIN_BARS:
+            if at := sure_senses([runs[0][w], runs[1][w]], senses[w], bar):
+                break
         groups = list(at)
         # Its first sense leads when the runs agree on it and a sure sense holds that group too:
         # 放つ "to fire" (unsure) and "to emit" (sure) are "send out", before "to set free".
@@ -436,6 +444,16 @@ def _backing(runs: list[list[tuple[str, float]]], group: str) -> list[float]:
     return [r[0][1] for r in runs]
 
 
+def _checked() -> dict[str, str]:
+    """The main group each skeptic verdict was given for, by "char|word id", from the batches it read."""
+    out: dict[str, str] = {}
+    for folder in {DRAFTS, DRAFTS.parent / "word-groups", DRAFTS.parent / "word-groups-exp"}:
+        for f in [*folder.glob("skeptic/in-*.json"), *folder.glob("band*-in-*.json"), *folder.glob("skeptic-in.json")]:
+            for e in json.loads(f.read_text(encoding="utf-8")):
+                out.setdefault(e.get("key") or f"{e['char']}|{e['id']}", e["main"])
+    return out
+
+
 def _skeptic() -> dict[str, dict]:
     """The skeptic pass's verdicts, by "char|word id": skeptic/out-*.json, and the pilot's
     skeptic-out.json (keyed by word id alone; a word under two of its kanji gets the verdict on both)."""
@@ -465,6 +483,7 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
     if pa or pb:
         raise SystemExit(f"runs have problems ({len(pa)}, {len(pb)}): run check")
     verdicts = _skeptic()
+    checked = _checked()
     proposals.use_review_dir(review_dir)
     placed = extra = kept = touched = vetoed = unchecked = 0
     with review._change() as data:
@@ -485,6 +504,8 @@ def load(dry_run: bool, review_dir: Path | None) -> None:
                 old = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
                 ev = {"bySense": {"A": a[c][wid], "B": b[c][wid]}, "before": {k: v for k, v in old.items() if k != "before"}}
                 verdict = verdicts.get(f"{c}|{wid}")
+                if verdict and checked.get(f"{c}|{wid}") != r["main"]:
+                    verdict = None  # given for another main group than this one
                 if verdict:
                     ev["skeptic"] = verdict
                 fields: dict = {"evidence": {**old, **ev}}

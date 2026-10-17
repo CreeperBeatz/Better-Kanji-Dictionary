@@ -304,10 +304,11 @@ unmarked, came out the same 99.6% of the time. In the sandbox, common kun words
 in no group go from 29.9% to 17.4%, on words from 24.1% to 13.6%, and kanji
 with a kun reading on no card from 204 to 77. A main group at 0.7-0.79 was
 let in after a 300-word sample came out 99.3% right; the skeptic then checked
-all 2,596 of them (18 held back). Now 8,175 words are placed: kun words in no
-group 12.1%, on words 8.6%, kanji with a kun reading on no card 52. A sample
-of 300 at 0.6-0.69 was 99.0% right (not let in yet). Not loaded into the
-review store yet. Left: words whose only sense sits between two groups (育つ: "raise" or
+all 2,596 of them (18 held back). Then 0.6-0.69 too (a sample was 99.0%
+right), and words both runs call sound-only below 0.8, each checked by the
+skeptic (1,484 of 1,494 and 141 of 151 ok). Now 10,097 words are placed: kun
+words in no group 7.7%, on words 5.0%, kanji with a kun reading on no card 38.
+Not loaded into the review store yet. Left: words whose only sense sits between two groups (育つ: "raise" or
 "grow up"), for a reviewer.
 
 ### D-027 · Meanings that no group of the kanji holds

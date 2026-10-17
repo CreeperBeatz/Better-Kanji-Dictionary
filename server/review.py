@@ -2504,8 +2504,9 @@ def word_senses(char: str) -> dict[int, str]:
 # the rest wait, ungrouped, for a later run or a reviewer.
 DRAFT_WORD_MIN = 0.8
 # A draft placed sense by sense (pipeline/word_groups.py, `method` "senses") is loaded only once a
-# skeptic pass called it right below 0.8, so it shows from 0.7 (300 sampled: 99.3% right).
-SENSES_WORD_MIN = 0.7
+# skeptic pass called it right below 0.8, so it shows from 0.6 (300 sampled at 0.7-0.79: 99.3%
+# right; at 0.6-0.69: 99.0%).
+SENSES_WORD_MIN = 0.6
 _drafts: tuple[dict | None, dict] = (None, {})
 
 
