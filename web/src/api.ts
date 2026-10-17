@@ -252,6 +252,18 @@ export interface KanjiMeaning {
   similar: CloseKanji[]
   /** Kanji easy to mix up on one of its readings: 挙げる, 揚げる beside 上げる. */
   mixups: MixUp[]
+  /** The patterns it builds words in, each with a few words: 〜人 "a person from …", 日本人 村人. */
+  uses?: MeaningUse[]
+}
+
+/** A way a kanji builds words with one of its meanings (a suffix, a counter, a set phrase). */
+export interface MeaningUse {
+  id: string
+  en: string
+  bg: string | null
+  about?: string
+  aboutBg?: string
+  words: Word[]
 }
 
 /** A kanji's meanings, readings and words, as its page shows them (server: search.kanji_page). */

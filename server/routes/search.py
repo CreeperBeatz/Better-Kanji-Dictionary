@@ -980,7 +980,8 @@ def kanji_page(char: str) -> dict:
     special_ids = {r["word_id"] for r in special}
     words = _fetch_words(
         list({*(w for ws in in_group.values() for w in ws), *special_ids,
-              *(r["word_id"] for rs in examples.values() for r in rs), *(w for s in senses for w in s.get("examples") or [])})
+              *(r["word_id"] for rs in examples.values() for r in rs), *(w for s in senses for w in s.get("examples") or []),
+              *(w for s in senses for u in s.get("uses") or [] for w in u["examples"])})
     )
     on_row = query_one("SELECT on_yomi FROM kanji WHERE char = ?", (char,))
     on_readings = {r.strip("-") for r in json.loads((on_row and on_row["on_yomi"]) or "[]")}
@@ -1112,6 +1113,9 @@ def kanji_page(char: str) -> dict:
             "exceptions": [starred(as_here(r), r["word_id"]) for r in exceptions],
             "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
             "mixups": here,
+            # The patterns it builds words in (〜人 "a person from …": 日本人, 村人), each with its examples.
+            "uses": [{"id": u["id"], "en": u["en"], "bg": u.get("bg"), "about": u.get("about"), "aboutBg": u.get("aboutBg"),
+                      "words": [marked(w) for w in u["examples"] if w in words]} for u in s.get("uses") or []],
         })
     sound = [w for w in in_group.get(review.CATCH_ALL, []) if w not in special_ids]
     if sound:

@@ -67,7 +67,8 @@ FORMAT = 6
 # 3: up to 26 words a reading on each meaning, the rest after the key words.
 # 4: a meaning's best examples starred, first in each part.
 # 5: a word under each of its meanings, with the sense that has it (焼く under "bake").
-PAGES_FORMAT = 5
+# 6: each meaning's uses, the patterns it builds words in, with their examples.
+PAGES_FORMAT = 6
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"

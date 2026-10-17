@@ -24,7 +24,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { reducedMotion } from '../media'
-import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MixUp, UsageCard, Word } from '../api'
+import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MeaningUse, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { bringToTop, focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
@@ -32,7 +32,8 @@ import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
 import { ReadingsLine, SpecialReadings } from './Readings'
 import { useFold } from './fold'
 import { WordLanes } from './WordLanes'
-import { warmKanji } from '../warm'
+import { warmKanji, warmWord } from '../warm'
+import { MarkedReading } from '../search/MarkedReading'
 
 /** Remembers "fold all": '1' while every card is folded. */
 const FOLD_KEY = 'meanings-folded'
@@ -66,6 +67,8 @@ const S = strings(
     all_other: 'All {n} words',
     sound: 'For its sound only',
     soundHint: 'In these words the kanji brings no meaning.',
+    uses: 'Uses',
+    usesHint: 'Ways the kanji builds words with this meaning.',
   },
   {
     meanings: 'Значения',
@@ -81,6 +84,8 @@ const S = strings(
     all_other: 'Всичките {n} думи',
     sound: 'Само заради звука',
     soundHint: 'В тези думи канджито не внася значение.',
+    uses: 'Употреби',
+    usesHint: 'Как канджито образува думи с това значение.',
   },
 )
 
@@ -91,6 +96,7 @@ export function Meanings({
   kunYomi,
   onKanji,
   onWordsWith,
+  onWord,
   row,
 }: {
   page: KanjiPage
@@ -101,6 +107,8 @@ export function Meanings({
   onKanji: (c: string) => void
   /** All the kanji's words, at this meaning. */
   onWordsWith?: (meaning: string) => void
+  /** Opens a word's entry: a use's words. */
+  onWord?: (w: Word) => void
   /** The page's word row, so words look the same everywhere on it. */
   row: (w: Word) => ReactNode
 }) {
@@ -170,7 +178,7 @@ export function Meanings({
           open={isOpen(m.id)}
           onToggle={() => turn(m.id, !isOpen(m.id))}
           self={self}
-          onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+          onKanji={onKanji} onWordsWith={onWordsWith} onWord={onWord} row={row} />
       ))}
 
       {page.soundOnly && (
@@ -202,6 +210,7 @@ function Meaning({
   self,
   onKanji,
   onWordsWith,
+  onWord,
   row,
 }: {
   m: KanjiMeaning
@@ -213,6 +222,7 @@ function Meaning({
   onKanji: (c: string) => void
   /** All the kanji's words, at this meaning. */
   onWordsWith?: (meaning: string) => void
+  onWord?: (w: Word) => void
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
@@ -237,7 +247,7 @@ function Meaning({
       {about && <p className="meaning-about">{about}</p>}
       {shown && (
         <div className="meaning-body" ref={body}>
-          <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} row={row} />
+          <MeaningBody m={m} self={self} onKanji={onKanji} onWordsWith={onWordsWith} onWord={onWord} row={row} />
         </div>
       )}
     </article>
@@ -250,12 +260,14 @@ function MeaningBody({
   self,
   onKanji,
   onWordsWith,
+  onWord,
   row,
 }: {
   m: KanjiMeaning
   self: KanjiLite
   onKanji: (c: string) => void
   onWordsWith?: (meaning: string) => void
+  onWord?: (w: Word) => void
   row: (w: Word) => ReactNode
 }) {
   const lang = useLang()
@@ -293,6 +305,7 @@ function MeaningBody({
           </button>
         )
       )}
+      {m.uses && m.uses.length > 0 && <Uses uses={m.uses} lang={lang} onWord={onWord} />}
       {m.similar.length > 0 && (
         <section className="aside-block meaning-similar">
           <AsideTitle icon="≈">{t('similar')}</AsideTitle>
@@ -307,6 +320,45 @@ function MeaningBody({
         <MixUpLine key={x.reading} x={x} self={self} onKanji={onKanji} />
       ))}
     </>
+  )
+}
+
+/**
+ * ⑂ Uses: the patterns the kanji builds words in with this meaning, Kodansha's
+ * 1a, 1b -- 〜人 "a person from …" -- each named, said in a line, and shown by
+ * a few words. A word opens its entry.
+ */
+function Uses({ uses, lang, onWord }: { uses: MeaningUse[]; lang: Lang; onWord?: (w: Word) => void }) {
+  const t = S(lang)
+  return (
+    <section className="aside-block meaning-uses" title={t('usesHint')}>
+      <AsideTitle icon="⑂">{t('uses')}</AsideTitle>
+      <ul>
+        {uses.map((u) => {
+          const about = (lang === 'bg' && u.aboutBg) || u.about
+          return (
+            <li key={u.id} className="use">
+              <p className="use-head">
+                <span className="use-label">{(lang === 'bg' && u.bg) || u.en}</span>
+                {about && <span className="use-about">{about}</span>}
+              </p>
+              <span className="use-words">
+                {u.words.map((w) => (
+                  <button key={w.id} className="use-word" {...warmWord(w.id)} onClick={() => onWord?.(w)} disabled={!onWord}>
+                    <span className="use-word-head" lang="ja">
+                      {w.headword}
+                    </span>
+                    <span className="use-word-reading" lang="ja">
+                      <MarkedReading reading={w.reading} mark={w.mark} />
+                    </span>
+                  </button>
+                ))}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 
