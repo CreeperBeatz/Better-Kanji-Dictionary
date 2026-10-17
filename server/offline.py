@@ -66,7 +66,8 @@ FORMAT = 6
 # 2: each mix-up's kanji with its meaning on that reading.
 # 3: up to 26 words a reading on each meaning, the rest after the key words.
 # 4: a meaning's best examples starred, first in each part.
-PAGES_FORMAT = 4
+# 5: a word under each of its meanings, with the sense that has it (焼く under "bake").
+PAGES_FORMAT = 5
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"

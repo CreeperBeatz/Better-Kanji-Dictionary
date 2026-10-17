@@ -282,6 +282,14 @@ function remember(key: string, r: SearchResponse) {
 /** Memoised: while a new search is on its way the old rows stay as they are. */
 const WordRow = memo(WordRowView)
 
+/** The senses a row shows, by number: the first three, or under a meaning one of its later
+ *  senses has (焼く under "bake"), that sense first, its number kept. */
+function senseOrder(w: Word): number[] {
+  const all = w.senses.map((_, i) => i)
+  const at = w.senseAt && w.senses[w.senseAt] ? w.senseAt : 0
+  return [at, ...all.filter((i) => i !== at)].slice(0, 3)
+}
+
 function WordRowView({
   w,
   onWord,
@@ -334,7 +342,8 @@ function WordRowView({
         )}
         <span className="word-foot">
           <span className="word-gloss">
-            {w.senses.slice(0, 3).map((s, i) => {
+            {senseOrder(w).map((i) => {
+              const s = w.senses[i]
               const g = glossOf(s, lang)
               return (
                 <span key={i} className="sense" data-fallback={g.fallback || undefined}>

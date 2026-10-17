@@ -2121,6 +2121,13 @@ button.usage-head:focus-visible .usage-spelling {
   grid-column: -2 / -1;
 }
 
+/* Under a meaning one of its later senses has: that sense's number, as in the word lists. */
+.vocab-sense-n {
+  margin-right: 0.35em;
+  font-weight: 600;
+  color: var(--paper-dim);
+}
+
 /* ---------------------------------------------------------------- draw pad */
 
 .drawpad {

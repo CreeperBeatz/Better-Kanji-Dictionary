@@ -281,6 +281,48 @@ reviewed yet.
 **Status: in review.** 揚 is in the meanings queue. A word goes into one
 group only, so a verb with two meanings needs a decision on its board.
 
+### D-026 · Core words in no meaning group
+*Found 2026-10-17* (Dani, on the dictionary: some kun readings are missing
+from every meaning card).
+Of the common words of the 2,394 kanji with meanings, 30% of the kun words
+and 24% of the on words are in no group. The kanji page does not show them.
+In 204 kanji, a kun reading has no word on any card: 焼く, 守る, 育つ, 打つ,
+放つ, 加わる, 明かす.
+Source: the meanings drafts (`ai:claude-sonnet`). The site shows a drafted
+word only when both runs agree with confidence ≥ 0.8 (`DRAFT_WORD_MIN`).
+10,925 words have agreeing runs below 0.8; 2,067 have runs that disagree.
+Often the runs agree but are unsure because the word has two of the
+kanji's meanings: 焼く is "burn" and "bake" (see D-025).
+**Status: open.** A fix is on feat/word-groups (pipeline/word_groups.py):
+the unsure words are placed again, one JMdict sense at a time, so a word
+can have a main group and up to two extra groups (焼く: burn, also bake).
+Pilot of 50 kanji: 231 of 565 words placed, and a skeptic found none wrong.
+Full run (2026-10-17, 1,476 kanji, 13,059 words, two Opus runs): 5,597 words
+placed, 531 with extra groups. A skeptic checked every placement; the 111 it
+called wrong or doubtful stay out. Words the site already shows, placed again
+unmarked, came out the same 99.6% of the time. In the sandbox, common kun words
+in no group go from 29.9% to 17.4%, on words from 24.1% to 13.6%, and kanji
+with a kun reading on no card from 204 to 77. A main group at 0.7-0.79 was
+let in after a 300-word sample came out 99.3% right; the skeptic then checked
+all 2,596 of them (18 held back). Then 0.6-0.69 too (a sample was 99.0%
+right), and words both runs call sound-only below 0.8, each checked by the
+skeptic (1,484 of 1,494 and 141 of 151 ok). Now 10,097 words are placed: kun
+words in no group 7.7%, on words 5.0%, kanji with a kun reading on no card 38.
+Not loaded into the review store yet. Left: words whose only sense sits between two groups (育つ: "raise" or
+"grow up"), for a reviewer.
+
+### D-027 · Meanings that no group of the kanji holds
+*Found 2026-10-17* (the word-groups pilot, D-026).
+For some words, both runs said that no group of the kanji fits any sense:
+自首 and 出自 (自 "from"), 劇薬 (劇 "severe, intense"), 御幸 (幸 "imperial
+visit"), 物故, 真打, 明け渡す. Each points to a meaning the kanji's groups
+lack, or to a word that needs a person.
+Source: the meanings drafts' groups (`ai:claude-sonnet`).
+**Status: open.** The full run found 92 such words in 81 kanji
+(data/drafts/word-groups*/nofit.json): 仮名 (名 "letter, script"), 気概
+(概 "spirit"), 具合 (具 "condition"), 千尋 (尋 "fathom"), 文献 (献 "wise men"),
+and others. Each needs its kanji's groups looked at, or a person to place it.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

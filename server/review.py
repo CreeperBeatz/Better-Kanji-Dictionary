@@ -11,7 +11,11 @@ The task types (TASK-forms-review.md §5, and more since):
                                                  "mixups": [{"char": "産", "reading": "うまれる"}]}
     usage          subject はやい・…      value: {"reading", "no", "spellings": [{"kanji", "def", "defEn", "defBg",
                                                  "examples": [{"ja", "kana", "en", "bg"}]}], "notes": [{"ja", "en", "bg"}]}
-    word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"
+    word_sense     subject 生|1234567    value: a sense id of the kanji, or "catch-all"; live, it may
+                                        carry `also`: up to two more of the kanji's groups the word has
+                                        in its other senses (焼く: 焼.burn, also 焼.cook), from its draft,
+                                        and `at`: group -> the JMdict sense (0-based) that puts it there,
+                                        where that is not the first (焼.cook: 1, "to roast; to bake")
     bg             subject word:123 | kanji:生   value: the Bulgarian, per sense / per meaning
                    | usage:はやい・…    value: {"spellings": [{"def", "examples": [...]}], "notes": [...]}, the
                                         Bulgarian of the accepted usage card, field for field
@@ -559,6 +563,47 @@ def _placements(data: dict, char: str) -> dict[int, str]:
     return {int(k[len(prefix):]): v["sense"] for k, v in data["live"]["word_sense"].items() if k.startswith(prefix)}
 
 
+ALSO_MAX = 2  # a word's groups beside its main one
+
+
+def clean_also(also: Any, ids: set[str], main: str | None) -> list[str]:
+    """A word's extra groups, as far as they hold: the kanji's groups, not its main one
+    nor the catch-all, each once, at most ALSO_MAX."""
+    if not isinstance(also, list) or main in (None, CATCH_ALL):
+        return []
+    return [g for g in dict.fromkeys(also) if isinstance(g, str) and g in ids and g not in (main, CATCH_ALL)][:ALSO_MAX]
+
+
+def clean_at(at: Any, groups: list[str]) -> dict[str, int]:
+    """Which sense of the word each of its groups comes from, for `groups`, where not its first."""
+    if not isinstance(at, dict):
+        return {}
+    return {g: n for g, n in at.items() if g in groups and isinstance(n, int) and 0 < n < 50}
+
+
+def _item_also(item: dict | None, ids: set[str], main: str | None) -> tuple[list[str], dict[str, int]]:
+    """The extra groups a word's draft gives it (D-025: 焼く is "burn" and "bake"), and the sense of
+    the word each group comes from."""
+    ev = (item or {}).get("evidence")
+    ev = ev if isinstance(ev, dict) else {}
+    also = clean_also(ev.get("also"), ids, main)
+    return also, clean_at(ev.get("at"), [main, *also])
+
+
+def _live_also(data: dict, char: str, key: str = "also") -> dict[int, Any]:
+    """word id -> its extra groups (or, `key` "at", which sense each group comes from),
+    for this kanji's accepted words that have any."""
+    prefix = f"{char}|"
+    return {int(k[len(prefix):]): v[key] for k, v in data["live"]["word_sense"].items()
+            if k.startswith(prefix) and v.get(key)}
+
+
+def _set_word(data: dict, subject: str, sense: str, decision: str, also: list[str], at: dict[str, int] | None = None) -> None:
+    at = clean_at(at, [sense, *also])
+    _set_live(data, "word_sense", subject, {"sense": sense, "decision": decision,
+                                            **({"also": also} if also else {}), **({"at": at} if at else {})})
+
+
 def validate(type_: str, subject: str, value: Any, data: dict | None = None, pending_ok: bool = False,
              machine: bool = False) -> Any:
     """`value` cleaned, or an AppError saying what is wrong with it. None clears an override.
@@ -1046,6 +1091,9 @@ def _reopen_words(data: dict, char: str, before: list[dict], after: list[dict], 
     if not changed:
         return
     ws = data["live"]["word_sense"]
+    for subject in [k for k, v in ws.items() if k.startswith(f"{char}|") and set(v.get("also") or []) & changed]:
+        v = ws[subject]
+        _set_word(data, subject, v["sense"], v["decision"], [g for g in v["also"] if g not in changed], v.get("at"))
     for subject in [k for k, v in ws.items() if k.startswith(f"{char}|") and v["sense"] in changed]:
         old = ws[subject]
         _set_live(data, "word_sense", subject, None)
@@ -1082,7 +1130,7 @@ def _auto_words(data: dict, char: str, senses: list[dict]) -> None:
         before = live_value("word_sense", item["subject"], data)
         d = _decision("auto", "word_sense", item["subject"], before, item["proposed"], "auto", item["id"],
                       "two runs agree, both confident")
-        _set_live(data, "word_sense", item["subject"], {"sense": item["proposed"], "decision": d["id"]})
+        _set_word(data, item["subject"], item["proposed"], d["id"], *_item_also(item, ids, item["proposed"]))
         _close(data, item, "auto-accepted", d)
         data["decisions"].append(d)
 
@@ -1535,6 +1583,11 @@ def _place_words(data: dict, char: str, words: dict, user_id: str, parent: str) 
             act = "accept" if item["proposed"] == value else "edit"
             c = _decision(act, "word_sense", subject, before, value, user_id, item["id"], None)
             _apply(data, "word_sense", subject, value, c["id"])
+            if act == "accept":
+                # The groups of its other senses come with it; moved to another group, they are dropped.
+                also, at = _item_also(item, {s["id"] for s in _senses(data, char) or []}, value)
+                if also or at:
+                    _set_word(data, subject, value, c["id"], also, at)
             _close(data, item, "accepted" if act == "accept" else "edited", c)
         elif before != value:
             c = _decision("direct", "word_sense", subject, before, value, user_id, None, None)
@@ -2450,6 +2503,10 @@ def word_senses(char: str) -> dict[int, str]:
 # A word's drafted group shows on the site only when both drafting runs put it there this sure;
 # the rest wait, ungrouped, for a later run or a reviewer.
 DRAFT_WORD_MIN = 0.8
+# A draft placed sense by sense (pipeline/word_groups.py, `method` "senses") is loaded only once a
+# skeptic pass called it right below 0.8, so it shows from 0.6 (300 sampled at 0.7-0.79: 99.3%
+# right; at 0.6-0.69: 99.0%).
+SENSES_WORD_MIN = 0.6
 _drafts: tuple[dict | None, dict] = (None, {})
 
 
@@ -2462,6 +2519,7 @@ def _open_drafts(data: dict) -> dict:
         return _drafts[1]
     latest: dict[tuple[str, str], dict] = {}
     words: dict[str, dict[int, str]] = {}
+    also: dict[str, dict[int, tuple]] = {}
     for i in data["items"].values():
         if i["status"] != "open" or i["origin"] != "proposal":
             continue
@@ -2472,13 +2530,16 @@ def _open_drafts(data: dict) -> dict:
                 latest[key] = i
         elif i["type"] == "word_sense" and isinstance(i["proposed"], str):
             ev = i.get("evidence") if isinstance(i.get("evidence"), dict) else {}
-            if ev.get("agree") and (ev.get("confidence") or 0) >= DRAFT_WORD_MIN:
+            bar = SENSES_WORD_MIN if ev.get("method") == "senses" else DRAFT_WORD_MIN
+            if ev.get("agree") and (ev.get("confidence") or 0) >= bar:
                 char, wid = i["subject"].split("|")
                 words.setdefault(char, {})[int(wid)] = i["proposed"]
+                if ev.get("also") or ev.get("at"):
+                    also.setdefault(char, {})[int(wid)] = (ev.get("also"), ev.get("at"))
     index = {"senses": {s: i["proposed"] for (t, s), i in latest.items() if t == "kanji_senses"},
              "extras": {s: i["proposed"] for (t, s), i in latest.items() if t == "kanji_extras"},
              "usage": {s: i["proposed"] for (t, s), i in latest.items() if t == "usage"},
-             "words": words}
+             "words": words, "also": also}
     _drafts = (data, index)
     return index
 
@@ -2504,7 +2565,9 @@ def site_meanings(char: str) -> dict:
     a dictionary that is 98% right with every feature beats one that is 100% right with half).
     `draft` says which parts are unreviewed, for the page to mark. A drafted word is placed only
     when it is sure (`DRAFT_WORD_MIN`, both runs agreeing) and its group is among the groups
-    shown; an accepted placement always wins.
+    shown; an accepted placement always wins. `also`: word id -> the other groups a placed
+    word has in its other senses (焼く is "burn", also "bake"), accepted or drafted with it;
+    `at`: word id -> {group: the word's sense (0-based) that puts it there}, where not its first.
     """
     with _lock:
         data = _current()
@@ -2516,11 +2579,19 @@ def site_meanings(char: str) -> dict:
     placed = _placements(data, char) if senses else {}
     ids = {s["id"] for s in senses or []} | {CATCH_ALL}
     drafted = {w: g for w, g in drafts["words"].get(char, {}).items() if senses and w not in placed and g in ids}
+    also = {w: a for w, a in _live_also(data, char).items() if w in placed}
+    at = {w: a for w, a in _live_also(data, char, "at").items() if w in placed}
+    for w, g in drafted.items():
+        a, n = drafts["also"].get(char, {}).get(w) or (None, None)
+        if a := clean_also(a, ids, g):
+            also[w] = a
+        if n := clean_at(n, [g, *(a or [])]):
+            at[w] = n
     extras = extras_of(char, data)
     draft_extras = extras is None and _clean_draft(drafts, "kanji_extras", char, data) is not None
     if draft_extras:
         extras = _clean_draft(drafts, "kanji_extras", char, data)
-    return {"senses": senses, "placed": {**drafted, **placed}, "extras": extras,
+    return {"senses": senses, "placed": {**drafted, **placed}, "also": also, "at": at, "extras": extras,
             "draft": {"senses": draft_senses, "words": len(drafted), "extras": draft_extras}}
 
 
@@ -2593,7 +2664,7 @@ def _pack_data_key() -> str:
         drafts = _open_drafts(data)
         # What the site shows on kanji pages: the accepted values, and the open drafts it falls
         # back on (not the whole index: its "clean" is a cache).
-        pages = [{t: data["live"][t] for t in PAGE_TYPES}, [drafts[k] for k in ("senses", "extras", "usage", "words")]]
+        pages = [{t: data["live"][t] for t in PAGE_TYPES}, [drafts[k] for k in ("senses", "extras", "usage", "words", "also")]]
     parts = (json.dumps(ov, ensure_ascii=False, sort_keys=True) + bg_overlay.key(),
              json.dumps(pages, ensure_ascii=False, sort_keys=True, default=str))
     return ".".join(hashlib.sha256(b.encode()).hexdigest()[:16] for b in parts)
@@ -2663,6 +2734,9 @@ def export() -> dict[str, int]:
     meaning = {
         "senses": {c: v["senses"] for c, v in sorted(data["live"]["kanji_senses"].items())},
         "words": {k: v["sense"] for k, v in sorted(data["live"]["word_sense"].items())},
+        # The other groups a word has in its other senses (焼く: burn, also bake).
+        "also": {k: v["also"] for k, v in sorted(data["live"]["word_sense"].items()) if v.get("also")},
+        "at": {k: v["at"] for k, v in sorted(data["live"]["word_sense"].items()) if v.get("at")},
         # Origin (from Wiktionary's glyph origin, CC BY-SA), how the groups link, kanji to mix up.
         "kanji": {c: {k: x for k, x in v.items() if k != "decision"} for c, v in sorted(data["live"]["kanji_extras"].items())},
     }
