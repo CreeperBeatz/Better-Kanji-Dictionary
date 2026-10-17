@@ -356,6 +356,154 @@ def place_prepare(review_dir: Path | None) -> None:
           f"{stats['unplaced']} unplaced -> {stats['again'] + stats['unplaced']} to place")
 
 
+def _placement():
+    """word_groups pointed at the placement folder, with both runs read and checked."""
+    import word_groups as wg  # noqa: PLC0415
+    wg.DRAFTS, wg.IN, wg.OUT = proposals.folders(DRAFTS / "place")
+    a, pa = wg.read_run("A")
+    b, pb = wg.read_run("B")
+    if pa or pb:
+        raise SystemExit(f"placement runs have problems ({len(pa)}, {len(pb)}): run word_groups check")
+    return wg, a, b, wg._inputs("A")
+
+
+def skeptic_prepare(n: int) -> None:
+    """The placed words whose main group stands below 0.8, for the skeptic pass (word_groups_skeptic_prompt.md)."""
+    wg, a, b, kanji = _placement()
+    items = []
+    for c, k in kanji.items():
+        senses = {w["id"]: w["senses"] for w in k["words"]}
+        got = wg.combine([a[c], b[c]], senses)
+        groups = {g["id"]: g["en"] + (" — " + g["about"] if g.get("about") else "") for g in k["groups"]}
+        for w in k["words"]:
+            r = got[w["id"]]
+            if r["main"] and min(wg._backing([a[c][w["id"]], b[c][w["id"]]], r["main"])) < wg.SURE:
+                items.append({"key": f"{c}|{w['id']}", "char": c, "groups": groups, "word": w["word"], "reading": w["reading"],
+                              "senses": [f"{s[0]}. {s[3]}" + (f" [{s[2]}]" if s[2] else "") for s in w["senses"]],
+                              "main": r["main"], "extras": r["extras"]})
+    d = DRAFTS / "place" / "skeptic"
+    if any(d.glob("in-*.json")):
+        raise SystemExit(f"{d} has batches already")
+    d.mkdir(parents=True, exist_ok=True)
+    size = -(-len(items) // n)
+    for i in range(n):
+        if part := items[i * size:(i + 1) * size]:
+            (d / f"in-{i:02d}.json").write_text(json.dumps(part, ensure_ascii=False, indent=0), encoding="utf-8")
+    print(f"{len(items)} placements below 0.8 -> {-(-len(items) // size) if items else 0} skeptic batches in {d.relative_to(proposals.ROOT)}")
+
+
+def _latest(data: dict, type_: str) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for i in data["items"].values():
+        if i["type"] == type_ and (i["subject"] not in out or i["created"] > out[i["subject"]]["created"]):
+            out[i["subject"]] = i
+    return out
+
+
+def _open(item: dict | None) -> bool:
+    """An AI draft no person has touched."""
+    return bool(item) and item["status"] == "open" and item["origin"] == "proposal" and not item.get("skipped_by")
+
+
+REASON = "regrouped: a group is a meaning, patterns are uses (D-028)"
+
+
+def load(dry_run: bool, review_dir: Path | None) -> None:
+    """final.json into the review store's open drafts: each kanji's groups (with the old groups'
+    similar kanji, its uses, and what each takes in), its link sentence, and its words: a word
+    whose old group went to one new group follows it; the rest take what the placement runs
+    gave them, under word_groups' rules (two runs agree; below 0.8 only with a skeptic ok).
+    Drafts a person touched are left alone."""
+    fin = json.loads((DRAFTS / "final.json").read_text(encoding="utf-8"))
+    maps = json.loads((DRAFTS / "place" / "mapped.json").read_text(encoding="utf-8"))
+    wg, a, b, kanji = _placement()
+    verdicts, checked = wg._skeptic(), wg._checked()
+    proposals.use_review_dir(review_dir)
+    n = dict.fromkeys(("kanji", "links", "mapped", "placed", "unplaced", "vetoed", "unchecked", "touched", "skipped_kanji"), 0)
+    with review._change() as data:
+        senses_items, extras_items, words = _latest(data, "kanji_senses"), _latest(data, "kanji_extras"), _latest(data, "word_sense")
+        for c, e in fin.items():
+            item = senses_items.get(c)
+            if c in data["live"]["kanji_senses"] or not _open(item):
+                n["skipped_kanji"] += 1
+                continue
+            old = {proposals.short_id(s["id"]): s for s in item["proposed"] or [] if isinstance(s, dict)}
+            groups = [{"id": proposals.sense_id(c, g["id"]), "en": g["en"], "bg": g["bg"], "about": g["about"], "aboutBg": g["aboutBg"],
+                       "examples": g["examples"],
+                       "similar": list(dict.fromkeys(x for f in g["from"] for x in (old.get(f) or {}).get("similar") or []))[:16],
+                       "uses": g["uses"]} for g in e["groups"]]
+            ev = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+            ev = {**ev, "regroup": {"from": {g["id"]: g["from"] for g in e["groups"]}, "before": item["proposed"]}}
+            if not dry_run:
+                review._update(data, item, proposed=groups, evidence=ev, source=SOURCE_AI, reason=REASON)
+            n["kanji"] += 1
+            ex = extras_items.get(c)
+            if _open(ex) and isinstance(ex.get("proposed"), dict) and e.get("link"):
+                if not dry_run:
+                    review._update(data, ex, proposed={**ex["proposed"], "link": e["link"], "linkBg": e["linkBg"]})
+                n["links"] += 1
+            targets = {f: t[0] for f, t in _targets(e["groups"]).items() if len(t) == 1}
+            rename = {proposals.sense_id(c, f): proposals.sense_id(c, t) for f, t in targets.items()}
+            senses_of = {w["id"]: w["senses"] for w in kanji[c]["words"]} if c in kanji else {}
+            got = wg.combine([a[c], b[c]], senses_of) if c in kanji else {}
+            for wid, m in maps.get(c, {}).items():
+                w = words.get(f"{c}|{wid}")
+                if not _open(w) or f"{c}|{wid}" in data["live"]["word_sense"]:
+                    n["touched"] += 1
+                    continue
+                old_ev = w.get("evidence") if isinstance(w.get("evidence"), dict) else {}
+                new_ev = {**old_ev, "regroup": {"was": w["proposed"]}}
+                if isinstance(old_ev.get("runs"), list):
+                    new_ev["runs"] = [{**r, "sense": rename.get(r.get("sense"), r.get("sense"))} for r in old_ev["runs"]]
+                main = proposals.sense_id(c, m["main"])
+                new_ev["also"] = [proposals.sense_id(c, x) for x in m["extras"]]
+                new_ev["at"] = {rename[k]: v for k, v in (old_ev.get("at") or {}).items() if rename.get(k) in [main, *new_ev["also"]]}
+                if not dry_run:
+                    review._update(data, w, proposed=main, evidence=new_ev, reason=REASON)
+                n["mapped"] += 1
+            for wid, r in got.items():
+                w = words.get(f"{c}|{wid}")
+                if not _open(w) or f"{c}|{wid}" in data["live"]["word_sense"]:
+                    n["touched"] += 1
+                    continue
+                runs = [a[c][wid], b[c][wid]]
+                old_ev = w.get("evidence") if isinstance(w.get("evidence"), dict) else {}
+                ev = {**old_ev, "bySense": {"A": runs[0], "B": runs[1]}, "regroup": {"was": w["proposed"]}}
+                verdict = verdicts.get(f"{c}|{wid}")
+                if verdict and checked.get(f"{c}|{wid}") != r["main"]:
+                    verdict = None
+                if verdict:
+                    ev["skeptic"] = verdict
+                below = r["main"] and min(wg._backing(runs, r["main"])) < wg.SURE
+                if r["main"] and ((verdict and verdict.get("main") != "ok") or (below and not verdict)):
+                    n["vetoed"] += bool(verdict)
+                    n["unchecked"] += not verdict
+                    r = {**r, "main": None}
+                elif r["main"] and verdict:
+                    r = {**r, "extras": [g for g in r["extras"] if (verdict.get("extras") or {}).get(g) == "ok"]}
+                fields: dict = {"evidence": ev, "reason": REASON}
+                if r["main"]:
+                    main = proposals.sense_id(c, r["main"])
+                    ca, cb = wg._backing(runs, r["main"])
+                    fields["proposed"] = main
+                    fields["source"] = wg.SOURCE
+                    fields["evidence"] = {**ev, "runs": [{"run": "A", "sense": main, "confidence": ca}, {"run": "B", "sense": main, "confidence": cb}],
+                                          "confidence": min(ca, cb), "agree": True, "method": "senses",
+                                          "also": [proposals.sense_id(c, g) for g in r["extras"]],
+                                          "at": {proposals.sense_id(c, g): x for g, x in r["at"].items()}}
+                    n["placed"] += 1
+                else:
+                    n["unplaced"] += 1
+                if not dry_run:
+                    review._update(data, w, **fields)
+        if dry_run:
+            raise SystemExit(f"dry run, nothing written: {n}")
+    print(n)
+
+
+SOURCE_AI = "ai:claude-opus"
+
+
 def main() -> int:
     global DRAFTS, IN, OUT
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -374,6 +522,11 @@ def main() -> int:
     fp.add_argument("--batch", help="one reconcile batch only, e.g. 003")
     pp = sub.add_parser("place-prepare")
     pp.add_argument("--review-dir", type=Path, help="the review store to map from (default data/review)")
+    sp = sub.add_parser("skeptic-prepare")
+    sp.add_argument("--n", type=int, default=8, help="skeptic batches")
+    lp = sub.add_parser("load")
+    lp.add_argument("--dry-run", action="store_true")
+    lp.add_argument("--review-dir", type=Path, help="the review store to load into (default data/review)")
     args = ap.parse_args()
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "prepare":
@@ -386,6 +539,10 @@ def main() -> int:
         final(args.batch)
     elif args.cmd == "place-prepare":
         place_prepare(args.review_dir)
+    elif args.cmd == "skeptic-prepare":
+        skeptic_prepare(args.n)
+    elif args.cmd == "load":
+        load(args.dry_run, args.review_dir)
     else:
         compare()
     return 0

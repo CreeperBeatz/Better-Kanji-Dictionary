@@ -323,6 +323,33 @@ Source: the meanings drafts' groups (`ai:claude-sonnet`).
 (概 "spirit"), 具合 (具 "condition"), 千尋 (尋 "fathom"), 文献 (献 "wise men"),
 and others. Each needs its kanji's groups looked at, or a person to place it.
 
+### D-028 · Groups that are word-building patterns, not meanings
+*Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
+in no group; "it feels like we are not asking the correct question").
+人 had "person", "person of a kind" (村人, 素人), "counting people" (三人) and
+"human" as four groups, though 人 means "person" in all of them. "Of a kind"
+and "counting" are ways the kanji builds words, not meanings. The two placing
+runs then split between twin groups, so the word was placed in neither. 物
+(thing / goods / substance), 出 (〜出す "start doing"), 性 (-ity "quality" next
+to "nature") and 政 ("government" next to "politics") had the same fault.
+Source: the meanings drafts' groups (`ai:claude-sonnet`): the more words a
+kanji had, the more its groups were split by pattern.
+**Status: open, fix drafted.** Dani's rule (2026-10-17): a group is a meaning;
+a pattern (suffix, prefix, counter, intensifier, one reading) is a *use* inside
+the meaning it carries, like Kodansha's 1a/1b. Showing the uses on the cards
+comes later. On feat/word-groups (pipeline/regroup.py), 206 kanji were redrawn:
+the 138 with the most run splits or homeless words, 23 with pattern-named groups,
+and 45 that an Opus audit of the other 465 kanji with 3+ groups flagged. Two
+Opus runs (70% gave the same groups), then a reconcile pass. Result: 790 groups
+became 618, with 870 uses. Each placed word follows its old group when that group
+went to exactly one new group (15,797 of 17,867). The other 2,070 were placed
+again by two Opus runs: 1,096 sure at 0.8, plus 534 at 0.6–0.79 that the skeptic
+checked (527 ok, 5 doubtful, 2 wrong; the 7 not ok stay out). In the sandbox
+(C:/tmp/rg-sandbox), the common words these kanji place go from 89.8% to 97.6%
+(15,898 → 17,271 of 17,699); 立 from 124 to 168 of 182. Not loaded into
+data/review or prod yet. Left: words where every sense fits no group (D-027
+style): 自首, 出自, 張本人, 得度, 連理, 身代, 総花, 活発, 丁度, 目方.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
