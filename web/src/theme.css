@@ -937,8 +937,11 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   padding: 0;
 }
 
+/* A thin rule between uses, so each reads as its own small list. */
 .use + .use {
-  margin-top: 7px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
 }
 
 .use-head {
