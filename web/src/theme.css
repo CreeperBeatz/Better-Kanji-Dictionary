@@ -4127,6 +4127,34 @@ button.usage-head:focus-visible .usage-spelling {
   }
 }
 
+/* The lit cluster on the map by meaning: its colour, its name, and a way out. */
+.map-highlight {
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  color: var(--paper);
+}
+
+.map-highlight-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.map-highlight button {
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-family: var(--gothic);
+  font-size: calc(15px * var(--type));
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.map-highlight button:hover {
+  color: var(--paper);
+}
+
 .map-absent-glyph {
   font-family: var(--mincho);
   font-size: calc(16px * var(--type));

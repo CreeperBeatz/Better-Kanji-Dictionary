@@ -194,3 +194,21 @@ def get_map(scope: str, by: str = "parts") -> dict:
     if mkey not in _cache:
         _cache[mkey] = _build_meaning(scope, _cache[key])
     return _cache[mkey]
+
+
+@functools.cache
+def _order() -> dict[str, int]:
+    return {c: j for j, c in enumerate(_meaning_map()["order"])}
+
+
+@router.get("/{scope}/near/{cluster}")
+def get_near(scope: str, cluster: int) -> dict:
+    """How near each kanji of the scope's meaning map is to one cluster, as a
+    digit per kanji in the map's order: 3 in it, 2 near, 1 related, 0 not.
+    Fetched on a double-click, so the 142 rows never ride on the map itself."""
+    rows = _meaning_map()["near"]
+    if not 0 <= cluster < len(rows):
+        raise HTTPException(404, "no such cluster")
+    chars = get_map(scope, "meaning")["chars"]
+    at = _order()
+    return {"cluster": cluster, "stage": "".join(rows[cluster][at[c]] for c in chars)}

@@ -3,6 +3,7 @@
     .venv/Scripts/python pipeline/meaning_map.py texts   # what the site says about each kanji
     python pipeline/meaning_map.py embed                 # vectors, 2D per scope, clusters (torch, umap-learn)
     # name the clusters and regions: clusters-in.json -> names.json (pipeline/meaning_map_names.md)
+    python pipeline/meaning_map.py near                  # how near every kanji is to every cluster
     python pipeline/meaning_map.py build                 # -> data/meaning_map.json, which the server serves
 
 Each kanji is embedded from its hero sentence and its meaning groups (label +
@@ -21,6 +22,11 @@ clusters gathered into REGIONS) for the zoomed-out one, in English and
 Bulgarian. A changed meaning moves nothing until this is run again; ids are not
 stable across runs, so the names are redone with it.
 
+`near` grades every kanji against every cluster, for the map's highlight: a
+double-click on a kanji lights its cluster, and the rest fade in stages by how
+close they are to the cluster's mean vector (Dani, 2026-10-18). It reads the
+clusters `embed` left, so it never renumbers them.
+
 `texts` imports the server, so it runs in the project venv; `embed` needs torch,
 which the venv does not have.
 """
@@ -36,6 +42,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "pipeline" / "data" / "meaning-map"
 TEXTS, VECTORS, HTML = OUT / "texts.json", OUT / "vectors.npy", OUT / "map.html"
 LAYOUT, CLUSTERS_IN, NAMES = OUT / "layout.json", OUT / "clusters-in.json", OUT / "names.json"
+NEAR = OUT / "near.json"
 MAP = ROOT / "data" / "meaning_map.json"
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
 REGIONS = 20  # the zoomed-out map's names
@@ -144,6 +151,41 @@ def embed() -> None:
     print(f"-> {LAYOUT}, {CLUSTERS_IN}; name them into {NAMES}, then `build`")
 
 
+def near() -> None:
+    """Per cluster, a stage per kanji: 3 in it, 2 near, 1 related, 0 not.
+
+    Similarity to the cluster's mean is measured against the cluster's own
+    spread -- 0 at the median kanji, 1 at its 10th-percentile member -- and
+    each stage is capped by rank as well, at 1x and 4x the cluster's size: a
+    loose cluster like "Seas and wide spaces" would otherwise light up a
+    fifth of the map. For Birds: 2 = 飛鳴卵巣鳩雛蝶, 1 = 鹿熊犬猫狼鯨 and the
+    other animals.
+    """
+    import numpy as np
+
+    lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
+    vec = np.load(VECTORS)
+    lab = np.array(lay["cluster"])
+    out = []
+    for k in range(len(lay["region"])):
+        mem = lab == k
+        c = vec[mem].mean(0)
+        sim = vec @ (c / np.linalg.norm(c))
+        lo, hi = np.median(sim), np.percentile(sim[mem], 10)
+        t = (sim - lo) / (hi - lo)
+        n = int(mem.sum())
+        stage = np.where(mem, 3, 0)
+        others = [i for i in np.argsort(-sim) if not mem[i]]
+        for rank, i in enumerate(others[:4 * n]):
+            if rank < n and t[i] >= 0.5:
+                stage[i] = 2
+            elif t[i] >= 0.25:
+                stage[i] = 1
+        out.append("".join(map(str, stage)))
+    NEAR.write_text(json.dumps(out), encoding="utf-8")
+    print(f"{len(out)} clusters graded -> {NEAR}")
+
+
 def build() -> None:
     """data/meaning_map.json, what the server serves: names, clusters, a layout per scope."""
     lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
@@ -157,6 +199,9 @@ def build() -> None:
         "clusters": [{"en": c["en"], "bg": c["bg"], "region": lay["region"][i]} for i, c in enumerate(names["clusters"])],
         "cluster": dict(zip(chars, lay["cluster"])),
         "layouts": {n: {chars[i]: xy for i, xy in zip(L["idx"], L["xy"])} for n, L in lay["layouts"].items()},
+        # near[k][j]: stage of the j-th kanji of `order` for cluster k (see near())
+        "order": "".join(chars),
+        "near": json.loads(NEAR.read_text(encoding="utf-8")),
     }
     MAP.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{MAP}: {len(chars)} kanji, {n_clusters} clusters, {MAP.stat().st_size // 1024} KB")
@@ -165,9 +210,9 @@ def build() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("texts", "embed", "build"):
+    for c in ("texts", "embed", "near", "build"):
         sub.add_parser(c)
-    {"texts": texts, "embed": embed, "build": build}[ap.parse_args().cmd]()
+    {"texts": texts, "embed": embed, "near": near, "build": build}[ap.parse_args().cmd]()
 
 
 if __name__ == "__main__":

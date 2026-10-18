@@ -1060,6 +1060,9 @@ export const api = {
       chars.map((c) => ['c', c] as [string, string]),
     ),
 
+  /** For one cluster of the meaning map, a digit per kanji in the map's order: 3 in it, 2 near, 1 related, 0 not. */
+  mapNear: (scope: string, cluster: number) =>
+    get<{ cluster: number; stage: string }>(`/api/map/${encodeURIComponent(scope)}/near/${cluster}`),
   map: (scope: string, by: 'parts' | 'meaning' = 'parts') =>
     get<MapResponse>(`/api/map/${encodeURIComponent(scope)}${by === 'meaning' ? '?by=meaning' : ''}`),
 
