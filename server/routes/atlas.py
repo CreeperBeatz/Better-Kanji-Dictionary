@@ -147,26 +147,20 @@ def _meaning_map() -> dict:
 def _build_meaning(scope: str, parts: dict) -> dict:
     """The parts map's scope, cut down to the kanji the meaning map places.
 
-    Edges between the kept kanji stay (木 in 林), so a picked kanji still
-    shows what it is built from and what it builds, wherever those landed.
+    No edges: what a kanji is built from has no say in where it sits here, and
+    lines to its parts, scattered across the map, only cluttered it (Dani,
+    2026-10-18).
     """
     mm = _meaning_map()
     xy = mm["layouts"][scope]
     keep = [i for i, c in enumerate(parts["chars"]) if c in xy]
-    new = {old: j for j, old in enumerate(keep)}
-    edges = parts["edges"]
-    kept_edges: list[int] = []
-    for e in range(0, len(edges), 2):
-        a, b = new.get(edges[e]), new.get(edges[e + 1])
-        if a is not None and b is not None:
-            kept_edges += [a, b]
     out = {k: [parts[k][i] for i in keep]
            for k in ("chars", "freq", "jlpt", "joyo", "fanout", "strokes", "meaning", "meaningBg", "target")}
     out["target"] = [1] * len(keep)
     out.update({
         "scope": scope,
         "by": "meaning",
-        "edges": kept_edges,
+        "edges": [],
         "similar": [],
         # flat x,y per kanji, in t-SNE's units: the client scales them to its sizes
         "xy": [v for c in out["chars"] for v in xy[c]],
@@ -174,7 +168,7 @@ def _build_meaning(scope: str, parts: dict) -> dict:
         "cluster": [mm["cluster"].get(c, -1) for c in out["chars"]],
         "clusters": mm["clusters"],
         "regions": mm["regions"],
-        "counts": {"nodes": len(keep), "targets": len(keep), "edges": len(kept_edges) // 2},
+        "counts": {"nodes": len(keep), "targets": len(keep), "edges": 0},
     })
     return out
 

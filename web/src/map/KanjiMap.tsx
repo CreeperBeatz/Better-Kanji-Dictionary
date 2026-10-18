@@ -173,6 +173,8 @@ const S = strings(
     zoomOut: 'Zoom out',
     whole: 'Show the whole map',
     counts: '{n} characters, {e} links',
+    countsMeaning: '{n} kanji',
+    legendClickMeaning: 'click to select, click again to open,',
     legendSize: 'larger is more frequent, or a part more characters share',
     legendNear: 'nearby characters share a part; ones that share none sit in rows below',
     legendClick: 'click to select and see its links, click again to open,',
@@ -206,6 +208,8 @@ const S = strings(
     zoomOut: 'Отдалечете',
     whole: 'Покажете цялата карта',
     counts: '{n} йероглифа, {e} връзки',
+    countsMeaning: '{n} канджи',
+    legendClickMeaning: 'кликнете, за да изберете, кликнете пак, за да отворите,',
     legendSize: 'по-големият е по-чест или е част, споделена от повече йероглифи',
     legendNear: 'близките йероглифи имат обща част; тези без общи части са на редове отдолу',
     legendClick: 'кликнете, за да изберете и видите връзките, кликнете пак, за да отворите,',
@@ -1322,7 +1326,10 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
 
       {legend && (
         <p className="legend" id="stage-legend">
-          {counts && t('counts', { n: num(counts.nodes), e: num(counts.edges) })}
+          {counts &&
+            (by === 'meaning'
+              ? t('countsMeaning', { n: num(counts.nodes) })
+              : t('counts', { n: num(counts.nodes), e: num(counts.edges) }))}
           <br />
           {t(by === 'meaning' ? 'legendSizeMeaning' : 'legendSize')}
           <br />
@@ -1334,7 +1341,7 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
             </>
           )}
           <br />
-          {t('legendClick')}
+          {t(by === 'meaning' ? 'legendClickMeaning' : 'legendClick')}
           <br />
           {t('legendEmpty')}
         </p>
