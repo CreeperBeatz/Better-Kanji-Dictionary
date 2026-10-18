@@ -3,6 +3,7 @@
     .venv/Scripts/python pipeline/meaning_map.py texts   # what the site says about each kanji
     python pipeline/meaning_map.py embed                 # vectors, 2D per scope, clusters (torch, umap-learn)
     # name the clusters and regions: clusters-in.json -> names.json (pipeline/meaning_map_names.md)
+    python pipeline/meaning_map.py adopt                 # a cluster for kanji in none, by their main meaning
     python pipeline/meaning_map.py near                  # how near every cluster is to every other
     python pipeline/meaning_map.py build                 # -> data/meaning_map.json, which the server serves
 
@@ -21,6 +22,15 @@ Clusters (HDBSCAN, about 140) are named for the zoomed-in map, regions (the
 clusters gathered into REGIONS) for the zoomed-out one, in English and
 Bulgarian. A changed meaning moves nothing until this is run again; ids are not
 stable across runs, so the names are redone with it.
+
+`adopt` gives a cluster to kanji HDBSCAN left in none. Those are mostly broad
+kanji with unrelated meanings -- 本 is main, book, origin, "this", real and a
+counter -- whose averaged vector falls between clusters: 人 本 長 時 社 発 者
+are all out (Dani asked why, 2026-10-18). Each is placed by its first meaning
+group alone, against the clusters' members' first groups, and only when it
+clears the bar 90% of members clear for their own cluster (ADOPT): 人 ->
+Common people, 本 -> Leaders, 時 -> Years and eras; 面 (0.57) and 革 (0.54)
+stay in none. Where a kanji sits is unchanged: its place is all its meanings.
 
 `near` grades every cluster against every other, for the map's highlight: a
 double-click on a kanji lights its cluster, and the other clusters fade in
@@ -43,6 +53,8 @@ OUT = ROOT / "pipeline" / "data" / "meaning-map"
 TEXTS, VECTORS, HTML = OUT / "texts.json", OUT / "vectors.npy", OUT / "map.html"
 LAYOUT, CLUSTERS_IN, NAMES = OUT / "layout.json", OUT / "clusters-in.json", OUT / "names.json"
 NEAR = OUT / "near.json"
+MAIN_VECTORS, ADOPTED = OUT / "main-vectors.npy", OUT / "adopted.json"
+ADOPT = 0.61  # the 10th percentile of members' similarity to their own cluster, by first groups
 MAP = ROOT / "data" / "meaning_map.json"
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
 REGIONS = 20  # the zoomed-out map's names
@@ -67,7 +79,9 @@ def texts() -> None:
             text = "; ".join(json.loads(kd or "[]"))
         if text:
             rows.append({"char": c, "freq": freq, "jlpt": jlpt, "hero": page.get("hero"),
-                         "groups": [en for en, _ in groups], "text": text})
+                         "groups": [en for en, _ in groups], "text": text,
+                         # its first meaning group alone, which `adopt` places a kanji in no cluster by
+                         "main": f"{groups[0][0]}: {groups[0][1]}" if groups else text})
     OUT.mkdir(parents=True, exist_ok=True)
     TEXTS.write_text(json.dumps(rows, ensure_ascii=False, indent=0), encoding="utf-8")
     print(f"{len(rows)} kanji -> {TEXTS}")
@@ -151,6 +165,33 @@ def embed() -> None:
     print(f"-> {LAYOUT}, {CLUSTERS_IN}; name them into {NAMES}, then `build`")
 
 
+def adopt() -> None:
+    import numpy as np
+
+    rows = json.loads(TEXTS.read_text(encoding="utf-8"))
+    lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
+    assert [r["char"] for r in rows] == lay["chars"], "texts.json no longer matches the layout: run embed again"
+    if MAIN_VECTORS.exists() and len(np.load(MAIN_VECTORS)) == len(rows):
+        vec = np.load(MAIN_VECTORS)
+    else:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(MODEL, device="cuda")
+        vec = model.encode([r["main"] for r in rows], batch_size=64, normalize_embeddings=True)
+        np.save(MAIN_VECTORS, vec)
+    lab = np.array(lay["cluster"])
+    means = np.stack([vec[lab == k].mean(0) for k in range(len(lay["region"]))])
+    sim = vec @ (means / np.linalg.norm(means, axis=1, keepdims=True)).T
+    own = np.array([sim[i, lab[i]] for i in np.flatnonzero(lab >= 0)])
+    out = {}
+    for i in np.flatnonzero(lab < 0):
+        k = int(sim[i].argmax())
+        if sim[i, k] >= ADOPT:
+            out[rows[i]["char"]] = k
+    ADOPTED.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    print(f"members' own-cluster similarity, 10th percentile: {np.percentile(own, 10):.3f} (ADOPT = {ADOPT})")
+    print(f"{len(out)} of {int((lab < 0).sum())} kanji in no cluster adopted -> {ADOPTED}")
+
+
 def near() -> None:
     """Per cluster, a stage per cluster: 3 itself, 2 near, 1 related, 0 not.
 
@@ -190,6 +231,7 @@ def build() -> None:
     lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
     names = json.loads(NAMES.read_text(encoding="utf-8"))
     nears = json.loads(NEAR.read_text(encoding="utf-8"))
+    adopted = json.loads(ADOPTED.read_text(encoding="utf-8")) if ADOPTED.exists() else {}
     n_clusters = len(lay["region"])
     assert len(names["clusters"]) == n_clusters and len(names["regions"]) == REGIONS, "names do not match the layout"
     chars = lay["chars"]
@@ -199,7 +241,7 @@ def build() -> None:
         # near: a digit per cluster, how near it is to this one (see near())
         "clusters": [{"en": c["en"], "bg": c["bg"], "region": lay["region"][i], "near": nears[i]}
                      for i, c in enumerate(names["clusters"])],
-        "cluster": dict(zip(chars, lay["cluster"])),
+        "cluster": {c: adopted.get(c, k) for c, k in zip(chars, lay["cluster"])},
         "layouts": {n: {chars[i]: xy for i, xy in zip(L["idx"], L["xy"])} for n, L in lay["layouts"].items()},
     }
     MAP.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -209,9 +251,9 @@ def build() -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("texts", "embed", "near", "build"):
+    for c in ("texts", "embed", "adopt", "near", "build"):
         sub.add_parser(c)
-    {"texts": texts, "embed": embed, "near": near, "build": build}[ap.parse_args().cmd]()
+    {"texts": texts, "embed": embed, "adopt": adopt, "near": near, "build": build}[ap.parse_args().cmd]()
 
 
 if __name__ == "__main__":
