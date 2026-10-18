@@ -35,6 +35,10 @@
  *
  * Positions stream back while it runs, so the map visibly forms rather than
  * sitting blank.
+ *
+ * By meaning there is nothing to simulate: each kanji has a home, from
+ * data/meaning_map.json, and the only work is spreading the large ones apart
+ * so none covers another, each held near its home (`relax`).
  */
 
 import {
@@ -59,6 +63,8 @@ export interface LayoutRequest {
   seed: Float32Array
   /** a,b index pairs of lookalikes */
   similar?: Uint32Array
+  /** By meaning: each node's home, x,y; the layout only resolves overlaps around them. */
+  homes?: Float32Array
 }
 
 export type LayoutMessage =
@@ -84,7 +90,7 @@ const LOOK_LINK = 8
 
 // The simulation loops synchronously, so a newer request cannot interrupt it
 // from in here; the client terminates the worker instead.
-self.onmessage = (e: MessageEvent<LayoutRequest>) => layout(e.data)
+self.onmessage = (e: MessageEvent<LayoutRequest>) => (e.data.homes ? relax(e.data, e.data.homes) : layout(e.data))
 
 function post(msg: LayoutMessage) {
   ;(self as unknown as Worker).postMessage(msg, [msg.positions.buffer])
@@ -139,6 +145,28 @@ function layout(req: LayoutRequest) {
   }
 
   simulate(id, nodes, main, edges, size, snapshot, req.similar ?? new Uint32Array(0))
+}
+
+function relax(req: LayoutRequest, homes: Float32Array) {
+  const { id, n, size } = req
+  const nodes: Node[] = Array.from({ length: n }, (_, i) => ({ i, x: homes[2 * i], y: homes[2 * i + 1] }))
+  const snapshot = () => {
+    const p = new Float32Array(2 * n)
+    for (const d of nodes) {
+      p[2 * d.i] = d.x ?? 0
+      p[2 * d.i + 1] = d.y ?? 0
+    }
+    return p
+  }
+  const sim = forceSimulation(nodes)
+    .alphaDecay(0.03)
+    .velocityDecay(0.4)
+    .force('x', forceX<Node>((d) => homes[2 * d.i]).strength(0.3))
+    .force('y', forceY<Node>((d) => homes[2 * d.i + 1]).strength(0.3))
+    .force('collide', forceCollide<Node>((d) => size[d.i] + 1).iterations(2))
+    .stop()
+  run(sim, 160, () => post({ id, kind: 'progress', positions: snapshot(), done: 1 }))
+  post({ id, kind: 'done', positions: snapshot() })
 }
 
 /** Run a simulation to completion, streaming a snapshot every ~60 ms. */

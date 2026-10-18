@@ -11,9 +11,15 @@ Scopes follow the graph filter:
            from, whatever its level -- the parts are not optional
   common   the 2,501 newspaper-ranked characters, plus their parts
   all      everything in the graph
+
+`?by=meaning` is the same scope laid out by meaning instead (Dani, 2026-10-18):
+kanji only -- parts like 氵 have no meanings to place them by -- each where
+data/meaning_map.json puts it (pipeline/meaning_map.py), with its cluster.
 """
 
+import functools
 import json
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
@@ -25,6 +31,8 @@ router = APIRouter(prefix="/api/map", tags=["map"])
 SCOPES = {"5", "4", "3", "2", "1", "common", "all"}
 # How many of each character's closest lookalikes pull on the map.
 LOOKALIKES = 3
+
+MEANING_MAP = Path(__file__).parent.parent.parent / "data" / "meaning_map.json"
 
 # Keyed on the override set, so fixing a decomposition invalidates it.
 _cache: dict[tuple[str, str], dict] = {}
@@ -131,11 +139,58 @@ def _build(scope: str) -> dict:
     }
 
 
+@functools.cache
+def _meaning_map() -> dict:
+    return json.loads(MEANING_MAP.read_text(encoding="utf-8"))
+
+
+def _build_meaning(scope: str, parts: dict) -> dict:
+    """The parts map's scope, cut down to the kanji the meaning map places.
+
+    Edges between the kept kanji stay (木 in 林), so a picked kanji still
+    shows what it is built from and what it builds, wherever those landed.
+    """
+    mm = _meaning_map()
+    xy = mm["layouts"][scope]
+    keep = [i for i, c in enumerate(parts["chars"]) if c in xy]
+    new = {old: j for j, old in enumerate(keep)}
+    edges = parts["edges"]
+    kept_edges: list[int] = []
+    for e in range(0, len(edges), 2):
+        a, b = new.get(edges[e]), new.get(edges[e + 1])
+        if a is not None and b is not None:
+            kept_edges += [a, b]
+    out = {k: [parts[k][i] for i in keep]
+           for k in ("chars", "freq", "jlpt", "joyo", "fanout", "strokes", "meaning", "meaningBg", "target")}
+    out["target"] = [1] * len(keep)
+    out.update({
+        "scope": scope,
+        "by": "meaning",
+        "edges": kept_edges,
+        "similar": [],
+        # flat x,y per kanji, in t-SNE's units: the client scales them to its sizes
+        "xy": [v for c in out["chars"] for v in xy[c]],
+        # cluster id per kanji, -1 = in none
+        "cluster": [mm["cluster"].get(c, -1) for c in out["chars"]],
+        "clusters": mm["clusters"],
+        "regions": mm["regions"],
+        "counts": {"nodes": len(keep), "targets": len(keep), "edges": len(kept_edges) // 2},
+    })
+    return out
+
+
 @router.get("/{scope}")
-def get_map(scope: str) -> dict:
+def get_map(scope: str, by: str = "parts") -> dict:
     if scope not in SCOPES:
         raise HTTPException(400, f"scope must be one of {sorted(SCOPES)}")
+    if by not in ("parts", "meaning"):
+        raise HTTPException(400, "by must be parts or meaning")
     key = (scope, json.dumps(store.decomposition_overrides(), sort_keys=True))
     if key not in _cache:
         _cache[key] = _build(scope)
-    return _cache[key]
+    if by == "parts":
+        return _cache[key]
+    mkey = (scope + ":meaning", key[1])
+    if mkey not in _cache:
+        _cache[mkey] = _build_meaning(scope, _cache[key])
+    return _cache[mkey]

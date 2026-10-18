@@ -6,12 +6,23 @@
  * localStorage under a key that changes whenever any of them does -- a
  * decomposition fix lays that scope out again rather than drawing stale
  * positions.
+ *
+ * The same scope can be laid out two ways: by the parts characters share (the
+ * force layout in layout.worker.ts) or by what kanji mean (positions from
+ * data/meaning_map.json, only spread apart by size).
  */
 
 import { api, type MapResponse } from '../api'
 import type { ContainerFilter } from '../graph/KanjiGraph'
 
 export type Scope = '5' | '4' | '3' | '2' | '1' | 'common' | 'all'
+/** What places a character on the map: the parts it shares, or what it means. */
+export type Arrange = 'parts' | 'meaning'
+
+export interface Group {
+  en: string
+  bg: string
+}
 
 export function scopeOf(filter: ContainerFilter): Scope {
   return String(filter) as Scope
@@ -19,6 +30,7 @@ export function scopeOf(filter: ContainerFilter): Scope {
 
 export interface MapData {
   scope: Scope
+  by: Arrange
   n: number
   chars: string[]
   index: Map<string, number>
@@ -40,6 +52,12 @@ export interface MapData {
   partsIdx: Uint32Array
   usersAt: Uint32Array
   usersIdx: Uint32Array
+  /** By meaning: where each kanji belongs, in world units; null by parts. */
+  home: Float32Array | null
+  /** By meaning: cluster per kanji, -1 = in none. */
+  cluster: Int16Array | null
+  clusters: (Group & { region: number })[]
+  regions: Group[]
   key: string
 }
 
@@ -49,9 +67,38 @@ export interface MapData {
  * share. Whichever is bigger wins, so 日 is large for both reasons.
  */
 function sizeOf(freq: number | null, fanout: number, target: boolean): number {
-  const byFreq = freq ? 4 + 9 * (1 - Math.log(freq) / Math.log(2600)) : target ? 3.6 : 3
   const byFan = fanout > 0 ? Math.min(24, 4 + 2.6 * Math.log2(1 + fanout)) : 0
-  return Math.max(byFreq, byFan)
+  return Math.max(sizeByFreq(freq, target), byFan)
+}
+
+/** By meaning there are no parts to share, so size is frequency alone. */
+function sizeByFreq(freq: number | null, target: boolean): number {
+  return freq ? 4 + 9 * (1 - Math.log(freq) / Math.log(2600)) : target ? 3.6 : 3
+}
+
+/**
+ * The meaning map's positions in world units: spread so the kanji, at their
+ * sizes, cover about a third of the area they span -- room to tell clusters
+ * apart, close enough that a cluster still reads as one.
+ */
+function homes(xy: number[], size: Float32Array): Float32Array {
+  const n = size.length
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  let area = 0
+  for (let i = 0; i < n; i++) {
+    x0 = Math.min(x0, xy[2 * i])
+    x1 = Math.max(x1, xy[2 * i])
+    y0 = Math.min(y0, xy[2 * i + 1])
+    y1 = Math.max(y1, xy[2 * i + 1])
+    area += Math.PI * size[i] ** 2
+  }
+  const k = Math.sqrt((area * 3) / Math.max(1e-9, (x1 - x0) * (y1 - y0)))
+  const cx = (x0 + x1) / 2
+  const cy = (y0 + y1) / 2
+  return Float32Array.from(xy, (v, j) => (v - (j % 2 ? cy : cx)) * k)
 }
 
 function csr(n: number, from: Uint32Array, to: Uint32Array): [Uint32Array, Uint32Array] {
@@ -83,11 +130,16 @@ function prepare(r: MapResponse): MapData {
   const [partsAt, partsIdx] = csr(n, parents, children)
   const [usersAt, usersIdx] = csr(n, children, parents)
 
+  const by: Arrange = r.by === 'meaning' && r.xy ? 'meaning' : 'parts'
   const size = new Float32Array(n)
-  for (let i = 0; i < n; i++) size[i] = sizeOf(r.freq[i], r.fanout[i] ?? 0, r.target[i] === 1)
+  for (let i = 0; i < n; i++) {
+    size[i] = by === 'meaning' ? sizeByFreq(r.freq[i], true) : sizeOf(r.freq[i], r.fanout[i] ?? 0, r.target[i] === 1)
+  }
+  const home = by === 'meaning' ? homes(r.xy!, size) : null
 
   return {
     scope: r.scope as Scope,
+    by,
     n,
     chars: r.chars,
     index: new Map(r.chars.map((c, i) => [c, i])),
@@ -105,19 +157,31 @@ function prepare(r: MapResponse): MapData {
     partsIdx,
     usersAt,
     usersIdx,
-    // v3: lookalikes pull on the layout, so a v2 layout is stale.
-    key: `betterrtk:map:v3:${r.scope}:${n}:${m}:${hash(r.chars.join('') + r.edges.join(',') + ';' + (r.similar ?? []).join(','))}`,
+    home,
+    cluster: r.cluster ? Int16Array.from(r.cluster) : null,
+    clusters: r.clusters ?? [],
+    regions: r.regions ?? [],
+    // v3: lookalikes pull on the layout, so a v2 layout is stale. The fourth
+    // field is the slot a newer layout replaces: the scope, per arrangement.
+    key:
+      `betterrtk:map:v3:${slot(r.scope as Scope, by)}:${n}:${m}:` +
+      hash(r.chars.join('') + r.edges.join(',') + ';' + (r.similar ?? []).join(',') + ';' + (r.xy ?? []).join(',')),
   }
 }
 
-const inflight = new Map<Scope, Promise<MapData>>()
+function slot(scope: Scope, by: Arrange): string {
+  return by === 'meaning' ? `meaning-${scope}` : scope
+}
 
-export function loadMap(scope: Scope): Promise<MapData> {
-  let p = inflight.get(scope)
+const inflight = new Map<string, Promise<MapData>>()
+
+export function loadMap(scope: Scope, by: Arrange): Promise<MapData> {
+  const k = slot(scope, by)
+  let p = inflight.get(k)
   if (!p) {
-    p = api.map(scope).then(prepare)
-    p.catch(() => inflight.delete(scope))
-    inflight.set(scope, p)
+    p = api.map(scope, by).then(prepare)
+    p.catch(() => inflight.delete(k))
+    inflight.set(k, p)
   }
   return p
 }
@@ -151,7 +215,7 @@ export function storeLayout(data: MapData, positions: Float32Array) {
     // never be read again.
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i)
-      if (k && k.startsWith('betterrtk:map:') && k.split(':')[3] === data.scope && k !== data.key) {
+      if (k && k.startsWith('betterrtk:map:') && k.split(':')[3] === slot(data.scope, data.by) && k !== data.key) {
         localStorage.removeItem(k)
       }
     }

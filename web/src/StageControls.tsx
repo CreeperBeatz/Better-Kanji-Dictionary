@@ -35,6 +35,11 @@ const S = strings(
     simpleTitle: 'Only the parts',
     expanded: 'expanded',
     expandedTitle: 'The parts, and also how a whole kanji looks, dashed: 土 as 十 + 一',
+    arrange: 'What places a character on the map',
+    byMeaning: 'meaning',
+    byMeaningTitle: 'Kanji that mean related things sit together',
+    byParts: 'parts',
+    byPartsTitle: 'Characters sit by the parts they are built from',
   },
   {
     all: 'всички',
@@ -65,6 +70,11 @@ const S = strings(
     simpleTitle: 'Само частите',
     expanded: 'разгърнат',
     expandedTitle: 'Частите, а също как изглежда цяло канджи, с прекъсната линия: 土 като 十 + 一',
+    arrange: 'Какво подрежда картата',
+    byMeaning: 'значение',
+    byMeaningTitle: 'Канджи със сродни значения са едно до друго',
+    byParts: 'части',
+    byPartsTitle: 'Йероглифите са до частите, от които са изградени',
   },
 )
 
@@ -117,6 +127,21 @@ export function GraphDetail({ simple, onSimple }: { simple: boolean; onSimple: (
       </button>
       <button data-on={!simple} title={t('expandedTitle')} onClick={() => onSimple(false)}>
         {t('expanded')}
+      </button>
+    </div>
+  )
+}
+
+/** What places a character on the map: what it means, or the parts it shares. */
+export function MapArrange({ meaning, onMeaning }: { meaning: boolean; onMeaning: (meaning: boolean) => void }) {
+  const t = S(useLang())
+  return (
+    <div className="filter graph-detail" role="group" aria-label={t('arrange')}>
+      <button data-on={meaning} title={t('byMeaningTitle')} onClick={() => onMeaning(true)}>
+        {t('byMeaning')}
+      </button>
+      <button data-on={!meaning} title={t('byPartsTitle')} onClick={() => onMeaning(false)}>
+        {t('byParts')}
       </button>
     </div>
   )
