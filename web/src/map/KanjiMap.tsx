@@ -34,6 +34,7 @@ import { strings, useLang, type Translate } from '../i18n'
 import { mapMeaning } from '../i18n/content'
 import type { LayoutMessage, LayoutRequest } from './layout.worker'
 import { GlyphAtlas, type SpriteStyle } from './glyphs'
+import type { ClusterFocus } from './MapCard'
 import { cachedLayout, loadMap, storeLayout, type Arrange, type MapData, type Scope } from './mapData'
 
 /** Press this long on a touch screen to see a character, as hovering does. */
@@ -53,8 +54,11 @@ interface Props {
   onScope: (f: ContainerFilter) => void
   /** Show how to read the map, opened from the (i). */
   legend: boolean
-  /** Floats over the focus node, following it as the map moves. */
-  card?: React.ReactNode
+  /**
+   * Floats over the focus node, following it as the map moves. Given the
+   * switch for the light on the focus's cluster, or null when it has none.
+   */
+  card?: (focus: ClusterFocus | null) => React.ReactNode
 }
 
 interface Camera {
@@ -1235,6 +1239,10 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
   }, [zoomBy])
 
   const home = homeScope(focusNode?.char === focus ? focusNode : null)
+  const d = s.data
+  const fi = phase === 'ready' && d?.cluster && focus ? (d.index.get(focus) ?? -1) : -1
+  const fk = fi >= 0 ? d!.cluster![fi] : -1
+  const cardNode = card?.(fk >= 0 ? { on: lit === fk, toggle: () => setLit(lit === fk ? -1 : fk) } : null)
 
   return (
     <div className="map" ref={wrapRef}>
@@ -1250,9 +1258,9 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
         onContextMenu={(e) => e.preventDefault()}
       />
       <div className="map-tip" ref={tipRef} hidden />
-      {card && (
+      {cardNode && (
         <div className="map-card-anchor" ref={cardRef}>
-          {card}
+          {cardNode}
         </div>
       )}
 

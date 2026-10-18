@@ -13,6 +13,8 @@ import { local } from '../local/local'
 const S = strings(
   {
     open: 'See in Dictionary',
+    focus: 'Focus',
+    focusTitle: 'Light up its group on the map (double-click)',
     close: 'Close',
     on: 'On',
     kun: 'Kun',
@@ -20,6 +22,8 @@ const S = strings(
   },
   {
     open: 'Вижте в речника',
+    focus: 'Фокус',
+    focusTitle: 'Осветете групата му на картата (двоен клик)',
     close: 'Затворете',
     on: 'Он',
     kun: 'Кун',
@@ -27,7 +31,24 @@ const S = strings(
   },
 )
 
-export function MapCard({ char, onOpen, onClose }: { char: string; onOpen: () => void; onClose: () => void }) {
+/** The map by meaning's light on the character's cluster: whether it is on, and the switch. */
+export interface ClusterFocus {
+  on: boolean
+  toggle: () => void
+}
+
+export function MapCard({
+  char,
+  onOpen,
+  onClose,
+  focus,
+}: {
+  char: string
+  onOpen: () => void
+  onClose: () => void
+  /** null when there is no cluster to light: the parts map, or a kanji in none */
+  focus?: ClusterFocus | null
+}) {
   const lang = useLang()
   const t = S(lang)
   const [node, setNode] = useState<KanjiNode | null>(null)
@@ -85,9 +106,16 @@ export function MapCard({ char, onOpen, onClose }: { char: string; onOpen: () =>
           {[level, node.strokes ? t('strokes', { n: node.strokes }) : null].filter(Boolean).join(' · ')}
         </p>
       )}
-      <button className="see-components map-card-open" onClick={onOpen}>
-        {t('open')}
-      </button>
+      <div className="map-card-actions">
+        <button className="see-components" onClick={onOpen}>
+          {t('open')}
+        </button>
+        {focus && (
+          <button className="see-components" data-on={focus.on} aria-pressed={focus.on} title={t('focusTitle')} onClick={focus.toggle}>
+            {t('focus')}
+          </button>
+        )}
+      </div>
     </div>
   )
 }

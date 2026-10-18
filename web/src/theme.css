@@ -4026,8 +4026,19 @@ button.usage-head:focus-visible .usage-spelling {
   font-size: calc(12px * var(--type));
 }
 
-.map-card-open {
+.map-card-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 14px;
+}
+
+.map-card-actions .see-components {
+  margin: 0;
+}
+
+.map-card-actions .see-components[data-on='true'] {
+  background: var(--ai-wash);
+  color: var(--paper);
 }
 
 /* ---------------------------------------------------------------- map */
