@@ -3,7 +3,7 @@
     .venv/Scripts/python pipeline/meaning_map.py texts   # what the site says about each kanji
     python pipeline/meaning_map.py embed                 # vectors, 2D per scope, clusters (torch, umap-learn)
     # name the clusters and regions: clusters-in.json -> names.json (pipeline/meaning_map_names.md)
-    python pipeline/meaning_map.py near                  # how near every kanji is to every cluster
+    python pipeline/meaning_map.py near                  # how near every cluster is to every other
     python pipeline/meaning_map.py build                 # -> data/meaning_map.json, which the server serves
 
 Each kanji is embedded from its hero sentence and its meaning groups (label +
@@ -22,9 +22,9 @@ clusters gathered into REGIONS) for the zoomed-out one, in English and
 Bulgarian. A changed meaning moves nothing until this is run again; ids are not
 stable across runs, so the names are redone with it.
 
-`near` grades every kanji against every cluster, for the map's highlight: a
-double-click on a kanji lights its cluster, and the rest fade in stages by how
-close they are to the cluster's mean vector (Dani, 2026-10-18). It reads the
+`near` grades every cluster against every other, for the map's highlight: a
+double-click on a kanji lights its cluster, and the other clusters fade in
+stages by how close they are in meaning (Dani, 2026-10-18). It reads the
 clusters `embed` left, so it never renumbers them.
 
 `texts` imports the server, so it runs in the project venv; `embed` needs torch,
@@ -152,56 +152,55 @@ def embed() -> None:
 
 
 def near() -> None:
-    """Per cluster, a stage per kanji: 3 in it, 2 near, 1 related, 0 not.
+    """Per cluster, a stage per cluster: 3 itself, 2 near, 1 related, 0 not.
 
-    Similarity to the cluster's mean is measured against the cluster's own
-    spread -- 0 at the median kanji, 1 at its 10th-percentile member -- and
-    each stage is capped by rank as well, at 1x and 4x the cluster's size: a
-    loose cluster like "Seas and wide spaces" would otherwise light up a
-    fifth of the map. For Birds: 2 = 飛鳴卵巣鳩雛蝶, 1 = 鹿熊犬猫狼鯨 and the
-    other animals.
+    Whole clusters, not single kanji: a lit cluster's neighbours fade as
+    patches, which reads; kanji graded one by one speckled the map (Dani,
+    2026-10-18). Nearness is the cosine of the clusters' mean vectors: near =
+    the 3 closest at >= 0.66 (about the top tenth of all pairs), related = the
+    8 closest at >= 0.60. Birds: near = Wild animals, Insects; related = Fish
+    and hunting, Shaking and leaping.
     """
     import numpy as np
 
     lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
     vec = np.load(VECTORS)
     lab = np.array(lay["cluster"])
+    n = len(lay["region"])
+    means = np.stack([vec[lab == k].mean(0) for k in range(n)])
+    means /= np.linalg.norm(means, axis=1, keepdims=True)
+    sim = means @ means.T
     out = []
-    for k in range(len(lay["region"])):
-        mem = lab == k
-        c = vec[mem].mean(0)
-        sim = vec @ (c / np.linalg.norm(c))
-        lo, hi = np.median(sim), np.percentile(sim[mem], 10)
-        t = (sim - lo) / (hi - lo)
-        n = int(mem.sum())
-        stage = np.where(mem, 3, 0)
-        others = [i for i in np.argsort(-sim) if not mem[i]]
-        for rank, i in enumerate(others[:4 * n]):
-            if rank < n and t[i] >= 0.5:
-                stage[i] = 2
-            elif t[i] >= 0.25:
-                stage[i] = 1
+    for k in range(n):
+        stage = [0] * n
+        stage[k] = 3
+        others = [j for j in np.argsort(-sim[k]) if j != k]
+        for rank, j in enumerate(others[:8]):
+            if rank < 3 and sim[k, j] >= 0.66:
+                stage[j] = 2
+            elif sim[k, j] >= 0.60:
+                stage[j] = 1
         out.append("".join(map(str, stage)))
     NEAR.write_text(json.dumps(out), encoding="utf-8")
-    print(f"{len(out)} clusters graded -> {NEAR}")
+    print(f"{n} clusters graded -> {NEAR}")
 
 
 def build() -> None:
     """data/meaning_map.json, what the server serves: names, clusters, a layout per scope."""
     lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
     names = json.loads(NAMES.read_text(encoding="utf-8"))
+    nears = json.loads(NEAR.read_text(encoding="utf-8"))
     n_clusters = len(lay["region"])
     assert len(names["clusters"]) == n_clusters and len(names["regions"]) == REGIONS, "names do not match the layout"
     chars = lay["chars"]
     out = {
         "about": f"pipeline/meaning_map.py: {MODEL} over hero + meaning groups, t-SNE per scope, HDBSCAN clusters",
         "regions": [{"en": r["en"], "bg": r["bg"]} for r in names["regions"]],
-        "clusters": [{"en": c["en"], "bg": c["bg"], "region": lay["region"][i]} for i, c in enumerate(names["clusters"])],
+        # near: a digit per cluster, how near it is to this one (see near())
+        "clusters": [{"en": c["en"], "bg": c["bg"], "region": lay["region"][i], "near": nears[i]}
+                     for i, c in enumerate(names["clusters"])],
         "cluster": dict(zip(chars, lay["cluster"])),
         "layouts": {n: {chars[i]: xy for i, xy in zip(L["idx"], L["xy"])} for n, L in lay["layouts"].items()},
-        # near[k][j]: stage of the j-th kanji of `order` for cluster k (see near())
-        "order": "".join(chars),
-        "near": json.loads(NEAR.read_text(encoding="utf-8")),
     }
     MAP.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{MAP}: {len(chars)} kanji, {n_clusters} clusters, {MAP.stat().st_size // 1024} KB")

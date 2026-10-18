@@ -158,7 +158,8 @@ export interface MapResponse {
   xy?: number[]
   /** cluster id per kanji, -1 = in none */
   cluster?: number[]
-  clusters?: { en: string; bg: string; region: number }[]
+  /** near: a digit per cluster, how near it is to this one: 3 itself, 2 near, 1 related, 0 not */
+  clusters?: { en: string; bg: string; region: number; near: string }[]
   regions?: { en: string; bg: string }[]
 }
 
@@ -1060,9 +1061,6 @@ export const api = {
       chars.map((c) => ['c', c] as [string, string]),
     ),
 
-  /** For one cluster of the meaning map, a digit per kanji in the map's order: 3 in it, 2 near, 1 related, 0 not. */
-  mapNear: (scope: string, cluster: number) =>
-    get<{ cluster: number; stage: string }>(`/api/map/${encodeURIComponent(scope)}/near/${cluster}`),
   map: (scope: string, by: 'parts' | 'meaning' = 'parts') =>
     get<MapResponse>(`/api/map/${encodeURIComponent(scope)}${by === 'meaning' ? '?by=meaning' : ''}`),
 

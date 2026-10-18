@@ -56,7 +56,7 @@ export interface MapData {
   home: Float32Array | null
   /** By meaning: cluster per kanji, -1 = in none. */
   cluster: Int16Array | null
-  clusters: (Group & { region: number })[]
+  clusters: (Group & { region: number; near: string })[]
   regions: Group[]
   key: string
 }

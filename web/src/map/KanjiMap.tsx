@@ -19,17 +19,16 @@
  * map names countries from far out and towns up close: zoomed out the map
  * shows its regions' names, zoomed in its clusters'.
  *
- * Double-clicking a kanji there lights its cluster: the rest fade in stages by
- * how near they are in meaning (pipeline/meaning_map.py `near`), so what sits
- * close to the cluster stays readable and what has nothing to do with it goes
- * grey. A click on the selected kanji opens it only once DOUBLE_MS has passed
+ * Double-clicking a kanji there lights its cluster: the other clusters fade in
+ * stages by how near they are in meaning (pipeline/meaning_map.py `near`), so
+ * the clusters close to it stay readable and the rest go grey. A click on the selected kanji opens it only once DOUBLE_MS has passed
  * without a second click.
  */
 
 import { interpolateZoom } from 'd3-interpolate'
 import { quadtree, type Quadtree } from 'd3-quadtree'
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react'
-import { api, type KanjiNode } from '../api'
+import type { KanjiNode } from '../api'
 import type { ContainerFilter } from '../graph/KanjiGraph'
 import { strings, useLang, type Translate } from '../i18n'
 import { mapMeaning } from '../i18n/content'
@@ -97,7 +96,7 @@ const CLUSTERS_UNTIL = 32
 /** A second click within this long, and this close, makes a double-click. */
 const DOUBLE_MS = 300
 const DOUBLE_PX = 12
-/** Opacity per stage of a lit cluster: not related, related, near, in it. */
+/** Opacity per stage while a cluster is lit: not related, related, near, the cluster itself. */
 const STAGE_ALPHA = [0.08, 0.34, 0.68, 1]
 /** The same for distant dots, which are faint to begin with: these replace their opacity. */
 const STAGE_DOT = [0.07, 0.5, 0.85, 1]
@@ -269,6 +268,7 @@ function createState() {
     lang: 'en' as 'en' | 'bg',
     /** the lit cluster, -1 for none, and the stage of every node for it */
     lit: -1,
+    /** the stage of every node for it; kanji in no cluster count as not related */
     stage: null as Uint8Array | null,
     stageOf: null as MapData | null,
     /** the last click on a node, to tell a double-click */
@@ -434,11 +434,13 @@ function drawLabels(s: MapState, ctx: CanvasRenderingContext2D, ox: number, oy: 
   ctx.textBaseline = 'middle'
   ctx.lineJoin = 'round'
   const lit = s.lit >= 0 && s.stageOf === d ? s.lit : -1
-  // The lit cluster's name first, whatever the zoom, so nothing crowds it out.
-  const order = lit >= 0 ? [...s.labels.filter((l) => l.cluster === lit), ...s.labels.filter((l) => l.cluster !== lit)] : s.labels
+  const near = lit >= 0 ? d.clusters[lit].near : ''
+  const stageOf = (l: Label) => (l.cluster >= 0 && near ? near.charCodeAt(l.cluster) - 48 : 0)
+  // The lit cluster's name first, whatever the zoom, then its neighbours', so nothing crowds them out.
+  const order = lit >= 0 ? [...s.labels].sort((a, b) => stageOf(b) - stageOf(a)) : s.labels
   for (const l of order) {
     let alpha = l.region ? regionAlpha : clusterAlpha
-    if (lit >= 0) alpha = l.cluster === lit ? 1 : alpha * UNLIT_LABEL
+    if (lit >= 0) alpha = l.cluster === lit ? 1 : alpha * Math.max(UNLIT_LABEL, STAGE_ALPHA[stageOf(l)])
     if (alpha < 0.02) continue
     const x = l.x * k + ox
     const y = l.y * k + oy
@@ -969,25 +971,17 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
   useEffect(() => {
     s.lit = lit
     const d = s.data
-    if (lit < 0 || phase !== 'ready' || !d?.cluster) {
+    const near = lit >= 0 && phase === 'ready' && d?.cluster ? d.clusters[lit]?.near : undefined
+    if (!d?.cluster || !near) {
       s.stage = null
       s.stageOf = null
-      request()
-      return
+    } else {
+      const stage = new Uint8Array(d.n)
+      for (let i = 0; i < d.n; i++) stage[i] = d.cluster[i] >= 0 ? near.charCodeAt(d.cluster[i]) - 48 : 0
+      s.stage = stage
+      s.stageOf = d
     }
-    let cancelled = false
-    api.mapNear(d.scope, lit).then(
-      (r) => {
-        if (cancelled || s.data !== d || r.stage.length !== d.n) return
-        s.stage = Uint8Array.from(r.stage, (ch) => ch.charCodeAt(0) - 48)
-        s.stageOf = d
-        request()
-      },
-      () => {},
-    )
-    return () => {
-      cancelled = true
-    }
+    request()
   }, [lit, phase, scope, by, s, request])
 
   // Parts have no clusters: switching to them puts the light out.
