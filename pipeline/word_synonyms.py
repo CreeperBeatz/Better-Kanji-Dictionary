@@ -282,12 +282,14 @@ _TAILS = ("日", "に", "と")  # 金曜/金曜日, 余り/余りに
 
 def same_word(a: int, b: int) -> bool:
     """A short or polite form of the same word, which is no synonym (Dani, 2026-10-22):
-    風呂/お風呂, 見舞い/お見舞い, 金曜/金曜日, 余り/余りに."""
+    風呂/お風呂, 見舞い/お見舞い, 金曜/金曜日, 余り/余りに, 論ずる/論じる."""
     x, y = scope()[a], scope()[b]
     for p, q in ((x, y), (y, x)):
         for k in ("word", "reading"):
             s, t = p[k], q[k]
             if any(t == m + s for m in _POLITE) or any(t == s + m for m in _TAILS):
+                return True
+            if s.endswith("ずる") and t == s[:-2] + "じる":  # 論ずる/論じる
                 return True
     return False
 
