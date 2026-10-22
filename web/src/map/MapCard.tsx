@@ -15,6 +15,7 @@ const S = strings(
   {
     open: 'See in Dictionary',
     group: 'Group',
+    groupTitle: 'Every kanji in this group, in the search',
     noGroup: 'in no group',
     close: 'Close',
     on: 'On',
@@ -24,6 +25,7 @@ const S = strings(
   {
     open: 'Вижте в речника',
     group: 'Група',
+    groupTitle: 'Всички канджи от тази група, в търсенето',
     noGroup: 'в никоя група',
     close: 'Затворете',
     on: 'Он',
@@ -37,12 +39,15 @@ export function MapCard({
   onOpen,
   onClose,
   group,
+  onGroup,
 }: {
   char: string
   onOpen: () => void
   onClose: () => void
   /** The cluster lit on the map, null when it is in none; undefined while the map loads. */
   group?: Group | null
+  /** Lists every kanji in the group, in the search. */
+  onGroup?: (group: Group) => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -78,7 +83,10 @@ export function MapCard({
         <div className="map-card-group">
           <span className="map-card-group-label">{t('group')}</span>
           {group ? (
-            <span className="map-card-group-name">{group[lang === 'bg' ? 'bg' : 'en']}</span>
+            <button className="map-card-group-name" onClick={() => onGroup?.(group)} disabled={!onGroup} title={t('groupTitle')}>
+              {group[lang === 'bg' ? 'bg' : 'en']}
+              <span aria-hidden> →</span>
+            </button>
           ) : (
             <span className="map-card-group-none">{t('noGroup')}</span>
           )}

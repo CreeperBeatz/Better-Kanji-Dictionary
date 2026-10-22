@@ -4049,7 +4049,25 @@ button.usage-head:focus-visible .usage-spelling {
 }
 
 .map-card-group-name {
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
   color: var(--paper);
+  text-align: left;
+  cursor: pointer;
+}
+
+.map-card-group-name:hover:not(:disabled) {
+  color: var(--ai);
+}
+
+.map-card-group-name:disabled {
+  cursor: default;
+}
+
+.map-card-group-name span {
+  color: var(--muted);
 }
 
 .map-card-group-none {
@@ -6328,6 +6346,16 @@ html {
 
   .kanji-hits::-webkit-scrollbar {
     display: none;
+  }
+
+  /* A map group's page is all kanji, with nothing under them: they wrap, two to a row. */
+  .group-kanji .kanji-hits {
+    grid-auto-flow: row;
+    grid-template-rows: none;
+    grid-template-columns: 1fr 1fr;
+    margin: 14px 0 0;
+    padding: 0;
+    overflow: visible;
   }
 
   .kanji-hit {

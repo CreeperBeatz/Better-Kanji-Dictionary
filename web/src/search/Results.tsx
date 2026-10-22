@@ -28,6 +28,7 @@ import { Pitch } from './Pitch'
 import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
+import { loadMap, type MapData } from '../map/mapData'
 import { InstallNote } from '../install/InstallGuide'
 import { warmKanji, warmWord } from '../warm'
 
@@ -60,6 +61,10 @@ const S = strings(
     allWithKanji: 'See all words with {char}',
     backToResults: 'Back to the results for “{q}”',
     backToSearch: 'Back to the search',
+    group: 'Group: {name}',
+    groupCount: '{n} kanji, the most frequent first',
+    groupGone: 'This group is not on the map any more.',
+    groupError: 'The group could not be loaded.',
     resultsFor: 'Results for {q}',
     readAs: 'read as {r}',
     alternative: 'in Bulgarian: {q}',
@@ -108,6 +113,10 @@ const S = strings(
     allWithKanji: 'Всички думи с {char}',
     backToResults: 'Обратно към резултатите за „{q}“',
     backToSearch: 'Обратно към търсенето',
+    group: 'Група: {name}',
+    groupCount: '{n} канджи, най-честите първо',
+    groupGone: 'Тази група вече я няма на картата.',
+    groupError: 'Групата не се зареди.',
     resultsFor: 'Резултати за {q}',
     readAs: 'прочетено като {r}',
     alternative: 'на български: {q}',
@@ -429,6 +438,10 @@ interface SearchProps {
   words?: string
   /** Turns the search to every word with a kanji, by meaning, or (null) back to its results. */
   onWordsWith?: (char: string | null) => void
+  /** The map group (its English name) whose kanji the search shows in place of its results. */
+  group?: string
+  /** Turns the search to a map group's kanji, or (null) back to its results. */
+  onGroup?: (group: string | null) => void
   /** The rail shows a way back above the page (to the kanji the words were opened from): none of its own. */
   railBack?: boolean
 }
@@ -439,7 +452,21 @@ const FIRST_ROWS = 10
 const PAGE = 30
 const MOST = 1000
 
-export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith, railBack }: SearchProps) {
+export function SearchPage({
+  q,
+  onKanji,
+  onWord,
+  onSearch,
+  asked,
+  onAsk,
+  open,
+  onMap,
+  words,
+  onWordsWith,
+  group,
+  onGroup,
+  railBack,
+}: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -454,7 +481,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!term || words) {
+    if (!term || words || group) {
       setResult(null)
       setBusy(false)
       return
@@ -486,7 +513,7 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key, limit, words])
+  }, [term, lang, common, sort, order, key, limit, words, group])
 
   // The first screen of words is put up at once; the rest follow in a spare
   // moment, so a result never costs a keystroke more than a screenful.
@@ -505,6 +532,24 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
     localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
     setSort([next, nextOrder])
   }
+
+  // Every kanji in one group of the map: the search's own mode.
+  if (group)
+    return (
+      <GroupKanji
+        name={group}
+        onKanji={onKanji}
+        open={open?.kanji}
+        back={
+          onGroup &&
+          !railBack && (
+            <button className="back-link words-with-back" onClick={() => onGroup(null)}>
+              <span aria-hidden>←</span> {term ? t('backToResults', { q: term }) : t('backToSearch')}
+            </button>
+          )
+        }
+      />
+    )
 
   // Every word with one kanji, by meaning: the search's own mode.
   if (words)
@@ -917,6 +962,63 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
 }
 
 /** A level's kanji, and the parts they are built from. `open` is marked. */
+/**
+ * Every kanji in one group of the map by meaning (pipeline/meaning_map.py),
+ * the most frequent first: what the map card's group name opens. The groups
+ * come with the map's own data, every kanji's at the widest scope.
+ */
+function GroupKanji({ name, onKanji, open, back }: { name: string; onKanji: (char: string) => void; open?: string; back?: ReactNode }) {
+  const lang = useLang()
+  const t = S(lang)
+  const [data, setData] = useState<MapData | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let stale = false
+    loadMap('all').then(
+      (d) => !stale && setData(d),
+      () => !stale && setFailed(true),
+    )
+    return () => {
+      stale = true
+    }
+  }, [])
+
+  const k = data ? data.clusters.findIndex((c) => c.en === name) : -1
+  const kanji: ChipKanji[] = []
+  if (data && k >= 0) {
+    const ids: number[] = []
+    for (let i = 0; i < data.n; i++) if (data.cluster[i] === k) ids.push(i)
+    ids.sort((a, b) => (data.freq[a] ?? Infinity) - (data.freq[b] ?? Infinity))
+    for (const i of ids) {
+      kanji.push({ char: data.chars[i], meanings: [data.meaning[i]], meaningsBg: data.meaningBg[i] ? [data.meaningBg[i]] : null })
+    }
+  }
+  const shown = k >= 0 ? data!.clusters[k][lang === 'bg' ? 'bg' : 'en'] : name
+
+  return (
+    <section className="rail-section search-page group-kanji" aria-label={t('group', { name: shown })} aria-busy={!data && !failed}>
+      {back}
+      <header className="words-with-head">
+        <div>
+          <h2>{t('group', { name: shown })}</h2>
+          {data && k >= 0 && <p className="hint">{t('groupCount', { n: kanji.length })}</p>}
+        </div>
+      </header>
+      {!data && !failed && <p className="hint">{t('looking')}</p>}
+      {failed && <p className="hint">{t('groupError')}</p>}
+      {data && k < 0 && <p className="hint">{t('groupGone')}</p>}
+      {kanji.length > 0 && (
+        <div className="kanji-hits">
+          {kanji.map((c) => (
+            <KanjiChip key={c.char} k={c} onKanji={onKanji} open={open === c.char} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: string) => void; open?: string }) {
   const lang = useLang()
   const t = S(lang)

@@ -1098,6 +1098,7 @@ export function App() {
   // The search under the pages, as it stands: its query, and its mode.
   const searchBase: Page = root.kind === 'search' ? { ...root, q } : { kind: 'search', q }
   const searchWords = root.kind === 'search' ? root.words : undefined
+  const searchGroup = root.kind === 'search' ? root.group : undefined
 
   // A pick from the search column replaces what is open beside it.
   function openOverSearch(p: Picked) {
@@ -1275,6 +1276,7 @@ export function App() {
           <SearchPage
             q={p.q}
             words={p.words}
+            group={p.group}
             onKanji={openKanji}
             onWord={openWord}
             onSearch={type}
@@ -1282,6 +1284,7 @@ export function App() {
             onAsk={setAsked}
             onMap={browseMap}
             onWordsWith={showWords}
+            onGroup={showGroup}
             railBack={shownUnder !== null}
           />
         )
@@ -1745,6 +1748,16 @@ export function App() {
     if (split || searchShown) return rebase(page)
     if (top.kind === 'search') return replaceTop(page)
     push(page)
+  })
+  // A map group's kanji, as the search's own mode: from the map card on a
+  // phone that means off the map to the search.
+  const showGroup = useStable((group: string | null) => {
+    const page: Page = group ? { kind: 'search', q, group } : { kind: 'search', q }
+    setHovered(null)
+    if (split || searchShown) rebase(page)
+    else if (top.kind === 'search') replaceTop(page)
+    else push(page)
+    if (mobile && group) leaveStage('replace')
   })
   const searchTabKanji = useStable((char: string) => openFromSearchTab(kanjiPage(char)))
   const searchTabWord = useStable((w: Word) => openFromSearchTab(wordPage(w)))
@@ -2522,6 +2535,8 @@ export function App() {
                 open={openIn(picked)}
                 words={searchWords}
                 onWordsWith={showWords}
+                group={searchGroup}
+                onGroup={showGroup}
               />
             </div>
           </aside>
@@ -2622,6 +2637,8 @@ export function App() {
                     open={openIn(top)}
                     words={searchWords}
                     onWordsWith={showWords}
+                    group={searchGroup}
+                    onGroup={showGroup}
                   />
                 )}
                 {!notesShown &&
@@ -2764,6 +2781,7 @@ export function App() {
                       onOpen={() => seeInDictionary(mapCard)}
                       onClose={() => setMapCard(null)}
                       group={group}
+                      onGroup={(g) => showGroup(g.en)}
                     />
                   )
                 }
