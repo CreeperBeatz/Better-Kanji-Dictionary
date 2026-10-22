@@ -608,7 +608,7 @@ def _kanji_hits(chars: list[str]) -> list[dict]:
 
     ph = ",".join("?" * len(chars))
     rows = query(
-        f"SELECT k.char, k.meanings, k.freq, k.jlpt, k.joyo, k.strokes, "
+        f"SELECT k.char, k.meanings, k.freq, k.jlpt, k.joyo, k.strokes, k.on_yomi, k.kun_yomi, "
         f"       COALESCE(f.joyo_count, 0) AS fanout, c.meaning AS curated, kb.meanings AS meanings_bg "
         f"FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
         f"LEFT JOIN kanji_curated c ON c.char = k.char "
@@ -629,6 +629,9 @@ def _kanji_hits(chars: list[str]) -> list[dict]:
             "joyo": bool(r["joyo"]),
             "strokes": r["strokes"],
             "fanout": r["fanout"],
+            # for the search's expanded kanji rows
+            "onYomi": _json.loads(r["on_yomi"] or "[]"),
+            "kunYomi": _json.loads(r["kun_yomi"] or "[]"),
         }
         for r in rows
     ]
@@ -880,6 +883,15 @@ def _key_word(w: dict) -> bool:
     return w["common"] and ((w["jlpt"] or 0) >= 2 or (w["nf"] is not None and w["nf"] <= 8))
 
 
+def map_group(char: str) -> dict | None:
+    """The kanji's cluster on the map by meaning, by name, or None."""
+    from .atlas import _meaning_map
+
+    mm = _meaning_map()
+    k = mm["cluster"].get(char, -1)
+    return {"en": mm["clusters"][k]["en"], "bg": mm["clusters"][k]["bg"]} if k >= 0 else None
+
+
 @router.get("/kanji-page/{char}")
 def kanji_page(char: str) -> dict:
     """A kanji's meanings, readings and words, as its page shows them: one unit.
@@ -901,14 +913,17 @@ def kanji_page(char: str) -> dict:
     so, and the commonest of them. `special`: its special readings, the kana
     going over more than one kanji or matching none of its readings (今日 きょう
     under 今), one word each. And its classical radical, which the page names only on the radical's own.
+    `group`: its cluster on the map by meaning (pipeline/meaning_map.py), whose kanji the page's
+    group line lists in the search; None for a kanji in none.
     """
     from .. import review
     from .graph import _fetch
 
     out: dict = {"char": char, "meanings": [], "hero": None, "heroBg": None, "link": None, "linkBg": None, "mixups": [], "soundOnly": None,
-                 "readings": {}, "special": [], "radical": None}
+                 "readings": {}, "special": [], "radical": None, "group": None}
     if len(char) != 1:
         return out
+    out["group"] = map_group(char)
     formed = {r.strip("-"): w for r, w in reading_words(char)["words"].items()}
     has_readings = _has_readings()
     rows = query(

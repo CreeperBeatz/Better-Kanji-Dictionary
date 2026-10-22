@@ -609,6 +609,8 @@ export class Engine {
       joyo: !!r[5],
       strokes: r[1],
       fanout: r[10],
+      onYomi: r[8],
+      kunYomi: r[9],
     }))
   }
 

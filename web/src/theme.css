@@ -714,6 +714,40 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
+/* Its group on the map by meaning, under the gist: opens the group's kanji in the search. */
+.kanji-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: -4px 0 14px;
+  font-size: calc(13px * var(--type));
+}
+
+.kanji-group-label {
+  color: var(--muted);
+  font-size: calc(11px * var(--type));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kanji-group-name {
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--paper);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kanji-group-name:hover {
+  color: var(--ai);
+}
+
+.kanji-group-name span {
+  color: var(--muted);
+}
+
 /* How the meanings follow from each other, above them. */
 .meanings-link {
   margin: 2px 0 8px;
@@ -1973,6 +2007,40 @@ button.usage-head:focus-visible .usage-spelling {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* The tools' switches, together at the end of the row. */
+.search-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Kanji as rows (the search's "expanded kanji"): a word's card, its glyph larger. */
+.kanji-rows {
+  margin-top: 14px;
+}
+
+/* The words come after: a firmer line where the kanji end. */
+.kanji-rows:not(:last-child) {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule-bright);
+}
+
+.kanji-row .kanji-row-glyph {
+  font-family: var(--mincho);
+  font-size: calc(30px * var(--type));
+  line-height: 1;
+}
+
+.kanji-row-readings {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+}
+
+.kanji-row-kun {
+  color: var(--paper-dim);
 }
 
 .sort-pill {

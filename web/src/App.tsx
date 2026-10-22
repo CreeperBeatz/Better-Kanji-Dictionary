@@ -1328,6 +1328,7 @@ export function App() {
             onComponents={!mobile && view !== 'focus' ? () => setView('focus') : undefined}
             onSignIn={signIn}
             onWordsWith={showWords}
+            onGroup={showGroup}
             notes={notesButton(p, live)}
           />
         ) : null
