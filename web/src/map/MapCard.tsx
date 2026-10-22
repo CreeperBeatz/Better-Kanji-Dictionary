@@ -14,8 +14,6 @@ import type { Group } from './mapData'
 const S = strings(
   {
     open: 'See in Dictionary',
-    explore: 'Explore group',
-    exploreTitle: 'Show its group on its own, to move round and zoom in',
     group: 'Group',
     noGroup: 'in no group',
     close: 'Close',
@@ -25,8 +23,6 @@ const S = strings(
   },
   {
     open: 'Вижте в речника',
-    explore: 'Разгледайте групата',
-    exploreTitle: 'Покажете групата му отделно, за да я разгледате и приближите',
     group: 'Група',
     noGroup: 'в никоя група',
     close: 'Затворете',
@@ -41,15 +37,12 @@ export function MapCard({
   onOpen,
   onClose,
   group,
-  onExplore,
 }: {
   char: string
   onOpen: () => void
   onClose: () => void
   /** By meaning: the cluster lit on the map, null when it is in none; undefined by parts. */
   group?: Group | null
-  /** By meaning, for a kanji in a group: explore that group. */
-  onExplore?: () => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -118,16 +111,9 @@ export function MapCard({
           {[level, node.strokes ? t('strokes', { n: node.strokes }) : null].filter(Boolean).join(' · ')}
         </p>
       )}
-      <div className="map-card-actions">
-        <button className="see-components" onClick={onOpen}>
-          {t('open')}
-        </button>
-        {onExplore && (
-          <button className="see-components" onClick={onExplore} title={t('exploreTitle')}>
-            {t('explore')}
-          </button>
-        )}
-      </div>
+      <button className="see-components map-card-open" onClick={onOpen}>
+        {t('open')}
+      </button>
     </div>
   )
 }

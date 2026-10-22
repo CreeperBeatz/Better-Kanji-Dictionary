@@ -19,7 +19,6 @@ import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { GraphDetail, LevelFilter, MapArrange, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
-import { GroupExplore } from './map/GroupExplore'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
@@ -815,21 +814,9 @@ export function App() {
 
   // A character picked on the map is previewed over it, not opened.
   const [mapCard, setMapCard] = useState<string | null>(null)
-  // By meaning: the kanji whose group is being explored, null while that view is shut.
-  const [exploring, setExploring] = useState<string | null>(null)
   useEffect(() => {
-    if (view !== 'map') {
-      setMapCard(null)
-      setExploring(null)
-    }
+    if (view !== 'map') setMapCard(null)
   }, [view])
-  useEffect(() => {
-    if (!mapMeaning) setExploring(null)
-  }, [mapMeaning])
-  const closeExplore = useStable((char: string) => {
-    setExploring(null)
-    setMapCard(char)
-  })
 
   useEffect(() => {
     document.title = titleOf(top)
@@ -2782,14 +2769,6 @@ export function App() {
                       onOpen={() => seeInDictionary(mapCard)}
                       onClose={() => setMapCard(null)}
                       group={group}
-                      onExplore={
-                        group
-                          ? () => {
-                              setExploring(mapCard)
-                              setMapCard(null)
-                            }
-                          : undefined
-                      }
                     />
                   )
                 }
@@ -2797,9 +2776,6 @@ export function App() {
                 legend={legendOpen && view === 'map'}
               />
               </Suspense>
-              {exploring && mapMeaning && (
-                <GroupExplore key={exploring} scope={scopeOf(filter)} char={exploring} onClose={closeExplore} onOpen={seeInDictionary} />
-              )}
             </div>
           )}
 
