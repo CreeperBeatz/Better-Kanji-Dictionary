@@ -293,6 +293,8 @@ def same_word(a: int, b: int) -> bool:
                 return True
             if s.endswith("す") and t == s[:-1] + "せる":  # 済ます/済ませる, 任す/任せる
                 return True
+            if s.endswith("る") and t == s[:-1] + "りる":  # 足る/足りる
+                return True
             if any(t[i] in "がにの" and t[:i] + t[i + 1:] == s for i in range(1, len(t) - 1)):  # 万一/万が一, 役立つ/役に立つ
                 return True
     return False
@@ -525,6 +527,11 @@ def _pairs(run: dict[int, list[dict]]) -> tuple[dict[tuple, dict], Counter]:
                         o, own = found[0], True
                     if o == wid or same_word(wid, o):
                         stats[f"{kind} same word dropped"] += o != wid
+                        continue
+                    # Read the same: a spelling or a mix-up (眼鏡/メガネ), never a synonym.
+                    # An antonym may share it (従兄弟/従姉妹).
+                    if kind == "syn" and hira(scope()[o]["reading"]) == hira(scope()[wid]["reading"]):
+                        stats["syn same reading dropped"] += 1
                         continue
                     out[(wid, i, kind, o)] = {"sure": float(it["sure"]), "sense": it.get("sense"), "nuance": (it.get("nuance") or "").strip(), "own": own}
     return out, stats
