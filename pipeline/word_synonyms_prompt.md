@@ -47,6 +47,9 @@ These are **not** synonyms:
 - A related word: 医者 for 病院, 食べる for 料理.
 - Another form of the same word: 美しさ for 美しい, 始まる for 始める
   (a transitive/intransitive pair is not a synonym).
+- A short form or a polite form of the same word: 金曜 for 金曜日, 訓 for
+  訓読み, 経済 for 経済学 when it only shortens it, お風呂 for 風呂,
+  見舞い for お見舞い, 余りに for 余り. They are just short or polite forms.
 - The same word in another spelling or kanji. 上る, 登る and 昇る all read
   のぼる: they are mix-ups, not synonyms. The candidates never include
   words read the same as the word.
@@ -55,6 +58,9 @@ These are **not** synonyms:
 下がる; 暑い ↔ 寒い; 開ける ↔ 閉める; 入口 ↔ 出口; 勝つ ↔ 負ける. These are
 not antonyms: a negative form (できる / できない), a mere contrast (猫 / 犬),
 or a word opposite only in a far, rare sense.
+
+**Pairs that differ by sex** count as antonyms: 祖父 ↔ 祖母, 少年 ↔ 少女,
+夫 ↔ 妻, 兄 ↔ 姉. Other pairs of the same kind do not (硬貨 / 紙幣).
 
 **Which sense of the other word.** Give the number of the other word's
 sense that matches (`sense`). For an offered word, it must be one of the

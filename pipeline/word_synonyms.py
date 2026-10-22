@@ -54,6 +54,7 @@ import proposals  # noqa: E402
 
 DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "word-synonyms")
 SOURCES = proposals.ROOT / "pipeline" / "data"
+WIKTIONARY = proposals.DRAFTS / "word-synonyms" / "wiktionary.json"  # whatever --drafts says
 
 SENSES = 8  # of a word's JMdict senses, at most this many
 OTHER_SENSES = 4  # of a candidate's senses, shown to tell which one is meant
@@ -204,13 +205,14 @@ def wiktionary() -> None:
                     if o != h and hira(scope()[o]["reading"]) != hira(scope()[h]["reading"]):
                         out[h][kind].setdefault(o, gloss)
     data = {str(h): {k: [[o, g] for o, g in v.items()] for k, v in d.items()} for h, d in out.items()}
-    _dump(DRAFTS / "wiktionary.json", data)
+    _dump(WIKTIONARY, data)
     print(f"{entries:,} Wiktionary entries with lists; {len(data):,} of our words get pairs:"
           f" {sum(len(d['syn']) for d in data.values()):,} synonyms, {sum(len(d['ant']) for d in data.values()):,} antonyms")
 
 
+@cache
 def wiktionary_pairs() -> dict[int, dict[str, set[int]]]:
-    return {int(h): {k: {o for o, _ in v} for k, v in d.items()} for h, d in _read(DRAFTS / "wiktionary.json").items()}
+    return {int(h): {k: {o for o, _ in v} for k, v in d.items()} for h, d in _read(WIKTIONARY).items()}
 
 
 # ---------------------------------------------------------------- candidates
@@ -273,6 +275,23 @@ def _jmdict_refs() -> dict[int, list[tuple[int, str, int | None, str]]]:
     return out
 
 
+WIKTIONARY_CANDIDATES = False  # prepare --wiktionary
+_POLITE = ("お", "ご", "御")
+_TAILS = ("日", "に", "と")  # 金曜/金曜日, 余り/余りに
+
+
+def same_word(a: int, b: int) -> bool:
+    """A short or polite form of the same word, which is no synonym (Dani, 2026-10-22):
+    風呂/お風呂, 見舞い/お見舞い, 金曜/金曜日, 余り/余りに."""
+    x, y = scope()[a], scope()[b]
+    for p, q in ((x, y), (y, x)):
+        for k in ("word", "reading"):
+            s, t = p[k], q[k]
+            if any(t == m + s for m in _POLITE) or any(t == s + m for m in _TAILS):
+                return True
+    return False
+
+
 def candidates(wid: int) -> tuple[list[int], list[int]]:
     """A word's synonym candidates (best first, every sense taking turns) and its antonym candidates."""
     words = scope()
@@ -281,7 +300,8 @@ def candidates(wid: int) -> tuple[list[int], list[int]]:
     idx = _phrase_index()
 
     def fine(o: int) -> bool:
-        return o != wid and o in words and hira(words[o]["reading"]) not in mine and words[o]["word"] not in mine
+        return (o != wid and o in words and hira(words[o]["reading"]) not in mine and words[o]["word"] not in mine
+                and not same_word(wid, o))
 
     per_sense: list[Counter] = [Counter() for _ in me["senses"][:SENSES]]
     for i, (_, _, g) in enumerate(me["senses"][:SENSES]):
@@ -310,8 +330,13 @@ def candidates(wid: int) -> tuple[list[int], list[int]]:
             for o in peers:
                 if fine(o):
                     wn[o] += 0.8 / math.sqrt(max(1, len(peers) - 1))
-    # Each sense in turn gives its next best; WordNet (no sense) takes a turn too.
+    # Each sense in turn gives its next best; WordNet (no sense) takes a turn too,
+    # and Wiktionary's list goes first when it is used (not in the pilot, which checked against it).
     lanes = [[o for o, _ in c.most_common()] for c in per_sense] + [[o for o, _ in wn.most_common()]]
+    if WIKTIONARY_CANDIDATES:
+        listed = wiktionary_pairs().get(wid, {})
+        lanes.insert(0, [o for o in sorted(listed.get("syn", ()), key=_rank) if fine(o)])
+        opposites = [o for o in sorted(listed.get("ant", ()), key=_rank) if fine(o)] + opposites
     picked: list[int] = []
     depth = 0
     while len(picked) < CANDIDATES and any(depth < len(lane) for lane in lanes):
@@ -354,12 +379,18 @@ def _entry(wid: int, rng: random.Random, shuffle: bool) -> dict:
     }
 
 
-def prepare(pilot: int, size: int, runs: list[str]) -> None:
-    """Batches for each run; a second call with new run names (another model) asks about the same words."""
+def prepare(pilot: int, size: int, runs: list[str], jlpt: bool = False, skip: list[Path] = ()) -> None:
+    """Batches for each run; a second call with new run names (another model) asks about the same words.
+    With `jlpt`: every JLPT word but those a folder in `skip` asked about."""
     if any(f for r in runs for f in IN.glob(f"{r}-*.json")):
         raise SystemExit(f"{IN} has batches for {runs} already")
     rng = random.Random(17)
-    if (DRAFTS / "pilot.json").exists():
+    if jlpt and not (DRAFTS / "pilot.json").exists():
+        done = {w for f in skip for w in _read(proposals.folders(f)[0] / "pilot.json")["words"]}
+        words = sorted(w for w, x in scope().items() if x["jlpt"] and w not in done)
+        words = rng.sample(words, len(words))  # levels mixed, so batches are alike
+        _dump(DRAFTS / "pilot.json", {"words": words})
+    elif (DRAFTS / "pilot.json").exists():
         words = _read(DRAFTS / "pilot.json")["words"]
         rng = random.Random(17 + len(list(IN.glob("*.json"))))
     else:
@@ -486,7 +517,8 @@ def _pairs(run: dict[int, list[dict]]) -> tuple[dict[tuple, dict], Counter]:
                             stats[f"{kind} own words not ours"] += 1
                             continue
                         o, own = found[0], True
-                    if o == wid:
+                    if o == wid or same_word(wid, o):
+                        stats[f"{kind} same word dropped"] += o != wid
                         continue
                     out[(wid, i, kind, o)] = {"sure": float(it["sure"]), "sense": it.get("sense"), "nuance": (it.get("nuance") or "").strip(), "own": own}
     return out, stats
@@ -681,7 +713,7 @@ def sample(n: int, bar: float) -> None:
 
 
 def main() -> int:
-    global DRAFTS, IN, OUT, RUNS
+    global DRAFTS, IN, OUT, RUNS, WIKTIONARY_CANDIDATES
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     proposals.drafts_arg(ap, "data/drafts/word-synonyms")
@@ -689,6 +721,9 @@ def main() -> int:
     sub.add_parser("wiktionary")
     p = sub.add_parser("prepare")
     p.add_argument("--pilot", type=int, default=200, help="this many JLPT words")
+    p.add_argument("--jlpt", action="store_true", help="every JLPT word, instead of a pilot")
+    p.add_argument("--skip", type=Path, action="append", default=[], help="a drafts folder whose words are done")
+    p.add_argument("--wiktionary", action="store_true", help="Wiktionary's lists among the candidates")
     p.add_argument("--size", type=int, default=40, help="words per batch")
     p.add_argument("--runs", default="A,B")
     ck = sub.add_parser("check")
@@ -710,7 +745,8 @@ def main() -> int:
     if args.cmd == "wiktionary":
         wiktionary()
     elif args.cmd == "prepare":
-        prepare(args.pilot, args.size, args.runs.split(","))
+        WIKTIONARY_CANDIDATES = args.wiktionary
+        prepare(args.pilot, args.size, args.runs.split(","), args.jlpt, args.skip)
     elif args.cmd == "check":
         check(args.batch)
     elif args.cmd == "skeptic-prepare":

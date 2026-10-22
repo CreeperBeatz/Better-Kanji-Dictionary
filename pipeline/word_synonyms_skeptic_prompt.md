@@ -20,11 +20,14 @@ For each pair, judge with your own knowledge of Japanese:
      sense, in at least some common sentences, with nearly the same meaning.
      It is `wrong` if it is a broader or narrower word (果物 / りんご), a word
      of the same kind (犬 / 猫), only a related word (医者 / 病院), another
-     form of the same word (始まる / 始める), or fits only another sense of
-     the word.
+     form of the same word (始まる / 始める), a short or polite form of the
+     same word (金曜 / 金曜日, 訓 / 訓読み, お風呂 / 風呂), or fits only
+     another sense of the word.
    - An antonym: the plain opposite in this sense (勝つ / 負ける). It is
      `wrong` for a negative form, a mere contrast, or an opposite only in
      another sense.
+     Pairs that differ by sex are antonyms here (祖父 / 祖母, 少年 / 少女);
+     other pairs of the same kind are not (硬貨 / 紙幣).
    - `doubtful`: a careful dictionary might list it, but it would mislead a
      learner more than help, or it is a stretch.
 2. **Which sense of `other`** matches: give its number.
