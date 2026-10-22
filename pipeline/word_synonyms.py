@@ -125,6 +125,8 @@ def forms() -> dict[str, list[tuple[int, str]]]:
 def resolve(text: str, reading: str | None = None, best: bool = True) -> list[int]:
     """Our words for a written form (and reading, when known): the best one, or all that match."""
     text = (text or "").strip().strip("【】[]「」")
+    if text not in forms() and text.endswith("する") and len(text) > 2:  # 称賛する: JMdict files the noun
+        text, reading = text[:-2], reading[:-2] if reading and reading.endswith("する") else reading
     found = forms().get(text) or []
     if reading:
         same = [x for x in found if x[1] == hira(reading)]
@@ -527,11 +529,12 @@ def _key(k: tuple) -> str:
 
 
 def skeptic_prepare(size: int) -> None:
+    """Batches of the pairs both runs give at SKEPTIC_BAR that no earlier batch of this run pair holds."""
     sin, _ = _sk_folders()
-    if any(sin.glob("*.json")):
-        raise SystemExit(f"{sin} has batches already")
+    earlier = sorted(sin.glob(f"{_sk_name()}-*.json"))
+    asked = {p["key"] for f in earlier for p in _read(f)["pairs"]}
     merged, _ = combine(RUNS)
-    keys = sorted((k for k, v in merged.items() if v["both"] >= SKEPTIC_BAR), key=lambda k: (k[0], k[1], k[2]))
+    keys = sorted((k for k, v in merged.items() if v["both"] >= SKEPTIC_BAR and _key(k) not in asked), key=lambda k: (k[0], k[1], k[2]))
     items = []
     for k in keys:
         wid, i, kind, o = k
@@ -544,9 +547,9 @@ def skeptic_prepare(size: int) -> None:
             "nuances": list(dict.fromkeys(v[r]["nuance"] for r in RUNS if v[r]["nuance"])),
         })
     for b in range(0, len(items), size):
-        name = f"{_sk_name()}-{b // size:03d}"
+        name = f"{_sk_name()}-{len(earlier) + b // size:03d}"
         _dump(sin / f"{name}.json", {"batch": name, "pairs": items[b:b + size]})
-    print(f"{len(items)} pairs (both runs >= {SKEPTIC_BAR}) in {math.ceil(len(items) / size)} batches")
+    print(f"{len(items)} new pairs (both runs >= {SKEPTIC_BAR}) in {math.ceil(len(items) / size)} batches; {len(asked)} asked before")
 
 
 def read_skeptic(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
