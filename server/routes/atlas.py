@@ -15,10 +15,6 @@ Scopes follow the graph filter:
 `?by=meaning` is the same scope laid out by meaning instead (Dani, 2026-10-18):
 kanji only -- parts like 氵 have no meanings to place them by -- each where
 data/meaning_map.json puts it (pipeline/meaning_map.py), with its cluster.
-
-GET /api/map/{scope}/near/{char} is the Explore view's: a kanji and its
-nearest kanji in that scope by meaning (data/meaning_near.json), each with how
-near it is, the angle it sits at round the kanji, and what the map shows of it.
 """
 
 import functools
@@ -37,7 +33,6 @@ SCOPES = {"5", "4", "3", "2", "1", "common", "all"}
 LOOKALIKES = 3
 
 MEANING_MAP = Path(__file__).parent.parent.parent / "data" / "meaning_map.json"
-MEANING_NEAR = MEANING_MAP.with_name("meaning_near.json")
 
 # Keyed on the override set, so fixing a decomposition invalidates it.
 _cache: dict[tuple[str, str], dict] = {}
@@ -149,11 +144,6 @@ def _meaning_map() -> dict:
     return json.loads(MEANING_MAP.read_text(encoding="utf-8"))
 
 
-@functools.cache
-def _meaning_near() -> dict:
-    return json.loads(MEANING_NEAR.read_text(encoding="utf-8"))["scopes"]
-
-
 def _build_meaning(scope: str, parts: dict) -> dict:
     """The parts map's scope, cut down to the kanji the meaning map places.
 
@@ -183,7 +173,8 @@ def _build_meaning(scope: str, parts: dict) -> dict:
     return out
 
 
-def _scope(scope: str, by: str) -> dict:
+@router.get("/{scope}")
+def get_map(scope: str, by: str = "parts") -> dict:
     if scope not in SCOPES:
         raise HTTPException(400, f"scope must be one of {sorted(SCOPES)}")
     if by not in ("parts", "meaning"):
@@ -197,38 +188,3 @@ def _scope(scope: str, by: str) -> dict:
     if mkey not in _cache:
         _cache[mkey] = _build_meaning(scope, _cache[key])
     return _cache[mkey]
-
-
-@router.get("/{scope}")
-def get_map(scope: str, by: str = "parts") -> dict:
-    return _scope(scope, by)
-
-
-@router.get("/{scope}/near/{char}")
-def get_near(scope: str, char: str) -> dict:
-    m = _scope(scope, "meaning")
-    near = _meaning_near()[scope].get(char)
-    if near is None:
-        raise HTTPException(404, f"{char} is not on the {scope} map by meaning")
-    index = {c: i for i, c in enumerate(m["chars"])}
-
-    def node(c: str) -> dict:
-        i = index[c]
-        k = m["cluster"][i]
-        return {
-            "char": c,
-            "freq": m["freq"][i],
-            "jlpt": m["jlpt"][i],
-            "joyo": m["joyo"][i],
-            "meaning": m["meaning"][i],
-            "meaningBg": m["meaningBg"][i],
-            "group": {"en": m["clusters"][k]["en"], "bg": m["clusters"][k]["bg"]} if k >= 0 else None,
-        }
-
-    chars, sims, angles = near
-    return {
-        "scope": scope,
-        "centre": node(char),
-        # nearest first; sim is the cosine of the two kanji's vectors, angle in degrees
-        "near": [{**node(c), "sim": s / 1000, "angle": a} for c, s, a in zip(chars, sims, angles) if c in index],
-    }

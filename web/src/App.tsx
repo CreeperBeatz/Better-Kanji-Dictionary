@@ -19,7 +19,7 @@ import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
 import { GraphDetail, LevelFilter, MapArrange, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
-import { MeaningExplore } from './map/MeaningExplore'
+import { GroupExplore } from './map/GroupExplore'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
@@ -815,7 +815,7 @@ export function App() {
 
   // A character picked on the map is previewed over it, not opened.
   const [mapCard, setMapCard] = useState<string | null>(null)
-  // By meaning: the kanji the Explore view started from, null while it is shut.
+  // By meaning: the kanji whose group is being explored, null while that view is shut.
   const [exploring, setExploring] = useState<string | null>(null)
   useEffect(() => {
     if (view !== 'map') {
@@ -2783,7 +2783,7 @@ export function App() {
                       onClose={() => setMapCard(null)}
                       group={group}
                       onExplore={
-                        group !== undefined
+                        group
                           ? () => {
                               setExploring(mapCard)
                               setMapCard(null)
@@ -2798,7 +2798,7 @@ export function App() {
               />
               </Suspense>
               {exploring && mapMeaning && (
-                <MeaningExplore key={exploring} scope={scopeOf(filter)} char={exploring} onClose={closeExplore} onOpen={seeInDictionary} />
+                <GroupExplore key={exploring} scope={scopeOf(filter)} char={exploring} onClose={closeExplore} onOpen={seeInDictionary} />
               )}
             </div>
           )}

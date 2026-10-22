@@ -14,8 +14,8 @@ import type { Group } from './mapData'
 const S = strings(
   {
     open: 'See in Dictionary',
-    explore: 'Explore',
-    exploreTitle: 'Show the kanji nearest in meaning round it',
+    explore: 'Explore group',
+    exploreTitle: 'Show its group on its own, to move round and zoom in',
     group: 'Group',
     noGroup: 'in no group',
     close: 'Close',
@@ -25,8 +25,8 @@ const S = strings(
   },
   {
     open: 'Вижте в речника',
-    explore: 'Разгледайте',
-    exploreTitle: 'Покажете най-близките по значение канджи около него',
+    explore: 'Разгледайте групата',
+    exploreTitle: 'Покажете групата му отделно, за да я разгледате и приближите',
     group: 'Група',
     noGroup: 'в никоя група',
     close: 'Затворете',
@@ -48,7 +48,7 @@ export function MapCard({
   onClose: () => void
   /** By meaning: the cluster lit on the map, null when it is in none; undefined by parts. */
   group?: Group | null
-  /** By meaning: open the Explore view on this kanji. */
+  /** By meaning, for a kanji in a group: explore that group. */
   onExplore?: () => void
 }) {
   const lang = useLang()
