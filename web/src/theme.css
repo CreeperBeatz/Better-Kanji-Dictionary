@@ -4138,17 +4138,11 @@ button.usage-head:focus-visible .usage-spelling {
   }
 }
 
-/* The lit cluster on the map by meaning: its colour, its name, and a way out. */
+/* The lit cluster on the map by meaning: its name, and a way out. */
 .map-highlight {
   gap: 8px;
   padding: 4px 6px 4px 12px;
   color: var(--paper);
-}
-
-.map-highlight-swatch {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
 }
 
 .map-highlight button {

@@ -15,14 +15,12 @@
  * Clicking a character flies to it and makes it the focus; clicking the focus
  * again opens it in the focus view. Clicking empty space clears the focus.
  *
- * By meaning, each cluster of kanji has its own colour and a name, the way a
- * map names countries from far out and towns up close: zoomed out the map
- * shows its regions' names, zoomed in its clusters'.
- *
- * Double-clicking a kanji there lights its cluster: the other clusters fade in
- * stages by how near they are in meaning (pipeline/meaning_map.py `near`), so
- * the clusters close to it stay readable and the rest go grey. A click on the selected kanji opens it only once DOUBLE_MS has passed
- * without a second click.
+ * By meaning, the map is coloured as by parts and carries no names. Double-
+ * clicking a kanji there (or the card's Focus) lights its cluster and names
+ * it: the other clusters fade in stages by how near they are in meaning
+ * (pipeline/meaning_map.py `near`), so the clusters close to it stay readable
+ * and the rest all but vanish. A click on the selected kanji opens it only
+ * once DOUBLE_MS has passed without a second click.
  */
 
 import { interpolateZoom } from 'd3-interpolate'
@@ -85,18 +83,6 @@ const ALPHA_STEPS = 12
 const TAU = Math.PI * 2
 const MINCHO = '"Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif'
 const SANS = 'system-ui, -apple-system, "Segoe UI", sans-serif'
-/**
- * Which names show follows how big a typical kanji is on screen (its radius in
- * px), not the zoom: N5's 80 kanji are legible at a zoom where the full map's
- * are dots. Region names while kanji are dots, gone by REGIONS_UNTIL...
- */
-const REGIONS_FULL = 3
-const REGIONS_UNTIL = 5
-/** ...cluster names from there, until the glyphs alone are easy to read. */
-const CLUSTERS_FROM = 3.5
-const CLUSTERS_FULL = 5
-const CLUSTERS_FADE = 22
-const CLUSTERS_UNTIL = 32
 /** A second click within this long, and this close, makes a double-click. */
 const DOUBLE_MS = 300
 const DOUBLE_PX = 12
@@ -104,17 +90,8 @@ const DOUBLE_PX = 12
 const STAGE_ALPHA = [0.08, 0.34, 0.68, 1]
 /** The same for distant dots, which are faint to begin with: these replace their opacity. */
 const STAGE_DOT = [0.07, 0.5, 0.85, 1]
-/** Names of the other clusters while one is lit. */
-const UNLIT_LABEL = 0.12
-
-/** A cluster needs this many kanji on the map to be named there, a region this many. */
-const CLUSTER_NAMED = 3
-const REGION_NAMED = 8
-
-/** A light colour per cluster, readable on the dark plates; neighbours differ by the golden angle. */
-function groupColour(k: number): string {
-  return `hsl(${Math.round((k * 137.508) % 360)} 52% 72%)`
-}
+/** Between the lit cluster's bottom and its name, in px. */
+const LIT_NAME_GAP = 10
 
 // The last finished layout seeds the next scope, so switching N4 -> N3 grows
 // the map around where things already were instead of reshuffling it.
@@ -182,7 +159,7 @@ const S = strings(
     legendSizeMeaning: 'larger is more frequent',
     legendLight: 'double-click a kanji to light up its group',
     unlight: 'Show all groups',
-    legendNearMeaning: 'nearby kanji mean related things; a colour is a group of them, named as you zoom',
+    legendNearMeaning: 'nearby kanji mean related things',
     showParts: 'show on the parts map',
   },
   {
@@ -217,7 +194,7 @@ const S = strings(
     legendSizeMeaning: 'по-големият е по-чест',
     legendLight: 'кликнете два пъти върху канджи, за да осветите групата му',
     unlight: 'Покажете всички групи',
-    legendNearMeaning: 'близките канджи имат сродни значения; цветът е група от тях, с име при приближаване',
+    legendNearMeaning: 'близките канджи имат сродни значения',
     showParts: 'покажете на картата по части',
   },
 )
@@ -266,13 +243,11 @@ function createState() {
     near: new Set<number>(),
     nearOf: -1,
     nearData: null as MapData | null,
-    look: null as Look | null,
-    lookOf: null as MapData | null,
-    /** By meaning: the names, placed for the current layout. */
-    labels: [] as Label[],
-    labelsOf: null as Float32Array | null,
-    /** the median node radius, which label detail is measured against */
-    medSize: 1,
+    /** colour class per node: 0 jōyō target, 1 other target, 2 part */
+    cls: null as Uint8Array | null,
+    clsOf: null as MapData | null,
+    /** where the lit cluster's name goes, in world units, for this layout */
+    litName: null as null | { k: number; pos: Float32Array; x: number; bottom: number },
     lang: 'en' as 'en' | 'bg',
     /** the lit cluster, -1 for none, and the stage of every node for it */
     lit: -1,
@@ -327,148 +302,54 @@ function placeCard(s: MapState, ox: number, oy: number, k: number) {
 
 type MapState = ReturnType<typeof createState>
 
-/**
- * How each node is coloured: a class per node, indexing `colors` (dots) and
- * `styles` (sprites). By parts: 0 jōyō target, 1 other target, 2 part. By
- * meaning: 0 in no cluster, 1 + its cluster otherwise.
- */
-interface Look {
-  cls: Uint16Array
-  colors: string[]
-  styles: SpriteStyle[]
-}
-
-function looks(s: MapState, d: MapData): Look {
-  if (s.lookOf === d && s.look) return s.look
-  const c = (s.colors ??= palette())
-  const st = (s.styles ??= spriteStyles(c))
-  const cls = new Uint16Array(d.n)
-  let look: Look
-  if (d.cluster) {
-    const groups = d.clusters.map((_, k) => groupColour(k))
-    look = {
-      cls,
-      colors: [c.paper, ...groups],
-      styles: [st.paper, ...groups.map((g, k) => ({ key: `g${k}`, plate: c.sumi, stroke: c.rule, glyph: g, font: MINCHO }))],
-    }
-    for (let i = 0; i < d.n; i++) cls[i] = d.cluster[i] >= 0 ? d.cluster[i] + 1 : 0
-  } else {
-    look = { cls, colors: [c.paper, c.muted, c.ai], styles: [st.paper, st.muted, st.part] }
+function classes(s: MapState, d: MapData): Uint8Array {
+  if (s.clsOf !== d || !s.cls) {
+    const cls = new Uint8Array(d.n)
     for (let i = 0; i < d.n; i++) cls[i] = d.target[i] ? (d.joyo[i] ? 0 : 1) : 2
+    s.cls = cls
+    s.clsOf = d
   }
-  s.look = look
-  s.lookOf = d
-  if (s.bins.length < look.colors.length * ALPHA_STEPS) {
-    s.bins = Array.from({ length: look.colors.length * ALPHA_STEPS }, () => [] as number[])
-  }
-  return look
-}
-
-/** A region's or cluster's name, at its most central kanji. */
-interface Label {
-  region: boolean
-  /** the cluster named, -1 for a region */
-  cluster: number
-  /** kanji of it on this map: the bigger names win a clash */
-  n: number
-  x: number
-  y: number
-  en: string
-  bg: string
-  color: string
+  return s.cls
 }
 
 /**
- * Each name goes on its group's medoid -- the member nearest all the others --
- * rather than the centroid, which for a group in two pieces lands in neither.
+ * The lit cluster's name, centred under it -- above it is where the focus's
+ * card floats. A few members can sit far from the rest, so "under" is the 90th
+ * percentile of their bottoms and the middle their median x, not the extremes.
  */
-function placeLabels(d: MapData, pos: Float32Array, c: ReturnType<typeof palette>): Label[] {
-  if (!d.cluster) return []
-  const byCluster = new Map<number, number[]>()
-  const byRegion = new Map<number, number[]>()
-  for (let i = 0; i < d.n; i++) {
-    const k = d.cluster[i]
-    if (k < 0) continue
-    const r = d.clusters[k].region
-    if (!byCluster.has(k)) byCluster.set(k, [])
-    if (!byRegion.has(r)) byRegion.set(r, [])
-    byCluster.get(k)!.push(i)
-    byRegion.get(r)!.push(i)
-  }
-  const medoid = (ids: number[]) => {
-    let best = ids[0]
-    let bestSum = Infinity
-    for (const a of ids) {
-      let sum = 0
-      for (const b of ids) sum += Math.hypot(pos[2 * a] - pos[2 * b], pos[2 * a + 1] - pos[2 * b + 1])
-      if (sum < bestSum) {
-        bestSum = sum
-        best = a
-      }
-    }
-    return best
-  }
-  const out: Label[] = []
-  for (const [r, ids] of byRegion) {
-    if (ids.length < REGION_NAMED) continue
-    const m = medoid(ids)
-    out.push({ region: true, cluster: -1, n: ids.length, x: pos[2 * m], y: pos[2 * m + 1], ...d.regions[r], color: c.paper })
-  }
-  for (const [k, ids] of byCluster) {
-    if (ids.length < CLUSTER_NAMED) continue
-    const m = medoid(ids)
-    const { en, bg } = d.clusters[k]
-    out.push({ region: false, cluster: k, n: ids.length, x: pos[2 * m], y: pos[2 * m + 1], en, bg, color: groupColour(k) })
-  }
-  return out.sort((a, b) => b.n - a.n)
-}
-
-/** The names that fit at this zoom, biggest groups first, none over another. */
-function drawLabels(s: MapState, ctx: CanvasRenderingContext2D, ox: number, oy: number, k: number) {
+function drawLitName(s: MapState, ctx: CanvasRenderingContext2D, ox: number, oy: number, k: number) {
   const d = s.data
   const pos = s.pos
   const c = s.colors
-  if (!d?.cluster || !pos || !c) return
-  if (s.labelsOf !== pos) {
-    s.labels = placeLabels(d, pos, c)
-    s.labelsOf = pos
+  const lit = s.lit
+  if (!d?.cluster || !pos || !c || lit < 0 || s.stageOf !== d) return
+  if (s.litName?.k !== lit || s.litName.pos !== pos) {
+    const xs: number[] = []
+    const bottoms: number[] = []
+    for (let i = 0; i < d.n; i++) {
+      if (d.cluster[i] !== lit) continue
+      xs.push(pos[2 * i])
+      bottoms.push(pos[2 * i + 1] + d.size[i])
+    }
+    xs.sort((a, b) => a - b)
+    bottoms.sort((a, b) => a - b)
+    s.litName = { k: lit, pos, x: xs[xs.length >> 1] ?? NaN, bottom: bottoms[Math.floor(bottoms.length * 0.9)] ?? NaN }
   }
-  const z = s.medSize * k
-  const ramp = (v: number, from: number, to: number) => Math.max(0, Math.min(1, (v - from) / (to - from)))
-  const regionAlpha = 1 - ramp(z, REGIONS_FULL, REGIONS_UNTIL)
-  const clusterAlpha = ramp(z, CLUSTERS_FROM, CLUSTERS_FULL) * (1 - ramp(z, CLUSTERS_FADE, CLUSTERS_UNTIL))
-  const taken: [number, number, number, number][] = []
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.lineJoin = 'round'
-  const lit = s.lit >= 0 && s.stageOf === d ? s.lit : -1
-  const near = lit >= 0 ? d.clusters[lit].near : ''
-  const stageOf = (l: Label) => (l.cluster >= 0 && near ? near.charCodeAt(l.cluster) - 48 : 0)
-  // The lit cluster's name first, whatever the zoom, then its neighbours', so nothing crowds them out.
-  const order = lit >= 0 ? [...s.labels].sort((a, b) => stageOf(b) - stageOf(a)) : s.labels
-  for (const l of order) {
-    let alpha = l.region ? regionAlpha : clusterAlpha
-    if (lit >= 0) alpha = l.cluster === lit ? 1 : alpha * Math.max(UNLIT_LABEL, STAGE_ALPHA[stageOf(l)])
-    if (alpha < 0.02) continue
-    const x = l.x * k + ox
-    const y = l.y * k + oy
-    if (x < -200 || x > s.w + 200 || y < -40 || y > s.h + 40) continue
-    const name = s.lang === 'bg' ? l.bg : l.en
-    const text = l.region ? name.toUpperCase() : name
-    ctx.font = l.region ? `600 13px ${SANS}` : `500 12.5px ${SANS}`
-    const w = ctx.measureText(text).width + 8
-    const h = l.region ? 20 : 18
-    const box: [number, number, number, number] = [x - w / 2, y - h / 2, x + w / 2, y + h / 2]
-    if (taken.some((t) => box[0] < t[2] && box[2] > t[0] && box[1] < t[3] && box[3] > t[1])) continue
-    taken.push(box)
-    ctx.globalAlpha = alpha
-    ctx.lineWidth = 4
-    ctx.strokeStyle = c.sumi
-    ctx.strokeText(text, x, y)
-    ctx.fillStyle = l.color
-    ctx.fillText(text, x, y)
-  }
+  const { x: wx, bottom } = s.litName
+  if (Number.isNaN(wx)) return
+  const x = wx * k + ox
+  const y = bottom * k + oy + LIT_NAME_GAP
+  const text = d.clusters[lit][s.lang]
   ctx.globalAlpha = 1
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'top'
+  ctx.lineJoin = 'round'
+  ctx.font = `600 14px ${SANS}`
+  ctx.lineWidth = 4
+  ctx.strokeStyle = c.sumi
+  ctx.strokeText(text, x, y)
+  ctx.fillStyle = c.paper
+  ctx.fillText(text, x, y)
 }
 
 function stopPrewarm(s: MapState) {
@@ -485,7 +366,9 @@ function startPrewarm(s: MapState) {
   stopPrewarm(s)
   const d = s.data
   if (!d || !fontLoaded) return
-  const { cls, styles: styleOf } = looks(s, d)
+  const styles = (s.styles ??= spriteStyles((s.colors ??= palette())))
+  const styleOf = [styles.paper, styles.muted, styles.part]
+  const cls = classes(s, d)
   const order = Array.from({ length: d.n }, (_, i) => i)
     .sort((a, b) => d.size[b] - d.size[a])
     .slice(0, atlas.capacity)
@@ -588,11 +471,13 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   }
   const near = s.near
 
-  const { cls, colors, styles: styleOf } = looks(s, d)
-  // While a cluster is lit, what is not related at all loses its colour too.
+  const cls = classes(s, d)
+  const colors = [c.paper, c.muted, c.ai]
+  const styles = (s.styles ??= spriteStyles(c))
+  const styleOf = [styles.paper, styles.muted, styles.part]
+  // While a cluster is lit, the others fade by how near they are to it.
   const stage = s.lit >= 0 && s.stageOf === d ? s.stage : null
   const dim = (i: number) => (stage ? STAGE_ALPHA[stage[i]] : 1)
-  const clsOf = (i: number) => (stage && stage[i] === 0 ? 0 : cls[i])
 
   // --- distant nodes as points, gathered into a handful of paths by colour
   // and (stepped) opacity, so the pass costs a few dozen fills rather than
@@ -606,7 +491,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
     const fade = r <= LABEL_FROM ? 1 : (LABEL_FULL - r) / (LABEL_FULL - LABEL_FROM)
     const alpha = (stage ? STAGE_DOT[stage[i]] : 0.28 + 0.6 * Math.min(1, r / LABEL_FROM)) * fade
     const q = Math.min(ALPHA_STEPS - 1, Math.floor(alpha * ALPHA_STEPS))
-    bins[clsOf(i) * ALPHA_STEPS + q].push(i)
+    bins[cls[i] * ALPHA_STEPS + q].push(i)
   }
   for (let b = 0; b < bins.length; b++) {
     const list = bins[b]
@@ -651,7 +536,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
 
   const glyph = (i: number, x: number, y: number, r: number, alpha: number) => {
     ctx.globalAlpha = alpha * dim(i)
-    const style = styleOf[clsOf(i)]
+    const style = styleOf[cls[i]]
     if (!atlas.draw(ctx, d.chars[i], style, x, y, r, dpr)) {
       // Text is the costly part; past the frame's budget the plate alone
       // holds the place and the glyph lands on the next frame.
@@ -675,8 +560,6 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
     if (!inView(i)) continue
     glyph(i, pos[2 * i] * k + ox, pos[2 * i + 1] * k + oy, Math.max(d.size[i] * k, 9), 1)
   }
-
-  drawLabels(s, ctx, ox, oy, k)
 
   // --- the focus: a vermilion seal, as in the focus view.
   if (f >= 0 && inView(f)) {
@@ -711,6 +594,8 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
     ctx.stroke()
   }
   ctx.globalAlpha = 1
+
+  drawLitName(s, ctx, ox, oy, k)
 
   // Sprites this frame lacked are rendered now that all drawing is done, and
   // the frame after picks them up.
@@ -900,7 +785,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
         s.hover = -1
         s.focus = -1
         s.maxSize = d.size.reduce((a, b) => Math.max(a, b), 1)
-        s.medSize = d.size.slice().sort()[d.n >> 1] ?? 1
         setCounts({ nodes: d.n, edges: d.edges.length / 2 })
         startPrewarm(s)
 
@@ -1279,7 +1163,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
 
       {phase === 'ready' && lit >= 0 && s.data?.clusters[lit] && (
         <div className="map-status map-highlight">
-          <span className="map-highlight-swatch" style={{ background: groupColour(lit) }} aria-hidden />
           {s.data.clusters[lit][lang === 'bg' ? 'bg' : 'en']}
           <button onClick={() => setLit(-1)} aria-label={t('unlight')} title={`${t('unlight')} (Esc)`}>
             ×
