@@ -277,7 +277,7 @@ def _jmdict_refs() -> dict[int, list[tuple[int, str, int | None, str]]]:
 
 WIKTIONARY_CANDIDATES = False  # prepare --wiktionary
 _POLITE = ("お", "ご", "御")
-_TAILS = ("日", "に", "と")  # 金曜/金曜日, 余り/余りに
+_TAILS = ("日", "に", "と", "的")  # 金曜/金曜日, 余り/余りに, 必然/必然的
 
 
 def same_word(a: int, b: int) -> bool:
