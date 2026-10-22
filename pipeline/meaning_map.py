@@ -6,6 +6,7 @@
     python pipeline/meaning_map.py adopt                 # a cluster for kanji in none, by their main meaning
     python pipeline/meaning_map.py near                  # how near every cluster is to every other
     python pipeline/meaning_map.py build                 # -> data/meaning_map.json, which the server serves
+    python pipeline/meaning_map.py explore               # -> data/meaning_near.json, each kanji's nearest by meaning
 
 Each kanji is embedded from its hero sentence and its meaning groups (label +
 about), as the page shows them, not from KANJIDIC's keywords: those are what put
@@ -37,6 +38,13 @@ double-click on a kanji lights its cluster, and the other clusters fade in
 stages by how close they are in meaning (Dani, 2026-10-18). It reads the
 clusters `embed` left, so it never renumbers them.
 
+`explore` lists, per scope, each kanji's EXPLORE nearest kanji in the vectors
+themselves, for the map's Explore view: the kanji in the middle, the nearest
+round it (Dani, 2026-10-22). The plane keeps only 45% of those, so the view
+reads them from here, not from the map. Each gets an angle: the neighbours'
+offsets from their mean, on their own two main axes, so neighbours alike in
+meaning sit on the same side.
+
 `texts` imports the server, so it runs in the project venv; `embed` needs torch,
 which the venv does not have.
 """
@@ -56,6 +64,8 @@ NEAR = OUT / "near.json"
 MAIN_VECTORS, ADOPTED = OUT / "main-vectors.npy", OUT / "adopted.json"
 ADOPT = 0.61  # the 10th percentile of members' similarity to their own cluster, by first groups
 MAP = ROOT / "data" / "meaning_map.json"
+NEAR_MAP = ROOT / "data" / "meaning_near.json"
+EXPLORE = 24  # neighbours per kanji in the Explore view
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
 REGIONS = 20  # the zoomed-out map's names
 
@@ -248,12 +258,49 @@ def build() -> None:
     print(f"{MAP}: {len(chars)} kanji, {n_clusters} clusters, {MAP.stat().st_size // 1024} KB")
 
 
+def explore() -> None:
+    """data/meaning_near.json: per scope, per kanji, its nearest in that scope, how near, and at what angle."""
+    import numpy as np
+
+    rows = json.loads(TEXTS.read_text(encoding="utf-8"))
+    vec = np.load(VECTORS)
+    assert len(vec) == len(rows), "vectors.npy no longer matches texts.json: run embed again"
+    out = {}
+    for name, idx in _scopes(rows).items():
+        idx = np.array(idx)
+        v = vec[idx]
+        sim = v @ v.T
+        np.fill_diagonal(sim, -1)
+        k = min(EXPLORE, len(idx) - 1)
+        scope = {}
+        for a in range(len(idx)):
+            nb = np.argsort(-sim[a])[:k]
+            off = v[nb] - v[nb].mean(0)
+            # The neighbours' two main axes of difference: an SVD of 24 rows is cheap.
+            _, _, axes = np.linalg.svd(off, full_matrices=False)
+            xy = off @ axes[:2].T
+            ang = (np.degrees(np.arctan2(xy[:, 1], xy[:, 0])).round().astype(int) % 360).tolist()
+            scope[rows[idx[a]]["char"]] = [
+                "".join(rows[idx[j]]["char"] for j in nb),
+                [int(round(float(sim[a, j]) * 1000)) for j in nb],
+                ang,
+            ]
+        out[name] = scope
+    NEAR_MAP.write_text(json.dumps({
+        "about": f"pipeline/meaning_map.py explore: {MODEL} over hero + meaning groups; per kanji "
+                 "[nearest kanji, cosine x1000, angle in degrees]",
+        "scopes": out,
+    }, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"{NEAR_MAP}: {sum(map(len, out.values()))} lists, {NEAR_MAP.stat().st_size // 1024} KB")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("texts", "embed", "adopt", "near", "build"):
+    for c in ("texts", "embed", "adopt", "near", "build", "explore"):
         sub.add_parser(c)
-    {"texts": texts, "embed": embed, "adopt": adopt, "near": near, "build": build}[ap.parse_args().cmd]()
+    {"texts": texts, "embed": embed, "adopt": adopt, "near": near, "build": build,
+     "explore": explore}[ap.parse_args().cmd]()
 
 
 if __name__ == "__main__":

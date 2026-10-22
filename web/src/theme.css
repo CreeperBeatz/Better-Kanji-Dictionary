@@ -4026,8 +4026,14 @@ button.usage-head:focus-visible .usage-spelling {
   font-size: calc(12px * var(--type));
 }
 
-.map-card-open {
+.map-card-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 14px;
+}
+
+.map-card-actions .see-components {
+  margin: 0;
 }
 
 /* By meaning: the group lit on the map, as the card's first section. */
@@ -4150,6 +4156,213 @@ button.usage-head:focus-visible .usage-spelling {
 @keyframes map-dots {
   to {
     background-position: -200% 0;
+  }
+}
+
+/* Explore by meaning: a kanji in the middle, its nearest in meaning round it. */
+/* Over the map, under the level filter and the meaning/parts switch. */
+.map-host:has(> .explore) {
+  isolation: isolate;
+}
+
+.explore {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  container-type: size;
+  overflow: hidden;
+  background: var(--sumi);
+}
+
+.explore-rings {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.explore-rings ellipse {
+  fill: none;
+  stroke: var(--rule);
+  stroke-dasharray: 2 6;
+}
+
+.explore-bar {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  z-index: 1;
+  /* the level filter and the meaning/parts switch stay in the top right */
+  max-width: calc(100% - 460px);
+}
+
+/* Too narrow for both in one row: the bar goes under them (MeaningExplore NARROW). */
+@container (max-width: 879px) {
+  .explore-bar {
+    top: 58px;
+    max-width: none;
+  }
+}
+
+.explore-title {
+  color: var(--muted);
+  font-size: calc(11px * var(--type));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.explore-back,
+.explore-x {
+  padding: 2px 8px;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-size: calc(17px * var(--type));
+  line-height: 1;
+  cursor: pointer;
+}
+
+.explore-back:disabled {
+  color: var(--rule-bright);
+  cursor: default;
+}
+
+.explore-back:not(:disabled):hover,
+.explore-x:hover {
+  color: var(--paper);
+}
+
+.explore-trail {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.explore-trail li + li::before {
+  content: '›';
+  margin: 0 4px;
+  color: var(--muted);
+}
+
+.explore-trail button {
+  padding: 0 2px;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  font-family: var(--mincho);
+  font-size: calc(18px * var(--type));
+  cursor: pointer;
+}
+
+.explore-trail button:hover {
+  color: var(--paper);
+}
+
+.explore-trail button[aria-current] {
+  color: var(--shu);
+  cursor: default;
+}
+
+.explore-open {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.explore-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* centred on its point: the glyph's middle, not the label's */
+  translate: -50% -32%;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--paper-dim);
+  cursor: pointer;
+  transition:
+    transform 520ms var(--ease),
+    color 200ms var(--ease);
+  animation: explore-in 360ms var(--ease) both;
+}
+
+@keyframes explore-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.explore-node[data-kin] {
+  color: var(--paper);
+}
+
+.explore-node:hover {
+  color: var(--paper);
+}
+
+.explore-glyph {
+  font-family: var(--mincho);
+  line-height: 1.05;
+  transition: font-size 520ms var(--ease);
+}
+
+.explore-node[data-middle] .explore-glyph {
+  color: var(--paper);
+  font-weight: 600;
+  padding: 10px 14px;
+  border: 1.5px solid var(--shu);
+  border-radius: 50%;
+  box-shadow: 0 0 40px rgba(208, 69, 43, 0.18);
+}
+
+.explore-meaning {
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--gothic);
+  font-size: calc(11.5px * var(--type));
+  color: var(--muted);
+}
+
+.explore-node[data-kin] .explore-meaning,
+.explore-node:hover .explore-meaning {
+  color: var(--paper-dim);
+}
+
+.explore-node[data-middle] .explore-meaning {
+  max-width: 180px;
+  margin-top: 6px;
+  font-size: calc(13.5px * var(--type));
+  color: var(--paper);
+}
+
+/* a fixed slot: a kanji in no group keeps the label where the others have it */
+.explore-group {
+  min-height: 1.3em;
+  font-size: calc(10.5px * var(--type));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .explore-node,
+  .explore-glyph {
+    transition: none;
+    animation: none;
   }
 }
 

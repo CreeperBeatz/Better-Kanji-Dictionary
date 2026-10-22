@@ -163,6 +163,28 @@ export interface MapResponse {
   regions?: { en: string; bg: string }[]
 }
 
+/** A kanji in the map's Explore view. */
+export interface NearKanji {
+  char: string
+  freq: number | null
+  jlpt: number | null
+  joyo: 0 | 1
+  meaning: string
+  meaningBg: string
+  /** its cluster on the map by meaning, null when it is in none */
+  group: { en: string; bg: string } | null
+}
+
+/** GET /api/map/{scope}/near/{char}: a kanji and its nearest in meaning, nearest first. */
+export interface NearResponse {
+  scope: string
+  centre: NearKanji
+  /** sim: the cosine of the two kanji's meaning vectors; angle: where round the centre, in degrees */
+  near: (NearKanji & { sim: number; angle: number })[]
+}
+
+const nearCache = new Map<string, Promise<NearResponse>>()
+
 export interface WordEntry {
   word: Word
   kanji: (KanjiNode & { curated: string | null })[]
@@ -1063,6 +1085,18 @@ export const api = {
 
   map: (scope: string, by: 'parts' | 'meaning' = 'parts') =>
     get<MapResponse>(`/api/map/${encodeURIComponent(scope)}${by === 'meaning' ? '?by=meaning' : ''}`),
+
+  /** Kept for the session: an Explore walk often goes back the way it came. */
+  mapNear: (scope: string, char: string): Promise<NearResponse> => {
+    const key = `${scope}:${char}`
+    let p = nearCache.get(key)
+    if (!p) {
+      p = get<NearResponse>(`/api/map/${encodeURIComponent(scope)}/near/${encodeURIComponent(char)}`)
+      p.catch(() => nearCache.delete(key))
+      nearCache.set(key, p)
+    }
+    return p
+  },
 
   /** Kept for the session: a character's page is opened again and again. */
   similar: Object.assign(
