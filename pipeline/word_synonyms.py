@@ -466,7 +466,7 @@ def _valid(entry, w: dict) -> list[dict] | str:
                 if key in seen:
                     return f"sense {i + 1} {kind}: {key} twice"
                 seen.add(key)
-                if it.get("id") == w["id"] or it.get("word") == w["word"]:
+                if it.get("id") == w["id"] or (it.get("word") == w["word"] and hira(it.get("reading") or "") == hira(w["reading"])):
                     return f"sense {i + 1} {kind}: the word itself"
     return entry
 
