@@ -4030,6 +4030,26 @@ button.usage-head:focus-visible .usage-spelling {
   margin-top: 14px;
 }
 
+/* The group lit on the map, as the card's first section: label and name as the facts under it. */
+.map-card-group {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: -14px -16px 12px;
+  padding: 9px 34px 9px 16px;
+  border-bottom: 1px solid var(--rule);
+  font-size: calc(13px * var(--type));
+}
+
+.map-card-group-label,
+.map-card-group-none {
+  color: var(--muted);
+}
+
+.map-card-group-name {
+  color: var(--paper);
+}
+
 /* ---------------------------------------------------------------- map */
 
 .map-host,

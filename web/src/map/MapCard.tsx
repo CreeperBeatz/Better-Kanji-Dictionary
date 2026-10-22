@@ -9,10 +9,13 @@ import { levelOf } from '../detail/DetailPanel'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { local } from '../local/local'
+import type { Group } from './mapData'
 
 const S = strings(
   {
     open: 'See in Dictionary',
+    group: 'Group',
+    noGroup: 'in no group',
     close: 'Close',
     on: 'On',
     kun: 'Kun',
@@ -20,6 +23,8 @@ const S = strings(
   },
   {
     open: 'Вижте в речника',
+    group: 'Група',
+    noGroup: 'в никоя група',
     close: 'Затворете',
     on: 'Он',
     kun: 'Кун',
@@ -27,7 +32,18 @@ const S = strings(
   },
 )
 
-export function MapCard({ char, onOpen, onClose }: { char: string; onOpen: () => void; onClose: () => void }) {
+export function MapCard({
+  char,
+  onOpen,
+  onClose,
+  group,
+}: {
+  char: string
+  onOpen: () => void
+  onClose: () => void
+  /** The cluster lit on the map, null when it is in none; undefined while the map loads. */
+  group?: Group | null
+}) {
   const lang = useLang()
   const t = S(lang)
   const [node, setNode] = useState<KanjiNode | null>(null)
@@ -58,6 +74,16 @@ export function MapCard({ char, onOpen, onClose }: { char: string; onOpen: () =>
       <button className="map-card-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
         ×
       </button>
+      {group !== undefined && (
+        <div className="map-card-group">
+          <span className="map-card-group-label">{t('group')}</span>
+          {group ? (
+            <span className="map-card-group-name">{group[lang === 'bg' ? 'bg' : 'en']}</span>
+          ) : (
+            <span className="map-card-group-none">{t('noGroup')}</span>
+          )}
+        </div>
+      )}
       <div className="map-card-head">
         <span className="map-card-glyph" lang="ja">
           {char}

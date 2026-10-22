@@ -140,18 +140,16 @@ export interface MapResponse {
   freq: (number | null)[]
   jlpt: (number | null)[]
   joyo: (0 | 1)[]
-  fanout: number[]
   strokes: (number | null)[]
   meaning: string[]
   /** The first Bulgarian meaning, or "" when there is none. */
   meaningBg: string[]
-  /** 1 = in the scope in its own right, 0 = pulled in only as a part */
-  target: (0 | 1)[]
-  /** flat parent,child index pairs */
-  edges: number[]
-  /** flat a,b index pairs of lookalikes, each pair once; they pull on the layout */
-  similar: number[]
-  counts: { nodes: number; targets: number; edges: number }
+  /** flat x,y per kanji, in the meaning map's own units */
+  xy: number[]
+  /** cluster id per kanji, -1 = in none */
+  cluster: number[]
+  /** near: a digit per cluster, how near it is to this one: 3 itself, 2 near, 1 related, 0 not */
+  clusters: { en: string; bg: string; near: string }[]
 }
 
 export interface WordEntry {
