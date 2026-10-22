@@ -1,0 +1,703 @@
+"""Synonyms and antonyms of words, one dictionary sense at a time.
+
+    python pipeline/word_synonyms.py wiktionary          # once: Wiktionary's lists, resolved to our words
+    python pipeline/word_synonyms.py prepare --pilot 200 [--size 40] [--runs A,B]
+    # one Opus subagent per in/<run>-*.json, each reading pipeline/word_synonyms_prompt.md
+    python pipeline/word_synonyms.py check [--batch A-000]
+    python pipeline/word_synonyms.py skeptic-prepare [--size 120]
+    # one Opus subagent per skeptic/in/*.json, each reading pipeline/word_synonyms_skeptic_prompt.md
+    python pipeline/word_synonyms.py check-skeptic [--batch S-000]
+    python pipeline/word_synonyms.py evaluate
+    python pipeline/word_synonyms.py sample [--n 30]    # sample.md, for Dani to judge
+
+A word sense's synonyms are other words a learner could use in its place, in
+that sense, with a **nuance**: one line on how they differ. Its antonyms are
+its plain opposites in that sense. Both point at a sense of the other word.
+Only words in scope (common or JLPT) are offered or kept.
+
+Candidates come from open data, with no language model (`candidates`):
+JMdict senses with the same English phrase (a rare phrase counts more),
+Japanese WordNet synsets, and JMdict's own cross-references (<xref>, <ant>).
+Words read the same as the word are left out: those are spellings or
+mix-ups (上る/登る), which the kanji page's mix-up block covers. A subagent
+picks among them and may add words of its own, which are looked up in JMdict.
+
+Wiktionary's synonym and antonym lists are **not** shown to the subagents,
+so `evaluate` can check against them blind. They are also the fallback: if
+the pilot is not good enough, only Wiktionary's pairs are used.
+
+What counts (`combine`): a pair both runs give for the same sense, each at
+least `bar` sure. `evaluate` reports several bars against the skeptic's
+verdicts and Wiktionary, to choose one.
+
+Drafts live in data/drafts/word-synonyms/ (untracked).
+"""
+
+from __future__ import annotations
+
+import argparse
+import gzip
+import json
+import math
+import random
+import re
+import sys
+from collections import Counter, defaultdict
+from functools import cache
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+import proposals  # noqa: E402
+
+DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "word-synonyms")
+SOURCES = proposals.ROOT / "pipeline" / "data"
+
+SENSES = 8  # of a word's JMdict senses, at most this many
+OTHER_SENSES = 4  # of a candidate's senses, shown to tell which one is meant
+GLOSS = 140  # characters of a sense's English
+CANDIDATES = 20  # synonym candidates per word
+OPPOSITES = 6  # antonym candidates per word
+MAX_SYN = 5  # per sense
+MAX_ANT = 3  # per sense
+NUANCE = 160  # characters
+DF_MAX = 80  # an English phrase more words share than this says nothing
+SYNSET_MAX = 25  # nor does a WordNet synset with more of our words than this
+BARS = (0.9, 0.8, 0.7, 0.6)
+SKEPTIC_BAR = 0.6  # pairs both runs give at least this sure go to the skeptic
+FAR = {"arch", "obs", "rare"}
+
+_KATA = str.maketrans({chr(c): chr(c - 0x60) for c in range(0x30A1, 0x30F7)})
+
+
+def hira(s: str) -> str:
+    return s.translate(_KATA)
+
+
+def _dump(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _read(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- our words
+
+
+@cache
+def scope() -> dict[int, dict]:
+    """Every common or JLPT word: headword, reading, rank, JLPT level, senses (all of them)."""
+    db = proposals.connect()
+    jlpt = dict(db.execute("SELECT word_id, MAX(level) FROM word_jlpt GROUP BY word_id"))
+    out = {
+        wid: {"id": wid, "word": head, "reading": reading, "common": common, "nf": nf or 99, "jlpt": jlpt.get(wid), "senses": []}
+        for wid, head, reading, common, nf in db.execute("SELECT id, headword, reading, common, nf FROM word")
+        if common or wid in jlpt
+    }
+    for wid, _, pos, misc, gloss in db.execute("SELECT word_id, ord, pos, misc, gloss FROM sense ORDER BY word_id, ord"):
+        if wid in out:
+            out[wid]["senses"].append((pos or "", misc or "", gloss))
+    return out
+
+
+def _rank(wid: int) -> tuple:
+    w = scope()[wid]
+    return (not w["common"], w["jlpt"] is None, w["nf"])
+
+
+@cache
+def forms() -> dict[str, list[tuple[int, str]]]:
+    """Written form (kanji or kana) -> the scope words written so, with their readings, best first."""
+    words = scope()
+    out: dict[str, list[tuple[int, str]]] = defaultdict(list)
+    for wid, text in proposals.connect().execute("SELECT word_id, text FROM word_form"):
+        if wid in words:
+            out[text].append((wid, hira(words[wid]["reading"])))
+    for w in words.values():  # the reading itself, for words written in kana
+        out[w["reading"]].append((w["id"], hira(w["reading"])))
+    return {t: sorted(set(v), key=lambda x: _rank(x[0])) for t, v in out.items()}
+
+
+def resolve(text: str, reading: str | None = None, best: bool = True) -> list[int]:
+    """Our words for a written form (and reading, when known): the best one, or all that match."""
+    text = (text or "").strip().strip("【】[]「」")
+    found = forms().get(text) or []
+    if reading:
+        same = [x for x in found if x[1] == hira(reading)]
+        found = same or ([] if not any(ch > "ヿ" for ch in text) else found)
+    ids = list(dict.fromkeys(w for w, _ in found))
+    return ids[:1] if best else ids
+
+
+def _short(gloss: str, n: int = GLOSS) -> str:
+    return gloss if len(gloss) <= n else gloss[:n].rsplit(";", 1)[0]
+
+
+def senses_of(wid: int, n: int = SENSES, chars: int = GLOSS) -> list[list]:
+    return [[i + 1, pos, misc, _short(g, chars)] for i, (pos, misc, g) in enumerate(scope()[wid]["senses"][:n])]
+
+
+def _brief(wid: int, n: int = OTHER_SENSES) -> dict:
+    w = scope()[wid]
+    return {"id": wid, "word": w["word"], "reading": w["reading"], "senses": [[s[0], s[1], s[3]] for s in senses_of(wid, n, 100)]}
+
+
+# ---------------------------------------------------------------- Wiktionary
+
+
+def _ruby_reading(text: str, ruby: list) -> str | None:
+    """美しい + [[美, うつく]] -> うつくしい; None without ruby (kana words need none)."""
+    if not ruby:
+        return text if not any(ch > "ヿ" for ch in text) else None
+    out, i = "", 0
+    for pair in ruby:
+        if len(pair) != 2:
+            return None
+        base, rt = pair
+        j = text.find(base, i)
+        if j < 0:
+            return None
+        out += text[i:j] + rt
+        i = j + len(base)
+    return out + text[i:]
+
+
+def wiktionary() -> None:
+    """Japanese entries' synonym and antonym lists, for our words, both ends resolved to our ids.
+
+    Writes wiktionary.json: word id -> {"syn": [[other id, Wiktionary sense or ""]], "ant": [...]}.
+    Junk in the lists ("see the following entry") resolves to nothing and drops out."""
+    words = forms()
+    out: dict[int, dict[str, dict[int, str]]] = defaultdict(lambda: {"syn": {}, "ant": {}})
+    raw = SOURCES / "raw-wiktextract-data.jsonl.gz"
+    entries = 0
+    for line in gzip.open(raw, "rt", encoding="utf-8"):
+        if '"lang_code": "ja"' not in line:
+            continue
+        e = json.loads(line)
+        if e.get("lang_code") != "ja" or e.get("word") not in words:
+            continue
+        canon = next((f for f in e.get("forms", []) if "canonical" in (f.get("tags") or [])), None)
+        reading = _ruby_reading(e["word"], canon.get("ruby") or []) if canon else None
+        heads = resolve(e["word"], reading, best=False)
+        if not heads:
+            continue
+        lists = [("syn", s, s.get("sense") or "") for s in e.get("synonyms", [])]
+        lists += [("ant", s, s.get("sense") or "") for s in e.get("antonyms", [])]
+        for sn in e.get("senses", []):
+            gloss = "; ".join(sn.get("glosses") or [])
+            lists += [("syn", s, gloss) for s in sn.get("synonyms", [])]
+            lists += [("ant", s, gloss) for s in sn.get("antonyms", [])]
+        if lists:
+            entries += 1
+        for kind, s, gloss in lists:
+            word = s.get("word") or ""
+            others = resolve(word, _ruby_reading(word, s.get("ruby") or []))
+            for h in heads:
+                for o in others:
+                    if o != h and hira(scope()[o]["reading"]) != hira(scope()[h]["reading"]):
+                        out[h][kind].setdefault(o, gloss)
+    data = {str(h): {k: [[o, g] for o, g in v.items()] for k, v in d.items()} for h, d in out.items()}
+    _dump(DRAFTS / "wiktionary.json", data)
+    print(f"{entries:,} Wiktionary entries with lists; {len(data):,} of our words get pairs:"
+          f" {sum(len(d['syn']) for d in data.values()):,} synonyms, {sum(len(d['ant']) for d in data.values()):,} antonyms")
+
+
+def wiktionary_pairs() -> dict[int, dict[str, set[int]]]:
+    return {int(h): {k: {o for o, _ in v} for k, v in d.items()} for h, d in _read(DRAFTS / "wiktionary.json").items()}
+
+
+# ---------------------------------------------------------------- candidates
+
+
+def _phrases(gloss: str) -> list[str]:
+    out = []
+    for p in gloss.split(";"):
+        p = re.sub(r"\([^)]*\)", "", p).lower()
+        p = re.sub(r"^(a|an|the) ", "", re.sub(r"\s+", " ", p).strip())
+        if len(p) > 1:
+            out.append(p)
+    return out
+
+
+@cache
+def _phrase_index() -> dict[str, set[tuple[int, int]]]:
+    idx: dict[str, set[tuple[int, int]]] = defaultdict(set)
+    for wid, w in scope().items():
+        for i, (_, _, g) in enumerate(w["senses"][:SENSES]):
+            for p in _phrases(g):
+                idx[p].add((wid, i))
+    return idx
+
+
+@cache
+def _wordnet() -> tuple[dict[str, set[str]], dict[str, set[int]]]:
+    """Lemma -> synsets, and synset -> our words (each lemma's best word)."""
+    lemma_sets: dict[str, set[str]] = defaultdict(set)
+    members: dict[str, set[int]] = defaultdict(set)
+    for line in (SOURCES / "wn-data-jpn.tab").open(encoding="utf-8"):
+        t = line.rstrip("\n").split("\t")
+        if len(t) < 3 or t[1] != "jpn:lemma":
+            continue
+        lemma_sets[t[2]].add(t[0])
+        for w in resolve(t[2]):
+            members[t[0]].add(w)
+    return lemma_sets, members
+
+
+@cache
+def _jmdict_refs() -> dict[int, list[tuple[int, str, int | None, str]]]:
+    """Word id -> (sense index, xref|ant, target word, target sense number) from JMdict."""
+    words = scope()
+    out: dict[int, list] = defaultdict(list)
+    text = gzip.open(SOURCES / "JMdict_e.gz", "rt", encoding="utf-8").read()
+    for m in re.finditer(r"<entry>.*?</entry>", text, re.S):
+        e = m.group(0)
+        wid = int(re.search(r"<ent_seq>(\d+)", e).group(1))
+        if wid not in words:
+            continue
+        for i, s in enumerate(re.findall(r"<sense>.*?</sense>", e, re.S)):
+            for kind, ref in re.findall(r"<(xref|ant)>([^<]*)</\1>", s):
+                parts = ref.split("・")
+                n = int(parts[-1]) if parts[-1].isdigit() else None
+                parts = [p for p in parts if not p.isdigit()]
+                targets = resolve(parts[0], parts[1] if len(parts) > 1 else None)
+                for t in targets:
+                    out[wid].append((i, kind, t, n))
+    return out
+
+
+def candidates(wid: int) -> tuple[list[int], list[int]]:
+    """A word's synonym candidates (best first, every sense taking turns) and its antonym candidates."""
+    words = scope()
+    me = words[wid]
+    mine = {hira(me["reading"])} | {t for t, v in forms().items() if any(w == wid for w, _ in v)}
+    idx = _phrase_index()
+
+    def fine(o: int) -> bool:
+        return o != wid and o in words and hira(words[o]["reading"]) not in mine and words[o]["word"] not in mine
+
+    per_sense: list[Counter] = [Counter() for _ in me["senses"][:SENSES]]
+    for i, (_, _, g) in enumerate(me["senses"][:SENSES]):
+        for p in _phrases(g):
+            hits = {o for o, _ in idx.get(p, ())}
+            if len(hits) > DF_MAX:
+                continue
+            for o in hits:
+                if fine(o):
+                    per_sense[i][o] += 1 / math.log2(1 + len(hits))
+    opposites: list[int] = []
+    for i, kind, o, _ in _jmdict_refs().get(wid, ()):
+        if not fine(o) or i >= SENSES:
+            continue
+        if kind == "ant":
+            opposites.append(o)
+        else:
+            per_sense[i][o] += 0.6
+    lemma_sets, members = _wordnet()
+    wn = Counter()
+    for text in {me["word"], *(t for t in mine if any(ch > "ヿ" for ch in t) or me["word"] == me["reading"])}:
+        for s in lemma_sets.get(text, ()):
+            peers = members.get(s, set())
+            if len(peers) > SYNSET_MAX:
+                continue
+            for o in peers:
+                if fine(o):
+                    wn[o] += 0.8 / math.sqrt(max(1, len(peers) - 1))
+    # Each sense in turn gives its next best; WordNet (no sense) takes a turn too.
+    lanes = [[o for o, _ in c.most_common()] for c in per_sense] + [[o for o, _ in wn.most_common()]]
+    picked: list[int] = []
+    depth = 0
+    while len(picked) < CANDIDATES and any(depth < len(lane) for lane in lanes):
+        for lane in lanes:
+            if depth < len(lane) and lane[depth] not in picked and len(picked) < CANDIDATES:
+                picked.append(lane[depth])
+        depth += 1
+    return picked, list(dict.fromkeys(opposites))[:OPPOSITES]
+
+
+# ---------------------------------------------------------------- batches
+
+
+def _pilot_words(n: int, rng: random.Random) -> list[int]:
+    """JLPT words, the same number from each level; 60% of them with a Wiktionary synonym, to check against."""
+    wk = wiktionary_pairs()
+    by_level: dict[int, list[int]] = defaultdict(list)
+    for wid, w in scope().items():
+        if w["jlpt"]:
+            by_level[w["jlpt"]].append(wid)
+    out: list[int] = []
+    per = n // len(by_level)
+    for level in sorted(by_level, reverse=True):
+        pool = sorted(by_level[level])
+        listed = [w for w in pool if wk.get(w, {}).get("syn")]
+        rest = [w for w in pool if w not in set(listed)]
+        k = min(len(listed), round(per * 0.6))
+        out += rng.sample(listed, k) + rng.sample(rest, per - k)
+    return out
+
+
+def _entry(wid: int, rng: random.Random, shuffle: bool) -> dict:
+    w = scope()[wid]
+    syn, ant = candidates(wid)
+    if shuffle:
+        syn = rng.sample(syn, len(syn))
+    return {
+        "id": wid, "word": w["word"], "reading": w["reading"], "senses": senses_of(wid),
+        "candidates": [_brief(o) for o in syn], "opposites": [_brief(o) for o in ant],
+    }
+
+
+def prepare(pilot: int, size: int, runs: list[str]) -> None:
+    if any(IN.glob("*.json")):
+        raise SystemExit(f"{IN} has batches already: delete the folder's in/ and out/ to start again")
+    rng = random.Random(17)
+    words = _pilot_words(pilot, rng)
+    _dump(DRAFTS / "pilot.json", {"words": words})
+    stats = Counter()
+    for r, run in enumerate(runs):
+        order = words if r == 0 else rng.sample(words, len(words))
+        entries = [_entry(w, rng, shuffle=r > 0) for w in order]
+        for e in entries:
+            stats["candidates"] += len(e["candidates"])
+            stats["opposites"] += len(e["opposites"])
+        for b in range(0, len(entries), size):
+            name = f"{run}-{b // size:03d}"
+            _dump(IN / f"{name}.json", {"batch": name, "run": run, "words": entries[b:b + size]})
+    print(f"{len(words)} words, {len(runs)} runs, {math.ceil(len(words) / size)} batches each;"
+          f" {stats['candidates'] / len(words) / len(runs):.1f} candidates and {stats['opposites'] / len(words) / len(runs):.1f} opposites a word")
+
+
+# ---------------------------------------------------------------- reading the runs
+
+
+def _valid_item(it, offered: dict[int, int], own_ok: bool, kind: str) -> str | None:
+    if not isinstance(it, dict):
+        return "not an object"
+    if "id" in it:
+        if it["id"] not in offered:
+            return f"id {it['id']} was not offered"
+        n = it.get("sense")
+        if not isinstance(n, int) or not 1 <= n <= offered[it["id"]]:
+            return f"id {it['id']}: sense must be one of its numbers"
+    elif own_ok and isinstance(it.get("word"), str) and isinstance(it.get("reading"), str):
+        if "sense" in it and it["sense"] is not None and not isinstance(it["sense"], int):
+            return f"{it['word']}: sense must be a number or null"
+    else:
+        return "needs an offered id, or a word and reading of your own"
+    s = it.get("sure")
+    if not isinstance(s, (int, float)) or not 0 <= s <= 1:
+        return "sure must be 0.0 to 1.0"
+    nu = it.get("nuance")
+    if kind == "syn" and (not isinstance(nu, str) or not nu.strip()):
+        return "a synonym needs a nuance"
+    if nu is not None and (not isinstance(nu, str) or len(nu) > NUANCE):
+        return f"nuance must be text of at most {NUANCE} characters"
+    return None
+
+
+def _valid(entry, w: dict) -> list[dict] | str:
+    if not isinstance(entry, list) or len(entry) != len(w["senses"]):
+        return f"needs exactly {len(w['senses'])} sense objects"
+    syn = {c["id"]: len(scope()[c["id"]]["senses"][:SENSES]) for c in w["candidates"]}
+    ant = {c["id"]: len(scope()[c["id"]]["senses"][:SENSES]) for c in w["opposites"]}
+    for i, s in enumerate(entry):
+        if not isinstance(s, dict) or not isinstance(s.get("syn", []), list) or not isinstance(s.get("ant", []), list):
+            return f"sense {i + 1}: needs {{\"syn\": [...], \"ant\": [...]}}"
+        if len(s.get("syn", [])) > MAX_SYN or len(s.get("ant", [])) > MAX_ANT:
+            return f"sense {i + 1}: at most {MAX_SYN} synonyms and {MAX_ANT} antonyms"
+        for kind, offered in (("syn", syn), ("ant", {**ant, **syn})):
+            seen = set()
+            for it in s.get(kind, []):
+                bad = _valid_item(it, offered, True, kind)
+                if bad:
+                    return f"sense {i + 1} {kind}: {bad}"
+                key = it.get("id") or (it["word"], it["reading"])
+                if key in seen:
+                    return f"sense {i + 1} {kind}: {key} twice"
+                seen.add(key)
+                if it.get("id") == w["id"] or it.get("word") == w["word"]:
+                    return f"sense {i + 1} {kind}: the word itself"
+    return entry
+
+
+def _inputs(run: str) -> dict[int, dict]:
+    return {w["id"]: w for f in sorted(IN.glob(f"{run}-*.json")) for w in _read(f)["words"]}
+
+
+def read_run(run: str, only: str | None = None) -> tuple[dict[int, list[dict]], list[str]]:
+    good: dict[int, list[dict]] = {}
+    problems: list[str] = []
+    for inp, batch, got in proposals.outputs(IN, OUT, f"{only or run + '-*'}.json", problems):
+        answers = got.get("words") if isinstance(got, dict) else None
+        if not isinstance(answers, dict):
+            problems.append(f"{inp.stem}: no \"words\" object")
+            continue
+        for w in batch["words"]:
+            entry = answers.get(str(w["id"]))
+            if entry is None:
+                problems.append(f"{inp.stem}: {w['id']} {w['word']} missing")
+                continue
+            v = _valid(entry, w)
+            if isinstance(v, str):
+                problems.append(f"{inp.stem}: {w['id']} {w['word']}: {v}")
+            else:
+                good[w["id"]] = v
+        extra = set(answers) - {str(w["id"]) for w in batch["words"]}
+        if extra:
+            problems.append(f"{inp.stem}: ids not asked: {sorted(extra)[:5]}")
+    return good, problems
+
+
+def check(only: str | None = None) -> None:
+    runs = sorted({f.stem.split("-")[0] for f in IN.glob("*.json")}) if not only else [only.split("-")[0]]
+    for run in runs:
+        good, problems = read_run(run, only)
+        print(f"run {run}: {len(good)} words valid, {len(problems)} problems")
+        for p in problems[:30]:
+            print("   ", p)
+
+
+def _pairs(run: dict[int, list[dict]]) -> tuple[dict[tuple, dict], Counter]:
+    """(word, sense index, syn|ant, other word) -> what the run said; own words looked up."""
+    out: dict[tuple, dict] = {}
+    stats = Counter()
+    for wid, entry in run.items():
+        for i, s in enumerate(entry):
+            for kind in ("syn", "ant"):
+                for it in s.get(kind, []):
+                    if "id" in it:
+                        o, own = it["id"], False
+                    else:
+                        found = resolve(it["word"], it["reading"])
+                        stats[f"{kind} own words"] += 1
+                        if not found:
+                            stats[f"{kind} own words not ours"] += 1
+                            continue
+                        o, own = found[0], True
+                    if o == wid:
+                        continue
+                    out[(wid, i, kind, o)] = {"sure": float(it["sure"]), "sense": it.get("sense"), "nuance": (it.get("nuance") or "").strip(), "own": own}
+    return out, stats
+
+
+def combine(runs: tuple[str, ...] = ("A", "B")) -> tuple[dict[tuple, dict], Counter]:
+    """Every pair any run gave, with each run's answer under its name; `both` = min sure, 0 if a run left it out."""
+    got = [read_run(r)[0] for r in runs]
+    done = set.intersection(*(set(g) for g in got))
+    merged: dict[tuple, dict] = {}
+    stats = Counter()
+    for r, g in zip(runs, got):
+        pairs, st = _pairs({w: e for w, e in g.items() if w in done})
+        stats.update(st)
+        for k, v in pairs.items():
+            merged.setdefault(k, {})[r] = v
+    for v in merged.values():
+        v["both"] = min(v[r]["sure"] if r in v else 0.0 for r in runs)
+    stats["words"] = len(done)
+    return merged, stats
+
+
+# ---------------------------------------------------------------- skeptic
+
+
+def _sk_folders() -> tuple[Path, Path]:
+    return DRAFTS / "skeptic" / "in", DRAFTS / "skeptic" / "out"
+
+
+def _key(k: tuple) -> str:
+    wid, i, kind, o = k
+    return f"{wid}:{i + 1}:{kind}:{o}"
+
+
+def skeptic_prepare(size: int) -> None:
+    sin, _ = _sk_folders()
+    if any(sin.glob("*.json")):
+        raise SystemExit(f"{sin} has batches already")
+    merged, _ = combine()
+    keys = sorted((k for k, v in merged.items() if v["both"] >= SKEPTIC_BAR), key=lambda k: (k[0], k[1], k[2]))
+    items = []
+    for k in keys:
+        wid, i, kind, o = k
+        w = scope()[wid]
+        v = merged[k]
+        items.append({
+            "key": _key(k), "kind": "synonym" if kind == "syn" else "antonym",
+            "word": {"word": w["word"], "reading": w["reading"], "sense": senses_of(wid)[i]},
+            "other": _brief(o, SENSES),
+            "nuances": list(dict.fromkeys(v[r]["nuance"] for r in ("A", "B") if v[r]["nuance"])),
+        })
+    for b in range(0, len(items), size):
+        name = f"S-{b // size:03d}"
+        _dump(sin / f"{name}.json", {"batch": name, "pairs": items[b:b + size]})
+    print(f"{len(items)} pairs (both runs >= {SKEPTIC_BAR}) in {math.ceil(len(items) / size)} batches")
+
+
+def read_skeptic(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
+    sin, sout = _sk_folders()
+    good: dict[str, dict] = {}
+    problems: list[str] = []
+    for inp, batch, got in proposals.outputs(sin, sout, f"{only or 'S-*'}.json", problems):
+        answers = got.get("pairs") if isinstance(got, dict) else None
+        if not isinstance(answers, dict):
+            problems.append(f"{inp.stem}: no \"pairs\" object")
+            continue
+        for p in batch["pairs"]:
+            a = answers.get(p["key"])
+            n_other = len(p["other"]["senses"])
+            if not isinstance(a, dict) or a.get("verdict") not in ("ok", "doubtful", "wrong"):
+                problems.append(f"{inp.stem}: {p['key']} needs a verdict ok/doubtful/wrong")
+            elif a["verdict"] == "ok" and (not isinstance(a.get("sense"), int) or not 1 <= a["sense"] <= n_other):
+                problems.append(f"{inp.stem}: {p['key']} ok needs the other word's sense number")
+            elif a["verdict"] == "ok" and p["kind"] == "synonym" and (not isinstance(a.get("nuance"), str) or not a["nuance"].strip() or len(a["nuance"]) > NUANCE):
+                problems.append(f"{inp.stem}: {p['key']} ok synonym needs a nuance of at most {NUANCE} characters")
+            else:
+                good[p["key"]] = a
+    return good, problems
+
+
+def check_skeptic(only: str | None = None) -> None:
+    good, problems = read_skeptic(only)
+    print(f"skeptic: {len(good)} pairs valid, {len(problems)} problems")
+    for p in problems[:30]:
+        print("   ", p)
+
+
+# ---------------------------------------------------------------- evaluation
+
+
+def evaluate() -> None:
+    merged, stats = combine()
+    verdicts, _ = read_skeptic()
+    wk = wiktionary_pairs()
+    words = {k[0] for k in merged} | set(read_run("A")[0])
+    print(f"{stats['words']} words in both runs; own words: syn {stats['syn own words']} ({stats['syn own words not ours']} not ours),"
+          f" ant {stats['ant own words']} ({stats['ant own words not ours']} not ours)")
+    for kind in ("syn", "ant"):
+        print(f"\n{kind}:")
+        listed = {w: wk.get(w, {}).get(kind, set()) for w in words}
+        asked = sum(1 for s in listed.values() if s)
+        offered = {w: {c["id"] for c in _inputs("A")[w]["candidates"] + _inputs("A")[w]["opposites"]} for w in words if w in _inputs("A")}
+        hit_c = sum(len(s & offered.get(w, set())) for w, s in listed.items())
+        total = sum(len(s) for s in listed.values())
+        print(f"  Wiktionary: {asked} pilot words list {total} {kind} of ours; {hit_c} ({hit_c / max(total, 1):.0%}) were among the candidates")
+        any_run = {(k[0], k[3]) for k, v in merged.items() if k[2] == kind}
+        hit_any = sum(1 for w, s in listed.items() for o in s if (w, o) in any_run)
+        print(f"  any run gave {hit_any} ({hit_any / max(total, 1):.0%}) of Wiktionary's")
+        for bar in BARS:
+            kept = {k: v for k, v in merged.items() if k[2] == kind and v["both"] >= bar}
+            ok = [verdicts.get(_key(k), {}).get("verdict") for k in kept]
+            judged = [x for x in ok if x]
+            senses = {(k[0], k[1]) for k in kept}
+            pairs = {(k[0], k[3]) for k in kept}
+            hit = sum(1 for w, s in listed.items() for o in s if (w, o) in pairs)
+            own = sum(1 for v in kept.values() if any(v.get(r, {}).get("own") for r in ("A", "B")))
+            okc = Counter(judged)
+            print(f"  bar {bar}: {len(kept)} pairs over {len(senses)} senses of {len({k[0] for k in kept})} words; own words {own};"
+                  f" Wiktionary recall {hit / max(total, 1):.0%};"
+                  f" skeptic ok {okc['ok']}/{len(judged)} ({okc['ok'] / max(len(judged), 1):.0%}), doubtful {okc['doubtful']}, wrong {okc['wrong']}")
+    # Agreement between the runs at all.
+    for kind in ("syn", "ant"):
+        a = {k for k, v in merged.items() if k[2] == kind and "A" in v}
+        b = {k for k, v in merged.items() if k[2] == kind and "B" in v}
+        print(f"\n{kind} run agreement: A {len(a)}, B {len(b)}, both {len(a & b)} ({len(a & b) / max(len(a | b), 1):.0%} of either)")
+
+
+def final(bar: float) -> dict[int, list[dict]]:
+    """Word -> per sense {syn, ant}: pairs both runs gave at `bar`, the skeptic's ok taken (and its sense and nuance)."""
+    merged, _ = combine()
+    verdicts, _ = read_skeptic()
+    out: dict[int, list[dict]] = {}
+    for k, v in sorted(merged.items(), key=lambda kv: -kv[1]["both"]):
+        a = verdicts.get(_key(k))
+        if v["both"] < bar or not a or a["verdict"] != "ok":
+            continue
+        wid, i, kind, o = k
+        entry = out.setdefault(wid, [{"syn": [], "ant": []} for _ in senses_of(wid)])
+        entry[i][kind].append({"id": o, "sense": a["sense"], "nuance": (a.get("nuance") or "").strip(), "sure": v["both"]})
+    return out
+
+
+def sample(n: int, bar: float) -> None:
+    """sample.md: n pilot words, each sense with what would go live at `bar`, and what the skeptic held back."""
+    merged, _ = combine()
+    verdicts, _ = read_skeptic()
+    wk = wiktionary_pairs()
+    live = final(bar)
+    words = _read(DRAFTS / "pilot.json")["words"]
+    pick = sorted(random.Random(5).sample(words, min(n, len(words))), key=lambda w: -(scope()[w]["jlpt"] or 0))
+    lines = [f"# Word synonyms pilot: {len(pick)} words (bar {bar}, skeptic ok)", "",
+             "≈ synonym, ↔ antonym. *Held back* = both runs gave it, the skeptic did not say ok.",
+             "W = Wiktionary lists it too.", ""]
+    for wid in pick:
+        w = scope()[wid]
+        lines += [f"## {w['word']} 【{w['reading']}】 N{w['jlpt']}", ""]
+        mine = live.get(wid)
+        listed = wk.get(wid, {})
+        for i, (num, pos, misc, gloss) in enumerate(senses_of(wid)):
+            lines.append(f"{num}. *{gloss}*" + (f" ({misc})" if misc else ""))
+            for kind, mark in (("syn", "≈"), ("ant", "↔")):
+                for it in (mine[i][kind] if mine else []):
+                    o = scope()[it["id"]]
+                    og = scope()[it["id"]]["senses"][it["sense"] - 1][2] if it["sense"] <= len(o["senses"]) else ""
+                    wmark = " W" if it["id"] in listed.get(kind, set()) else ""
+                    lines.append(f"   - {mark} **{o['word']}** {o['reading']} ({_short(og, 60)}){wmark}: {it['nuance']}")
+                held = [k for k, v in merged.items() if k[0] == wid and k[1] == i and k[2] == kind and v["both"] >= bar
+                        and verdicts.get(_key(k), {}).get("verdict") not in (None, "ok")]
+                for k in held:
+                    o = scope()[k[3]]
+                    lines.append(f"   - ~~{mark} {o['word']} {o['reading']}~~ held back ({verdicts[_key(k)]['verdict']}: {verdicts[_key(k)].get('why', '')})")
+        missed = [o for kind in ("syn", "ant") for o in listed.get(kind, ()) if not any(
+            it["id"] == o for s in (mine or []) for it in s[kind])]
+        if missed:
+            lines.append(f"\n   Wiktionary also lists: {', '.join(scope()[o]['word'] for o in missed)}")
+        lines.append("")
+    _dump_text = "\n".join(lines) + "\n"
+    (DRAFTS / "sample.md").write_text(_dump_text, encoding="utf-8")
+    print(f"wrote {DRAFTS / 'sample.md'}")
+
+
+def main() -> int:
+    global DRAFTS, IN, OUT
+    sys.stdout.reconfigure(encoding="utf-8")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    proposals.drafts_arg(ap, "data/drafts/word-synonyms")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("wiktionary")
+    p = sub.add_parser("prepare")
+    p.add_argument("--pilot", type=int, default=200, help="this many JLPT words")
+    p.add_argument("--size", type=int, default=40, help="words per batch")
+    p.add_argument("--runs", default="A,B")
+    ck = sub.add_parser("check")
+    ck.add_argument("--batch", help="just this batch, e.g. A-000")
+    sp = sub.add_parser("skeptic-prepare")
+    sp.add_argument("--size", type=int, default=120)
+    cs = sub.add_parser("check-skeptic")
+    cs.add_argument("--batch", help="just this batch, e.g. S-000")
+    sub.add_parser("evaluate")
+    sm = sub.add_parser("sample")
+    sm.add_argument("--n", type=int, default=30)
+    sm.add_argument("--bar", type=float, default=0.8)
+    args = ap.parse_args()
+    DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
+    if args.cmd == "wiktionary":
+        wiktionary()
+    elif args.cmd == "prepare":
+        prepare(args.pilot, args.size, args.runs.split(","))
+    elif args.cmd == "check":
+        check(args.batch)
+    elif args.cmd == "skeptic-prepare":
+        skeptic_prepare(args.size)
+    elif args.cmd == "check-skeptic":
+        check_skeptic(args.batch)
+    elif args.cmd == "evaluate":
+        evaluate()
+    else:
+        sample(args.n, args.bar)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

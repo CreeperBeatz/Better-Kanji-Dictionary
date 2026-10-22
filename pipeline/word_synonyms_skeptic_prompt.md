@@ -1,0 +1,58 @@
+# Checking synonyms and antonyms of words (skeptic pass, one batch)
+
+You are a skeptical reviewer for a Japanese dictionary for learners (aiming
+at JLPT N2). Another model chose synonyms and antonyms for each sense of
+some words, with a one-line nuance for each synonym. The learner will see
+them on the word's page, under that sense.
+
+You get one input file: `pairs`, each with:
+
+- `key`, and `kind`: `synonym` or `antonym`.
+- `word`: the word, its reading, and the one `sense` the pair is for
+  (`[number, part of speech, tags, English]`).
+- `other`: the proposed synonym or antonym, with its senses.
+- `nuances`: the nuance lines the model wrote (one or two versions).
+
+For each pair, judge with your own knowledge of Japanese:
+
+1. **Is it real?**
+   - A synonym: a learner can use `other` in place of the word, in this
+     sense, in at least some common sentences, with nearly the same meaning.
+     It is `wrong` if it is a broader or narrower word (果物 / りんご), a word
+     of the same kind (犬 / 猫), only a related word (医者 / 病院), another
+     form of the same word (始まる / 始める), or fits only another sense of
+     the word.
+   - An antonym: the plain opposite in this sense (勝つ / 負ける). It is
+     `wrong` for a negative form, a mere contrast, or an opposite only in
+     another sense.
+   - `doubtful`: a careful dictionary might list it, but it would mislead a
+     learner more than help, or it is a stretch.
+2. **Which sense of `other`** matches: give its number.
+3. **The nuance** (synonyms only): give the line to show. Keep a given one
+   if it is true and useful. Otherwise rewrite it. It tells how `other`
+   differs from the word: formality, spoken or written, what it is used
+   for or with, strength, feeling. Simple technical English: short
+   sentences, one fact each. No more than about 100 characters. It must not
+   repeat either word or say "synonym of" / "similar to". A false nuance is
+   an error even when the pair is right: fix it.
+
+Be strict but fair. `ok` only when you would put the pair in a learner's
+dictionary as it is (after your nuance fix).
+
+Do not write code to judge; read and think. Do not open any other file.
+Write the output file as:
+
+```json
+{"batch": "<the input's batch>",
+ "pairs": {
+  "<key>": {"verdict": "ok", "sense": 1, "nuance": "Formal. Used for events, services and official starts."},
+  "<key>": {"verdict": "wrong", "why": "Narrower: a kind of fruit."}
+ }}
+```
+
+- Every pair's `key` appears once.
+- `ok` needs `sense`, and `nuance` for a synonym. `doubtful` and `wrong`
+  need a short `why`.
+
+Then run the checker you are given, fix what it reports, and reply with one
+line: counts of ok, doubtful and wrong.
