@@ -68,8 +68,7 @@ FORMAT = 6
 # 4: a meaning's best examples starred, first in each part.
 # 5: a word under each of its meanings, with the sense that has it (焼く under "bake").
 # 6: each meaning's uses, the patterns it builds words in, with their examples.
-# 7: the kanji's group on the map by meaning (data/meaning_map.json, which the key follows too).
-PAGES_FORMAT = 7
+PAGES_FORMAT = 6
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -111,9 +110,7 @@ def source_key(fresh: bool = False) -> tuple[str, str]:
 
     whole, pages = pack_key(fresh)
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    from .routes.atlas import MEANING_MAP
-
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", f"{PAGES_FORMAT}|{_stamp(MEANING_MAP)}|{pages}"
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", f"{PAGES_FORMAT}|{pages}"
 
 
 def _on_disk() -> dict | None:

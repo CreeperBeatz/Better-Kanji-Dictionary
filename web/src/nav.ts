@@ -23,10 +23,9 @@ export type Page =
   /**
    * `words`: the search shows every word with that kanji, by the meaning it
    * has in each, in place of its results -- a mode of the search, never a page
-   * beside it. `group`: likewise every kanji in one group of the map, named
-   * by its English name, which outlives the cluster numbers of a rebuild.
+   * beside it.
    */
-  | { kind: 'search'; q: string; words?: string; group?: string }
+  | { kind: 'search'; q: string; words?: string }
   | { kind: 'level'; level: Level }
   /**
    * `centre` is the character the graph was centred on when this one was
@@ -79,7 +78,7 @@ export function samePage(a: Page, b: Page): boolean {
   if (a.kind !== b.kind) return false
   switch (a.kind) {
     case 'search':
-      return a.q === (b as typeof a).q && a.words === (b as typeof a).words && a.group === (b as typeof a).group
+      return a.q === (b as typeof a).q && a.words === (b as typeof a).words
     case 'level':
       return a.level === (b as typeof a).level
     case 'kanji':
@@ -100,18 +99,16 @@ export function urlOf(p: Page): string {
   const params = new URLSearchParams(window.location.search)
   params.delete('q')
   params.delete('words')
-  params.delete('group')
   let path = '/'
   if (p.kind === 'kanji') path = `/kanji/${encodeURIComponent(p.char)}`
   else if (p.kind === 'word') path = `/word/${p.id}`
   else if (p.kind === 'level') path = `/level/${p.level}`
   else if (p.kind === 'words') path = `/words/${encodeURIComponent(p.char)}`
   if ((p.kind === 'kanji' || p.kind === 'word') && p.notes) path += '/associations'
-  else if (p.kind === 'search' && (p.q || p.words || p.group)) {
+  else if (p.kind === 'search' && (p.q || p.words)) {
     path = '/search'
     if (p.q) params.set('q', p.q)
     if (p.words) params.set('words', p.words)
-    else if (p.group) params.set('group', p.group)
   }
   const query = params.toString()
   return path + (query ? `?${query}` : '') + window.location.hash
@@ -144,11 +141,10 @@ export function pageInUrl(): Page | null {
   if (path === '/search' || path === '/search/') {
     const params = new URLSearchParams(window.location.search)
     const words = params.get('words')
-    const group = params.get('group')
     return {
       kind: 'search',
       q: params.get('q') ?? '',
-      ...(words && [...words].length === 1 ? { words } : group ? { group } : {}),
+      ...(words && [...words].length === 1 ? { words } : {}),
     }
   }
   return null

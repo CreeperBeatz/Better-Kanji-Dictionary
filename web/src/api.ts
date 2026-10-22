@@ -272,8 +272,6 @@ export interface KanjiPage {
   /** Its gist, the line the page opens with. */
   hero: string | null
   heroBg: string | null
-  /** Its cluster on the map by meaning; null in none; missing from a pack built before it. */
-  group?: { en: string; bg: string } | null
   /** How its meanings follow from each other. */
   link: string | null
   linkBg: string | null
@@ -299,9 +297,6 @@ export interface KanjiHit {
   joyo: boolean
   strokes: number | null
   fanout: number
-  /** For the expanded kanji rows; the semantic search's hits leave them out. */
-  onYomi?: string[]
-  kunYomi?: string[]
 }
 
 /** What equally good matches are ordered by: newspaper rank or JLPT level. */
@@ -1057,8 +1052,6 @@ export const api = {
     ),
 
   map: (scope: string) => get<MapResponse>(`/api/map/${encodeURIComponent(scope)}`),
-  /** One group of the map's kanji, by its English name, as search results. */
-  mapGroup: kept((name: string) => get<{ group: { en: string; bg: string }; kanji: KanjiHit[] }>(`/api/map/group/${encodeURIComponent(name)}`)),
 
   /** Kept for the session: a character's page is opened again and again. */
   similar: Object.assign(

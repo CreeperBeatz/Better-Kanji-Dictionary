@@ -13,10 +13,6 @@ Scopes follow the graph filter:
   5 .. 1   JLPT N5 and easier .. N1 and easier
   common   the newspaper-ranked kanji
   all      every kanji the meaning map places
-
-GET /api/map/group/{name} is one cluster's kanji, by its English name, as the
-search's kanji results, the most frequent first: what the search lists when a
-group is opened from the map card or a kanji's page.
 """
 
 import functools
@@ -79,19 +75,6 @@ def _build(scope: str) -> dict:
         "clusters": mm["clusters"],
         "regions": mm["regions"],
     }
-
-
-@router.get("/group/{name}")
-def get_group(name: str) -> dict:
-    from .search import _kanji_hits
-
-    mm = _meaning_map()
-    k = next((i for i, c in enumerate(mm["clusters"]) if c["en"] == name), -1)
-    if k < 0:
-        raise HTTPException(404, f"no group named {name!r} on the map")
-    hits = _kanji_hits([c for c, kk in mm["cluster"].items() if kk == k])
-    hits.sort(key=lambda h: (h["freq"] is None, h["freq"] or 0, h["char"]))
-    return {"group": {"en": mm["clusters"][k]["en"], "bg": mm["clusters"][k]["bg"]}, "kanji": hits}
 
 
 @router.get("/{scope}")

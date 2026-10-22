@@ -714,35 +714,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* Its group on the map by meaning, under the gist: a section titled as the
-   statistics are, its one button the column's width, boxed as a meaning card. */
-.kanji-group-open {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 12px;
-  font: inherit;
-  font-size: calc(14px * var(--type));
-  color: var(--paper);
-  text-align: left;
-  background: var(--sumi-sunk);
-  border: 1px solid var(--rule-bright);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 120ms var(--ease), border-color 120ms var(--ease);
-}
-
-.kanji-group-open:hover {
-  background: var(--sumi-lift);
-  border-color: var(--ai-deep);
-}
-
-.kanji-group-open > [aria-hidden] {
-  color: var(--ai);
-}
-
 /* How the meanings follow from each other, above them. */
 .meanings-link {
   margin: 2px 0 8px;
@@ -2002,26 +1973,6 @@ button.usage-head:focus-visible .usage-spelling {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-
-/* A map group's kanji as rows: a word's card, its glyph larger. */
-.kanji-rows {
-  margin-top: 14px;
-}
-
-.kanji-row .kanji-row-glyph {
-  font-size: calc(25px * var(--type));
-  line-height: 1;
-}
-
-.kanji-row-readings {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0 10px;
-}
-
-.kanji-row-kun {
-  color: var(--paper-dim);
 }
 
 .sort-pill {
@@ -4079,7 +4030,7 @@ button.usage-head:focus-visible .usage-spelling {
   margin-top: 14px;
 }
 
-/* The group lit on the map, as the card's first section: label and link as the facts under it. */
+/* The group lit on the map, as the card's first section: label and name as the facts under it. */
 .map-card-group {
   display: flex;
   align-items: baseline;
@@ -4096,13 +4047,7 @@ button.usage-head:focus-visible .usage-spelling {
 }
 
 .map-card-group-name {
-  font-size: inherit;
-  text-align: left;
-}
-
-.map-card-group-name:disabled {
-  color: var(--paper-dim);
-  cursor: default;
+  color: var(--paper);
 }
 
 /* ---------------------------------------------------------------- map */
@@ -6377,16 +6322,6 @@ html {
 
   .kanji-hits::-webkit-scrollbar {
     display: none;
-  }
-
-  /* A map group's page is all kanji, with nothing under them: they wrap, two to a row. */
-  .group-kanji .kanji-hits {
-    grid-auto-flow: row;
-    grid-template-rows: none;
-    grid-template-columns: 1fr 1fr;
-    margin: 14px 0 0;
-    padding: 0;
-    overflow: visible;
   }
 
   .kanji-hit {

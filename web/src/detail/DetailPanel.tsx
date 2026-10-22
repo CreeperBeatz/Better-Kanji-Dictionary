@@ -28,8 +28,6 @@ const S = strings(
     noMeaning: 'no recorded meaning',
     seeComponents: 'Components',
     heroAi: 'AI summary',
-    group: 'Group',
-    groupTitle: 'Every kanji in this group of the map, in the search',
     seeComponentsTitle: 'Show what {char} is built from, and what it is part of',
     statistics: 'Statistics',
     strokes: 'Strokes',
@@ -62,8 +60,6 @@ const S = strings(
     noMeaning: 'няма записано значение',
     seeComponents: 'Компоненти',
     heroAi: 'Обобщение от ИИ',
-    group: 'Група',
-    groupTitle: 'Всички канджи от тази група на картата, в търсенето',
     seeComponentsTitle: 'Покажете от какво е изграден {char} и в какво участва',
     statistics: 'Статистика',
     strokes: 'Черти',
@@ -109,8 +105,6 @@ interface Props {
   onSignIn?: () => void
   /** Opens every word with the kanji, by meaning: "see all words". */
   onWordsWith?: (char: string) => void
-  /** Lists every kanji in its group of the map by meaning (by English name), in the search. */
-  onGroup?: (group: string) => void
   /** The way to its associations, beside the statistics' title (a phone's). */
   notes?: React.ReactNode
 }
@@ -175,7 +169,7 @@ export function KanjiHead({ node }: { node: KanjiNode }) {
   )
 }
 
-export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith, onGroup, notes }: Props) {
+export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSignIn, onWordsWith, notes }: Props) {
   const lang = useLang()
   const t = S(lang)
   const [words, setWords] = useState<Word[]>([])
@@ -307,16 +301,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
           <p className="kanji-hero">{hero}</p>
           <p className="kanji-hero-note">{t('heroAi')}</p>
         </>
-      )}
-      {/* Its group on the map by meaning: the kanji that mean things near it. */}
-      {unit?.group && onGroup && (
-        <section className="kanji-group">
-          <h3 className="facts-title">{t('group')}</h3>
-          <button className="kanji-group-open" onClick={() => onGroup(unit.group!.en)} title={t('groupTitle')}>
-            <span className="kanji-group-name">{unit.group[lang === 'bg' ? 'bg' : 'en']}</span>
-            <span aria-hidden>→</span>
-          </button>
-        </section>
       )}
       {notes ? (
         <div className="facts-title-row">

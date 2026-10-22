@@ -28,8 +28,6 @@ import { Pitch } from './Pitch'
 import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
-import { ReadingKana } from '../detail/Readings'
-import { plainReading } from '../local/japanese'
 import { InstallNote } from '../install/InstallGuide'
 import { warmKanji, warmWord } from '../warm'
 
@@ -59,15 +57,9 @@ const S = strings(
     open: 'Open this entry',
     notTranslated: 'not translated into Bulgarian yet',
     inN: 'in {n}',
-    kanjiCommonTitle: 'Jōyō, on the JLPT lists, or among the 2,500 kanji most frequent in newspapers',
-    kanjiNewsTitle: 'Newspaper frequency: number {n} of the 2,500 most frequent kanji',
     allWithKanji: 'See all words with {char}',
     backToResults: 'Back to the results for “{q}”',
     backToSearch: 'Back to the search',
-    group: 'Group: {name}',
-    groupCount: '{n} kanji, the most frequent first',
-    groupGone: 'This group is not on the map any more.',
-    groupError: 'The group could not be loaded.',
     resultsFor: 'Results for {q}',
     readAs: 'read as {r}',
     alternative: 'in Bulgarian: {q}',
@@ -113,15 +105,9 @@ const S = strings(
     open: 'Отворете статията',
     notTranslated: 'още не е преведено на български',
     inN: 'в {n}',
-    kanjiCommonTitle: 'Джойо, в списъците за JLPT или сред 2500-те най-чести канджи във вестниците',
-    kanjiNewsTitle: 'Честота във вестниците: номер {n} от 2500-те най-чести канджи',
     allWithKanji: 'Всички думи с {char}',
     backToResults: 'Обратно към резултатите за „{q}“',
     backToSearch: 'Обратно към търсенето',
-    group: 'Група: {name}',
-    groupCount: '{n} канджи, най-честите първо',
-    groupGone: 'Тази група вече я няма на картата.',
-    groupError: 'Групата не се зареди.',
     resultsFor: 'Резултати за {q}',
     readAs: 'прочетено като {r}',
     alternative: 'на български: {q}',
@@ -400,72 +386,6 @@ interface ChipKanji {
   meanings: string[]
   meaningsBg?: string[] | null
   fanout?: number | null
-  freq?: number | null
-  jlpt?: number | null
-  joyo?: boolean
-  onYomi?: string[]
-  kunYomi?: string[]
-}
-
-const KanjiRow = memo(KanjiRowView)
-
-/** A kanji as a row, laid out as a word's: readings by it, then common or not; meanings, frequency, level under.
- *  A map group's kanji are listed so; the search's own results stay chips. */
-function KanjiRowView({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
-  const lang = useLang()
-  const t = S(lang)
-  const m = meaningsOf(k, lang)
-  const common = isCommon({ freq: k.freq ?? null, jlpt: k.jlpt ?? null, joyo: !!k.joyo })
-  // As the kanji's page prints them: on in katakana, kun with its okurigana set apart.
-  const on = [...new Set((k.onYomi ?? []).map(plainReading))].slice(0, 3)
-  const kun = [...new Set((k.kunYomi ?? []).map(plainReading))].slice(0, 3)
-  return (
-    <li className="word">
-      <button className="word-card kanji-row" {...warmKanji(k.char)} onClick={() => onKanji(k.char)} aria-current={open || undefined}>
-        <span className="word-head">
-          <span className="word-spelling">
-            <span className="word-forms kanji-row-glyph" lang="ja">
-              {k.char}
-            </span>
-            <span className="word-reading kanji-row-readings" lang="ja">
-              {on.map((r) => (
-                <span key={`on-${r}`} className="kanji-row-on">
-                  <ReadingKana r={r} on />
-                </span>
-              ))}
-              {kun.map((r) => (
-                <span key={`kun-${r}`} className="kanji-row-kun">
-                  <ReadingKana r={r} on={false} />
-                </span>
-              ))}
-            </span>
-          </span>
-          <span className="word-common" data-common={common || undefined} title={common ? t('kanjiCommonTitle') : undefined}>
-            {common ? t('common') : t('uncommon')}
-          </span>
-        </span>
-        <span className="word-foot">
-          <span className="word-gloss" data-fallback={m.fallback || undefined}>
-            {m.value.slice(0, 4).join(', ')}
-          </span>
-          {(k.jlpt || k.freq) && (
-            <span className="word-meta">
-              {k.freq && (
-                <span className="word-news" title={t('kanjiNewsTitle', { n: k.freq })}>
-                  {t('news', { n: k.freq })}
-                </span>
-              )}
-              {k.jlpt && (
-                <span className="word-jlpt" data-level={k.jlpt}>
-                  N{k.jlpt}
-                </span>
-              )}
-            </span>
-          )}
-        </span>
-      </button>
-    </li>
-  )
 }
 
 const KanjiChip = memo(KanjiChipView)
@@ -509,10 +429,6 @@ interface SearchProps {
   words?: string
   /** Turns the search to every word with a kanji, by meaning, or (null) back to its results. */
   onWordsWith?: (char: string | null) => void
-  /** The map group (its English name) whose kanji the search shows in place of its results. */
-  group?: string
-  /** Turns the search to a map group's kanji, or (null) back to its results. */
-  onGroup?: (group: string | null) => void
   /** The rail shows a way back above the page (to the kanji the words were opened from): none of its own. */
   railBack?: boolean
 }
@@ -523,21 +439,7 @@ const FIRST_ROWS = 10
 const PAGE = 30
 const MOST = 1000
 
-export function SearchPage({
-  q,
-  onKanji,
-  onWord,
-  onSearch,
-  asked,
-  onAsk,
-  open,
-  onMap,
-  words,
-  onWordsWith,
-  group,
-  onGroup,
-  railBack,
-}: SearchProps) {
+export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, onMap, words, onWordsWith, railBack }: SearchProps) {
   const lang = useLang()
   const t = S(lang)
   const term = q.trim()
@@ -552,7 +454,7 @@ export function SearchPage({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!term || words || group) {
+    if (!term || words) {
       setResult(null)
       setBusy(false)
       return
@@ -584,7 +486,7 @@ export function SearchPage({
       stale = true
       clearTimeout(timer)
     }
-  }, [term, lang, common, sort, order, key, limit, words, group])
+  }, [term, lang, common, sort, order, key, limit, words])
 
   // The first screen of words is put up at once; the rest follow in a spare
   // moment, so a result never costs a keystroke more than a screenful.
@@ -603,24 +505,6 @@ export function SearchPage({
     localStorage.setItem(SORT_KEY, `${next}:${nextOrder}`)
     setSort([next, nextOrder])
   }
-
-  // Every kanji in one group of the map: the search's own mode.
-  if (group)
-    return (
-      <GroupKanji
-        name={group}
-        onKanji={onKanji}
-        open={open?.kanji}
-        back={
-          onGroup &&
-          !railBack && (
-            <button className="back-link words-with-back" onClick={() => onGroup(null)}>
-              <span aria-hidden>←</span> {term ? t('backToResults', { q: term }) : t('backToSearch')}
-            </button>
-          )
-        }
-      />
-    )
 
   // Every word with one kanji, by meaning: the search's own mode.
   if (words)
@@ -1033,56 +917,6 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
 }
 
 /** A level's kanji, and the parts they are built from. `open` is marked. */
-/**
- * Every kanji in one group of the map by meaning (pipeline/meaning_map.py),
- * the most frequent first, as the search's own kanji results: what the map
- * card's group name and a kanji page's group line open.
- */
-function GroupKanji({ name, onKanji, open, back }: { name: string; onKanji: (char: string) => void; open?: string; back?: ReactNode }) {
-  const lang = useLang()
-  const t = S(lang)
-  const [data, setData] = useState(() => api.mapGroup.peek(name) ?? null)
-  // 'gone': no group by that name now (the map was rebuilt); 'error': not reached.
-  const [failed, setFailed] = useState<null | 'gone' | 'error'>(null)
-
-  useEffect(() => {
-    let stale = false
-    setFailed(null)
-    api.mapGroup(name).then(
-      (d) => !stale && setData(d),
-      (e: unknown) => !stale && setFailed((e as { status?: number }).status === 404 ? 'gone' : 'error'),
-    )
-    return () => {
-      stale = true
-    }
-  }, [name])
-
-  const kanji = data?.group.en === name ? data.kanji : []
-  const shown = data?.group.en === name ? data.group[lang === 'bg' ? 'bg' : 'en'] : name
-
-  return (
-    <section className="rail-section search-page group-kanji" aria-label={t('group', { name: shown })} aria-busy={!data && !failed}>
-      {back}
-      <header className="words-with-head">
-        <div>
-          <h2>{t('group', { name: shown })}</h2>
-          {kanji.length > 0 && <p className="hint">{t('groupCount', { n: kanji.length })}</p>}
-        </div>
-      </header>
-      {!kanji.length && !failed && <p className="hint">{t('looking')}</p>}
-      {failed === 'error' && <p className="hint">{t('groupError')}</p>}
-      {failed === 'gone' && <p className="hint">{t('groupGone')}</p>}
-      {kanji.length > 0 && (
-        <ol className="words kanji-rows">
-          {kanji.map((k) => (
-            <KanjiRow key={k.char} k={k} onKanji={onKanji} open={open === k.char} />
-          ))}
-        </ol>
-      )}
-    </section>
-  )
-}
-
 function LevelGrid({ level, onKanji, open }: { level: Level; onKanji: (char: string) => void; open?: string }) {
   const lang = useLang()
   const t = S(lang)
