@@ -293,6 +293,8 @@ def same_word(a: int, b: int) -> bool:
                 return True
             if s.endswith("す") and t == s[:-1] + "せる":  # 済ます/済ませる, 任す/任せる
                 return True
+            if any(t[i] in "がにの" and t[:i] + t[i + 1:] == s for i in range(1, len(t) - 1)):  # 万一/万が一, 役立つ/役に立つ
+                return True
     return False
 
 
