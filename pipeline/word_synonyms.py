@@ -295,7 +295,7 @@ def same_word(a: int, b: int) -> bool:
                 return True
             if s.endswith("る") and t == s[:-1] + "りる":  # 足る/足りる
                 return True
-            if any(t[i] in "がにの" and t[:i] + t[i + 1:] == s for i in range(1, len(t) - 1)):  # 万一/万が一, 役立つ/役に立つ
+            if any(t[i] in "がにのっ" and t[:i] + t[i + 1:] == s for i in range(1, len(t) - 1)):  # 万一/万が一, 役立つ/役に立つ, 矢張り/矢っ張り
                 return True
     return False
 
