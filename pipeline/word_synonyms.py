@@ -129,8 +129,8 @@ def resolve(text: str, reading: str | None = None, best: bool = True) -> list[in
         text, reading = text[:-2], reading[:-2] if reading and reading.endswith("する") else reading
     found = forms().get(text) or []
     if reading:
-        same = [x for x in found if x[1] == hira(reading)]
-        found = same or ([] if not any(ch > "ヿ" for ch in text) else found)
+        # A reading that matches none of them names another word (被る こうむる is not 被る かぶる).
+        found = [x for x in found if x[1] == hira(reading)]
     ids = list(dict.fromkeys(w for w, _ in found))
     return ids[:1] if best else ids
 
