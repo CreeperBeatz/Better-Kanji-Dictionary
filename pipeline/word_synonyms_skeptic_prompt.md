@@ -45,13 +45,15 @@ Write the output file as:
 ```json
 {"batch": "<the input's batch>",
  "pairs": {
-  "<key>": {"verdict": "ok", "sense": 1, "nuance": "Formal. Used for events, services and official starts."},
+  "<key>": {"verdict": "ok", "sense": 1, "nuance": "Formal. Used for events, services and official starts.", "fixed": false},
   "<key>": {"verdict": "wrong", "why": "Narrower: a kind of fruit."}
  }}
 ```
 
 - Every pair's `key` appears once.
-- `ok` needs `sense`, and `nuance` for a synonym. `doubtful` and `wrong`
+- `ok` needs `sense`, and `nuance` for a synonym. Set `fixed` to true when
+  no given nuance was usable and you wrote a new one or corrected a fact;
+  false when you kept one or only trimmed the wording. `doubtful` and `wrong`
   need a short `why`.
 
 Then run the checker you are given, fix what it reports, and reply with one

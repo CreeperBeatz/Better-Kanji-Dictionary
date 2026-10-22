@@ -6,7 +6,9 @@
     python pipeline/word_synonyms.py check [--batch A-000]
     python pipeline/word_synonyms.py skeptic-prepare [--size 120]
     # one Opus subagent per skeptic/in/*.json, each reading pipeline/word_synonyms_skeptic_prompt.md
-    python pipeline/word_synonyms.py check-skeptic [--batch S-000]
+    python pipeline/word_synonyms.py check-skeptic [--batch SAB-000]
+    # --runs C,D on skeptic-prepare, check-skeptic, evaluate and sample: another model's two runs
+    # (prepare --runs C,D asks the same pilot words again)
     python pipeline/word_synonyms.py evaluate
     python pipeline/word_synonyms.py sample [--n 30]    # sample.md, for Dani to judge
 
@@ -351,11 +353,16 @@ def _entry(wid: int, rng: random.Random, shuffle: bool) -> dict:
 
 
 def prepare(pilot: int, size: int, runs: list[str]) -> None:
-    if any(IN.glob("*.json")):
-        raise SystemExit(f"{IN} has batches already: delete the folder's in/ and out/ to start again")
+    """Batches for each run; a second call with new run names (another model) asks about the same words."""
+    if any(f for r in runs for f in IN.glob(f"{r}-*.json")):
+        raise SystemExit(f"{IN} has batches for {runs} already")
     rng = random.Random(17)
-    words = _pilot_words(pilot, rng)
-    _dump(DRAFTS / "pilot.json", {"words": words})
+    if (DRAFTS / "pilot.json").exists():
+        words = _read(DRAFTS / "pilot.json")["words"]
+        rng = random.Random(17 + len(list(IN.glob("*.json"))))
+    else:
+        words = _pilot_words(pilot, rng)
+        _dump(DRAFTS / "pilot.json", {"words": words})
     stats = Counter()
     for r, run in enumerate(runs):
         order = words if r == 0 else rng.sample(words, len(words))
@@ -507,6 +514,13 @@ def _sk_folders() -> tuple[Path, Path]:
     return DRAFTS / "skeptic" / "in", DRAFTS / "skeptic" / "out"
 
 
+RUNS = ("A", "B")  # the two runs combined; --runs C,D for another model's
+
+
+def _sk_name() -> str:
+    return "S" + "".join(RUNS)
+
+
 def _key(k: tuple) -> str:
     wid, i, kind, o = k
     return f"{wid}:{i + 1}:{kind}:{o}"
@@ -516,7 +530,7 @@ def skeptic_prepare(size: int) -> None:
     sin, _ = _sk_folders()
     if any(sin.glob("*.json")):
         raise SystemExit(f"{sin} has batches already")
-    merged, _ = combine()
+    merged, _ = combine(RUNS)
     keys = sorted((k for k, v in merged.items() if v["both"] >= SKEPTIC_BAR), key=lambda k: (k[0], k[1], k[2]))
     items = []
     for k in keys:
@@ -527,10 +541,10 @@ def skeptic_prepare(size: int) -> None:
             "key": _key(k), "kind": "synonym" if kind == "syn" else "antonym",
             "word": {"word": w["word"], "reading": w["reading"], "sense": senses_of(wid)[i]},
             "other": _brief(o, SENSES),
-            "nuances": list(dict.fromkeys(v[r]["nuance"] for r in ("A", "B") if v[r]["nuance"])),
+            "nuances": list(dict.fromkeys(v[r]["nuance"] for r in RUNS if v[r]["nuance"])),
         })
     for b in range(0, len(items), size):
-        name = f"S-{b // size:03d}"
+        name = f"{_sk_name()}-{b // size:03d}"
         _dump(sin / f"{name}.json", {"batch": name, "pairs": items[b:b + size]})
     print(f"{len(items)} pairs (both runs >= {SKEPTIC_BAR}) in {math.ceil(len(items) / size)} batches")
 
@@ -539,7 +553,7 @@ def read_skeptic(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
     sin, sout = _sk_folders()
     good: dict[str, dict] = {}
     problems: list[str] = []
-    for inp, batch, got in proposals.outputs(sin, sout, f"{only or 'S-*'}.json", problems):
+    for inp, batch, got in proposals.outputs(sin, sout, f"{only or _sk_name() + '-*'}.json", problems):
         answers = got.get("pairs") if isinstance(got, dict) else None
         if not isinstance(answers, dict):
             problems.append(f"{inp.stem}: no \"pairs\" object")
@@ -569,17 +583,18 @@ def check_skeptic(only: str | None = None) -> None:
 
 
 def evaluate() -> None:
-    merged, stats = combine()
+    merged, stats = combine(RUNS)
     verdicts, _ = read_skeptic()
     wk = wiktionary_pairs()
-    words = {k[0] for k in merged} | set(read_run("A")[0])
+    words = {k[0] for k in merged} | set(read_run(RUNS[0])[0])
+    first = _inputs(RUNS[0])
     print(f"{stats['words']} words in both runs; own words: syn {stats['syn own words']} ({stats['syn own words not ours']} not ours),"
           f" ant {stats['ant own words']} ({stats['ant own words not ours']} not ours)")
     for kind in ("syn", "ant"):
         print(f"\n{kind}:")
         listed = {w: wk.get(w, {}).get(kind, set()) for w in words}
         asked = sum(1 for s in listed.values() if s)
-        offered = {w: {c["id"] for c in _inputs("A")[w]["candidates"] + _inputs("A")[w]["opposites"]} for w in words if w in _inputs("A")}
+        offered = {w: {c["id"] for c in first[w]["candidates"] + first[w]["opposites"]} for w in words if w in first}
         hit_c = sum(len(s & offered.get(w, set())) for w, s in listed.items())
         total = sum(len(s) for s in listed.values())
         print(f"  Wiktionary: {asked} pilot words list {total} {kind} of ours; {hit_c} ({hit_c / max(total, 1):.0%}) were among the candidates")
@@ -593,21 +608,23 @@ def evaluate() -> None:
             senses = {(k[0], k[1]) for k in kept}
             pairs = {(k[0], k[3]) for k in kept}
             hit = sum(1 for w, s in listed.items() for o in s if (w, o) in pairs)
-            own = sum(1 for v in kept.values() if any(v.get(r, {}).get("own") for r in ("A", "B")))
+            own = sum(1 for v in kept.values() if any(v.get(r, {}).get("own") for r in RUNS))
             okc = Counter(judged)
+            fixed = sum(1 for k in kept if verdicts.get(_key(k), {}).get("verdict") == "ok" and verdicts[_key(k)].get("fixed"))
             print(f"  bar {bar}: {len(kept)} pairs over {len(senses)} senses of {len({k[0] for k in kept})} words; own words {own};"
                   f" Wiktionary recall {hit / max(total, 1):.0%};"
-                  f" skeptic ok {okc['ok']}/{len(judged)} ({okc['ok'] / max(len(judged), 1):.0%}), doubtful {okc['doubtful']}, wrong {okc['wrong']}")
+                  f" skeptic ok {okc['ok']}/{len(judged)} ({okc['ok'] / max(len(judged), 1):.0%}), doubtful {okc['doubtful']}, wrong {okc['wrong']}"
+                  + (f"; nuance rewritten in {fixed} of {okc['ok']} ok" if kind == "syn" else ""))
     # Agreement between the runs at all.
     for kind in ("syn", "ant"):
-        a = {k for k, v in merged.items() if k[2] == kind and "A" in v}
-        b = {k for k, v in merged.items() if k[2] == kind and "B" in v}
-        print(f"\n{kind} run agreement: A {len(a)}, B {len(b)}, both {len(a & b)} ({len(a & b) / max(len(a | b), 1):.0%} of either)")
+        a = {k for k, v in merged.items() if k[2] == kind and RUNS[0] in v}
+        b = {k for k, v in merged.items() if k[2] == kind and RUNS[1] in v}
+        print(f"\n{kind} run agreement: {RUNS[0]} {len(a)}, {RUNS[1]} {len(b)}, both {len(a & b)} ({len(a & b) / max(len(a | b), 1):.0%} of either)")
 
 
 def final(bar: float) -> dict[int, list[dict]]:
     """Word -> per sense {syn, ant}: pairs both runs gave at `bar`, the skeptic's ok taken (and its sense and nuance)."""
-    merged, _ = combine()
+    merged, _ = combine(RUNS)
     verdicts, _ = read_skeptic()
     out: dict[int, list[dict]] = {}
     for k, v in sorted(merged.items(), key=lambda kv: -kv[1]["both"]):
@@ -622,13 +639,13 @@ def final(bar: float) -> dict[int, list[dict]]:
 
 def sample(n: int, bar: float) -> None:
     """sample.md: n pilot words, each sense with what would go live at `bar`, and what the skeptic held back."""
-    merged, _ = combine()
+    merged, _ = combine(RUNS)
     verdicts, _ = read_skeptic()
     wk = wiktionary_pairs()
     live = final(bar)
     words = _read(DRAFTS / "pilot.json")["words"]
     pick = sorted(random.Random(5).sample(words, min(n, len(words))), key=lambda w: -(scope()[w]["jlpt"] or 0))
-    lines = [f"# Word synonyms pilot: {len(pick)} words (bar {bar}, skeptic ok)", "",
+    lines = [f"# Word synonyms pilot, runs {'+'.join(RUNS)}: {len(pick)} words (bar {bar}, skeptic ok)", "",
              "≈ synonym, ↔ antonym. *Held back* = both runs gave it, the skeptic did not say ok.",
              "W = Wiktionary lists it too.", ""]
     for wid in pick:
@@ -655,12 +672,13 @@ def sample(n: int, bar: float) -> None:
             lines.append(f"\n   Wiktionary also lists: {', '.join(scope()[o]['word'] for o in missed)}")
         lines.append("")
     _dump_text = "\n".join(lines) + "\n"
-    (DRAFTS / "sample.md").write_text(_dump_text, encoding="utf-8")
-    print(f"wrote {DRAFTS / 'sample.md'}")
+    path = DRAFTS / f"sample-{''.join(RUNS)}.md"
+    path.write_text(_dump_text, encoding="utf-8")
+    print(f"wrote {path}")
 
 
 def main() -> int:
-    global DRAFTS, IN, OUT
+    global DRAFTS, IN, OUT, RUNS
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     proposals.drafts_arg(ap, "data/drafts/word-synonyms")
@@ -675,12 +693,16 @@ def main() -> int:
     sp = sub.add_parser("skeptic-prepare")
     sp.add_argument("--size", type=int, default=120)
     cs = sub.add_parser("check-skeptic")
-    cs.add_argument("--batch", help="just this batch, e.g. S-000")
-    sub.add_parser("evaluate")
+    cs.add_argument("--batch", help="just this batch, e.g. SAB-000")
+    ev = sub.add_parser("evaluate")
     sm = sub.add_parser("sample")
     sm.add_argument("--n", type=int, default=30)
     sm.add_argument("--bar", type=float, default=0.8)
+    for sp_ in (sp, cs, ev, sm):
+        sp_.add_argument("--runs", default="A,B", help="the two runs to combine, e.g. C,D for another model")
     args = ap.parse_args()
+    if args.cmd in ("skeptic-prepare", "check-skeptic", "evaluate", "sample"):
+        RUNS = tuple(args.runs.split(","))
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "wiktionary":
         wiktionary()
