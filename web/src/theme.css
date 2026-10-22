@@ -714,14 +714,33 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* Its group on the map by meaning, under the gist, a row as the statistics' are: opens the group's kanji in the search. */
-.facts.kanji-group {
-  margin: 0 0 14px;
+/* Its group on the map by meaning, under the gist: a section titled as the
+   statistics are, its one button the column's width, boxed as a meaning card. */
+.kanji-group-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: calc(14px * var(--type));
+  color: var(--paper);
+  text-align: left;
+  background: var(--sumi-sunk);
+  border: 1px solid var(--rule-bright);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease);
 }
 
-.kanji-group-name {
-  font-size: inherit;
-  text-align: left;
+.kanji-group-open:hover {
+  background: var(--sumi-lift);
+  border-color: var(--ai-deep);
+}
+
+.kanji-group-open > [aria-hidden] {
+  color: var(--ai);
 }
 
 /* How the meanings follow from each other, above them. */
@@ -1985,22 +2004,9 @@ button.usage-head:focus-visible .usage-spelling {
   gap: 8px;
 }
 
-/* The tools' switches, together at the end of the row. */
-.search-switches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* Kanji as rows (the search's "expanded kanji"): a word's card, its glyph larger. */
+/* A map group's kanji as rows: a word's card, its glyph larger. */
 .kanji-rows {
   margin-top: 14px;
-}
-
-/* The words come after: a firmer line where the kanji end. */
-.kanji-rows:not(:last-child) {
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--rule-bright);
 }
 
 .kanji-row .kanji-row-glyph {

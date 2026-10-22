@@ -59,8 +59,6 @@ const S = strings(
     open: 'Open this entry',
     notTranslated: 'not translated into Bulgarian yet',
     inN: 'in {n}',
-    kanjiExpanded: 'Expanded kanji',
-    kanjiExpandedTitle: 'Show each kanji as a row, with its readings, meanings, frequency and JLPT level',
     kanjiCommonTitle: 'Jōyō, on the JLPT lists, or among the 2,500 kanji most frequent in newspapers',
     kanjiNewsTitle: 'Newspaper frequency: number {n} of the 2,500 most frequent kanji',
     allWithKanji: 'See all words with {char}',
@@ -115,8 +113,6 @@ const S = strings(
     open: 'Отворете статията',
     notTranslated: 'още не е преведено на български',
     inN: 'в {n}',
-    kanjiExpanded: 'Разгърнати канджи',
-    kanjiExpandedTitle: 'Покажете всяко канджи като ред, с четенията, значенията, честотата и нивото по JLPT',
     kanjiCommonTitle: 'Джойо, в списъците за JLPT или сред 2500-те най-чести канджи във вестниците',
     kanjiNewsTitle: 'Честота във вестниците: номер {n} от 2500-те най-чести канджи',
     allWithKanji: 'Всички думи с {char}',
@@ -411,62 +407,10 @@ interface ChipKanji {
   kunYomi?: string[]
 }
 
-// '1' when the search shows kanji as rows, like its words; as chips otherwise.
-const KANJI_ROWS_KEY = 'betterrtk:kanjiRows'
-
-/** Kanji as rows or chips, kept on the device; every list in the search follows the one switch. */
-function useKanjiRows(): [boolean, () => void] {
-  const [on, setOn] = useState(() => localStorage.getItem(KANJI_ROWS_KEY) === '1')
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => e.key === KANJI_ROWS_KEY && setOn(e.newValue === '1')
-    const onSwitch = () => setOn(localStorage.getItem(KANJI_ROWS_KEY) === '1')
-    window.addEventListener('storage', onStorage)
-    window.addEventListener(KANJI_ROWS_KEY, onSwitch)
-    return () => {
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener(KANJI_ROWS_KEY, onSwitch)
-    }
-  }, [])
-  const toggle = () => {
-    const next = !on
-    localStorage.setItem(KANJI_ROWS_KEY, next ? '1' : '0')
-    setOn(next)
-    // Another list on screen (the search column beside the rail) follows.
-    window.dispatchEvent(new Event(KANJI_ROWS_KEY))
-  }
-  return [on, toggle]
-}
-
-function KanjiRowsSwitch({ on, onToggle, t }: { on: boolean; onToggle: () => void; t: ReturnType<typeof S> }) {
-  return (
-    <button className="search-filter" aria-pressed={on} data-on={on || undefined} onClick={onToggle} title={t('kanjiExpandedTitle')}>
-      {t('kanjiExpanded')}
-    </button>
-  )
-}
-
-/** A search's kanji: chips, or rows like its words. */
-function KanjiList({ kanji, rows, onKanji, open }: { kanji: ChipKanji[]; rows: boolean; onKanji: (c: string) => void; open?: string | null }) {
-  if (rows)
-    return (
-      <ol className="words kanji-rows">
-        {kanji.map((k) => (
-          <KanjiRow key={k.char} k={k} onKanji={onKanji} open={open === k.char} />
-        ))}
-      </ol>
-    )
-  return (
-    <div className="kanji-hits">
-      {kanji.map((k) => (
-        <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open === k.char} />
-      ))}
-    </div>
-  )
-}
-
 const KanjiRow = memo(KanjiRowView)
 
-/** A kanji as a row, laid out as a word's: readings by it, then common or not; meanings, frequency, level under. */
+/** A kanji as a row, laid out as a word's: readings by it, then common or not; meanings, frequency, level under.
+ *  A map group's kanji are listed so; the search's own results stay chips. */
 function KanjiRowView({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string) => void; open?: boolean }) {
   const lang = useLang()
   const t = S(lang)
@@ -599,7 +543,6 @@ export function SearchPage({
   const term = q.trim()
   const [common, toggleCommon] = useCommon()
   const [[sort, order], setSort] = useState(savedSort)
-  const [kanjiRows, toggleKanjiRows] = useKanjiRows()
   // "more" asks again for 30 more, kept per query, so going back keeps what was opened.
   const base = keyOf(lang, common, `${sort}:${order}`, term)
   const [opened, setOpened] = useState<{ base: string; n: number } | null>(null)
@@ -668,8 +611,6 @@ export function SearchPage({
         name={group}
         onKanji={onKanji}
         open={open?.kanji}
-        rows={kanjiRows}
-        onRows={toggleKanjiRows}
         back={
           onGroup &&
           !railBack && (
@@ -711,10 +652,7 @@ export function SearchPage({
   const tools = (
     <div className="search-tools">
       <SortPill sort={sort} order={order} onPick={pickSort} t={t} />
-      <span className="search-switches">
-        {(result?.kanji.length ?? 0) > 0 && <KanjiRowsSwitch on={kanjiRows} onToggle={toggleKanjiRows} t={t} />}
-        <CommonFilter on={common} onToggle={toggleCommon} t={t} />
-      </span>
+      <CommonFilter on={common} onToggle={toggleCommon} t={t} />
     </div>
   )
   // Common only leaves out rare kanji as the server leaves out rare words,
@@ -753,7 +691,13 @@ export function SearchPage({
           ))}
         </p>
       )}
-      {kanji.length > 0 && <KanjiList kanji={kanji} rows={kanjiRows} onKanji={onKanji} open={open?.kanji} />}
+      {kanji.length > 0 && (
+        <div className="kanji-hits">
+          {kanji.map((k) => (
+            <KanjiChip key={k.char} k={k} onKanji={onKanji} open={open?.kanji === k.char} />
+          ))}
+        </div>
+      )}
       {openKanji && onWordsWith && (
         <button className="clear words-with-open" onClick={() => onWordsWith(openKanji)}>
           {t('allWithKanji', { char: openKanji })} →
@@ -1094,21 +1038,7 @@ export function LevelPage({ level, onKanji }: { level: Level; onKanji: (char: st
  * the most frequent first, as the search's own kanji results: what the map
  * card's group name and a kanji page's group line open.
  */
-function GroupKanji({
-  name,
-  onKanji,
-  open,
-  back,
-  rows,
-  onRows,
-}: {
-  name: string
-  onKanji: (char: string) => void
-  open?: string
-  back?: ReactNode
-  rows: boolean
-  onRows: () => void
-}) {
+function GroupKanji({ name, onKanji, open, back }: { name: string; onKanji: (char: string) => void; open?: string; back?: ReactNode }) {
   const lang = useLang()
   const t = S(lang)
   const [data, setData] = useState(() => api.mapGroup.peek(name) ?? null)
@@ -1143,13 +1073,11 @@ function GroupKanji({
       {failed === 'error' && <p className="hint">{t('groupError')}</p>}
       {failed === 'gone' && <p className="hint">{t('groupGone')}</p>}
       {kanji.length > 0 && (
-        <>
-          <div className="search-tools">
-            <span />
-            <KanjiRowsSwitch on={rows} onToggle={onRows} t={t} />
-          </div>
-          <KanjiList kanji={kanji} rows={rows} onKanji={onKanji} open={open} />
-        </>
+        <ol className="words kanji-rows">
+          {kanji.map((k) => (
+            <KanjiRow key={k.char} k={k} onKanji={onKanji} open={open === k.char} />
+          ))}
+        </ol>
       )}
     </section>
   )
