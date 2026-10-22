@@ -1,25 +1,21 @@
 /**
- * The map: every character in a scope at once, to wander around in.
+ * The map: every kanji in a scope at once, placed by what it means, to
+ * wander around in (pipeline/meaning_map.py). Nearby kanji mean related
+ * things. The map by parts it once had beside this was removed on 2026-10-22.
  *
- * Canvas, not SVG -- the widest scope is 13k nodes and 27k edges, far past
- * what the DOM keeps interactive. Drawing is on demand (only when the camera,
- * the layout or the hover changes), and detail follows zoom the way a street
- * map's does: from far out, only the large characters -- the frequent ones and
- * the parts many others share -- carry a glyph, and the rest are points of
- * light that resolve into characters as you get close.
+ * Canvas, not SVG -- the widest scope is 2,679 kanji, past what the DOM keeps
+ * smooth to pan. Drawing is on demand (only when the camera, the layout or
+ * the hover changes), and detail follows zoom the way a street map's does:
+ * from far out, only the large kanji -- the frequent ones -- carry a glyph,
+ * and the rest are points of light that resolve into kanji as you get close.
  *
- * Links are drawn only for the selected and the hovered character. Stroking
- * all 27k every frame was most of the cost of a pan, and as a haze they said
- * little; as spokes from one character they say everything.
- *
- * Clicking a character flies to it and makes it the focus; clicking the focus
+ * Clicking a kanji flies to it and makes it the focus; clicking the focus
  * again opens it in the focus view. Clicking empty space clears the focus.
  *
- * By meaning, the map is coloured as by parts and carries no names. Selecting
- * a kanji there lights its cluster, which the card names: the other clusters
- * fade in stages by how near they are in meaning (pipeline/meaning_map.py
- * `near`), so the clusters close to it stay readable and the rest all but
- * vanish.
+ * The map carries no names. The focus's cluster is lit, and the card names
+ * it: the other clusters fade in stages by how near they are in meaning
+ * (pipeline/meaning_map.py `near`), so the clusters close to it stay readable
+ * and the rest all but vanish.
  */
 
 import { interpolateZoom } from 'd3-interpolate'
@@ -31,16 +27,13 @@ import { strings, useLang, type Translate } from '../i18n'
 import { mapMeaning } from '../i18n/content'
 import type { LayoutMessage, LayoutRequest } from './layout.worker'
 import { GlyphAtlas, type SpriteStyle } from './glyphs'
-import { cachedLayout, loadMap, storeLayout, type Arrange, type Group, type MapData, type Scope } from './mapData'
+import { cachedLayout, loadMap, storeLayout, type Group, type MapData, type Scope } from './mapData'
 
 /** Press this long on a touch screen to see a character, as hovering does. */
 const HOLD_DELAY = 450
 
 interface Props {
   scope: Scope
-  by: Arrange
-  /** Switch arrangement, offered when the focus is a part, which only the parts map has. */
-  onArrange: (by: Arrange) => void
   /** null when nothing is selected */
   focus: string | null
   focusNode: KanjiNode | null
@@ -52,7 +45,7 @@ interface Props {
   legend: boolean
   /**
    * Floats over the focus node, following it as the map moves. Given the
-   * focus's cluster by meaning, null when it is in none, undefined by parts.
+   * focus's cluster, null when it is in none, undefined while the map loads.
    */
   card?: (cluster: Group | null | undefined) => React.ReactNode
 }
@@ -69,8 +62,6 @@ const LABEL_FROM = 5.5
 const LABEL_FULL = 8.5
 /** Flying to a character zooms in at least this far, so it can be read. */
 const READABLE_RADIUS = 13
-/** How many of the focus's neighbours are always drawn as legible glyphs. */
-const NEAR_LIMIT = 48
 const GLYPH_PX = 64
 /** Milliseconds a frame may spend rendering the sprites it found missing, once its drawing is done. */
 const SPRITE_MS = 4
@@ -85,10 +76,6 @@ const STAGE_ALPHA = [0.08, 0.34, 0.68, 1]
 /** The same for distant dots, which are faint to begin with: these replace their opacity. */
 const STAGE_DOT = [0.07, 0.5, 0.85, 1]
 
-// The last finished layout seeds the next scope, so switching N4 -> N3 grows
-// the map around where things already were instead of reshuffling it.
-let lastLayout: { data: MapData; pos: Float32Array } | null = null
-
 function palette() {
   const css = getComputedStyle(document.documentElement)
   const v = (name: string) => css.getPropertyValue(name).trim()
@@ -99,8 +86,6 @@ function palette() {
     faint: v('--faint'),
     rule: v('--rule'),
     ruleBright: v('--rule-bright'),
-    ai: v('--ai'),
-    aiDeep: v('--ai-deep'),
     shu: v('--shu'),
     sumi: v('--sumi'),
   }
@@ -111,7 +96,6 @@ function spriteStyles(c: ReturnType<typeof palette>) {
   return {
     paper: { ...base, key: 'paper', stroke: c.rule, glyph: c.paper } as SpriteStyle,
     muted: { ...base, key: 'muted', stroke: c.rule, glyph: c.muted } as SpriteStyle,
-    part: { ...base, key: 'part', stroke: c.aiDeep, glyph: c.ai } as SpriteStyle,
   }
 }
 
@@ -121,15 +105,13 @@ let fontLoaded = false
 const S = strings(
   {
     joyo: 'jōyō',
-    part: 'part',
     rare: 'rare',
     scopeCommon: 'common',
     scopeAll: 'full',
     none: 'no recorded meaning',
-    component: 'component',
     clickOpen: '{level} · click to open',
     fetching: 'Fetching the map',
-    laying: 'Laying out {n} characters',
+    laying: 'Laying out {n} kanji',
     error: 'The map could not be loaded.',
     absent: '{c} is not on the {scope} map',
     showOn: 'show on {scope}',
@@ -141,28 +123,21 @@ const S = strings(
     zoomIn: 'Zoom in',
     zoomOut: 'Zoom out',
     whole: 'Show the whole map',
-    counts: '{n} characters, {e} links',
-    countsMeaning: '{n} kanji',
-    legendClickMeaning: 'click to select and light its group, click again to open,',
-    legendSize: 'larger is more frequent, or a part more characters share',
-    legendNear: 'nearby characters share a part; ones that share none sit in rows below',
-    legendClick: 'click to select and see its links, click again to open,',
+    counts: '{n} kanji',
+    legendSize: 'larger is more frequent',
+    legendNear: 'nearby kanji mean related things',
+    legendClick: 'click to select and light its group, click again to open,',
     legendEmpty: 'click empty space to deselect',
-    legendSizeMeaning: 'larger is more frequent',
-    legendNearMeaning: 'nearby kanji mean related things',
-    showParts: 'show on the parts map',
   },
   {
     joyo: 'джойо',
-    part: 'част',
     rare: 'рядък',
     scopeCommon: 'чести',
     scopeAll: 'пълна',
     none: 'няма записано значение',
-    component: 'част',
     clickOpen: '{level} · кликнете, за да отворите',
     fetching: 'Картата се зарежда',
-    laying: 'Подреждат се {n} йероглифа',
+    laying: 'Подреждат се {n} канджи',
     error: 'Картата не можа да се зареди.',
     absent: '{c} го няма на картата „{scope}“',
     showOn: 'покажете на „{scope}“',
@@ -174,16 +149,11 @@ const S = strings(
     zoomIn: 'Приближете',
     zoomOut: 'Отдалечете',
     whole: 'Покажете цялата карта',
-    counts: '{n} йероглифа, {e} връзки',
-    countsMeaning: '{n} канджи',
-    legendClickMeaning: 'кликнете, за да изберете и осветите групата му, кликнете пак, за да отворите,',
-    legendSize: 'по-големият е по-чест или е част, споделена от повече йероглифи',
-    legendNear: 'близките йероглифи имат обща част; тези без общи части са на редове отдолу',
-    legendClick: 'кликнете, за да изберете и видите връзките, кликнете пак, за да отворите,',
+    counts: '{n} канджи',
+    legendSize: 'по-големият е по-чест',
+    legendNear: 'близките канджи имат сродни значения',
+    legendClick: 'кликнете, за да изберете и осветите групата му, кликнете пак, за да отворите,',
     legendEmpty: 'кликнете в празно, за да отмените избора',
-    legendSizeMeaning: 'по-големият е по-чест',
-    legendNearMeaning: 'близките канджи имат сродни значения',
-    showParts: 'покажете на картата по части',
   },
 )
 type T = Translate<Parameters<ReturnType<typeof S>>[0]>
@@ -191,8 +161,7 @@ type T = Translate<Parameters<ReturnType<typeof S>>[0]>
 function levelLabel(d: MapData, i: number, t: T): string {
   const j = d.jlpt[i]
   if (j) return `N${j}`
-  if (d.joyo[i]) return t('joyo')
-  return d.fanout[i] > 0 ? t('part') : t('rare')
+  return d.joyo[i] ? t('joyo') : t('rare')
 }
 
 /** The narrowest scope a character appears in, for the "not on this map" hint. */
@@ -228,10 +197,7 @@ function createState() {
     colors: null as ReturnType<typeof palette> | null,
     styles: null as ReturnType<typeof spriteStyles> | null,
     maxSize: 1,
-    near: new Set<number>(),
-    nearOf: -1,
-    nearData: null as MapData | null,
-    /** colour class per node: 0 jōyō target, 1 other target, 2 part */
+    /** colour class per node: 0 jōyō, 1 not */
     cls: null as Uint8Array | null,
     clsOf: null as MapData | null,
     lang: 'en' as 'en' | 'bg',
@@ -241,7 +207,7 @@ function createState() {
     stage: null as Uint8Array | null,
     stageOf: null as MapData | null,
     /** scratch lists for the batched dot pass, one per colour × opacity step */
-    bins: Array.from({ length: 3 * ALPHA_STEPS }, () => [] as number[]),
+    bins: Array.from({ length: 2 * ALPHA_STEPS }, () => [] as number[]),
     /** cancels the idle sprite prewarm, if one is running */
     warm: null as null | (() => void),
     /** what floats over the focus node -- the card a pick opens -- placed each frame */
@@ -288,7 +254,7 @@ type MapState = ReturnType<typeof createState>
 function classes(s: MapState, d: MapData): Uint8Array {
   if (s.clsOf !== d || !s.cls) {
     const cls = new Uint8Array(d.n)
-    for (let i = 0; i < d.n; i++) cls[i] = d.target[i] ? (d.joyo[i] ? 0 : 1) : 2
+    for (let i = 0; i < d.n; i++) cls[i] = d.joyo[i] ? 0 : 1
     s.cls = cls
     s.clsOf = d
   }
@@ -310,7 +276,7 @@ function startPrewarm(s: MapState) {
   const d = s.data
   if (!d || !fontLoaded) return
   const styles = (s.styles ??= spriteStyles((s.colors ??= palette())))
-  const styleOf = [styles.paper, styles.muted, styles.part]
+  const styleOf = [styles.paper, styles.muted]
   const cls = classes(s, d)
   const order = Array.from({ length: d.n }, (_, i) => i)
     .sort((a, b) => d.size[b] - d.size[a])
@@ -372,52 +338,11 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   const f = s.focus
   const hv = s.hover
 
-  // --- the focus's own edges: parts in indigo, users in paper.
-  const spokes = (i: number, alpha: number, width: number) => {
-    const x = pos[2 * i] * k + ox
-    const y = pos[2 * i + 1] * k + oy
-    ctx.lineWidth = width
-    ctx.globalAlpha = alpha
-    ctx.strokeStyle = c.aiDeep
-    ctx.beginPath()
-    for (let m = d.partsAt[i]; m < d.partsAt[i + 1]; m++) {
-      const j = d.partsIdx[m]
-      ctx.moveTo(x, y)
-      ctx.lineTo(pos[2 * j] * k + ox, pos[2 * j + 1] * k + oy)
-    }
-    ctx.stroke()
-    ctx.strokeStyle = c.ruleBright
-    ctx.beginPath()
-    for (let m = d.usersAt[i]; m < d.usersAt[i + 1]; m++) {
-      const j = d.usersIdx[m]
-      ctx.moveTo(x, y)
-      ctx.lineTo(pos[2 * j] * k + ox, pos[2 * j + 1] * k + oy)
-    }
-    ctx.stroke()
-  }
-  if (f >= 0) spokes(f, 0.9, 1.3)
-  if (hv >= 0 && hv !== f) spokes(hv, 0.7, 1)
-
-  // Neighbours of the focus are drawn legibly whatever the zoom: that is
-  // the part of the map you are standing in. A hub like 口 has a thousand, so
-  // only the most important are promoted.
-  if (s.nearOf !== f || s.nearData !== d) {
-    const all: number[] = []
-    if (f >= 0) {
-      for (let m = d.partsAt[f]; m < d.partsAt[f + 1]; m++) all.push(d.partsIdx[m])
-      for (let m = d.usersAt[f]; m < d.usersAt[f + 1]; m++) all.push(d.usersIdx[m])
-    }
-    all.sort((a, b) => d.size[b] - d.size[a])
-    s.near = new Set(all.slice(0, NEAR_LIMIT))
-    s.nearOf = f
-    s.nearData = d
-  }
-  const near = s.near
 
   const cls = classes(s, d)
-  const colors = [c.paper, c.muted, c.ai]
+  const colors = [c.paper, c.muted]
   const styles = (s.styles ??= spriteStyles(c))
-  const styleOf = [styles.paper, styles.muted, styles.part]
+  const styleOf = [styles.paper, styles.muted]
   // While a cluster is lit, the others fade by how near they are to it.
   const stage = s.lit >= 0 && s.stageOf === d ? s.stage : null
   const dim = (i: number) => (stage ? STAGE_ALPHA[stage[i]] : 1)
@@ -430,7 +355,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   for (const b of bins) b.length = 0
   for (let i = 0; i < d.n; i++) {
     const r = d.size[i] * k
-    if (r >= LABEL_FULL || i === f || near.has(i) || !inView(i)) continue
+    if (r >= LABEL_FULL || i === f || !inView(i)) continue
     const fade = r <= LABEL_FROM ? 1 : (LABEL_FULL - r) / (LABEL_FULL - LABEL_FROM)
     const alpha = (stage ? STAGE_DOT[stage[i]] : 0.28 + 0.6 * Math.min(1, r / LABEL_FROM)) * fade
     const q = Math.min(ALPHA_STEPS - 1, Math.floor(alpha * ALPHA_STEPS))
@@ -455,7 +380,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
     ctx.fill()
   }
 
-  // --- near nodes as plates and glyphs, least important first so the big
+  // --- close nodes as plates and glyphs, least important first so the big
   // ones land on top.
   // Every node but the focus comes from the sprite atlas: fillText at a new
   // scale re-rasterises the glyph, which made every zoom frame redo them all.
@@ -494,14 +419,10 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   atlas.beginFrame()
   for (let i = 0; i < d.n; i++) {
     const r = d.size[i] * k
-    if (r < LABEL_FROM || i === f || near.has(i) || !inView(i)) continue
+    if (r < LABEL_FROM || i === f || !inView(i)) continue
     const a = Math.min(1, (r - LABEL_FROM) / (LABEL_FULL - LABEL_FROM))
     if (a < 0.02) continue
     glyph(i, pos[2 * i] * k + ox, pos[2 * i + 1] * k + oy, r, a)
-  }
-  for (const i of near) {
-    if (!inView(i)) continue
-    glyph(i, pos[2 * i] * k + ox, pos[2 * i + 1] * k + oy, Math.max(d.size[i] * k, 9), 1)
   }
 
   // --- the focus: a vermilion seal, as in the focus view.
@@ -517,7 +438,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
     ctx.fillRect(x - r * 3.2, y - r * 3.2, r * 6.4, r * 6.4)
     // The focus alone is drawn live in the heavier weight.
     ctx.font = `600 ${GLYPH_PX}px ${MINCHO}`
-    livePlate(f, x, y, r, c.sumi, d.target[f] ? c.rule : c.aiDeep, colors[cls[f]])
+    livePlate(f, x, y, r, c.sumi, c.rule, colors[cls[f]])
     ctx.strokeStyle = c.shu
     ctx.lineWidth = 1.5
     ctx.beginPath()
@@ -528,7 +449,7 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   if (hv >= 0 && hv !== f && inView(hv)) {
     const x = pos[2 * hv] * k + ox
     const y = pos[2 * hv + 1] * k + oy
-    const r = Math.max(d.size[hv] * k, near.has(hv) ? 9 : 3)
+    const r = Math.max(d.size[hv] * k, 3)
     ctx.globalAlpha = 1
     ctx.strokeStyle = c.paperDim
     ctx.lineWidth = 1
@@ -547,12 +468,12 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
 /** Memoised: the App re-renders far more often than anything here changes. */
 export const KanjiMap = memo(KanjiMapView)
 
-function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend, card }: Props) {
+function KanjiMapView({ scope, focus, focusNode, onSelect, onDeselect, onOpen, onScope, legend, card }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tipRef = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<'fetch' | 'layout' | 'ready' | 'error'>('fetch')
-  const [counts, setCounts] = useState<{ nodes: number; edges: number } | null>(null)
+  const [count, setCount] = useState<number | null>(null)
   const [present, setPresent] = useState(true)
   const lang = useLang()
   const t = S(lang)
@@ -704,7 +625,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
           s.placed = true
         }
       }
-      lastLayout = { data: d, pos }
       setPhase('ready')
       const i = d.index.get(s.focusChar) ?? -1
       s.focus = i
@@ -716,34 +636,20 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
       }
     }
 
-    loadMap(scope, by).then(
+    loadMap(scope).then(
       (d) => {
         if (cancelled) return
-        // The other arrangement's camera means nothing here: start from the whole map.
-        if (s.data && s.data.by !== d.by) s.placed = false
         s.data = d
         s.hover = -1
         s.focus = -1
         s.maxSize = d.size.reduce((a, b) => Math.max(a, b), 1)
-        setCounts({ nodes: d.n, edges: d.edges.length / 2 })
+        setCount(d.n)
         startPrewarm(s)
 
         const cached = cachedLayout(d)
         if (cached) {
           settle(d, cached)
           return
-        }
-
-        const seed = new Float32Array(2 * d.n).fill(NaN)
-        if (lastLayout && lastLayout.data.by === d.by) {
-          const prev = lastLayout
-          for (let i = 0; i < d.n; i++) {
-            const j = prev.data.index.get(d.chars[i])
-            if (j !== undefined) {
-              seed[2 * i] = prev.pos[2 * j]
-              seed[2 * i + 1] = prev.pos[2 * j + 1]
-            }
-          }
         }
 
         setPhase('layout')
@@ -770,11 +676,8 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
           }
           request()
         }
-        const similar = d.similar.slice()
-        const homes = d.home?.slice()
-        const req: LayoutRequest = { id: 1, n: d.n, edges: d.edges.slice(), size: d.size.slice(), seed, similar, homes }
-        const moved = [req.edges.buffer, req.size.buffer, req.seed.buffer, similar.buffer]
-        worker.postMessage(req, homes ? [...moved, homes.buffer] : moved)
+        const req: LayoutRequest = { id: 1, n: d.n, size: d.size.slice(), homes: d.home.slice() }
+        worker.postMessage(req, [req.size.buffer, req.homes.buffer])
       },
       () => !cancelled && setPhase('error'),
     )
@@ -784,7 +687,7 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
       worker?.terminate()
       stopPrewarm(s)
     }
-  }, [scope, by, s, centreOn, fitCamera, flyTo, request])
+  }, [scope, s, centreOn, fitCamera, flyTo, request])
 
   // The focus can change from anywhere -- search, breadcrumb, a word's kanji.
   useEffect(() => {
@@ -800,16 +703,16 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
 
   useEffect(() => request(), [lang, request])
 
-  // The focus's cluster, by meaning, is lit.
+  // The focus's cluster is lit.
   const data = s.data
-  const fi = phase === 'ready' && data?.cluster && focus ? (data.index.get(focus) ?? -1) : -1
-  const lit = fi >= 0 ? data!.cluster![fi] : -1
+  const fi = phase === 'ready' && data && focus ? (data.index.get(focus) ?? -1) : -1
+  const lit = fi >= 0 ? data!.cluster[fi] : -1
 
   useEffect(() => {
     s.lit = lit
     const d = s.data
-    const near = lit >= 0 && phase === 'ready' && d?.cluster ? d.clusters[lit]?.near : undefined
-    if (!d?.cluster || !near) {
+    const near = lit >= 0 && phase === 'ready' && d ? d.clusters[lit]?.near : undefined
+    if (!d || !near) {
       s.stage = null
       s.stageOf = null
     } else {
@@ -819,7 +722,7 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
       s.stageOf = d
     }
     request()
-  }, [lit, phase, scope, by, s, request])
+  }, [lit, phase, scope, s, request])
 
   // ------------------------------------------------------------------ canvas size
 
@@ -907,14 +810,14 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
         ? `translate(${px}px, ${py - 28}px) translate(-50%, -100%)`
         : `translate(${px + 14}px, ${py + 12}px)`
       const tt = tRef.current
-      const meaning = mapMeaning(d, i, tt.lang).value || (d.target[i] ? tt('none') : tt('component'))
+      const meaning = mapMeaning(d, i, tt.lang).value || tt('none')
       tip.innerHTML = ''
       const g = document.createElement('b')
       g.textContent = d.chars[i]
       const m = document.createElement('span')
       m.textContent = meaning
       const l = document.createElement('em')
-      const k = d.cluster ? d.cluster[i] : -1
+      const k = d.cluster[i]
       const level = k >= 0 ? `${levelLabel(d, i, tt)} · ${d.clusters[k][tt.lang === 'bg' ? 'bg' : 'en']}` : levelLabel(d, i, tt)
       l.textContent = i === s.focus ? tt('clickOpen', { level }) : level
       tip.append(g, m, l)
@@ -1049,7 +952,7 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
   }, [zoomBy])
 
   const home = homeScope(focusNode?.char === focus ? focusNode : null)
-  const cardNode = card?.(by === 'meaning' && phase === 'ready' ? (lit >= 0 ? data!.clusters[lit] : null) : undefined)
+  const cardNode = card?.(phase === 'ready' ? (lit >= 0 ? data!.clusters[lit] : null) : undefined)
 
   return (
     <div className="map" ref={wrapRef}>
@@ -1074,7 +977,7 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
       {phase !== 'ready' && (
         <p className="map-status" role="status">
           {phase === 'fetch' && t('fetching')}
-          {phase === 'layout' && counts && t('laying', { n: num(counts.nodes) })}
+          {phase === 'layout' && count !== null && t('laying', { n: num(count) })}
           {phase === 'error' && t('error')}
           {phase !== 'error' && <span className="map-status-dots" aria-hidden />}
         </p>
@@ -1086,7 +989,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
           {String(home) !== scope && (
             <button onClick={() => onScope(home)}>{t('showOn', { scope: scopeName(String(home) as Scope, t) })}</button>
           )}
-          {by === 'meaning' && <button onClick={() => onArrange('parts')}>{t('showParts')}</button>}
         </p>
       )}
 
@@ -1119,16 +1021,13 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
 
       {legend && (
         <p className="legend" id="stage-legend">
-          {counts &&
-            (by === 'meaning'
-              ? t('countsMeaning', { n: num(counts.nodes) })
-              : t('counts', { n: num(counts.nodes), e: num(counts.edges) }))}
+          {count !== null && t('counts', { n: num(count) })}
           <br />
-          {t(by === 'meaning' ? 'legendSizeMeaning' : 'legendSize')}
+          {t('legendSize')}
           <br />
-          {t(by === 'meaning' ? 'legendNearMeaning' : 'legendNear')}
+          {t('legendNear')}
           <br />
-          {t(by === 'meaning' ? 'legendClickMeaning' : 'legendClick')}
+          {t('legendClick')}
           <br />
           {t('legendEmpty')}
         </p>

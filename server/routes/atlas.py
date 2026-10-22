@@ -1,20 +1,18 @@
-"""The whole-set map: every character in a scope and the edges between them.
+"""The map: every kanji in a scope, where its meanings put it.
 
-GET /api/map/{scope} returns one scope as columns rather than objects -- at
-"all" that is 13k nodes, and repeating every key per node would triple the
-payload. The client lays it out itself (a force simulation in a worker), so the
-server only answers "which characters, and what is inside what".
+GET /api/map/{scope} returns one scope as columns rather than objects --
+repeating every key per kanji would triple the payload. Each kanji sits where
+data/meaning_map.json (pipeline/meaning_map.py) puts it, with its cluster; the
+client only spreads them so none overlap. Kanji only: parts like 氵 have no
+meanings to place them by. The map by parts -- a force layout over the
+decomposition, with parts as nodes -- was removed on 2026-10-22 (Dani: "let it
+be only meaning").
 
 Scopes follow the graph filter:
 
-  5 .. 1   JLPT N5 and easier .. N1 and easier, plus every part they are built
-           from, whatever its level -- the parts are not optional
-  common   the 2,501 newspaper-ranked characters, plus their parts
-  all      everything in the graph
-
-`?by=meaning` is the same scope laid out by meaning instead (Dani, 2026-10-18):
-kanji only -- parts like 氵 have no meanings to place them by -- each where
-data/meaning_map.json puts it (pipeline/meaning_map.py), with its cluster.
+  5 .. 1   JLPT N5 and easier .. N1 and easier
+  common   the newspaper-ranked kanji
+  all      every kanji the meaning map places
 """
 
 import functools
@@ -23,120 +21,16 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from .. import bg_overlay, store
+from .. import bg_overlay
 from ..db import query
 
 router = APIRouter(prefix="/api/map", tags=["map"])
 
 SCOPES = {"5", "4", "3", "2", "1", "common", "all"}
-# How many of each character's closest lookalikes pull on the map.
-LOOKALIKES = 3
 
 MEANING_MAP = Path(__file__).parent.parent.parent / "data" / "meaning_map.json"
 
-# Keyed on the override set, so fixing a decomposition invalidates it.
-_cache: dict[tuple[str, str], dict] = {}
-
-
-def _children() -> dict[str, list[str]]:
-    """The full containment table with overrides substituted, in one pass.
-
-    Cheaper than children_of() for this: that issues one IN (...) query per
-    frontier, and a 13k-character frontier is most of the table anyway.
-    """
-    kids: dict[str, list[str]] = {}
-    for r in query("SELECT parent, child FROM edge"):
-        kids.setdefault(r["parent"], []).append(r["child"])
-    kids.update({p: list(c) for p, c in store.decomposition_overrides().items()})
-    return kids
-
-
-def _build(scope: str) -> dict:
-    kids = _children()
-    rows = {
-        r["char"]: r
-        for r in query(
-            "SELECT k.char, k.freq, k.jlpt, k.joyo, k.strokes, k.meanings, "
-            "COALESCE(f.joyo_count, 0) AS fanout, kb.meanings AS meanings_bg "
-            "FROM kanji k LEFT JOIN fanout f ON f.char = k.char "
-            "LEFT JOIN kanji_bg kb ON kb.char = k.char"
-        )
-    }
-
-    if scope == "all":
-        targets = set(rows) | set(kids)
-    elif scope == "common":
-        targets = {c for c, r in rows.items() if r["freq"] is not None}
-    else:
-        level = int(scope)
-        targets = {c for c, r in rows.items() if r["jlpt"] is not None and r["jlpt"] >= level}
-
-    # Close downward: a level's kanji drag in their parts.
-    members = set(targets)
-    frontier = list(targets)
-    while frontier:
-        nxt = []
-        for c in frontier:
-            for k in kids.get(c, ()):
-                if k not in members:
-                    members.add(k)
-                    nxt.append(k)
-        frontier = nxt
-
-    # Frequent first, so the client draws (and labels) the important ones last
-    # and on top without sorting.
-    def rank(c: str) -> tuple:
-        r = rows.get(c)
-        freq = r["freq"] if r and r["freq"] is not None else 99999
-        fan = r["fanout"] if r else 0
-        return (-(fan >= 8), freq, -fan, c)
-
-    chars = sorted(members, key=rank, reverse=True)
-    index = {c: i for i, c in enumerate(chars)}
-
-    edges: list[int] = []
-    for parent in chars:
-        for child in kids.get(parent, ()):
-            j = index.get(child)
-            if j is not None and child != parent:
-                edges += [index[parent], j]
-
-    def col(name: str, default=None):
-        return [rows[c][name] if c in rows else default for c in chars]
-
-    meanings, meanings_bg = [], []
-    for c in chars:
-        m = json.loads(rows[c]["meanings"] or "[]") if c in rows else []
-        meanings.append(m[0] if m else "")
-        b = (bg_overlay.kanji(c, rows[c]["meanings_bg"]) or []) if c in rows else []
-        meanings_bg.append(b[0] if b else "")
-
-    # Lookalikes pull on the layout too, so 人 and 入 end up in sight of each
-    # other; see layout.worker.ts. Each character's closest few, both in scope.
-    look: set[tuple[int, int]] = set()
-    for r in query("SELECT char, other FROM similar WHERE kind = 'look' AND rank < ?", (LOOKALIKES,)):
-        a, b = index.get(r["char"]), index.get(r["other"])
-        if a is not None and b is not None and a != b:
-            look.add((a, b) if a < b else (b, a))
-    similar = [i for pair in sorted(look) for i in pair]
-
-    return {
-        "scope": scope,
-        "chars": chars,
-        "freq": col("freq"),
-        "jlpt": col("jlpt"),
-        "joyo": [1 if c in rows and rows[c]["joyo"] else 0 for c in chars],
-        "fanout": col("fanout", 0),
-        "strokes": col("strokes"),
-        "meaning": meanings,
-        "meaningBg": meanings_bg,
-        # 1 = in the scope in its own right, 0 = pulled in only as a part
-        "target": [1 if c in targets else 0 for c in chars],
-        "edges": edges,
-        # flat a,b index pairs of lookalikes, each pair once
-        "similar": similar,
-        "counts": {"nodes": len(chars), "targets": len(targets), "edges": len(edges) // 2},
-    }
+_cache: dict[str, dict] = {}
 
 
 @functools.cache
@@ -144,47 +38,49 @@ def _meaning_map() -> dict:
     return json.loads(MEANING_MAP.read_text(encoding="utf-8"))
 
 
-def _build_meaning(scope: str, parts: dict) -> dict:
-    """The parts map's scope, cut down to the kanji the meaning map places.
-
-    No edges: what a kanji is built from has no say in where it sits here, and
-    lines to its parts, scattered across the map, only cluttered it (Dani,
-    2026-10-18).
-    """
+def _build(scope: str) -> dict:
     mm = _meaning_map()
     xy = mm["layouts"][scope]
-    keep = [i for i, c in enumerate(parts["chars"]) if c in xy]
-    out = {k: [parts[k][i] for i in keep]
-           for k in ("chars", "freq", "jlpt", "joyo", "fanout", "strokes", "meaning", "meaningBg", "target")}
-    out["target"] = [1] * len(keep)
-    out.update({
+    rows = {
+        r["char"]: r
+        for r in query(
+            "SELECT k.char, k.freq, k.jlpt, k.joyo, k.strokes, k.meanings, kb.meanings AS meanings_bg "
+            "FROM kanji k LEFT JOIN kanji_bg kb ON kb.char = k.char"
+        )
+    }
+    # Frequent last, so the client draws (and labels) the important ones last
+    # and on top without sorting.
+    chars = sorted((c for c in xy if c in rows), key=lambda c: (rows[c]["freq"] or 99999, c), reverse=True)
+
+    meanings, meanings_bg = [], []
+    for c in chars:
+        m = json.loads(rows[c]["meanings"] or "[]")
+        meanings.append(m[0] if m else "")
+        b = bg_overlay.kanji(c, rows[c]["meanings_bg"]) or []
+        meanings_bg.append(b[0] if b else "")
+
+    return {
         "scope": scope,
-        "by": "meaning",
-        "edges": [],
-        "similar": [],
+        "chars": chars,
+        "freq": [rows[c]["freq"] for c in chars],
+        "jlpt": [rows[c]["jlpt"] for c in chars],
+        "joyo": [1 if rows[c]["joyo"] else 0 for c in chars],
+        "strokes": [rows[c]["strokes"] for c in chars],
+        "meaning": meanings,
+        "meaningBg": meanings_bg,
         # flat x,y per kanji, in t-SNE's units: the client scales them to its sizes
-        "xy": [v for c in out["chars"] for v in xy[c]],
+        "xy": [v for c in chars for v in xy[c]],
         # cluster id per kanji, -1 = in none
-        "cluster": [mm["cluster"].get(c, -1) for c in out["chars"]],
+        "cluster": [mm["cluster"].get(c, -1) for c in chars],
         "clusters": mm["clusters"],
         "regions": mm["regions"],
-        "counts": {"nodes": len(keep), "targets": len(keep), "edges": 0},
-    })
-    return out
+    }
 
 
 @router.get("/{scope}")
-def get_map(scope: str, by: str = "parts") -> dict:
+def get_map(scope: str) -> dict:
     if scope not in SCOPES:
         raise HTTPException(400, f"scope must be one of {sorted(SCOPES)}")
-    if by not in ("parts", "meaning"):
-        raise HTTPException(400, "by must be parts or meaning")
-    key = (scope, json.dumps(store.decomposition_overrides(), sort_keys=True))
-    if key not in _cache:
-        _cache[key] = _build(scope)
-    if by == "parts":
-        return _cache[key]
-    mkey = (scope + ":meaning", key[1])
-    if mkey not in _cache:
-        _cache[mkey] = _build_meaning(scope, _cache[key])
-    return _cache[mkey]
+    if scope not in _cache:
+        _cache[scope] = _build(scope)
+    return _cache[scope]

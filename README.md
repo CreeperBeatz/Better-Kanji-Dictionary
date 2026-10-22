@@ -46,28 +46,24 @@ says it has anything above it at all.
 
 ## The map
 
-**Map** (or `M`; `F` returns to the focus view) shows every character in a
-scope at once, to wander around in. The level buttons pick the scope: N5 to N1
-each include the parts their kanji are built from, `common` is the 2,501
-newspaper-ranked characters and their parts, and `all` is the whole graph,
-13,490 characters.
+**Map** (or `M`; `F` returns to the focus view) shows every kanji in a scope
+at once, placed by what it means, to wander around in. The level buttons pick
+the scope: N5 to N1 each include the easier levels, `common` is the 2,501
+newspaper-ranked kanji, and `all` is every kanji the meaning map places, 2,679.
 
-Characters sit near the parts they share, and parts that look alike (人 and
-入) are drawn toward each other; see `layout.worker.ts` for why only parts,
-not every character. Characters are larger when frequent or when many
-characters use them, and resolve from points into glyphs as you zoom in.
-Links are drawn only for the selected character (its parts in indigo, the
-characters it appears in as paper) and for the one under the pointer; a haze of
-all 27k said little and cost most of every frame. Clicking a character flies to
-it and makes it the focus; clicking the focus again opens it in the focus view.
-`◎` or `C` recentres on the focus.
+Kanji that mean related things sit together. Each is embedded from its hero
+sentence and meaning groups, laid out with t-SNE, and grouped into named
+clusters (`pipeline/meaning_map.py`, which builds `data/meaning_map.json`).
+Kanji are larger when frequent, and resolve from points into glyphs as you zoom
+in. Clicking a kanji flies to it, makes it the focus and lights its cluster: the
+others fade by how near they are in meaning, and the card names it. Clicking
+the focus again opens it in the focus view. `◎` or `C` recentres on the focus.
 
-The layout is a force simulation in a Web Worker, run once per scope and kept in
-`localStorage` (about 2 s for N1, 7 s for `all`). Large scopes lay out the shared
-components first and then place each leaf character at a weighted centroid of
-its parts, which is what makes `all` tractable at all -- a plain simulation took
-40 s. Nodes are drawn from a glyph sprite atlas, so zooming does not re-rasterise
-text every frame.
+The layout only spreads the large kanji apart round their places, in a Web
+Worker, and is kept in `localStorage`. Nodes are drawn from a glyph sprite
+atlas, so zooming does not re-rasterise text every frame. The map once had a
+second arrangement, by the parts characters share; it was removed on
+2026-10-22 and is in git history before then.
 
 ## What each piece does
 

@@ -140,27 +140,17 @@ export interface MapResponse {
   freq: (number | null)[]
   jlpt: (number | null)[]
   joyo: (0 | 1)[]
-  fanout: number[]
   strokes: (number | null)[]
   meaning: string[]
   /** The first Bulgarian meaning, or "" when there is none. */
   meaningBg: string[]
-  /** 1 = in the scope in its own right, 0 = pulled in only as a part */
-  target: (0 | 1)[]
-  /** flat parent,child index pairs */
-  edges: number[]
-  /** flat a,b index pairs of lookalikes, each pair once; they pull on the layout */
-  similar: number[]
-  counts: { nodes: number; targets: number; edges: number }
-  /** Laid out by meaning (`?by=meaning`): kanji only, with the fields below. */
-  by?: 'meaning'
   /** flat x,y per kanji, in the meaning map's own units */
-  xy?: number[]
+  xy: number[]
   /** cluster id per kanji, -1 = in none */
-  cluster?: number[]
+  cluster: number[]
   /** near: a digit per cluster, how near it is to this one: 3 itself, 2 near, 1 related, 0 not */
-  clusters?: { en: string; bg: string; region: number; near: string }[]
-  regions?: { en: string; bg: string }[]
+  clusters: { en: string; bg: string; region: number; near: string }[]
+  regions: { en: string; bg: string }[]
 }
 
 export interface WordEntry {
@@ -1061,8 +1051,7 @@ export const api = {
       chars.map((c) => ['c', c] as [string, string]),
     ),
 
-  map: (scope: string, by: 'parts' | 'meaning' = 'parts') =>
-    get<MapResponse>(`/api/map/${encodeURIComponent(scope)}${by === 'meaning' ? '?by=meaning' : ''}`),
+  map: (scope: string) => get<MapResponse>(`/api/map/${encodeURIComponent(scope)}`),
 
   /** Kept for the session: a character's page is opened again and again. */
   similar: Object.assign(

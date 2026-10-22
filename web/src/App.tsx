@@ -17,7 +17,7 @@ import { local, runningInstalled } from './local/local'
 import { InstallGuide } from './install/InstallGuide'
 import { WordHead, WordPanel } from './detail/WordPanel'
 import { clampShare, RAIL_MIN, RailResizer, SplitResizer, STAGE_MIN, useRailWidth, useSearchShare } from './RailResizer'
-import { GraphDetail, LevelFilter, MapArrange, type StageView } from './StageControls'
+import { GraphDetail, LevelFilter, type StageView } from './StageControls'
 import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
@@ -200,8 +200,6 @@ function useVisibleHeight(enabled: boolean) {
 const SPLIT_KEY = 'betterrtk:searchBeside'
 // '0' when the graph shows visual splits too (expanded); only the parts (simple) otherwise.
 const GRAPH_SIMPLE_KEY = 'betterrtk:graphSimple'
-// '0' when the map is laid out by parts; by meaning otherwise.
-const MAP_MEANING_KEY = 'betterrtk:mapMeaning'
 const SPLIT_ROOM = 2 * RAIL_MIN + STAGE_MIN
 // On a phone a page's tabs sit along the bottom: Search, left of Dictionary,
 // is the search the page was opened from, and Components is the graph.
@@ -708,7 +706,6 @@ export function App() {
   const accountShown = accountOpen || authError !== null
   const [filter, setFilter] = useState<ContainerFilter>('common')
   const [simpleGraph, chooseSimple] = useOnUnlessOff(GRAPH_SIMPLE_KEY)
-  const [mapMeaning, chooseMapMeaning] = useOnUnlessOff(MAP_MEANING_KEY)
   const [view, setViewState] = useState<StageView>(initialView)
   // The map is expensive to lay out, so once opened it stays mounted and keeps
   // its camera while the focus view is showing.
@@ -2755,8 +2752,6 @@ export function App() {
               <Suspense fallback={null}>
               <KanjiMap
                 scope={scopeOf(filter)}
-                by={mapMeaning ? 'meaning' : 'parts'}
-                onArrange={(by) => chooseMapMeaning(by === 'meaning')}
                 focus={mapCard ?? focus}
                 focusNode={!mapCard && selected && data?.focus.char === focus ? data.focus : null}
                 onSelect={setMapCard}
@@ -2789,7 +2784,6 @@ export function App() {
                 <LevelFilter filter={filter} view={view} onFilter={setFilter} />
               )}
               {!error && view === 'focus' && <GraphDetail simple={simpleGraph} onSimple={chooseSimple} />}
-              {!error && view === 'map' && <MapArrange meaning={mapMeaning} onMeaning={chooseMapMeaning} />}
               {/* On a phone it sits at the end of the search bar instead, always on screen. */}
               {!mobile && <ProfileButton onOpen={signIn} />}
             </div>

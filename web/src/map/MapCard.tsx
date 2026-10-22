@@ -41,7 +41,7 @@ export function MapCard({
   char: string
   onOpen: () => void
   onClose: () => void
-  /** By meaning: the cluster lit on the map, null when it is in none; undefined by parts. */
+  /** The cluster lit on the map, null when it is in none; undefined while the map loads. */
   group?: Group | null
 }) {
   const lang = useLang()
