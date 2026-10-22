@@ -9,12 +9,13 @@ import { levelOf } from '../detail/DetailPanel'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { local } from '../local/local'
+import type { Group } from './mapData'
 
 const S = strings(
   {
     open: 'See in Dictionary',
-    focus: 'Focus',
-    focusTitle: 'Light up its group on the map (double-click)',
+    group: 'Group',
+    noGroup: 'in no group',
     close: 'Close',
     on: 'On',
     kun: 'Kun',
@@ -22,8 +23,8 @@ const S = strings(
   },
   {
     open: 'Вижте в речника',
-    focus: 'Фокус',
-    focusTitle: 'Осветете групата му на картата (двоен клик)',
+    group: 'Група',
+    noGroup: 'в никоя група',
     close: 'Затворете',
     on: 'Он',
     kun: 'Кун',
@@ -31,23 +32,17 @@ const S = strings(
   },
 )
 
-/** The map by meaning's light on the character's cluster: whether it is on, and the switch. */
-export interface ClusterFocus {
-  on: boolean
-  toggle: () => void
-}
-
 export function MapCard({
   char,
   onOpen,
   onClose,
-  focus,
+  group,
 }: {
   char: string
   onOpen: () => void
   onClose: () => void
-  /** null when there is no cluster to light: the parts map, or a kanji in none */
-  focus?: ClusterFocus | null
+  /** By meaning: the cluster lit on the map, null when it is in none; undefined by parts. */
+  group?: Group | null
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -79,6 +74,16 @@ export function MapCard({
       <button className="map-card-x" onClick={onClose} aria-label={t('close')} title={t('close')}>
         ×
       </button>
+      {group !== undefined && (
+        <div className="map-card-group">
+          <span className="map-card-group-label">{t('group')}</span>
+          {group ? (
+            <span className="map-card-group-name">{group[lang === 'bg' ? 'bg' : 'en']}</span>
+          ) : (
+            <span className="map-card-group-none">{t('noGroup')}</span>
+          )}
+        </div>
+      )}
       <div className="map-card-head">
         <span className="map-card-glyph" lang="ja">
           {char}
@@ -106,16 +111,9 @@ export function MapCard({
           {[level, node.strokes ? t('strokes', { n: node.strokes }) : null].filter(Boolean).join(' · ')}
         </p>
       )}
-      <div className="map-card-actions">
-        <button className="see-components" onClick={onOpen}>
-          {t('open')}
-        </button>
-        {focus && (
-          <button className="see-components" data-on={focus.on} aria-pressed={focus.on} title={t('focusTitle')} onClick={focus.toggle}>
-            {t('focus')}
-          </button>
-        )}
-      </div>
+      <button className="see-components map-card-open" onClick={onOpen}>
+        {t('open')}
+      </button>
     </div>
   )
 }

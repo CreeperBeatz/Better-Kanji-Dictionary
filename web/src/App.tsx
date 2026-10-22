@@ -2762,13 +2762,13 @@ export function App() {
                 onSelect={setMapCard}
                 onDeselect={() => (mapCard ? setMapCard(null) : deselect())}
                 onOpen={seeInDictionary}
-                card={(clusterFocus) =>
+                card={(group) =>
                   mapCard && (
                     <MapCard
                       char={mapCard}
                       onOpen={() => seeInDictionary(mapCard)}
                       onClose={() => setMapCard(null)}
-                      focus={clusterFocus}
+                      group={group}
                     />
                   )
                 }

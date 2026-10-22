@@ -4026,19 +4026,34 @@ button.usage-head:focus-visible .usage-spelling {
   font-size: calc(12px * var(--type));
 }
 
-.map-card-actions {
-  display: flex;
-  gap: 8px;
+.map-card-open {
   margin-top: 14px;
 }
 
-.map-card-actions .see-components {
-  margin: 0;
+/* By meaning: the group lit on the map, as the card's first section. */
+.map-card-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: -14px -16px 12px;
+  padding: 9px 34px 9px 16px;
+  border-bottom: 1px solid var(--rule);
+  font-size: calc(13px * var(--type));
 }
 
-.map-card-actions .see-components[data-on='true'] {
-  background: var(--ai-wash);
+.map-card-group-label {
+  color: var(--muted);
+  font-size: calc(11px * var(--type));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.map-card-group-name {
   color: var(--paper);
+}
+
+.map-card-group-none {
+  color: var(--muted);
 }
 
 /* ---------------------------------------------------------------- map */
@@ -4136,28 +4151,6 @@ button.usage-head:focus-visible .usage-spelling {
   to {
     background-position: -200% 0;
   }
-}
-
-/* The lit cluster on the map by meaning: its name, and a way out. */
-.map-highlight {
-  gap: 8px;
-  padding: 4px 6px 4px 12px;
-  color: var(--paper);
-}
-
-.map-highlight button {
-  background: none;
-  border: 0;
-  color: var(--paper-dim);
-  font-family: var(--gothic);
-  font-size: calc(15px * var(--type));
-  line-height: 1;
-  padding: 2px 6px;
-  cursor: pointer;
-}
-
-.map-highlight button:hover {
-  color: var(--paper);
 }
 
 .map-absent-glyph {

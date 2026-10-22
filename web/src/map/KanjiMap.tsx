@@ -15,12 +15,11 @@
  * Clicking a character flies to it and makes it the focus; clicking the focus
  * again opens it in the focus view. Clicking empty space clears the focus.
  *
- * By meaning, the map is coloured as by parts and carries no names. Double-
- * clicking a kanji there (or the card's Focus) lights its cluster and names
- * it: the other clusters fade in stages by how near they are in meaning
- * (pipeline/meaning_map.py `near`), so the clusters close to it stay readable
- * and the rest all but vanish. A click on the selected kanji opens it only
- * once DOUBLE_MS has passed without a second click.
+ * By meaning, the map is coloured as by parts and carries no names. Selecting
+ * a kanji there lights its cluster, which the card names: the other clusters
+ * fade in stages by how near they are in meaning (pipeline/meaning_map.py
+ * `near`), so the clusters close to it stay readable and the rest all but
+ * vanish.
  */
 
 import { interpolateZoom } from 'd3-interpolate'
@@ -32,8 +31,7 @@ import { strings, useLang, type Translate } from '../i18n'
 import { mapMeaning } from '../i18n/content'
 import type { LayoutMessage, LayoutRequest } from './layout.worker'
 import { GlyphAtlas, type SpriteStyle } from './glyphs'
-import type { ClusterFocus } from './MapCard'
-import { cachedLayout, loadMap, storeLayout, type Arrange, type MapData, type Scope } from './mapData'
+import { cachedLayout, loadMap, storeLayout, type Arrange, type Group, type MapData, type Scope } from './mapData'
 
 /** Press this long on a touch screen to see a character, as hovering does. */
 const HOLD_DELAY = 450
@@ -54,9 +52,9 @@ interface Props {
   legend: boolean
   /**
    * Floats over the focus node, following it as the map moves. Given the
-   * switch for the light on the focus's cluster, or null when it has none.
+   * focus's cluster by meaning, null when it is in none, undefined by parts.
    */
-  card?: (focus: ClusterFocus | null) => React.ReactNode
+  card?: (cluster: Group | null | undefined) => React.ReactNode
 }
 
 interface Camera {
@@ -82,16 +80,10 @@ const LIVE_UNTIL_MS = 14
 const ALPHA_STEPS = 12
 const TAU = Math.PI * 2
 const MINCHO = '"Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif'
-const SANS = 'system-ui, -apple-system, "Segoe UI", sans-serif'
-/** A second click within this long, and this close, makes a double-click. */
-const DOUBLE_MS = 300
-const DOUBLE_PX = 12
 /** Opacity per stage while a cluster is lit: not related, related, near, the cluster itself. */
 const STAGE_ALPHA = [0.08, 0.34, 0.68, 1]
 /** The same for distant dots, which are faint to begin with: these replace their opacity. */
 const STAGE_DOT = [0.07, 0.5, 0.85, 1]
-/** Between the lit cluster's bottom and its name, in px. */
-const LIT_NAME_GAP = 10
 
 // The last finished layout seeds the next scope, so switching N4 -> N3 grows
 // the map around where things already were instead of reshuffling it.
@@ -151,14 +143,12 @@ const S = strings(
     whole: 'Show the whole map',
     counts: '{n} characters, {e} links',
     countsMeaning: '{n} kanji',
-    legendClickMeaning: 'click to select, click again to open,',
+    legendClickMeaning: 'click to select and light its group, click again to open,',
     legendSize: 'larger is more frequent, or a part more characters share',
     legendNear: 'nearby characters share a part; ones that share none sit in rows below',
     legendClick: 'click to select and see its links, click again to open,',
     legendEmpty: 'click empty space to deselect',
     legendSizeMeaning: 'larger is more frequent',
-    legendLight: 'double-click a kanji to light up its group',
-    unlight: 'Show all groups',
     legendNearMeaning: 'nearby kanji mean related things',
     showParts: 'show on the parts map',
   },
@@ -186,14 +176,12 @@ const S = strings(
     whole: 'Покажете цялата карта',
     counts: '{n} йероглифа, {e} връзки',
     countsMeaning: '{n} канджи',
-    legendClickMeaning: 'кликнете, за да изберете, кликнете пак, за да отворите,',
+    legendClickMeaning: 'кликнете, за да изберете и осветите групата му, кликнете пак, за да отворите,',
     legendSize: 'по-големият е по-чест или е част, споделена от повече йероглифи',
     legendNear: 'близките йероглифи имат обща част; тези без общи части са на редове отдолу',
     legendClick: 'кликнете, за да изберете и видите връзките, кликнете пак, за да отворите,',
     legendEmpty: 'кликнете в празно, за да отмените избора',
     legendSizeMeaning: 'по-големият е по-чест',
-    legendLight: 'кликнете два пъти върху канджи, за да осветите групата му',
-    unlight: 'Покажете всички групи',
     legendNearMeaning: 'близките канджи имат сродни значения',
     showParts: 'покажете на картата по части',
   },
@@ -246,17 +234,12 @@ function createState() {
     /** colour class per node: 0 jōyō target, 1 other target, 2 part */
     cls: null as Uint8Array | null,
     clsOf: null as MapData | null,
-    /** where the lit cluster's name goes, in world units, for this layout */
-    litName: null as null | { k: number; pos: Float32Array; x: number; bottom: number },
     lang: 'en' as 'en' | 'bg',
     /** the lit cluster, -1 for none, and the stage of every node for it */
     lit: -1,
     /** the stage of every node for it; kanji in no cluster count as not related */
     stage: null as Uint8Array | null,
     stageOf: null as MapData | null,
-    /** the last click on a node, to tell a double-click */
-    lastTap: null as null | { i: number; x: number; y: number; t: number },
-    openTimer: 0,
     /** scratch lists for the batched dot pass, one per colour × opacity step */
     bins: Array.from({ length: 3 * ALPHA_STEPS }, () => [] as number[]),
     /** cancels the idle sprite prewarm, if one is running */
@@ -310,46 +293,6 @@ function classes(s: MapState, d: MapData): Uint8Array {
     s.clsOf = d
   }
   return s.cls
-}
-
-/**
- * The lit cluster's name, centred under it -- above it is where the focus's
- * card floats. A few members can sit far from the rest, so "under" is the 90th
- * percentile of their bottoms and the middle their median x, not the extremes.
- */
-function drawLitName(s: MapState, ctx: CanvasRenderingContext2D, ox: number, oy: number, k: number) {
-  const d = s.data
-  const pos = s.pos
-  const c = s.colors
-  const lit = s.lit
-  if (!d?.cluster || !pos || !c || lit < 0 || s.stageOf !== d) return
-  if (s.litName?.k !== lit || s.litName.pos !== pos) {
-    const xs: number[] = []
-    const bottoms: number[] = []
-    for (let i = 0; i < d.n; i++) {
-      if (d.cluster[i] !== lit) continue
-      xs.push(pos[2 * i])
-      bottoms.push(pos[2 * i + 1] + d.size[i])
-    }
-    xs.sort((a, b) => a - b)
-    bottoms.sort((a, b) => a - b)
-    s.litName = { k: lit, pos, x: xs[xs.length >> 1] ?? NaN, bottom: bottoms[Math.floor(bottoms.length * 0.9)] ?? NaN }
-  }
-  const { x: wx, bottom } = s.litName
-  if (Number.isNaN(wx)) return
-  const x = wx * k + ox
-  const y = bottom * k + oy + LIT_NAME_GAP
-  const text = d.clusters[lit][s.lang]
-  ctx.globalAlpha = 1
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'top'
-  ctx.lineJoin = 'round'
-  ctx.font = `600 14px ${SANS}`
-  ctx.lineWidth = 4
-  ctx.strokeStyle = c.sumi
-  ctx.strokeText(text, x, y)
-  ctx.fillStyle = c.paper
-  ctx.fillText(text, x, y)
 }
 
 function stopPrewarm(s: MapState) {
@@ -595,8 +538,6 @@ function drawFrame(s: MapState, canvas: HTMLCanvasElement | null): boolean {
   }
   ctx.globalAlpha = 1
 
-  drawLitName(s, ctx, ox, oy, k)
-
   // Sprites this frame lacked are rendered now that all drawing is done, and
   // the frame after picks them up.
   atlas.endFrame(SPRITE_MS)
@@ -612,7 +553,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
   const tipRef = useRef<HTMLDivElement>(null)
   const [phase, setPhase] = useState<'fetch' | 'layout' | 'ready' | 'error'>('fetch')
   const [counts, setCounts] = useState<{ nodes: number; edges: number } | null>(null)
-  const [lit, setLit] = useState(-1)
   const [present, setPresent] = useState(true)
   const lang = useLang()
   const t = S(lang)
@@ -860,6 +800,11 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
 
   useEffect(() => request(), [lang, request])
 
+  // The focus's cluster, by meaning, is lit.
+  const data = s.data
+  const fi = phase === 'ready' && data?.cluster && focus ? (data.index.get(focus) ?? -1) : -1
+  const lit = fi >= 0 ? data!.cluster![fi] : -1
+
   useEffect(() => {
     s.lit = lit
     const d = s.data
@@ -875,11 +820,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
     }
     request()
   }, [lit, phase, scope, by, s, request])
-
-  // Parts have no clusters: switching to them puts the light out.
-  useEffect(() => {
-    if (by === 'parts') setLit(-1)
-  }, [by])
 
   // ------------------------------------------------------------------ canvas size
 
@@ -1076,29 +1016,12 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
     const i = pick(x, y)
     const d = s.data
     if (!d) return
-    const now = performance.now()
-    const prev = s.lastTap
-    // The first click of a double-click flies the map to the kanji, so the
-    // second may land on another: it is the place on screen that counts.
-    if (d.cluster && prev && now - prev.t < DOUBLE_MS && Math.hypot(x - prev.x, y - prev.y) < DOUBLE_PX) {
-      clearTimeout(s.openTimer)
-      s.lastTap = null
-      const k = d.cluster[prev.i]
-      if (k >= 0) setLit(k)
-      return
-    }
-    s.lastTap = i >= 0 ? { i, x, y, t: now } : null
     if (i < 0) {
-      setLit(-1)
       if (s.focus >= 0 || s.focusChar) onDeselect()
       return
     }
-    if (i !== s.focus) onSelect(d.chars[i])
-    else if (!d.cluster) onOpen(d.chars[i])
-    else {
-      const c = d.chars[i]
-      s.openTimer = window.setTimeout(() => onOpen(c), DOUBLE_MS)
-    }
+    if (i === s.focus) onOpen(d.chars[i])
+    else onSelect(d.chars[i])
   }
 
   useEffect(() => {
@@ -1107,7 +1030,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
       if (!wrapRef.current?.offsetParent) return // map hidden behind the focus view
       if ((e.key === 'c' || e.key === 'C') && s.focus >= 0) centreOn(s.focus)
-      if (e.key === 'Escape' && s.lit >= 0) setLit(-1)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -1127,10 +1049,7 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
   }, [zoomBy])
 
   const home = homeScope(focusNode?.char === focus ? focusNode : null)
-  const d = s.data
-  const fi = phase === 'ready' && d?.cluster && focus ? (d.index.get(focus) ?? -1) : -1
-  const fk = fi >= 0 ? d!.cluster![fi] : -1
-  const cardNode = card?.(fk >= 0 ? { on: lit === fk, toggle: () => setLit(lit === fk ? -1 : fk) } : null)
+  const cardNode = card?.(by === 'meaning' && phase === 'ready' ? (lit >= 0 ? data!.clusters[lit] : null) : undefined)
 
   return (
     <div className="map" ref={wrapRef}>
@@ -1159,15 +1078,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
           {phase === 'error' && t('error')}
           {phase !== 'error' && <span className="map-status-dots" aria-hidden />}
         </p>
-      )}
-
-      {phase === 'ready' && lit >= 0 && s.data?.clusters[lit] && (
-        <div className="map-status map-highlight">
-          {s.data.clusters[lit][lang === 'bg' ? 'bg' : 'en']}
-          <button onClick={() => setLit(-1)} aria-label={t('unlight')} title={`${t('unlight')} (Esc)`}>
-            ×
-          </button>
-        </div>
       )}
 
       {phase === 'ready' && !present && (
@@ -1217,12 +1127,6 @@ function KanjiMapView({ scope, by, onArrange, focus, focusNode, onSelect, onDese
           {t(by === 'meaning' ? 'legendSizeMeaning' : 'legendSize')}
           <br />
           {t(by === 'meaning' ? 'legendNearMeaning' : 'legendNear')}
-          {by === 'meaning' && (
-            <>
-              <br />
-              {t('legendLight')}
-            </>
-          )}
           <br />
           {t(by === 'meaning' ? 'legendClickMeaning' : 'legendClick')}
           <br />
