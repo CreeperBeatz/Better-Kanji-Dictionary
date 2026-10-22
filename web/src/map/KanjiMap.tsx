@@ -1,7 +1,7 @@
 /**
  * The map: every kanji in a scope at once, placed by what it means, to
  * wander around in (pipeline/meaning_map.py). Nearby kanji mean related
- * things. The map by parts it once had beside this was removed on 2026-10-22.
+ * things.
  *
  * Canvas, not SVG -- the widest scope is 2,679 kanji, past what the DOM keeps
  * smooth to pan. Drawing is on demand (only when the camera, the layout or
@@ -85,7 +85,6 @@ function palette() {
     muted: v('--muted'),
     faint: v('--faint'),
     rule: v('--rule'),
-    ruleBright: v('--rule-bright'),
     shu: v('--shu'),
     sumi: v('--sumi'),
   }
@@ -200,7 +199,6 @@ function createState() {
     /** colour class per node: 0 jōyō, 1 not */
     cls: null as Uint8Array | null,
     clsOf: null as MapData | null,
-    lang: 'en' as 'en' | 'bg',
     /** the lit cluster, -1 for none, and the stage of every node for it */
     lit: -1,
     /** the stage of every node for it; kanji in no cluster count as not related */
@@ -487,7 +485,6 @@ function KanjiMapView({ scope, focus, focusNode, onSelect, onDeselect, onOpen, o
   // Everything the draw loop reads lives in one mutable bag, so a pan or a
   // hover never goes through React.
   const s = useRef(createState()).current
-  s.lang = lang === 'bg' ? 'bg' : 'en'
 
   // ------------------------------------------------------------------ drawing
 
@@ -700,8 +697,6 @@ function KanjiMapView({ scope, focus, focusNode, onSelect, onDeselect, onOpen, o
     if (i >= 0) centreOn(i)
     else request()
   }, [focus, phase, s, centreOn, request])
-
-  useEffect(() => request(), [lang, request])
 
   // The focus's cluster is lit.
   const data = s.data

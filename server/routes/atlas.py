@@ -4,9 +4,7 @@ GET /api/map/{scope} returns one scope as columns rather than objects --
 repeating every key per kanji would triple the payload. Each kanji sits where
 data/meaning_map.json (pipeline/meaning_map.py) puts it, with its cluster; the
 client only spreads them so none overlap. Kanji only: parts like 氵 have no
-meanings to place them by. The map by parts -- a force layout over the
-decomposition, with parts as nodes -- was removed on 2026-10-22 (Dani: "let it
-be only meaning").
+meanings to place them by.
 
 Scopes follow the graph filter:
 
@@ -30,16 +28,10 @@ SCOPES = {"5", "4", "3", "2", "1", "common", "all"}
 
 MEANING_MAP = Path(__file__).parent.parent.parent / "data" / "meaning_map.json"
 
-_cache: dict[str, dict] = {}
-
 
 @functools.cache
-def _meaning_map() -> dict:
-    return json.loads(MEANING_MAP.read_text(encoding="utf-8"))
-
-
 def _build(scope: str) -> dict:
-    mm = _meaning_map()
+    mm = json.loads(MEANING_MAP.read_text(encoding="utf-8"))
     xy = mm["layouts"][scope]
     rows = {
         r["char"]: r
@@ -72,8 +64,8 @@ def _build(scope: str) -> dict:
         "xy": [v for c in chars for v in xy[c]],
         # cluster id per kanji, -1 = in none
         "cluster": [mm["cluster"].get(c, -1) for c in chars],
+        # per cluster its name, and `near`: a digit per cluster, 3 itself, 2 near, 1 related, 0 not
         "clusters": mm["clusters"],
-        "regions": mm["regions"],
     }
 
 
@@ -81,6 +73,4 @@ def _build(scope: str) -> dict:
 def get_map(scope: str) -> dict:
     if scope not in SCOPES:
         raise HTTPException(400, f"scope must be one of {sorted(SCOPES)}")
-    if scope not in _cache:
-        _cache[scope] = _build(scope)
-    return _cache[scope]
+    return _build(scope)

@@ -4,9 +4,6 @@
  * Each kanji has a home, from data/meaning_map.json, so there is nothing to
  * simulate but overlaps: the large ones are spread apart so none covers
  * another, each held near its home. Positions stream back while it runs.
- *
- * The force layout over the decomposition that the map by parts used was
- * removed with it (2026-10-22); it is in git history before then.
  */
 
 import { forceCollide, forceSimulation, forceX, forceY, type SimulationNodeDatum } from 'd3-force'

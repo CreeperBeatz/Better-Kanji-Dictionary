@@ -38,8 +38,8 @@ export interface MapData {
   home: Float32Array
   /** cluster per kanji, -1 = in none */
   cluster: Int16Array
-  clusters: (Group & { region: number; near: string })[]
-  regions: Group[]
+  /** near: a digit per cluster, how near it is to this one: 3 itself, 2 near, 1 related, 0 not */
+  clusters: (Group & { near: string })[]
   key: string
 }
 
@@ -96,9 +96,7 @@ function prepare(r: MapResponse): MapData {
     home: homes(r.xy, size),
     cluster: Int16Array.from(r.cluster),
     clusters: r.clusters,
-    regions: r.regions,
-    // v4: by meaning only. The fourth field is the slot a newer layout
-    // replaces: the scope.
+    // v4: by meaning, so a v3 layout (by parts) is stale.
     key: `betterrtk:map:v4:${r.scope}:${n}:${hash(r.chars.join('') + ';' + r.xy.join(','))}`,
   }
 }
@@ -140,8 +138,8 @@ export function storeLayout(data: MapData, positions: Float32Array) {
     for (let i = 0; i < bytes.length; i += 0x8000) {
       bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
     }
-    // Drop older layouts of the same scope, and any from before v4 (by parts,
-    // or the meaning-<scope> slots); none can be read again.
+    // Drop older layouts of the same scope, and any from before v4; none can
+    // be read again.
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i)
       const f = k?.split(':') ?? []

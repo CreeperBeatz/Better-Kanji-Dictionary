@@ -62,8 +62,8 @@ the focus again opens it in the focus view. `◎` or `C` recentres on the focus.
 The layout only spreads the large kanji apart round their places, in a Web
 Worker, and is kept in `localStorage`. Nodes are drawn from a glyph sprite
 atlas, so zooming does not re-rasterise text every frame. The map once had a
-second arrangement, by the parts characters share; it was removed on
-2026-10-22 and is in git history before then.
+second arrangement, by the parts characters share; it is in git history before
+2026-10-22.
 
 ## What each piece does
 

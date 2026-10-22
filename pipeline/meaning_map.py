@@ -2,7 +2,7 @@
 
     .venv/Scripts/python pipeline/meaning_map.py texts   # what the site says about each kanji
     python pipeline/meaning_map.py embed                 # vectors, 2D per scope, clusters (torch, umap-learn)
-    # name the clusters and regions: clusters-in.json -> names.json (pipeline/meaning_map_names.md)
+    # name the clusters: clusters-in.json -> names.json (pipeline/meaning_map_names.md)
     python pipeline/meaning_map.py adopt                 # a cluster for kanji in none, by their main meaning
     python pipeline/meaning_map.py near                  # how near every cluster is to every other
     python pipeline/meaning_map.py build                 # -> data/meaning_map.json, which the server serves
@@ -18,10 +18,9 @@ Each map scope gets its own layout, started from the full one: the same
 arrangement, without N5's 80 kanji scattered over a map made for 2,679. Size is
 not here: the app keeps it, newspaper frequency, as on the parts map.
 
-Clusters (HDBSCAN, about 140) are named for the zoomed-in map, regions (the
-clusters gathered into REGIONS) for the zoomed-out one, in English and
-Bulgarian. A changed meaning moves nothing until this is run again; ids are not
-stable across runs, so the names are redone with it.
+Clusters (HDBSCAN, about 140) are named in English and Bulgarian; the map
+card shows the name. A changed meaning moves nothing until this is run again;
+ids are not stable across runs, so the names are redone with it.
 
 `adopt` gives a cluster to kanji HDBSCAN left in none. Those are mostly broad
 kanji with unrelated meanings -- 本 is main, book, origin, "this", real and a
@@ -33,7 +32,7 @@ Common people, 本 -> Leaders, 時 -> Years and eras; 面 (0.57) and 革 (0.54)
 stay in none. Where a kanji sits is unchanged: its place is all its meanings.
 
 `near` grades every cluster against every other, for the map's highlight: a
-double-click on a kanji lights its cluster, and the other clusters fade in
+click on a kanji lights its cluster, and the other clusters fade in
 stages by how close they are in meaning (Dani, 2026-10-18). It reads the
 clusters `embed` left, so it never renumbers them.
 
@@ -57,7 +56,6 @@ MAIN_VECTORS, ADOPTED = OUT / "main-vectors.npy", OUT / "adopted.json"
 ADOPT = 0.61  # the 10th percentile of members' similarity to their own cluster, by first groups
 MAP = ROOT / "data" / "meaning_map.json"
 MODEL = "Qwen/Qwen3-Embedding-0.6B"
-REGIONS = 20  # the zoomed-out map's names
 
 
 def texts() -> None:
@@ -108,7 +106,7 @@ def embed() -> None:
         np.save(VECTORS, vec)
 
     import umap
-    from sklearn.cluster import HDBSCAN, AgglomerativeClustering
+    from sklearn.cluster import HDBSCAN
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.manifold import TSNE
 
@@ -130,10 +128,6 @@ def embed() -> None:
     keys = sorted({int(l) for l in lab if l >= 0})
     renum = {k: i for i, k in enumerate(keys)}
     lab = np.array([renum.get(int(l), -1) for l in lab])
-    # Regions: the clusters gathered again by their mean vectors, for the zoomed-out map.
-    means = np.stack([vec[lab == k].mean(0) for k in range(len(keys))])
-    means /= np.linalg.norm(means, axis=1, keepdims=True)
-    region = AgglomerativeClustering(n_clusters=REGIONS, linkage="ward").fit_predict(means)
 
     # A first guess at each name, for whoever names them: the words a cluster's
     # group labels use more than the rest do.
@@ -148,20 +142,16 @@ def embed() -> None:
         ids = sorted(np.flatnonzero(sel), key=lambda i: rows[i]["freq"] or 9999)
         return [{"char": rows[i]["char"], "groups": rows[i]["groups"]} for i in ids[:30]]
 
-    clusters_in = {
-        "clusters": [{"id": k, "region": int(region[k]), "hint": hint[k], "size": int((lab == k).sum()),
-                      "kanji": members(lab == k)} for k in range(len(keys))],
-        "regions": [{"id": g, "clusters": [k for k in range(len(keys)) if region[k] == g]} for g in range(REGIONS)],
-    }
+    clusters_in = {"clusters": [{"id": k, "hint": hint[k], "size": int((lab == k).sum()), "kanji": members(lab == k)}
+                                for k in range(len(keys))]}
     CLUSTERS_IN.write_text(json.dumps(clusters_in, ensure_ascii=False, indent=1), encoding="utf-8")
     LAYOUT.write_text(json.dumps({
         "chars": [r["char"] for r in rows],
         "cluster": [int(l) for l in lab],
-        "region": [int(g) for g in region],
         "layouts": {n: {"idx": [int(i) for i in _scopes(rows)[n]], "xy": [[round(float(a), 3), round(float(b), 3)] for a, b in xy]}
                     for n, xy in layouts.items()},
     }), encoding="utf-8")
-    print(f"{len(rows)} kanji, {len(keys)} clusters in {REGIONS} regions, {int((lab < 0).sum())} unclustered")
+    print(f"{len(rows)} kanji, {len(keys)} clusters, {int((lab < 0).sum())} unclustered")
     print(f"-> {LAYOUT}, {CLUSTERS_IN}; name them into {NAMES}, then `build`")
 
 
@@ -179,7 +169,7 @@ def adopt() -> None:
         vec = model.encode([r["main"] for r in rows], batch_size=64, normalize_embeddings=True)
         np.save(MAIN_VECTORS, vec)
     lab = np.array(lay["cluster"])
-    means = np.stack([vec[lab == k].mean(0) for k in range(len(lay["region"]))])
+    means = np.stack([vec[lab == k].mean(0) for k in range(lab.max() + 1)])
     sim = vec @ (means / np.linalg.norm(means, axis=1, keepdims=True)).T
     own = np.array([sim[i, lab[i]] for i in np.flatnonzero(lab >= 0)])
     out = {}
@@ -207,7 +197,7 @@ def near() -> None:
     lay = json.loads(LAYOUT.read_text(encoding="utf-8"))
     vec = np.load(VECTORS)
     lab = np.array(lay["cluster"])
-    n = len(lay["region"])
+    n = lab.max() + 1
     means = np.stack([vec[lab == k].mean(0) for k in range(n)])
     means /= np.linalg.norm(means, axis=1, keepdims=True)
     sim = means @ means.T
@@ -232,14 +222,13 @@ def build() -> None:
     names = json.loads(NAMES.read_text(encoding="utf-8"))
     nears = json.loads(NEAR.read_text(encoding="utf-8"))
     adopted = json.loads(ADOPTED.read_text(encoding="utf-8")) if ADOPTED.exists() else {}
-    n_clusters = len(lay["region"])
-    assert len(names["clusters"]) == n_clusters and len(names["regions"]) == REGIONS, "names do not match the layout"
+    n_clusters = max(lay["cluster"]) + 1
+    assert len(names["clusters"]) == n_clusters, "names do not match the layout"
     chars = lay["chars"]
     out = {
         "about": f"pipeline/meaning_map.py: {MODEL} over hero + meaning groups, t-SNE per scope, HDBSCAN clusters",
-        "regions": [{"en": r["en"], "bg": r["bg"]} for r in names["regions"]],
         # near: a digit per cluster, how near it is to this one (see near())
-        "clusters": [{"en": c["en"], "bg": c["bg"], "region": lay["region"][i], "near": nears[i]}
+        "clusters": [{"en": c["en"], "bg": c["bg"], "near": nears[i]}
                      for i, c in enumerate(names["clusters"])],
         "cluster": {c: adopted.get(c, k) for c, k in zip(chars, lay["cluster"])},
         "layouts": {n: {chars[i]: xy for i, xy in zip(L["idx"], L["xy"])} for n, L in lay["layouts"].items()},

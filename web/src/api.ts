@@ -149,8 +149,7 @@ export interface MapResponse {
   /** cluster id per kanji, -1 = in none */
   cluster: number[]
   /** near: a digit per cluster, how near it is to this one: 3 itself, 2 near, 1 related, 0 not */
-  clusters: { en: string; bg: string; region: number; near: string }[]
-  regions: { en: string; bg: string }[]
+  clusters: { en: string; bg: string; near: string }[]
 }
 
 export interface WordEntry {
