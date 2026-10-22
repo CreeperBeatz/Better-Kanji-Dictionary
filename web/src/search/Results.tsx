@@ -62,7 +62,6 @@ const S = strings(
     kanjiExpanded: 'Expanded kanji',
     kanjiExpandedTitle: 'Show each kanji as a row, with its readings, meanings, frequency and JLPT level',
     kanjiCommonTitle: 'Jōyō, on the JLPT lists, or among the 2,500 kanji most frequent in newspapers',
-    kanjiNews: '#{n}',
     kanjiNewsTitle: 'Newspaper frequency: number {n} of the 2,500 most frequent kanji',
     allWithKanji: 'See all words with {char}',
     backToResults: 'Back to the results for “{q}”',
@@ -119,7 +118,6 @@ const S = strings(
     kanjiExpanded: 'Разгърнати канджи',
     kanjiExpandedTitle: 'Покажете всяко канджи като ред, с четенията, значенията, честотата и нивото по JLPT',
     kanjiCommonTitle: 'Джойо, в списъците за JLPT или сред 2500-те най-чести канджи във вестниците',
-    kanjiNews: '№{n}',
     kanjiNewsTitle: 'Честота във вестниците: номер {n} от 2500-те най-чести канджи',
     allWithKanji: 'Всички думи с {char}',
     backToResults: 'Обратно към резултатите за „{q}“',
@@ -510,7 +508,7 @@ function KanjiRowView({ k, onKanji, open }: { k: ChipKanji; onKanji: (c: string)
             <span className="word-meta">
               {k.freq && (
                 <span className="word-news" title={t('kanjiNewsTitle', { n: k.freq })}>
-                  {t('kanjiNews', { n: k.freq })}
+                  {t('news', { n: k.freq })}
                 </span>
               )}
               {k.jlpt && (

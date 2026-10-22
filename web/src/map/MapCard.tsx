@@ -83,9 +83,8 @@ export function MapCard({
         <div className="map-card-group">
           <span className="map-card-group-label">{t('group')}</span>
           {group ? (
-            <button className="map-card-group-name" onClick={() => onGroup?.(group)} disabled={!onGroup} title={t('groupTitle')}>
-              {group[lang === 'bg' ? 'bg' : 'en']}
-              <span aria-hidden> →</span>
+            <button className="clear map-card-group-name" onClick={() => onGroup?.(group)} disabled={!onGroup} title={t('groupTitle')}>
+              {group[lang === 'bg' ? 'bg' : 'en']} →
             </button>
           ) : (
             <span className="map-card-group-none">{t('noGroup')}</span>

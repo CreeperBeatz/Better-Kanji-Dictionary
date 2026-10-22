@@ -714,38 +714,14 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* Its group on the map by meaning, under the gist: opens the group's kanji in the search. */
-.kanji-group {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: -4px 0 14px;
-  font-size: calc(13px * var(--type));
-}
-
-.kanji-group-label {
-  color: var(--muted);
-  font-size: calc(11px * var(--type));
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+/* Its group on the map by meaning, under the gist, a row as the statistics' are: opens the group's kanji in the search. */
+.facts.kanji-group {
+  margin: 0 0 14px;
 }
 
 .kanji-group-name {
-  padding: 0;
-  background: none;
-  border: 0;
-  font: inherit;
-  color: var(--paper);
+  font-size: inherit;
   text-align: left;
-  cursor: pointer;
-}
-
-.kanji-group-name:hover {
-  color: var(--ai);
-}
-
-.kanji-group-name span {
-  color: var(--muted);
 }
 
 /* How the meanings follow from each other, above them. */
@@ -2028,8 +2004,7 @@ button.usage-head:focus-visible .usage-spelling {
 }
 
 .kanji-row .kanji-row-glyph {
-  font-family: var(--mincho);
-  font-size: calc(30px * var(--type));
+  font-size: calc(25px * var(--type));
   line-height: 1;
 }
 
@@ -4098,48 +4073,30 @@ button.usage-head:focus-visible .usage-spelling {
   margin-top: 14px;
 }
 
-/* By meaning: the group lit on the map, as the card's first section. */
+/* The group lit on the map, as the card's first section: label and link as the facts under it. */
 .map-card-group {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 14px;
   margin: -14px -16px 12px;
   padding: 9px 34px 9px 16px;
   border-bottom: 1px solid var(--rule);
   font-size: calc(13px * var(--type));
 }
 
-.map-card-group-label {
+.map-card-group-label,
+.map-card-group-none {
   color: var(--muted);
-  font-size: calc(11px * var(--type));
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .map-card-group-name {
-  padding: 0;
-  background: none;
-  border: 0;
-  font: inherit;
-  color: var(--paper);
+  font-size: inherit;
   text-align: left;
-  cursor: pointer;
-}
-
-.map-card-group-name:hover:not(:disabled) {
-  color: var(--ai);
 }
 
 .map-card-group-name:disabled {
+  color: var(--paper-dim);
   cursor: default;
-}
-
-.map-card-group-name span {
-  color: var(--muted);
-}
-
-.map-card-group-none {
-  color: var(--muted);
 }
 
 /* ---------------------------------------------------------------- map */

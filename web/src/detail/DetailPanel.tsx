@@ -310,13 +310,14 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       )}
       {/* Its group on the map by meaning: the kanji that mean things near it. */}
       {unit?.group && onGroup && (
-        <p className="kanji-group">
-          <span className="kanji-group-label">{t('group')}</span>
-          <button className="kanji-group-name" onClick={() => onGroup(unit.group!.en)} title={t('groupTitle')}>
-            {unit.group[lang === 'bg' ? 'bg' : 'en']}
-            <span aria-hidden> →</span>
-          </button>
-        </p>
+        <dl className="facts kanji-group">
+          <dt>{t('group')}</dt>
+          <dd>
+            <button className="clear kanji-group-name" onClick={() => onGroup(unit.group!.en)} title={t('groupTitle')}>
+              {unit.group[lang === 'bg' ? 'bg' : 'en']} →
+            </button>
+          </dd>
+        </dl>
       )}
       {notes ? (
         <div className="facts-title-row">
