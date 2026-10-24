@@ -55,11 +55,12 @@ def _surface(indexed: str) -> str:
 
 
 def _sentences(wid: int) -> list[str]:
-    """Tatoeba indexes a word by any of its spellings (奇麗 for 綺麗)."""
+    """Tatoeba indexes a word by any of its spellings (奇麗 for 綺麗), a word written only in kana by its kana."""
     db = ws.proposals.connect()
     rows = [r[0] for r in db.execute(
         "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
-        "WHERE sw.headword IN (SELECT text FROM word_form WHERE word_id = ? AND kana = 0)", (wid,))]
+        "WHERE sw.headword IN (SELECT text FROM word_form WHERE word_id = ?1 AND (kana = 0 OR NOT EXISTS "
+        "(SELECT 1 FROM word_form k WHERE k.word_id = ?1 AND k.kana = 0)))", (wid,))]
     texts = sorted({_surface(r) for r in rows}, key=len)
     # A sentence cut at its start ("はとても古い都です") is no example.
     return [t for t in texts if 6 <= len(t) <= EXAMPLE and t[0] not in "はがをにでともへや、。"][:OFFERED]
