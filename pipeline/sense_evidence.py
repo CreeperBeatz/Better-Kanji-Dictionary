@@ -95,6 +95,54 @@ def _plain(ja: str) -> str:
     return ja.replace("【", "").replace("】", "")
 
 
+PUNCT = re.compile(r"[。、！？!?.,，．「」『』（）()・…\s　]")
+
+
+def restore(notes: dict) -> dict:
+    """Every Tatoeba example as Tatoeba writes it. The drafts took sentences rebuilt from
+    the index, which drops punctuation and every word it does not index: names, figures
+    (彼はチェスター区選出の議員に当選した came back 彼は区選出の議員に当選した). Where only
+    punctuation was lost, the real text is put back. Where words were lost, the real
+    sentence and its human translation replace it (the English was written for the broken
+    one), if the word can be marked in it once; else it is listed."""
+    jpn = _sentences(RAW / "tatoeba" / "jpn_sentences.tsv.bz2")
+    eng = _sentences(RAW / "tatoeba" / "eng_sentences.tsv.bz2")
+    real: dict[str, list[tuple[str, str | None]]] = defaultdict(list)
+    for sid, eid, toks in _index():
+        if sid in jpn:
+            real["".join(m["surface"] if m["surface"] is not None else m["head"] for m in toks)].append((jpn[sid], eng.get(eid)))
+    texts = set(jpn.values())
+    stats, broken = Counter(), []
+    for k, ns in notes.items():
+        for i, n in enumerate(ns):
+            ex = n.get("ex")
+            if not ex or ex["src"] != "t":
+                continue
+            plain = _plain(ex["ja"])
+            if plain in texts:
+                stats["already real"] += 1
+                continue
+            word = ex["ja"][ex["ja"].index("【") + 1:ex["ja"].index("】")]
+            found = real.get(plain, [])
+            same = [(j, e) for j, e in found if PUNCT.sub("", j) == plain]
+            if same:
+                ja = _mark(same[0][0], word)
+                if ja:
+                    n["ex"] = {**ex, "ja": ja}
+                    stats["punctuation back"] += 1
+                    continue
+            full = [(j, e) for j, e in found if e and len(j) <= EXAMPLE + 15 and _mark(j, word)]
+            if full:
+                j, e = min(full, key=lambda x: len(x[0]))
+                n["ex"] = {"ja": _mark(j, word), "en": e, "src": "t"}
+                stats["lost words: real sentence"] += 1
+            else:
+                broken.append({"id": int(k), "sense": i, "ex": ex, "real": [j for j, _ in found]})
+                stats["lost words: listed"] += 1
+    ws._dump(DRAFTS / "broken_examples.json", broken)
+    return dict(stats)
+
+
 def run() -> None:
     notes = json.loads(SITE.read_text(encoding="utf-8"))
     sc = ws.scope()

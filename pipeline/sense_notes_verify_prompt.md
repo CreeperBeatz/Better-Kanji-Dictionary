@@ -14,7 +14,10 @@ Each item is a word: `id`, `word`, `reading`, `jlpt` (5 = N5, null = not on the
 list), `senses` and `sentences`.
 
 Each sense: `n` (JMdict's number), `pos`, `misc` (JMdict tags: arch, obs, rare,
-dated, hist, col, sl, uk ...), `gloss`, and `note` -- the draft:
+dated, hist, col, sl, uk ...), and where JMdict has them `field` (math, econ,
+law, sumo, Buddh ...: a specialist term, usually `rare` for a learner unless
+the field is everyday), `dialect` (ksb = Kansai ...) and `info` (JMdict's own
+note on the sense); `gloss`; and `note` -- the draft:
 `{rank, nuance, ex: {ja (the word in 【】), en, src: "t" Tatoeba | "d" drafted} | null}`.
 
 Some senses also have:

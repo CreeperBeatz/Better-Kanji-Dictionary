@@ -26,10 +26,13 @@ sentences offered where one fits (src "t"), else written (src "d").
 from __future__ import annotations
 
 import argparse
+import bz2
+import gzip
 import json
 import re
 import sys
 from collections import Counter
+from functools import cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,14 +65,47 @@ def _surface(indexed: str) -> str:
     return out
 
 
+@cache
+def _tatoeba() -> dict[int, str]:
+    """Tatoeba's own text by sentence id. The db keeps the index line, and the sentence
+    rebuilt from it loses every word the index skips: 石の上にも三年 came back 石の上にも年."""
+    out = {}
+    with bz2.open(ROOT / "pipeline" / "data" / "tatoeba" / "jpn_sentences.tsv.bz2", "rt", encoding="utf-8") as f:
+        for line in f:
+            i, _, text = line.rstrip("\n").split("\t", 2)
+            out[int(i)] = text
+    return out
+
+
+@cache
+def _jmdict_extras() -> dict[int, list[dict]]:
+    """Per word, per sense: JMdict's field, dialect and sense note, which the db drops
+    (需要 sense 2 is the economics term)."""
+    import xml.etree.ElementTree as ET
+    raw = gzip.open(ROOT / "pipeline" / "data" / "JMdict_e.gz", "rt", encoding="utf-8").read()
+    declared = set(re.findall(r'<!ENTITY\s+([\w-]+)\s+"', raw))
+    raw = re.sub(r"<!DOCTYPE.*?\]>", "", raw, count=1, flags=re.DOTALL)
+    raw = re.sub(r"&([\w-]+);", lambda m: m.group(1) if m.group(1) in declared else m.group(0), raw)
+    out = {}
+    for entry in ET.fromstring(raw).iter("entry"):
+        senses = []
+        for s in entry.findall("sense"):
+            x = {k: ", ".join(e.text for e in s.findall(tag) if e.text)
+                 for k, tag in (("field", "field"), ("dialect", "dial"), ("info", "s_inf"))}
+            senses.append({k: v for k, v in x.items() if v})
+        if any(senses):
+            out[int(entry.findtext("ent_seq"))] = senses
+    return out
+
+
 def _sentences(wid: int) -> list[str]:
     """Tatoeba indexes a word by any of its spellings (奇麗 for 綺麗), a word written only in kana by its kana."""
     db = ws.proposals.connect()
-    rows = [r[0] for r in db.execute(
-        "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
+    rows = db.execute(
+        "SELECT s.id, s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
         "WHERE sw.headword IN (SELECT text FROM word_form WHERE word_id = ?1 AND (kana = 0 OR NOT EXISTS "
-        "(SELECT 1 FROM word_form k WHERE k.word_id = ?1 AND k.kana = 0)))", (wid,))]
-    texts = sorted({_surface(r) for r in rows}, key=len)
+        "(SELECT 1 FROM word_form k WHERE k.word_id = ?1 AND k.kana = 0)))", (wid,)).fetchall()
+    texts = sorted({_tatoeba().get(i) or _surface(t) for i, t in rows}, key=len)
     # A sentence cut at its start ("はとても古い都です") is no example.
     return [t for t in texts if 6 <= len(t) <= EXAMPLE and t[0] not in "はがをにでともへや、。"][:OFFERED]
 
@@ -191,30 +227,40 @@ def _drafts() -> dict:
     return out
 
 
-def verify_prepare(size: int) -> None:
-    """Every drafted note to an Opus check, with what pipeline/sense_evidence.py found beside it."""
+def verify_prepare(size: int, start: int) -> None:
+    """Every drafted note to an Opus check, with what pipeline/sense_evidence.py found beside it.
+    From batch `start` on, and never over a batch already checked: the batches are the same
+    words every time (ranked, then cut), so a rerun only refreshes what the check has not read."""
     VIN.mkdir(parents=True, exist_ok=True)
     VOUT.mkdir(parents=True, exist_ok=True)
     notes, sc = _drafts(), ws.scope()
     ev = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    extras = _jmdict_extras()
     ids = sorted((int(k) for k in notes), key=ws._rank)
+    written = 0
     for b, i in enumerate(range(0, len(ids), size)):
+        name = f"V-{b:03d}"
+        if b < start or (VOUT / f"{name}.json").exists():
+            continue
         items = []
         for wid in ids[i:i + size]:
             k, w = str(wid), sc[wid]
             flags, offer = ev["flags"].get(k, []), ev["offer"].get(k, {})
+            ext = extras.get(wid, [])
             items.append({
                 "id": wid, "word": w["word"], "reading": w["reading"], "jlpt": w["jlpt"],
-                "senses": [{"n": n + 1, "pos": pos, "misc": misc, "gloss": gloss, "note": notes[k][n],
+                "senses": [{"n": n + 1, "pos": pos, "misc": misc, **(ext[n] if n < len(ext) else {}),
+                            "gloss": gloss, "note": notes[k][n],
                             **({"flags": [f"{kind}{': ' + d if d else ''}" for s, kind, d in flags if s == n]}
                                if any(s == n for s, _, _ in flags) else {}),
                             **({"offered": [{"ja": o["ja"], "en": o["en"]} for o in offer[str(n)]]} if str(n) in offer else {})}
                            for n, (pos, misc, gloss) in enumerate(w["senses"][:len(notes[k])])],
                 "sentences": _sentences(wid),
             })
-        name = f"V-{b:03d}"
         ws._dump(VIN / f"{name}.json", {"batch": name, "items": items})
-    print(f"V: {len(ids)} words, {sum(len(notes[str(w)]) for w in ids)} senses, {-(-len(ids) // size)} batches")
+        written += 1
+    print(f"V: {len(ids)} words, {sum(len(notes[str(w)]) for w in ids)} senses, {-(-len(ids) // size)} batches; "
+          f"{written} written from V-{start:03d}")
 
 
 def _verdicts(batch: str) -> tuple[dict, list[str]]:
@@ -305,6 +351,8 @@ def merge() -> None:
                 if v:
                     out[wid][n] = {**out[wid][n], **{f: v[f] for f in ("rank", "nuance", "ex") if f in v}}
                     fixed.update(f for f in ("rank", "nuance", "ex") if f in v)
+    import sense_evidence
+    print("Tatoeba examples:", sense_evidence.restore(out))
     ws._dump(SITE, out)
     print(f"{len(out)} words -> {SITE}" + (f"; checked {fixed['checked']} senses, fixed rank {fixed['rank']}, "
                                            f"nuance {fixed['nuance']}, ex {fixed['ex']}" if fixed else ""))
@@ -321,6 +369,7 @@ def main() -> None:
     p.add_argument("--batch")
     p = sub.add_parser("verify-prepare")
     p.add_argument("--size", type=int, default=60)
+    p.add_argument("--start", type=int, default=0)
     p = sub.add_parser("verify-check")
     p.add_argument("--batch")
     sub.add_parser("merge")
@@ -330,7 +379,7 @@ def main() -> None:
     elif a.cmd == "check":
         check(a.batch)
     elif a.cmd == "verify-prepare":
-        verify_prepare(a.size)
+        verify_prepare(a.size, a.start)
     elif a.cmd == "verify-check":
         verify_check(a.batch)
     else:
