@@ -994,7 +994,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 @container (max-width: 420px) {
-  .meaning-similar :is(.close-sense, .close-line, .close-own) {
+  .meaning-similar :is(.close-sense, .close-line) {
     grid-column: 1 / -1;
   }
 }
@@ -1066,26 +1066,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .close-line .entry-fallback,
 .spelling-def .entry-fallback {
   margin-left: 6px;
-}
-
-/* The page's own word or kanji and how it differs in turn, under the other's
-   line: its glyph small at the start, so the two lines read as a pair. */
-.close-own {
-  grid-column: 2 / -1;
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  margin: 0 0 3px;
-  font-size: calc(12px * var(--type));
-  line-height: 1.45;
-  color: var(--paper-dim);
-}
-
-.close-own-glyph {
-  flex: none;
-  font-family: var(--mincho);
-  font-size: calc(13px * var(--type));
-  color: var(--tone);
 }
 
 /* A word's senses as cards, numbered as a kanji's meanings are: smaller, not

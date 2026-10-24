@@ -1070,9 +1070,8 @@ def kanji_page(char: str) -> dict:
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
         return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None,
-                # How it differs, and beside it how this kanji does.
-                "nuance": synonyms.kanji_nuance(char, here["id"], c),
-                "ownNuance": synonyms.kanji_own_nuance(char, here["id"], c, g and g["id"])}
+                # How it differs; what this kanji is in the meaning, its card says.
+                "nuance": synonyms.kanji_nuance(char, here["id"], c)}
 
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,

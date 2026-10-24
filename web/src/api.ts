@@ -249,8 +249,6 @@ export interface CloseKanji extends KanjiLite {
   sense: { id: string; en: string | null; bg: string | null } | null
   /** How it differs from the page's kanji in this meaning, where drafted. */
   nuance?: { en: string; bg: string | null } | null
-  /** And how the page's kanji differs from it. */
-  ownNuance?: { en: string; bg: string | null } | null
 }
 
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */

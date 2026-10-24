@@ -20,9 +20,8 @@ export function AsideTitle({ icon, children }: { icon: string; children: ReactNo
 /**
  * 典 · Code · With the meaning: ceremony, and under it how it differs -- the
  * kanji or word, its keyword or reading, the meaning of it that is close to
- * this one, and the line; then the page's own kanji or word and how it
- * differs in turn, so the two can be weighed. The whole row is one button
- * that opens the other.
+ * this one, and the line. What the page's own kanji or word is in the meaning,
+ * its card says once, above. The whole row is one button that opens the other.
  */
 export function CloseRow({
   glyph,
@@ -30,7 +29,6 @@ export function CloseRow({
   sense,
   line,
   lineMark,
-  own,
   title,
   onOpen,
   warm,
@@ -41,8 +39,6 @@ export function CloseRow({
   line?: string | null
   /** Beside the line, as a word's English line is marked "EN" on a Bulgarian page. */
   lineMark?: ReactNode
-  /** The page's own kanji or word, and how it differs from this one. */
-  own?: { glyph: string; line: string | null | undefined }
   title: string
   onOpen: () => void
   /** Prefetch handlers, so what it opens is there by the time it opens. */
@@ -62,17 +58,6 @@ export function CloseRow({
           <span className="close-line">
             {line}
             {lineMark}
-          </span>
-        )}
-        {own?.line && (
-          <span className="close-own">
-            <span className="close-own-glyph" lang="ja">
-              {own.glyph}
-            </span>
-            <span>
-              {own.line}
-              {lineMark}
-            </span>
           </span>
         )}
       </button>

@@ -65,14 +65,6 @@ def kanji_nuance(char: str, meaning: str, other: str) -> dict | None:
     return _text(_kanji().get("similar", {}).get(f"{char}|{meaning}|{other}"))
 
 
-def kanji_own_nuance(char: str, meaning: str, other: str, other_meaning: str | None) -> dict | None:
-    """How `char` itself differs from `other` in `meaning`: the other kanji's line about this one,
-    in its meaning that is close, where it has one, else drafted (pipeline/self_nuance.py)."""
-    k = _kanji()
-    back = other_meaning and k.get("similar", {}).get(f"{other}|{other_meaning}|{char}")
-    return _text(back or k.get("self", {}).get(f"{char}|{meaning}|{other}"))
-
-
 def kanji_mixup(a: str, b: str, reading: str) -> dict | None:
     """When to write `a` and when `b` on `reading`: {en, bg}."""
     x, y = sorted((a, b))
