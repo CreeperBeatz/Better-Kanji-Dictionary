@@ -98,6 +98,13 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
         w = words.get(r["word_id"])
         if w:
             w["forms"].append({"text": r["text"], "kana": bool(r["kana"]), "rare": bool(r["rare"])})
+    # A spelling in old kanji (學校): with its old kanji made new, another of the word's spellings.
+    old = _old_kanji()
+    for w in words.values():
+        texts = {f["text"] for f in w["forms"]}
+        for f in w["forms"]:
+            if any(c in old for c in f["text"]) and "".join(old.get(c, c) for c in f["text"]) in texts:
+                f["old"] = True
 
     # One query for every word's accent, not one each: a kanji's page fetches hundreds.
     heads = sorted({w["headword"] for w in words.values()})
@@ -108,6 +115,12 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
     for w in words.values():
         w["pitch"] = pitch.get((w["headword"], w["reading"]))
     return words
+
+
+@functools.cache
+def _old_kanji() -> dict[str, str]:
+    """Each old kanji and its new form: 學 -> 学."""
+    return {r["other"]: r["char"] for r in query("SELECT char, other FROM char_form WHERE kind = 'old'")}
 
 
 def _order(w: dict, sort: str, desc: bool) -> tuple:
@@ -1206,13 +1219,10 @@ def spelling_kanji(w: dict) -> dict:
                                if "一" <= c <= "鿿" or "㐀" <= c <= "䶿"))
     if not chars:
         return {"open": [], "old": {}}
-    ph = ",".join("?" * len(chars))
-    old = {r["other"]: r["char"] for r in query(
-        f"SELECT char, other FROM char_form WHERE kind = 'old' AND other IN ({ph})", tuple(chars))}
     from .graph import _fetch
 
-    pages = _fetch(chars)
-    return {"open": [c for c in chars if c in pages], "old": old}
+    pages, old = _fetch(chars), _old_kanji()
+    return {"open": [c for c in chars if c in pages], "old": {c: old[c] for c in chars if c in old}}
 
 
 def related_words(word_id: int) -> list[dict]:

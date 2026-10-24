@@ -198,7 +198,8 @@ export interface Word {
   jlpt: number | null
   pitch: string | null
   senses: Sense[]
-  forms: { text: string; kana: boolean; rare: boolean }[]
+  /** `old`: the spelling in old kanji (學校 for 学校); missing from the device's copy. */
+  forms: { text: string; kana: boolean; rare: boolean; old?: boolean }[]
   inflection?: string[]
   /** On a kanji's page: which kana of `reading` are that kanji's, [from, to): じょう in じょうしょう. */
   mark?: [number, number] | null

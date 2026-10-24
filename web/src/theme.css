@@ -4680,13 +4680,19 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
-.entry-spellings ul {
+.entry-spelling-list {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+}
+
+/* On a search card: smaller, between the head and the senses. */
+.word-card .entry-spellings {
+  margin: 4px 0 2px;
+}
+
+.word-card .entry-spelling {
+  font-size: calc(15px * var(--type));
 }
 
 .entry-spelling {
