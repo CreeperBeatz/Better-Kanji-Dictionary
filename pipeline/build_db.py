@@ -522,7 +522,9 @@ def build_examples(db: sqlite3.Connection) -> None:
         DROP TABLE IF EXISTS sentence_word;
         CREATE TABLE sentence (
             id   INTEGER PRIMARY KEY,
-            text TEXT NOT NULL
+            text TEXT NOT NULL,     -- the jpn_indices line: lemma(reading)[sense]{surface} ...
+            real TEXT,              -- the sentence as Tatoeba writes it (D-031)
+            en   TEXT               -- its English translation on Tatoeba
         );
         CREATE TABLE sentence_word (
             headword    TEXT NOT NULL,
@@ -536,6 +538,24 @@ def build_examples(db: sqlite3.Connection) -> None:
     # substring match.
     TOKEN = re.compile(r"^([^(\[{~|]+)")
 
+    # The index line alone rebuilds a sentence without its punctuation and
+    # without every word it does not index (石の上にも三年 came back 石の上にも年),
+    # so keep Tatoeba's own text, and its translation, beside it.
+    def tatoeba(lang: str) -> dict[int, str]:
+        import bz2
+        path = DATA / "tatoeba" / f"{lang}_sentences.tsv.bz2"
+        if not path.exists():
+            print(f"  (no {path.name}: sentences keep only the index line)")
+            return {}
+        out = {}
+        with bz2.open(path, "rt", encoding="utf-8") as f:
+            for row in f:
+                i, _, text = row.rstrip("\n").split("\t", 2)
+                out[int(i)] = text
+        return out
+
+    jpn, eng = tatoeba("jpn"), tatoeba("eng")
+
     tar = tarfile.open(DATA / "jpn_indices.tar.bz2", "r:bz2")
     member = next(m for m in tar.getmembers() if m.name.endswith(".csv"))
     sentences, links = [], []
@@ -547,10 +567,10 @@ def build_examples(db: sqlite3.Connection) -> None:
         if len(parts) < 3:
             continue
         try:
-            sid = int(parts[0])
+            sid, eid = int(parts[0]), int(parts[1])
         except ValueError:
             continue
-        sentences.append((sid, parts[2]))
+        sentences.append((sid, parts[2], jpn.get(sid), eng.get(eid)))
         for tok in parts[2].split():
             m = TOKEN.match(tok)
             if not m:
@@ -560,9 +580,10 @@ def build_examples(db: sqlite3.Connection) -> None:
                 seen.add((head, sid))
                 links.append((head, sid))
 
-    db.executemany("INSERT OR IGNORE INTO sentence VALUES (?,?)", sentences)
+    db.executemany("INSERT OR IGNORE INTO sentence VALUES (?,?,?,?)", sentences)
     db.executemany("INSERT INTO sentence_word VALUES (?,?)", links)
-    print(f"  sentences     {len(sentences):>7,} indexed Japanese sentences")
+    print(f"  sentences     {len(sentences):>7,} indexed Japanese sentences, "
+          f"{sum(1 for s in sentences if s[2]):,} with Tatoeba's own text")
     print(f"  links         {len(links):>7,} word-to-sentence links")
 
 

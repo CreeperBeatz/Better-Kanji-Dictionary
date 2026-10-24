@@ -1161,11 +1161,11 @@ def kanji_page(char: str) -> dict:
 @router.get("/examples/{headword}")
 def examples(headword: str, limit: int = Query(5, ge=1, le=30)) -> dict:
     rows = query(
-        "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
-        "WHERE sw.headword = ? LIMIT ?",
+        f"SELECT s.text, {'s.real' if _sentence_real() else 'NULL'} AS real FROM sentence_word sw "
+        "JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ? LIMIT ?",
         (headword, limit),
     )
-    return {"headword": headword, "sentences": [r["text"] for r in rows]}
+    return {"headword": headword, "sentences": [r["real"] or r["text"] for r in rows]}
 
 
 @router.get("/word/{word_id}")
@@ -1198,14 +1198,15 @@ def word_entry(word_id: int) -> dict:
             kanji.append({**nodes[c], "curated": curated.get(c)})
 
     rows = query(
-        "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
-        "WHERE sw.headword = ? ORDER BY LENGTH(s.text) LIMIT 6",
+        f"SELECT s.text, {'s.real' if _sentence_real() else 'NULL'} AS real FROM sentence_word sw "
+        "JOIN sentence s ON s.id = sw.sentence_id "
+        "WHERE sw.headword = ? ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
         (w["headword"],),
     )
     return {
         "word": w,
         "kanji": kanji,
-        "examples": [_sentence(r["text"], w["headword"]) for r in rows],
+        "examples": [_sentence(r["text"], r["real"], w["headword"]) for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
         "senseNotes": synonyms.sense_notes(word_id),
@@ -1248,20 +1249,44 @@ def verb_pairs(word_id: int) -> list[dict]:
 _ANNOTATION = re.compile(r"\(.*?\)|\[.*?\]|~")
 
 
-def _sentence(indexed: str, headword: str) -> dict:
-    """Rebuild the sentence from a Tatoeba index line, and find the word in it.
+@functools.cache
+def _sentence_real() -> bool:
+    """Whether the db keeps Tatoeba's own text (built after D-031); an older one does not."""
+    return any(r["name"] == "real" for r in query("PRAGMA table_info(sentence)"))
 
-    The stored text is the jpn_indices B-line, one token per space:
+
+def _sentence(indexed: str, real: str | None, headword: str) -> dict:
+    """The sentence as Tatoeba writes it, and where the word is in it.
+
+    `indexed` is the jpn_indices B-line, one token per space:
     `lemma(reading)[sense]{surface}` -- only the lemma is mandatory, and the
     surface form, when given, is what the sentence actually says. Matching on
-    the lemma is what lets 食べた be marked as an example of 食べる.
+    the lemma is what lets 食べた be marked as an example of 食べる. The tokens
+    are found in `real` in order, so the word's own place is marked, not an
+    earlier look-alike. Without `real` (an old db), the sentence is rebuilt from
+    the tokens, which loses punctuation and every word the index skips (D-031).
     """
-    text = ""
-    hit = None
+    tokens = []
     for token in indexed.split():
         brace = token.find("{")
         lemma = _ANNOTATION.sub("", token[:brace] if brace >= 0 else token)
-        surface = token[brace + 1 : token.find("}", brace)] if brace >= 0 else lemma
+        tokens.append((lemma, token[brace + 1 : token.find("}", brace)] if brace >= 0 else lemma))
+    if real:
+        at, hit = 0, None
+        for lemma, surface in tokens:
+            pos = real.find(surface, at)
+            if pos < 0:
+                continue  # a token without its surface form, in dictionary spelling
+            if hit is None and lemma == headword:
+                hit = [pos, pos + len(surface)]
+            at = pos + len(surface)
+        if hit is None:
+            word = next((s for lemma, s in tokens if lemma == headword), None)
+            pos = real.find(word) if word else -1
+            hit = [pos, pos + len(word)] if pos >= 0 else None
+        return {"text": real, "hit": hit}
+    text, hit = "", None
+    for lemma, surface in tokens:
         if hit is None and lemma == headword:
             hit = [len(text), len(text) + len(surface)]
         text += surface

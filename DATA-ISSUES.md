@@ -390,12 +390,15 @@ punctuation and every word the index does not list: names and figures
 石の上にも三年 as 石の上にも年), and tokens without a {surface} come back in their
 dictionary spelling (かもしれない as かも知れない).
 Source: build_db's sentence stage.
-**Status: partly fixed.** The sense notes' examples are put back as Tatoeba
-writes them (sense_evidence.restore; 7,508 punctuation only, 80 replaced by
-the real sentence and its human translation, 17 left). The example sentences
-on word pages still show the rebuilt text. Left: keep Tatoeba's own text
-(pipeline/data/tatoeba/jpn_sentences.tsv.bz2) in the sentence table and mark
-the word in it.
+**Status: fixed locally** (2026-10-24, feat/word-synonyms). The sentence
+table keeps Tatoeba's own text and translation (`real`, `en`; from
+pipeline/data/tatoeba/*_sentences.tsv.bz2, 149,855 of 150,075 sentences), and
+the word page marks the word in it by walking the index tokens through it in
+order (search._sentence; on 200,000 links the same word as before, 145 left
+unmarked where the index spells the word otherwise). The sense notes'
+examples are put back the same way (sense_evidence.restore; 17 left as
+rebuilt). Left for prod: the two Tatoeba files on the Pi and
+`build_db.py examples` there; an old db still shows the rebuilt text.
 
 ## Fixed
 
