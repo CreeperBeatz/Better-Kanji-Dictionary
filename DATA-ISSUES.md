@@ -378,9 +378,10 @@ kanji is close: the one that lists this kanji back, else the one worded most
 alike (search.close, kanji_nuance._match). The guess is wrong for at least 26
 pairs, e.g. 家 shown as "expert, -ist" beside 屋 "house", 株 as "shares"
 beside 根 "root".
-**Status: open.** The check flagged them (`wrongLabel` in
-data/kanji_nuances.json) and wrote the line for the meaning that is close;
-the label shown is still the guess.
+**Status: fixed locally** (2026-10-25, feat/word-synonyms). The check
+flagged them (`wrongLabel` in data/kanji_nuances.json) and wrote the line for
+the meaning that is close; those 26 rows now show no label rather than the
+guess (synonyms.kanji_wrong_label). Open: naming the right meaning instead.
 
 ### D-031 · Tatoeba sentences are shown rebuilt from the index, not as written
 *Found 2026-10-24.* The sentence table keeps the jpn_indices line, and the
@@ -443,6 +444,22 @@ from was checked once (pipeline/origin_claims.py, 1,485 texts): 143 fixed,
 179 rows on the site and 3 sense notes. Loanword claims were right; the
 errors sat in kanji words. Lesson: a measured sample can grade a systematic
 mistake as minor; look for the pattern behind repeated fixes.
+
+### D-035 · Word opposites that were pairs, and pairs no kind held
+*Found 2026-10-25,* when Dani's new kinds (D-033) were applied: every
+opposite the site showed and every removed pair was sorted once
+(pipeline/synonym_kinds.py, 1,758 pairs, Opus). 122 opposites were pairs
+(祖父 / 祖母, 甥 / 姪, 上旬 / 下旬) and 14 were no opposites at all (悪い /
+美しい, 悪い / 上手); 151 removed pairs fit a new box: 68 easy to mix up by
+meaning (近代 / 現代), 47 short forms (ＣＭ), 21 older forms (メーター), 9
+pairs, 6 polite forms (仰る / 言う).
+Source: the antonym rule (sex pairs as opposites, 2026-10-22) and the
+synonym-only question of the first runs.
+**Status: fixed locally** (feat/word-synonyms). All 287 changes graded
+blind: 0 major, 28 minor. Left: three pairs with the wrong partner (女房 /
+夫, 嫁 / 夫, ボーイ / 女の子) and "short form" on a base word (白 / 白色).
+Only pairs that slipped into the runs were sorted: a run to find polite
+forms, mix-ups by meaning and pairs across all words is still to do.
 
 ## Fixed
 

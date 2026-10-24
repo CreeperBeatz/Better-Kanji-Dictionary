@@ -106,3 +106,10 @@ Parts: `kind` (is this kind, with its register / full / senses, right?) and
 `line` (only for `mix`). A kind that is plainly wrong (a real opposite
 removed, a short form that is a different word, a wrong register) is
 `major`.
+
+## dataset "final"
+
+Graded as "synonyms", with two more kinds, as defined under "kinds":
+`pair` (two words that go together, not opposites) and `polite` (separate
+words in different registers; `register` gives each). Neither has a line;
+grade only `pair` for them, as you would grade an antonym.

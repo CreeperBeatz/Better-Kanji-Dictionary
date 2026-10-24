@@ -1069,6 +1069,8 @@ def kanji_page(char: str) -> dict:
         g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
+        if synonyms.kanji_wrong_label(char, here["id"], c):
+            g = None  # the check found the guess wrong (D-030): no label rather than a false one
         return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None,
                 # How it differs; what this kanji is in the meaning, its card says.
                 "nuance": synonyms.kanji_nuance(char, here["id"], c)}

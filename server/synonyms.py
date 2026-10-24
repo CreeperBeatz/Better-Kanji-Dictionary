@@ -77,6 +77,12 @@ def kanji_not_close(char: str, meaning: str, other: str) -> bool:
     return bool((_kanji().get("similar", {}).get(f"{char}|{meaning}|{other}") or {}).get("mismatch"))
 
 
+def kanji_wrong_label(char: str, meaning: str, other: str) -> bool:
+    """Whether the guess at which meaning of `other` is close (search.close) is wrong for
+    this row: the check said so (D-030), and wrote the line for the meaning that is."""
+    return bool((_kanji().get("similar", {}).get(f"{char}|{meaning}|{other}") or {}).get("wrongLabel"))
+
+
 def kanji_mixup(a: str, b: str, reading: str) -> dict | None:
     """When to write `a` and when `b` on `reading`: {en, bg}."""
     x, y = sorted((a, b))
