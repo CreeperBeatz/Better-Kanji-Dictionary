@@ -351,11 +351,18 @@ def merge() -> None:
                 if v:
                     out[wid][n] = {**out[wid][n], **{f: v[f] for f in ("rank", "nuance", "ex") if f in v}}
                     fixed.update(f for f in ("rank", "nuance", "ex") if f in v)
+    import origin_claims  # word-origin claims fixed once, by word and text
+    origin = origin_claims.fixes()
+    for wid, ns in out.items():
+        for n, nt in enumerate(ns):
+            if nt and (int(wid), nt.get("nuance")) in origin:
+                ns[n] = {**nt, "nuance": origin[(int(wid), nt["nuance"])]}
+                fixed["origin"] += 1
     import sense_evidence
     print("Tatoeba examples:", sense_evidence.restore(out))
     ws._dump(SITE, out)
     print(f"{len(out)} words -> {SITE}" + (f"; checked {fixed['checked']} senses, fixed rank {fixed['rank']}, "
-                                           f"nuance {fixed['nuance']}, ex {fixed['ex']}" if fixed else ""))
+                                           f"nuance {fixed['nuance']}, ex {fixed['ex']}, origin {fixed['origin']}" if fixed else ""))
 
 
 def main() -> None:

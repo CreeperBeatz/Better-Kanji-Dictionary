@@ -893,7 +893,17 @@ def export(bar: float = 0.6) -> None:
             mirrored.append(f"{o}|{n - 1}|{kind}|{w}|{i + 1}")
             stats[f"{kind} mirrored"] += 1
             stats[f"{kind} mirrored without line"] += kind == "syn" and not line
-    rows ={str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
+    # Word-origin claims fixed once (pipeline/origin_claims.py): by word and text, wherever shown.
+    import origin_claims
+    origin = origin_claims.fixes()
+    for w, rs in out.items():
+        for r in rs:
+            if r[1] == "syn":
+                for f, who in ((4, r[2]), (5, w)):
+                    if len(r) > f and (who, r[f]) in origin:
+                        r[f] = origin[(who, r[f])]
+                        stats["origin fixed"] += 1
+    rows = {str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
     SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     _dump(MIRRORED, mirrored)
     print(f"{len(rows)} words, {dict(stats)} -> {SITE}")
