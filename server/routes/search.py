@@ -1208,6 +1208,7 @@ def word_entry(word_id: int) -> dict:
         "examples": [_sentence(r["text"], w["headword"]) for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
+        "senseNotes": synonyms.sense_notes(word_id),
         "spelling": spelling_kanji(w),
     }
 

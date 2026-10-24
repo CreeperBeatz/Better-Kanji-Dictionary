@@ -1099,7 +1099,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .sense-card header {
   position: static;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: start;
   gap: 2px 9px;
   margin: 0 -10px;
@@ -1122,6 +1122,69 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .sense-card .rest {
+  color: var(--paper-dim);
+}
+
+/* How soon a learner meets the sense: "main" in the accent, "rare" dim, a
+   secondary one says nothing; its badge says the same, filled for main. */
+.sense-rank {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: calc(11px * var(--type));
+  color: var(--muted);
+}
+
+.sense-card[data-rank='main'] .sense-rank {
+  color: var(--ai);
+}
+
+.sense-card[data-rank='main'] .meaning-n {
+  background: var(--paper);
+}
+
+.sense-card[data-rank='secondary'] .meaning-n,
+.sense-card[data-rank='rare'] .meaning-n {
+  color: var(--paper-dim);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--paper-dim);
+}
+
+.sense-card[data-rank='rare'] .meaning-n {
+  opacity: 0.6;
+}
+
+/* What the sense is, under its glosses: the nuance, then an example. */
+.sense-note {
+  margin: 6px 0 0 calc(19px * var(--type) + 9px);
+}
+
+.sense-nuance {
+  margin: 0;
+  font-size: calc(13px * var(--type));
+  line-height: 1.5;
+  color: var(--paper);
+}
+
+.sense-example {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 6px 0 0;
+}
+
+.sense-example-ja {
+  font-family: var(--mincho);
+  font-size: calc(15px * var(--type));
+  color: var(--paper);
+}
+
+.sense-example-ja mark {
+  color: var(--ai);
+  background: none;
+}
+
+.sense-example-en {
+  font-size: calc(12px * var(--type));
   color: var(--paper-dim);
 }
 

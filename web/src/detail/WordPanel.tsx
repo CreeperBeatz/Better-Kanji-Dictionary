@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { api, type RelatedWord, type Word, type WordEntry } from '../api'
+import { api, type RelatedWord, type SenseNote, type Word, type WordEntry } from '../api'
 import { reducedMotion } from '../media'
 import { AsideTitle, CloseRow } from './Close'
 import { Spellings } from './Spellings'
@@ -50,6 +50,13 @@ const S = strings(
     mixupsHint: 'Other words with the same reading.',
     withMeaning: 'With the meaning: {m}',
     openAt: 'Open {word} at this meaning',
+    main: 'main',
+    secondary: 'secondary',
+    rare: 'rare',
+    mainTitle: 'A main meaning: learn the word by it',
+    secondaryTitle: 'Met regularly, after the main meanings',
+    rareTitle: 'Seldom met',
+    drafted: 'An example written for this meaning, not from a corpus',
   },
   {
     amongFrequent: 'сред {n}-те най-чести думи',
@@ -73,6 +80,13 @@ const S = strings(
     mixupsHint: 'Други думи със същото четене.',
     withMeaning: 'Със значение: {m}',
     openAt: 'Отворете {word} на това значение',
+    main: 'основно',
+    secondary: 'второстепенно',
+    rare: 'рядко',
+    mainTitle: 'Основно значение: думата се учи по него',
+    secondaryTitle: 'Среща се редовно, след основните значения',
+    rareTitle: 'Среща се рядко',
+    drafted: 'Пример, написан за това значение, не от корпус',
   },
 )
 
@@ -163,6 +177,50 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
   )
 }
 
+/** The example's 【word】 marked, as the word is in an entry's sentences. */
+function NoteExample({ ja }: { ja: string }) {
+  const m = /^(.*?)【(.*?)】(.*)$/.exec(ja)
+  if (!m) return <>{ja}</>
+  return (
+    <>
+      {m[1]}
+      <mark>{m[2]}</mark>
+      {m[3]}
+    </>
+  )
+}
+
+/**
+ * What the sense is, once, under its glosses: its nuance -- where and how the
+ * word is used in it -- and an example. The synonym rows below say how each
+ * other word differs from this.
+ */
+function SenseNoteView({ note, lang }: { note: SenseNote; lang: Lang }) {
+  const t = S(lang)
+  const en =
+    lang === 'bg' ? (
+      <span className="entry-fallback" title={t('notTranslated')}>
+        EN
+      </span>
+    ) : null
+  return (
+    <div className="sense-note">
+      <p className="sense-nuance">
+        {note.nuance}
+        {en}
+      </p>
+      {note.ex && (
+        <p className="sense-example" title={note.ex.src === 'd' ? t('drafted') : undefined}>
+          <span lang="ja" className="sense-example-ja">
+            <NoteExample ja={note.ex.ja} />
+          </span>
+          <span className="sense-example-en">{note.ex.en}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** A sense in a line: its first glosses. */
 function senseLine(w: Word, n: number, lang: Lang): string | null {
   const s = w.senses[n]
@@ -212,7 +270,6 @@ function SenseAside({
             sense={m && t('withMeaning', { m })}
             line={r.line}
             lineMark={en}
-            own={{ glyph: word.headword, line: r.ownLine }}
             title={t('openAt', { word: r.word.headword })}
             warm={warmWord(r.word.id)}
             onOpen={() => open(r)}
@@ -364,8 +421,9 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
       <ol className="entry-senses">
         {w.senses.map((s, i) => {
           const [lead, ...rest] = glosses[i].value.split(';').map((g) => g.trim())
+          const note = entry?.senseNotes?.[i]
           return (
-            <li key={i} id={senseAnchor(w.id, i)} className="meaning sense-card">
+            <li key={i} id={senseAnchor(w.id, i)} className="meaning sense-card" data-rank={note?.rank}>
               {/* Its number and glosses, as a kanji meaning's title: the first gloss leads. */}
               <header>
                 <span className="meaning-n">{i + 1}</span>
@@ -393,7 +451,12 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                       })}
                     </p>
                   )}
+                {/* How soon a learner meets it. Its place is kept, so the glosses line up. */}
+                <span className="sense-rank" title={note ? t(`${note.rank}Title`) : undefined}>
+                  {note && note.rank !== 'secondary' && t(note.rank)}
+                </span>
               </header>
+              {note && <SenseNoteView note={note} lang={lang} />}
               {entry?.related && (
                 <SenseAside word={w} sense={i} related={entry.related.filter((r) => r.sense === i)} lang={lang} onWord={onWord} />
               )}

@@ -161,8 +161,19 @@ export interface WordEntry {
   pairs: Word[]
   /** Its synonyms, opposites and words read the same, sense by sense; missing from the device's copy. */
   related?: RelatedWord[]
+  /** One per sense: how soon a learner meets it, its nuance, an example; missing from the device's copy. */
+  senseNotes?: SenseNote[] | null
   /** The kanji of its spellings: which have a page, and which are old forms (學 -> 学); missing from the device's copy. */
   spelling?: { open: string[]; old: Record<string, string> }
+}
+
+/** What one sense of a word is (pipeline/sense_notes.py). */
+export interface SenseNote {
+  /** main: the meanings to learn the word by; secondary: met later; rare: barely met. */
+  rank: 'main' | 'secondary' | 'rare'
+  nuance: string
+  /** The word in it in 【】; src t = a Tatoeba sentence, d = written for it. */
+  ex: { ja: string; en: string; src: 't' | 'd' } | null
 }
 
 /** A word close to one sense of another, and how (server/synonyms.py). */

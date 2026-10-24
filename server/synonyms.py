@@ -11,7 +11,10 @@ data/kanji_nuances.json (pipeline/kanji_nuance.py merge): `similar`, keyed
 meaning; `mixup`, keyed "a|b|reading" with a < b, when to write which, for
 kanji easy to mix up that no usage card tells apart. Both English and Bulgarian.
 
-Either file missing, there is just nothing to show.
+data/word_sense_notes.json (pipeline/sense_notes.py merge): word id -> one note
+per sense, {rank: main|secondary|rare, nuance, ex: {ja (the word in 【】), en, src} | null}.
+
+Any file missing, there is just nothing to show.
 """
 
 from __future__ import annotations
@@ -38,6 +41,15 @@ def _words() -> dict:
 @cache
 def _kanji() -> dict:
     return _load("kanji_nuances.json")
+
+
+@cache
+def _notes() -> dict:
+    return _load("word_sense_notes.json")
+
+
+def sense_notes(word_id: int) -> list[dict] | None:
+    return _notes().get(str(word_id))
 
 
 def word_rows(word_id: int) -> list[list]:
