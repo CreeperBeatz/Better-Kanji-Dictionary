@@ -1057,7 +1057,9 @@ def kanji_page(char: str) -> dict:
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
         return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None,
-                "nuance": synonyms.kanji_nuance(char, here["id"], c)}
+                # How it differs, and beside it how this kanji does.
+                "nuance": synonyms.kanji_nuance(char, here["id"], c),
+                "ownNuance": synonyms.kanji_own_nuance(char, here["id"], c, g and g["id"])}
 
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,
@@ -1199,11 +1201,13 @@ def word_entry(word_id: int) -> dict:
 def related_words(word_id: int) -> list[dict]:
     """The word's synonyms (≈), opposites (↔) and the words read the same that are easy to
     mix up with it (!), sense by sense (server/synonyms.py): each the other word, the
-    number of its sense that matches, and the line on how it differs or when to write it."""
+    number of its sense that matches, the line on how it differs or when to write it, and
+    the line on how this word differs from it."""
     rows = synonyms.word_rows(word_id)
     others = _fetch_words(list({r[2] for r in rows}))
-    return [{"sense": i, "kind": kind, "word": others[o], "otherSense": n, "line": line}
-            for i, kind, o, n, line in rows if o in others]
+    return [{"sense": r[0], "kind": r[1], "word": others[r[2]], "otherSense": r[3], "line": r[4],
+             "ownLine": r[5] if len(r) > 5 else None}
+            for r in rows if r[2] in others]
 
 
 def verb_pairs(word_id: int) -> list[dict]:

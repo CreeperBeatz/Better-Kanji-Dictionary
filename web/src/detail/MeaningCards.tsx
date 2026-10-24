@@ -305,7 +305,7 @@ function MeaningBody({
           <AsideTitle icon="≈">{t('similar')}</AsideTitle>
           <ul>
             {m.similar.map((k) => (
-              <CloseRow key={k.char} k={k} lang={lang} onKanji={onKanji} />
+              <CloseRow key={k.char} k={k} self={self.char} lang={lang} onKanji={onKanji} />
             ))}
           </ul>
         </section>
@@ -349,7 +349,7 @@ function Uses({ uses, lang, row }: { uses: MeaningUse[]; lang: Lang; row: (w: Wo
  * 典 · Code · With the meaning: ceremony -- the kanji, its keyword, and the
  * meaning of it that is close to this one. The row opens the kanji at that meaning.
  */
-function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void }) {
+function CloseRow({ k, self, lang, onKanji }: { k: CloseKanji; self: string; lang: Lang; onKanji: (c: string) => void }) {
   const t = S(lang)
   const sense = k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)
   return (
@@ -358,6 +358,7 @@ function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c
       sub={meaningsOf(k, lang).value[0]}
       sense={sense && t('withMeaning', { m: sense })}
       line={k.nuance && ((lang === 'bg' && k.nuance.bg) || k.nuance.en)}
+      own={{ glyph: self, line: k.ownNuance && ((lang === 'bg' && k.ownNuance.bg) || k.ownNuance.en) }}
       title={t('openAt', { char: k.char })}
       warm={warmKanji(k.char)}
       onOpen={() => {

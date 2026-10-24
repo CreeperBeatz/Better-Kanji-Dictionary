@@ -3,10 +3,11 @@
  * the word, its reading and accent, every sense, and then the kanji it is
  * written with -- each of which opens that character.
  *
- * Under a sense, what sits beside it, as beside a meaning on a kanji's page
- * (detail/Close.tsx): ! the words read the same that are easy to mix up with
- * it, ≈ its synonyms, each with how it differs, and ↔ its opposites -- each
- * row opening that word at its matching sense.
+ * Each sense is a card, as each meaning of a kanji is, numbered: smaller,
+ * and always open. Under its glosses, what sits beside it, as beside a
+ * kanji's meaning (detail/Close.tsx): ! the words read the same that are easy
+ * to mix up with it, ≈ its synonyms, and ↔ its opposites -- each with how it
+ * differs and how this word does, each row opening that word at its sense.
  */
 
 import { useEffect, useState } from 'react'
@@ -212,6 +213,7 @@ function SenseAside({
             sense={m && t('withMeaning', { m })}
             line={r.line}
             lineMark={en}
+            own={{ glyph: word.headword, line: r.ownLine }}
             title={t('openAt', { word: r.word.headword })}
             warm={warmWord(r.word.id)}
             onOpen={() => open(r)}
@@ -219,6 +221,8 @@ function SenseAside({
         )
       })
   const mix = related.filter((r) => r.kind === 'mix')
+  // When to write this word, as each other one's line says when to write that one.
+  const ownMix = [...new Set(mix.map((r) => r.ownLine).filter(Boolean))]
   const syn = rows('syn')
   const ant = rows('ant')
   return (
@@ -237,6 +241,12 @@ function SenseAside({
                 </span>
                 <span className="usage-keyword">{senseLine(word, sense, lang)}</span>
               </p>
+              {ownMix.map((l) => (
+                <p key={l} className="spelling-def">
+                  {l}
+                  {en}
+                </p>
+              ))}
             </li>
             {mix.map((r) => (
               <li key={r.word.id}>
@@ -352,36 +362,44 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
       )}
 
       <ol className="entry-senses">
-        {w.senses.map((s, i) => (
-          <li key={i} id={senseAnchor(w.id, i)}>
-            {/* Part of speech only where it changes, as a printed dictionary does. */}
-            {(s.pos.length > 0 || s.misc.length > 0) &&
-              (i === 0 || s.pos.join() !== w.senses[i - 1].pos.join() || s.misc.length > 0) && (
-                <p className="entry-pos">
-                  {[...s.pos, ...s.misc].map((code, j) => {
-                    const tag = tagLabel(code, lang)
-                    return (
-                      <span key={j}>
-                        {j > 0 && ' · '}
-                        <abbr title={tag.full}>{tag.short}</abbr>
-                      </span>
-                    )
-                  })}
+        {w.senses.map((s, i) => {
+          const [lead, ...rest] = glosses[i].value.split(';').map((g) => g.trim())
+          return (
+            <li key={i} id={senseAnchor(w.id, i)} className="meaning sense-card">
+              {/* Its number and glosses, as a kanji meaning's title: the first gloss leads. */}
+              <header>
+                <span className="meaning-n">{i + 1}</span>
+                <p className="entry-gloss">
+                  <span className="sense-lead">{lead}</span>
+                  {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}
+                  {glosses[i].fallback && (
+                    <span className="entry-fallback" title={t('notTranslated')}>
+                      EN
+                    </span>
+                  )}
                 </p>
+                {/* Part of speech only where it changes, as a printed dictionary does. */}
+                {(s.pos.length > 0 || s.misc.length > 0) &&
+                  (i === 0 || s.pos.join() !== w.senses[i - 1].pos.join() || s.misc.length > 0) && (
+                    <p className="entry-pos">
+                      {[...s.pos, ...s.misc].map((code, j) => {
+                        const tag = tagLabel(code, lang)
+                        return (
+                          <span key={j}>
+                            {j > 0 && ' · '}
+                            <abbr title={tag.full}>{tag.short}</abbr>
+                          </span>
+                        )
+                      })}
+                    </p>
+                  )}
+              </header>
+              {entry?.related && (
+                <SenseAside word={w} sense={i} related={entry.related.filter((r) => r.sense === i)} lang={lang} onWord={onWord} />
               )}
-            <p className="entry-gloss">
-              {glosses[i].value.split(';').join('; ')}
-              {glosses[i].fallback && (
-                <span className="entry-fallback" title={t('notTranslated')}>
-                  EN
-                </span>
-              )}
-            </p>
-            {entry?.related && (
-              <SenseAside word={w} sense={i} related={entry.related.filter((r) => r.sense === i)} lang={lang} onWord={onWord} />
-            )}
-          </li>
-        ))}
+            </li>
+          )
+        })}
       </ol>
       {machine && <p className="entry-machine">{t('machine')}</p>}
 

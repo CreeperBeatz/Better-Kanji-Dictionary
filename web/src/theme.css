@@ -986,6 +986,19 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   display: contents;
 }
 
+/* Narrow, as on a phone, what is said of it goes under the kanji or word,
+   the width of the block: the meaning, then the lines. A long word does not
+   push them into a thin column. */
+.meaning-similar {
+  container-type: inline-size;
+}
+
+@container (max-width: 420px) {
+  .meaning-similar :is(.close-sense, .close-line, .close-own) {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Opposites, a word's only: in vermilion, apart from the synonyms' indigo. */
 .aside-block.opposites {
   --tone: var(--shu);
@@ -1055,6 +1068,72 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-left: 6px;
 }
 
+/* The page's own word or kanji and how it differs in turn, under the other's
+   line: its glyph small at the start, so the two lines read as a pair. */
+.close-own {
+  grid-column: 2 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 0 3px;
+  font-size: calc(12px * var(--type));
+  line-height: 1.45;
+  color: var(--paper-dim);
+}
+
+.close-own-glyph {
+  flex: none;
+  font-family: var(--mincho);
+  font-size: calc(13px * var(--type));
+  color: var(--tone);
+}
+
+/* A word's senses as cards, numbered as a kanji's meanings are: smaller, not
+   held to the top, and always open, so no caret. */
+.entry-senses > li.sense-card {
+  margin-top: 8px;
+  padding: 0 10px 8px;
+  font-size: inherit;
+}
+
+.sense-card header {
+  position: static;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 2px 9px;
+  margin: 0 -10px;
+  padding: 8px 10px 2px;
+}
+
+.sense-card .meaning-n {
+  width: calc(19px * var(--type));
+  height: calc(19px * var(--type));
+  margin-top: 1px;
+  font-size: calc(11px * var(--type));
+}
+
+.sense-card .entry-gloss {
+  margin: 0;
+}
+
+.sense-lead {
+  font-weight: 600;
+}
+
+.sense-card .rest {
+  color: var(--paper-dim);
+}
+
+/* Its part of speech under the glosses, in line with them. */
+.sense-card .entry-pos {
+  grid-column: 2;
+}
+
+.sense-card .aside-block {
+  margin-top: 10px;
+}
+
 /* A word's sense brought into view from another word's page glows a moment. */
 @keyframes sense-flash {
   0%,
@@ -1070,7 +1149,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 
 .entry-senses > li {
   scroll-margin-top: 56px;
-  border-radius: 3px;
 }
 
 .sense-flash {
@@ -4467,9 +4545,11 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
+/* Cards, each with its own number (.sense-card): no list numbers, no indent. */
 .entry-senses {
   margin: 18px 0 0;
-  padding: 0 0 0 20px;
+  padding: 0;
+  list-style: none;
 }
 
 /* On a phone, first in the entry, the head being above the tabs. */

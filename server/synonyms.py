@@ -1,9 +1,10 @@
 """Drafted synonyms, opposites and mix-ups of words, and the lines on kanji close in meaning.
 
 data/word_synonyms.json (pipeline/word_synonyms.py export): word id -> rows
-[sense index, kind, other word id, the other's sense number, line]; kind is
-syn (≈, the line says how the other differs), ant (↔, no line) or mix (read
-the same, the line says when to write the other).
+[sense index, kind, other word id, the other's sense number, line, own line];
+kind is syn (≈, the line says how the other differs), ant (↔, no line) or mix
+(read the same, the line says when to write the other). The own line says the
+same of the word itself, beside it.
 
 data/kanji_nuances.json (pipeline/kanji_nuance.py merge): `similar`, keyed
 "kanji|meaning id|other", one line on how the other kanji differs in that
@@ -50,6 +51,14 @@ def _text(v: dict | None) -> dict | None:
 def kanji_nuance(char: str, meaning: str, other: str) -> dict | None:
     """How `other` differs from `char` in `meaning`: {en, bg}."""
     return _text(_kanji().get("similar", {}).get(f"{char}|{meaning}|{other}"))
+
+
+def kanji_own_nuance(char: str, meaning: str, other: str, other_meaning: str | None) -> dict | None:
+    """How `char` itself differs from `other` in `meaning`: the other kanji's line about this one,
+    in its meaning that is close, where it has one, else drafted (pipeline/self_nuance.py)."""
+    k = _kanji()
+    back = other_meaning and k.get("similar", {}).get(f"{other}|{other_meaning}|{char}")
+    return _text(back or k.get("self", {}).get(f"{char}|{meaning}|{other}"))
 
 
 def kanji_mixup(a: str, b: str, reading: str) -> dict | None:

@@ -174,6 +174,8 @@ export interface RelatedWord {
   otherSense: number
   /** How it differs, or when to write it; English only for now. */
   line: string | null
+  /** The same of the page's own word, beside it: how it differs from this one. */
+  ownLine: string | null
 }
 
 export interface Sense {
@@ -233,6 +235,8 @@ export interface CloseKanji extends KanjiLite {
   sense: { id: string; en: string | null; bg: string | null } | null
   /** How it differs from the page's kanji in this meaning, where drafted. */
   nuance?: { en: string; bg: string | null } | null
+  /** And how the page's kanji differs from it. */
+  ownNuance?: { en: string; bg: string | null } | null
 }
 
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */

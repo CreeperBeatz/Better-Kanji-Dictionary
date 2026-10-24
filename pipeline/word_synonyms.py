@@ -787,13 +787,16 @@ def check_same_reading(only: str | None = None) -> None:
 # ---------------------------------------------------------------- export
 
 SITE = proposals.ROOT / "data" / "word_synonyms.json"
+SELF = proposals.DRAFTS / "self-nuance" / "self.json"  # pipeline/self_nuance.py merge
 # Every run pair that went through the skeptic: the JLPT run, its senses past the 8th, the pilot.
 SITE_RUNS = (("word-synonyms-jlpt", ("A", "B")), ("word-synonyms-jlpt", ("E", "F")), ("word-synonyms", ("C", "D")))
 
 
 def export(bar: float = 0.6) -> None:
-    """data/word_synonyms.json: word id -> rows [sense index, kind, other id, other's sense, line], kind
-    syn / ant / mix (read the same). What the site shows under each sense."""
+    """data/word_synonyms.json: word id -> rows [sense index, kind, other id, other's sense, line, own line],
+    kind syn / ant / mix (read the same). What the site shows under each sense. `line` says how the other
+    differs (mix: when to write it); `own line`, how this word differs from it: the other word's row about
+    this one, where it has one for the same senses, else drafted (pipeline/self_nuance.py)."""
     global DRAFTS, IN, OUT, RUNS
     saved = DRAFTS, IN, OUT, RUNS
     out: dict[int, list[list]] = defaultdict(list)
@@ -816,11 +819,20 @@ def export(bar: float = 0.6) -> None:
             if a["kind"] not in ("near", "sound"):
                 continue
             x, y = map(int, key.split(":"))
-            out[x].append([a["aSense"] - 1, "mix", y, a["bSense"], a["onA"].strip()])
-            out[y].append([a["bSense"] - 1, "mix", x, a["aSense"], a["onB"].strip()])
+            out[x].append([a["aSense"] - 1, "mix", y, a["bSense"], a["onA"].strip(), a["onB"].strip()])
+            out[y].append([a["bSense"] - 1, "mix", x, a["aSense"], a["onB"].strip(), a["onA"].strip()])
             stats["mix"] += 2
     finally:
         DRAFTS, IN, OUT, RUNS = saved
+    fwd = {(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
+    drafted = _read(SELF)["word"] if SELF.exists() else {}
+    for w, rs in out.items():
+        for r in rs:
+            if r[1] == "syn":
+                i, _, o, n, _ = r
+                own = fwd.get((o, n - 1, w, i)) or (drafted.get(f"{w}:{i}:{o}:{n - 1}") or {}).get("en")
+                r.append(own)
+                stats["own line"] += bool(own)
     rows = {str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
     SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{len(rows)} words, {dict(stats)} -> {SITE}")
