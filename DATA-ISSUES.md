@@ -431,6 +431,19 @@ reading together before any new run (a first try that did so also let
 through 金曜 / 金曜日 and 定期 / 定期的, whose tails read び and てき); the 15
 box cases wait for Dani.
 
+### D-034 · Word lines that call a Sino-Japanese word "native"
+*Found 2026-10-25,* by the second look at the mirrored synonym lines: the
+quick own lines (pipeline/self_nuance.py, Sonnet) often opened with "Native
+word." on words built from on'yomi (点数, 場所, 助言, 娯楽, 王, 級). The same
+mistake was in lines the Opus checks had passed, graded minor at most.
+Source: drafted synonym lines; a few sense notes.
+**Status: fixed locally** (feat/word-synonyms). The second look (W-*, 6,141
+pairs) fixed 1,060 lines; then every shown text that says where a word comes
+from was checked once (pipeline/origin_claims.py, 1,485 texts): 143 fixed,
+179 rows on the site and 3 sense notes. Loanword claims were right; the
+errors sat in kanji words. Lesson: a measured sample can grade a systematic
+mistake as minor; look for the pattern behind repeated fixes.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
