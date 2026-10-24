@@ -59,6 +59,12 @@ word in some common sentences / the plain opposite / a real mix-up? Not a
 broader or narrower word, not a short or polite form of the same word) and
 `line` (true and useful; not for antonyms).
 
+## datasets "mirrored", "mixup", "belowbar"
+
+Graded exactly as "synonyms". In "belowbar" the `other` word may have no
+`sense`: grade the pair `ok` if one of its senses makes it right, and judge
+the line against that sense.
+
 ## Output
 
 ```json

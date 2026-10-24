@@ -35,7 +35,10 @@ DRAFTS = ROOT / "data" / "drafts" / "quality-sample"
 IN, OUT = DRAFTS / "in", DRAFTS / "out"
 DATA = ROOT / "data"
 SEED = 20261024
-PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": ("pair", "line")}
+PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": ("pair", "line"),
+         # Graded like synonyms (2026-10-24): rows shown only by mirroring (their line is the Sonnet own line),
+         # every read-the-same row, and pairs the runs gave below the bar (what the bar throws away).
+         "mirrored": ("pair", "line"), "mixup": ("pair", "line"), "belowbar": ("pair", "line")}
 GRADES = ("ok", "minor", "major")
 
 
@@ -64,11 +67,11 @@ def _kanji(rng: random.Random, n: int) -> list[dict]:
     return out
 
 
-def _synonyms(rng: random.Random, n: int) -> list[dict]:
+def _synonyms(rng: random.Random, n: int, keep=lambda w, r: True) -> list[dict]:
     site = json.loads(ws.SITE.read_text(encoding="utf-8"))
-    pool = [(int(w), r) for w, rs in site.items() for r in rs]
+    pool = [(int(w), r) for w, rs in site.items() for r in rs if keep(int(w), r)]
     out = []
-    for w, r in rng.sample(pool, n):
+    for w, r in rng.sample(pool, min(n, len(pool))):
         i, kind, o, on = r[0], r[1], r[2], r[3]
         out.append({"key": f"{w}|{i}|{kind}|{o}|{on}", "kind": {"syn": "synonym", "ant": "antonym", "mix": "mixup"}[kind],
                     "word": {**_word(w), "sense": i + 1}, "other": {**_word(o), "sense": on},
@@ -76,11 +79,46 @@ def _synonyms(rng: random.Random, n: int) -> list[dict]:
     return out
 
 
+def _mirrored(rng: random.Random, n: int) -> list[dict]:
+    keys = set(ws._read(ws.MIRRORED))
+    return _synonyms(rng, n, lambda w, r: r[1] == "syn" and f"{w}|{r[0]}|{r[1]}|{r[2]}|{r[3]}" in keys)
+
+
+def _mixup(rng: random.Random, n: int) -> list[dict]:
+    return _synonyms(rng, n, lambda w, r: r[1] == "mix")
+
+
+def _belowbar(rng: random.Random, n: int) -> list[dict]:
+    """Pairs a run gave that the bar kept out (both runs at least 0.6), not shown on the site by another way."""
+    import proposals
+    site = json.loads(ws.SITE.read_text(encoding="utf-8"))
+    shown = {(int(w), r[0], r[2]) for w, rs in site.items() for r in rs}
+    pool = []
+    saved = ws.DRAFTS, ws.IN, ws.OUT, ws.RUNS
+    try:
+        for folder, runs in ws.SITE_RUNS:
+            ws.DRAFTS, ws.IN, ws.OUT = proposals.folders(proposals.DRAFTS / folder)
+            ws.RUNS = runs
+            for (w, i, kind, o), v in ws.combine(runs)[0].items():
+                if v["both"] < ws.SKEPTIC_BAR and (w, i, o) not in shown:
+                    said = [v[r] for r in runs if r in v]
+                    pool.append((w, i, kind, o, said[0].get("sense"), next((x["nuance"] for x in said if x["nuance"]), None)))
+    finally:
+        ws.DRAFTS, ws.IN, ws.OUT, ws.RUNS = saved
+    out = []
+    for w, i, kind, o, on, line in rng.sample(sorted(set(pool), key=str), n):
+        out.append({"key": f"{w}|{i}|{kind}|{o}|{on or ''}", "kind": {"syn": "synonym", "ant": "antonym"}[kind],
+                    "word": {**_word(w), "sense": i + 1}, "other": {**_word(o), **({"sense": on} if on else {})},
+                    **({"line": line} if kind == "syn" else {})})
+    return out
+
+
 def prepare(which: str, n: int, size: int) -> None:
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}")
-    items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms}[which](rng, n)
+    items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
+             "mixup": _mixup, "belowbar": _belowbar}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
@@ -177,7 +215,7 @@ def sheet(which: str, n: int) -> None:
             lines.append(f"- **{head}**\n  - en: {it['line']['en']}\n  - bg: {it['line']['bg']}\n  - grade: en __ bg __")
         else:
             w, o = it["word"], it["other"]
-            lines.append(f"- **{w['word']}** ({w['senses'][w['sense'] - 1]}) {it['kind']} **{o['word']}** ({o['senses'][o['sense'] - 1]})\n"
+            lines.append(f"- **{w['word']}** ({w['senses'][w['sense'] - 1]}) {it['kind']} **{o['word']}** ({o['senses'][o['sense'] - 1] if o.get('sense') else 'sense not given'})\n"
                          f"  - line: {it.get('line') or '—'}\n  - grade: pair __ line __")
     path = DRAFTS / f"sheet-{which}.md"
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

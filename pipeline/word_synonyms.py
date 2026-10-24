@@ -788,6 +788,7 @@ def check_same_reading(only: str | None = None) -> None:
 
 SITE = proposals.ROOT / "data" / "word_synonyms.json"
 SELF = proposals.DRAFTS / "self-nuance" / "self.json"  # pipeline/self_nuance.py merge
+MIRRORED = proposals.DRAFTS / "word-synonyms-jlpt" / "mirrored.json"  # rows shown only by mirroring, for quality_sample
 # Every run pair that went through the skeptic: the JLPT run, its senses past the 8th, the pilot.
 SITE_RUNS = (("word-synonyms-jlpt", ("A", "B")), ("word-synonyms-jlpt", ("E", "F")), ("word-synonyms", ("C", "D")))
 # Antonyms Dani decided that no run drafted: (word, sense, other, other's sense), senses from 1; shown both ways.
@@ -853,7 +854,22 @@ def export(bar: float = 0.6) -> None:
             r[4] = lines.get((w, r[0], r[1], r[2], r[3]), r[4])
     stats["recheck dropped"], stats["recheck lines"] = len(drop), len(lines)
     out = defaultdict(list, {w: rs for w, rs in out.items() if rs})
-    fwd = {(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
+    # Pairs removed wrongly (pipeline/synonym_removed.py, "keep"): back on both words, with their lines.
+    import synonym_removed
+    at = {(w, r[0], r[2]) for w, rs in out.items() for r in rs}
+    for k, v in synonym_removed.all_verdicts().items():
+        if v["verdict"] != "keep":
+            continue
+        w, _, kind, o = k.split("|")
+        w, o, i, n = int(w), int(o), v["wordSense"] - 1, v["otherSense"]
+        if (w, i, o) in at or (o, n - 1, w) in at:
+            continue
+        line, rev = (v["line"], v["reverse"]) if kind != "ant" else (None, None)
+        out[w].append([i, kind, o, n, line] + ([rev] if kind == "mix" else []))
+        out[o].append([n - 1, kind, w, i + 1, rev] + ([line] if kind == "mix" else []))
+        at |= {(w, i, o), (o, n - 1, w)}
+        stats[f"{kind} kept from removed"] += 1
+    fwd ={(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
     drafted = _read(SELF)["word"] if SELF.exists() else {}
     for w, rs in out.items():
         for r in rs:
@@ -865,6 +881,7 @@ def export(bar: float = 0.6) -> None:
     # Every pair on both words' pages: a row the other word lacks is mirrored there. Its line says how this
     # word differs: the second look's `reverse` fix, else the own line; its own line is this row's line.
     have = {(w, r[0], r[2]) for w, rs in out.items() for r in rs}
+    mirrored = []
     for w, rs in list(out.items()):
         for r in list(rs):
             i, kind, o, n = r[:4]
@@ -873,10 +890,12 @@ def export(bar: float = 0.6) -> None:
             line = lines.get((o, n - 1, kind, w, i + 1)) or (r[5] if kind == "syn" else None)
             out[o].append([n - 1, kind, w, i + 1, line] + ([r[4]] if kind == "syn" else []))
             have.add((o, n - 1, w))
+            mirrored.append(f"{o}|{n - 1}|{kind}|{w}|{i + 1}")
             stats[f"{kind} mirrored"] += 1
             stats[f"{kind} mirrored without line"] += kind == "syn" and not line
     rows ={str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
     SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    _dump(MIRRORED, mirrored)
     print(f"{len(rows)} words, {dict(stats)} -> {SITE}")
 
 
