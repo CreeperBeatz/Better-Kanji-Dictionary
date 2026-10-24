@@ -3,10 +3,13 @@
  * 古い, 旧い, 故い. The same on its page and on its search card. The headword
  * first; a spelling in old kanji (學校 for 学校) or seldom used says so. Its
  * reading is under the headword, so only other kana (キレイ) are here.
+ * After them, other words that are a form of this one: its short form (ＣＭ
+ * for コマーシャル) or older form (メーター for メートル), or the full or standard
+ * word it is a form of. Each opens that word.
  */
-import type { Word } from '../api'
+import type { RelatedWord, Word } from '../api'
 import { strings, useLang } from '../i18n'
-import { warmKanji } from '../warm'
+import { warmKanji, warmWord } from '../warm'
 
 const S = strings(
   {
@@ -17,6 +20,11 @@ const S = strings(
     oldTitle: 'The same spelling in old kanji, as before 1946',
     oldOf: '{old}: the old form of {char}',
     open: 'Open {char}',
+    short: 'short form',
+    shortOf: 'full form',
+    older: 'older form',
+    olderOf: 'standard form',
+    openWord: 'Open {word}',
   },
   {
     spellings: 'Пише се',
@@ -26,6 +34,11 @@ const S = strings(
     oldTitle: 'Същото изписване със стари канджи, както преди 1946',
     oldOf: '{old}: старата форма на {char}',
     open: 'Отворете {char}',
+    short: 'кратка форма',
+    shortOf: 'пълна форма',
+    older: 'стара форма',
+    olderOf: 'стандартна форма',
+    openWord: 'Отворете {word}',
   },
 )
 
@@ -37,13 +50,17 @@ const S = strings(
 export function Spellings({
   word: w,
   kanji,
+  related,
 }: {
   word: Word
   kanji?: { open: string[]; old: Record<string, string>; onPick: (char: string) => void }
+  /** Words that are a short or older form of this one, or that it is one of (sense -1). */
+  related?: { forms: RelatedWord[]; onWord: (w: Word) => void }
 }) {
   const t = S(useLang())
   const forms = w.forms.filter((f) => f.text !== w.reading)
-  if (!forms.some((f) => f.text !== w.headword)) return null
+  const others = (related?.forms ?? []).filter((r) => r.kind in FORM_TAGS)
+  if (!forms.some((f) => f.text !== w.headword) && !others.length) return null
   const open = new Set(kanji?.open ?? [])
   const old = kanji?.old ?? {}
   const shown = [...forms.filter((f) => f.text === w.headword), ...forms.filter((f) => f.text !== w.headword)]
@@ -77,7 +94,18 @@ export function Spellings({
             </span>
           )
         })}
+        {others.map((r) => (
+          <span key={r.word.id} className="entry-spelling">
+            <button className="entry-form-word" lang="ja" {...warmWord(r.word.id)} onClick={() => related?.onWord(r.word)} title={t('openWord', { word: r.word.headword })}>
+              {r.word.headword}
+            </button>
+            <span className="entry-spelling-tag">{t(FORM_TAGS[r.kind as keyof typeof FORM_TAGS])}</span>
+          </span>
+        ))}
       </span>
     </span>
   )
 }
+
+/** What the other word is to this one, by the kind of its row. */
+const FORM_TAGS = { short: 'short', shortOf: 'shortOf', older: 'older', olderOf: 'olderOf' } as const

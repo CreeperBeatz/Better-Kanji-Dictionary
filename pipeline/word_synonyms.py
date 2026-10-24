@@ -788,6 +788,7 @@ def check_same_reading(only: str | None = None) -> None:
 
 SITE = proposals.ROOT / "data" / "word_synonyms.json"
 SELF = proposals.DRAFTS / "self-nuance" / "self.json"  # pipeline/self_nuance.py merge
+KIND_ORDER = ("mix", "syn", "ant", "pair", "polite", "short", "shortOf", "older", "olderOf")  # as the page shows them
 MIRRORED = proposals.DRAFTS / "word-synonyms-jlpt" / "mirrored.json"  # rows shown only by mirroring, for quality_sample
 # Every run pair that went through the skeptic: the JLPT run, its senses past the 8th, the pilot.
 SITE_RUNS = (("word-synonyms-jlpt", ("A", "B")), ("word-synonyms-jlpt", ("E", "F")), ("word-synonyms", ("C", "D")))
@@ -869,7 +870,46 @@ def export(bar: float = 0.6) -> None:
         out[o].append([n - 1, kind, w, i + 1, rev] + ([line] if kind == "mix" else []))
         at |= {(w, i, o), (o, n - 1, w)}
         stats[f"{kind} kept from removed"] += 1
-    fwd ={(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
+    # Dani's kinds (pipeline/synonym_kinds.py): an opposite may now be a pair or a polite
+    # form, a removed pair may fit a new box. Short and older forms are of the whole word
+    # (sense -1), shown in its spellings row. Rows: pair [i, pair, o, n, None]; polite
+    # [.., other's register, own register]; mix by meaning [.., line, own line, "meaning"].
+    # One verdict per two words: an opposite shown under several senses (上 / 下) keeps all
+    # of its rows, which change kind together; the verdict's senses add a row if new.
+    import synonym_kinds
+    for k, v in synonym_kinds.all_verdicts().items():
+        w, _, o, _ = k.split("|")
+        w, o, kind = int(w), int(o), v["kind"]
+        if v["item"]["now"] == "ant" and kind != "ant":
+            for a, b, reg in ((w, o, "word"), (o, w, "other")):
+                kept = []
+                for r in out[a]:
+                    if r[1] != "ant" or r[2] != b:
+                        kept.append(r)
+                    elif kind == "pair":
+                        kept.append([r[0], "pair", b, r[3], None])
+                    elif kind == "polite":
+                        mine, theirs = v["register"][reg], v["register"]["other" if reg == "word" else "word"]
+                        kept.append([r[0], "polite", b, r[3], theirs, mine])
+                out[a] = kept
+        if kind in ("short", "older"):
+            full, part = (o, w) if v["full"] == "other" else (w, o)
+            out[part].append([-1, f"{kind}Of", full, None, None])
+            out[full].append([-1, kind, part, None, None])
+        elif kind != "none":
+            i, n = v["wordSense"] - 1, v["otherSense"]
+            if kind == "polite":
+                mine, theirs = v["register"]["word"], v["register"]["other"]
+                rows = [i, kind, o, n, theirs, mine], [n - 1, kind, w, i + 1, mine, theirs]
+            elif kind == "mix":
+                rows = [i, kind, o, n, v["line"], v["reverse"], "meaning"], [n - 1, kind, w, i + 1, v["reverse"], v["line"], "meaning"]
+            else:
+                rows = [i, kind, o, n, None], [n - 1, kind, w, i + 1, None]
+            for a, row in zip((w, o), rows):  # each side apart: before mirroring, a row may be on one only
+                if (row[0], row[2]) not in {(r[0], r[2]) for r in out[a]}:
+                    out[a].append(row)
+        stats[f"kinds: {v['item']['now']} -> {kind}"] += 1
+    fwd = {(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
     drafted = _read(SELF)["word"] if SELF.exists() else {}
     for w, rs in out.items():
         for r in rs:
@@ -885,7 +925,7 @@ def export(bar: float = 0.6) -> None:
     for w, rs in list(out.items()):
         for r in list(rs):
             i, kind, o, n = r[:4]
-            if kind == "mix" or (o, n - 1, w) in have:
+            if kind not in ("syn", "ant", "pair") or (o, n - 1, w) in have:
                 continue
             line = lines.get((o, n - 1, kind, w, i + 1)) or (r[5] if kind == "syn" else None)
             out[o].append([n - 1, kind, w, i + 1, line] + ([r[4]] if kind == "syn" else []))
@@ -903,7 +943,7 @@ def export(bar: float = 0.6) -> None:
                     if len(r) > f and (who, r[f]) in origin:
                         r[f] = origin[(who, r[f])]
                         stats["origin fixed"] += 1
-    rows = {str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
+    rows = {str(w): sorted(r, key=lambda r: (r[0], KIND_ORDER.index(r[1]))) for w, r in sorted(out.items())}
     SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     _dump(MIRRORED, mirrored)
     print(f"{len(rows)} words, {dict(stats)} -> {SITE}")

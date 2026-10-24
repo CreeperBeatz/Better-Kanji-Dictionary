@@ -178,17 +178,23 @@ export interface SenseNote {
 
 /** A word close to one sense of another, and how (server/synonyms.py). */
 export interface RelatedWord {
-  /** Which of the word's senses, from 0. */
+  /** Which of the word's senses, from 0; -1 for a short or older form of the whole word. */
   sense: number
-  /** ≈ a synonym, ↔ an opposite, ! read the same and easy to mix up. */
-  kind: 'syn' | 'ant' | 'mix'
+  /**
+   * ≈ a synonym, ↔ an opposite, ! easy to mix up, a pair (祖父 / 祖母), a polite
+   * counterpart (仰る / 言う); of the whole word: its short form (short), what it is
+   * the short form of (shortOf), its older form (older), what it is an older form of.
+   */
+  kind: 'syn' | 'ant' | 'mix' | 'pair' | 'polite' | 'short' | 'shortOf' | 'older' | 'olderOf'
   word: Word
-  /** The other word's sense that matches, from 1. */
-  otherSense: number
-  /** How it differs, or when to write it; English only for now. */
+  /** The other word's sense that matches, from 1; null for a form of the whole word. */
+  otherSense: number | null
+  /** How it differs, or when to write it (English only for now); polite: the other's register. */
   line: string | null
-  /** The same of the page's own word, beside it: how it differs from this one. */
+  /** The same of the page's own word, beside it; polite: its own register. */
   ownLine: string | null
+  /** mix: read the same (sound) or one English word for two (meaning). */
+  why?: 'sound' | 'meaning'
 }
 
 export interface Sense {

@@ -38,7 +38,9 @@ SEED = 20261024
 PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": ("pair", "line"),
          # Graded like synonyms (2026-10-24): rows shown only by mirroring (their line is the Sonnet own line),
          # every read-the-same row, and pairs the runs gave below the bar (what the bar throws away).
-         "mirrored": ("pair", "line"), "mixup": ("pair", "line"), "belowbar": ("pair", "line")}
+         "mirrored": ("pair", "line"), "mixup": ("pair", "line"), "belowbar": ("pair", "line"),
+         # Every pair whose kind changed in pipeline/synonym_kinds.py (2026-10-25), all of them.
+         "kinds": ("kind", "line")}
 GRADES = ("ok", "minor", "major")
 
 
@@ -113,12 +115,30 @@ def _belowbar(rng: random.Random, n: int) -> list[dict]:
     return out
 
 
+def _kinds(rng: random.Random, n: int) -> list[dict]:
+    import synonym_kinds
+    out = []
+    for k, v in sorted(synonym_kinds.all_verdicts().items()):
+        it = v["item"]
+        if v["kind"] == it["now"]:
+            continue
+        kind = v["kind"] if v["kind"] != "none" else "removed: not an opposite"
+        w, o = int(k.split("|")[0]), int(k.split("|")[2])
+        out.append({"key": k, "kind": kind,
+                    "word": {**_word(w), **({"sense": v["wordSense"]} if "wordSense" in v else {})},
+                    "other": {**_word(o), **({"sense": v["otherSense"]} if "otherSense" in v else {})},
+                    **({"register": v["register"]} if "register" in v else {}),
+                    **({"full": v["full"]} if "full" in v else {}),
+                    **({"line": v["line"], "reverse": v["reverse"]} if v["kind"] == "mix" else {})})
+    return rng.sample(out, min(n, len(out)))
+
+
 def prepare(which: str, n: int, size: int) -> None:
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}")
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
-             "mixup": _mixup, "belowbar": _belowbar}[which](rng, n)
+             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
@@ -145,7 +165,7 @@ def grades(batch: str) -> tuple[dict, list[str]]:
         it = by.get(k)
         if not it:
             continue
-        need = [p for p in parts if not (p == "line" and it.get("kind") == "antonym")]
+        need = [p for p in parts if not (p == "line" and (it.get("kind") == "antonym" or src["dataset"] == "kinds" and "line" not in it))]
         if not isinstance(v, dict) or any(v.get(p) not in GRADES for p in need):
             probs.append(f"{batch}: {k}: grade each of {', '.join(need)} as ok, minor or major")
         elif any(v.get(p) != "ok" for p in need) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):

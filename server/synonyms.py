@@ -2,9 +2,15 @@
 
 data/word_synonyms.json (pipeline/word_synonyms.py export): word id -> rows
 [sense index, kind, other word id, the other's sense number, line, own line];
-kind is syn (≈, the line says how the other differs), ant (↔, no line) or mix
-(read the same, the line says when to write the other). The own line says the
-same of the word itself, beside it.
+kind is syn (≈, the line says how the other differs), ant (↔, no line), mix
+(easy to mix up, the line says when to write the other; a 7th field says why:
+"sound", read the same, the default, or "meaning", one English word for two),
+pair (the two go together, not opposites: 祖父 / 祖母, 級 / 段; no line) or
+polite (one is the honorific, humble or polite counterpart of the other: the
+line and own line are the two registers). The own line says the same of the
+word itself, beside it. Short and older forms are of the whole word (sense -1,
+no other sense): short / shortOf (ＣＭ is the short form of コマーシャル),
+older / olderOf (メーター is an older form of メートル).
 
 data/kanji_nuances.json (pipeline/kanji_nuance.py merge): `similar`, keyed
 "kanji|meaning id|other", one line on how the other kanji differs in that

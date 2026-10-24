@@ -4766,6 +4766,23 @@ button.usage-head:focus-visible .usage-spelling {
   text-underline-offset: 4px;
 }
 
+/* Another word that is a form of this one (ＣＭ, メーター): it opens that word. */
+.entry-form-word {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 4px;
+}
+
+.entry-form-word:hover {
+  text-decoration-color: currentColor;
+}
+
 .entry-spelling-tag {
   font-family: var(--gothic);
   font-size: calc(11px * var(--type));

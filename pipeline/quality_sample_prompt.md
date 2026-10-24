@@ -83,3 +83,26 @@ Read the whole file first. Write valid JSON (UTF-8). Then run
 `.venv/Scripts/python.exe pipeline/quality_sample.py check --batch <BATCH>`
 and fix every problem it lists until it reports none. Reply with one line:
 counts of items with a major part, with only minor parts, and all ok.
+
+## dataset "kinds"
+
+A pair of words and the kind the dictionary now gives it. Kinds:
+- `ant`: the plain opposite (勝つ / 負ける).
+- `pair`: two words that clearly go together but are not opposites: the two
+  sexes (祖父 / 祖母), two halves of one system (級 / 段), two ends (前提 /
+  結論), members of a short series. If a learner would call them opposites
+  without a second thought, `pair` is `minor` at most (debatable), not major.
+- `polite`: two separate words for one act or thing, in different registers
+  (仰る / 言う); `register` gives each one's register.
+- `mix`: two words a learner mixes up by meaning, one English word for both
+  (近代 / 現代); `line` (when to use `other`) and `reverse` (when to use the
+  word) are graded together as the part `line`.
+- `short`: one is a short form of the other (ＣＭ / コマーシャル); `full`
+  says which is the long one. `older`: one is an old or rare variant of the
+  other (メーター / メートル); `full` says which is standard today.
+- `removed: not an opposite`: the dictionary showed them as opposites and
+  now shows nothing.
+Parts: `kind` (is this kind, with its register / full / senses, right?) and
+`line` (only for `mix`). A kind that is plainly wrong (a real opposite
+removed, a short form that is a different word, a wrong register) is
+`major`.

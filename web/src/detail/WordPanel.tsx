@@ -47,7 +47,15 @@ const S = strings(
     synonyms: 'Synonyms',
     opposites: 'Opposites',
     mixups: 'Easy to mix up',
-    mixupsHint: 'Other words with the same reading.',
+    mixupsHint: 'Other words easy to confuse with this one: read the same, or one English word for both.',
+    pairs: 'Pairs',
+    pairsHint: 'Words that go with this one, without being its opposite.',
+    politeForms: 'Polite forms',
+    politeHint: 'The same act or thing in another register.',
+    plain: 'plain',
+    polite: 'polite',
+    honorific: 'honorific',
+    humble: 'humble',
     withMeaning: 'With the meaning: {m}',
     openAt: 'Open {word} at this meaning',
     main: 'main',
@@ -77,7 +85,15 @@ const S = strings(
     synonyms: 'Синоними',
     opposites: 'Антоними',
     mixups: 'Лесно се бъркат',
-    mixupsHint: 'Други думи със същото четене.',
+    mixupsHint: 'Други думи, които лесно се бъркат с тази: със същото четене или с една и съща дума на английски.',
+    pairs: 'Двойки',
+    pairsHint: 'Думи, които вървят с тази, без да са ѝ противоположни.',
+    politeForms: 'Учтиви форми',
+    politeHint: 'Същото действие или нещо в друг стил на учтивост.',
+    plain: 'обикновена',
+    polite: 'учтива',
+    honorific: 'почтителна',
+    humble: 'скромна',
     withMeaning: 'Със значение: {m}',
     openAt: 'Отворете {word} на това значение',
     main: 'основно',
@@ -110,6 +126,9 @@ interface Props {
 }
 
 const KANJI = /[㐀-䶿一-鿿]/
+
+const REGISTERS = ['plain', 'polite', 'honorific', 'humble'] as const
+type Register = (typeof REGISTERS)[number]
 
 /** JMdict nf buckets are 500 words wide. */
 function rankOf(w: Word, lang: Lang): string | null {
@@ -248,7 +267,7 @@ function SenseAside({
   const t = S(lang)
   if (!related.length) return null
   const open = (r: RelatedWord) => {
-    focusMeaningNext(focusKey(r.word.id), String(r.otherSense - 1))
+    focusMeaningNext(focusKey(r.word.id), String((r.otherSense ?? 1) - 1))
     onWord(r.word)
   }
   const en =
@@ -261,7 +280,7 @@ function SenseAside({
     related
       .filter((r) => r.kind === kind)
       .map((r) => {
-        const m = senseLine(r.word, r.otherSense - 1, lang)
+        const m = senseLine(r.word, (r.otherSense ?? 1) - 1, lang)
         return (
           <CloseRow
             key={r.word.id}
@@ -281,6 +300,22 @@ function SenseAside({
   const ownMix = [...new Set(mix.map((r) => r.ownLine).filter(Boolean))]
   const syn = rows('syn')
   const ant = rows('ant')
+  const pair = rows('pair')
+  // A polite counterpart's line is its register: honorific, humble, polite or plain.
+  const polite = related
+    .filter((r) => r.kind === 'polite')
+    .map((r) => (
+      <CloseRow
+        key={r.word.id}
+        glyph={r.word.headword}
+        sub={r.word.reading}
+        sense={r.otherSense ? t('withMeaning', { m: senseLine(r.word, r.otherSense - 1, lang) ?? '' }) : null}
+        line={r.line && REGISTERS.includes(r.line as Register) ? t(r.line as Register) : null}
+        title={t('openAt', { word: r.word.headword })}
+        warm={warmWord(r.word.id)}
+        onOpen={() => open(r)}
+      />
+    ))
   return (
     <>
       {mix.length > 0 && (
@@ -313,7 +348,7 @@ function SenseAside({
                   <span className="usage-reading" lang="ja">
                     {r.word.reading}
                   </span>
-                  <span className="usage-keyword">{senseLine(r.word, r.otherSense - 1, lang)}</span>
+                  <span className="usage-keyword">{senseLine(r.word, (r.otherSense ?? 1) - 1, lang)}</span>
                 </button>
                 {r.line && (
                   <p className="spelling-def">
@@ -336,6 +371,18 @@ function SenseAside({
         <section className="aside-block meaning-similar opposites">
           <AsideTitle icon="↔">{t('opposites')}</AsideTitle>
           <ul>{ant}</ul>
+        </section>
+      )}
+      {pair.length > 0 && (
+        <section className="aside-block meaning-similar pairs" title={t('pairsHint')}>
+          <AsideTitle icon="&">{t('pairs')}</AsideTitle>
+          <ul>{pair}</ul>
+        </section>
+      )}
+      {polite.length > 0 && (
+        <section className="aside-block meaning-similar polite" title={t('politeHint')}>
+          <AsideTitle icon="敬">{t('politeForms')}</AsideTitle>
+          <ul>{polite}</ul>
         </section>
       )}
     </>
@@ -408,7 +455,11 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
         rank && <p className="entry-rank entry-rank-line">{rank}</p>
       )}
 
-      <Spellings word={w} kanji={{ open: entry?.spelling?.open ?? [], old: entry?.spelling?.old ?? {}, onPick }} />
+      <Spellings
+        word={w}
+        kanji={{ open: entry?.spelling?.open ?? [], old: entry?.spelling?.old ?? {}, onPick }}
+        related={{ forms: entry?.related?.filter((r) => r.sense < 0) ?? [], onWord }}
+      />
 
       {/* The verb's other half: 開ける for 開く, and the other way. */}
       {entry && entry.pairs.length > 0 && (
