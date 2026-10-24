@@ -34,8 +34,18 @@ the example; `ex` is null when the item has no `ex`.
 
 ## How to write
 
-- Say exactly what the English says: no more, no less. Same facts, same
-  hedges ("often", "mostly"), same order.
+- Say what the English means: the same facts, no more, no less, with the
+  same hedges ("often", "mostly"). But write it the way a Bulgarian would,
+  not word for word: the English is terse and often clumsy, and copying its
+  shape gives calques. Re-order or re-phrase freely; never change a fact.
+  - "A bit more written" → "Малко по-книжовно", not "Малко повече в
+    писмената реч"; "a little spoken and old-fashioned" → "Леко
+    разговорно и старомодно"; "a formal, written word" → "книжовна дума";
+    "used in speech and writing" → "Среща се и в говоримата, и в
+    писмената реч".
+  - An English noun phrase that opens a note ("Going to bed for the
+    night...") may become a plain Bulgarian sentence or a definition, as a
+    good Bulgarian dictionary would put it.
 - Simple technical Bulgarian: short sentences, one fact each, plain words.
   Not childish, not bureaucratic.
 - Keep every Japanese word, phrase and example in the text exactly as
