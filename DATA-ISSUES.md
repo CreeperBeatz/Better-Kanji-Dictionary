@@ -400,6 +400,15 @@ examples are put back the same way (sense_evidence.restore; 17 left as
 rebuilt). Left for prod: the two Tatoeba files on the Pi and
 `build_db.py examples` there; an old db still shows the rebuilt text.
 
+### D-032 · Two old kanji forms missing
+*Found 2026-10-24,* reading every spelling tagged "old kanji" (331 in common
+or JLPT words, from 142 old/new pairs, all correct). Two old forms are not in
+char_form, so spellings with them are not tagged: 冩 (写: 冩眞) and 鬪 (闘:
+戰鬪, 鬪爭). 處 in 臺處 is tagged nowhere either, since 台所 is written with 所,
+not 処: right as it is.
+Source: char_form kind=old (KANJIDIC variants).
+**Status: open.**
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

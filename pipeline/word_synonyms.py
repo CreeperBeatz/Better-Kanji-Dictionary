@@ -824,6 +824,26 @@ def export(bar: float = 0.6) -> None:
             stats["mix"] += 2
     finally:
         DRAFTS, IN, OUT, RUNS = saved
+    # The second look at the weak spots (pipeline/synonym_recheck.py): a pair dropped goes from
+    # both words; a line fixed replaces the one shown, and `reverse` the other word's line.
+    import synonym_recheck
+    lines, drop = {}, set()
+    for k, v in synonym_recheck.all_verdicts().items():
+        if not v:
+            continue
+        w, i, kind, o, n = k.split("|")
+        here, back = (int(w), int(i), kind, int(o), int(n)), (int(o), int(n) - 1, kind, int(w), int(i) + 1)
+        if v.get("drop"):
+            drop |= {here, back}
+        for f, row in (("line", here), ("reverse", back)):
+            if f in v:
+                lines[row] = v[f]
+    for w in out:
+        out[w] = [r for r in out[w] if (w, r[0], r[1], r[2], r[3]) not in drop]
+        for r in out[w]:
+            r[4] = lines.get((w, r[0], r[1], r[2], r[3]), r[4])
+    stats["recheck dropped"], stats["recheck lines"] = len(drop), len(lines)
+    out = defaultdict(list, {w: rs for w, rs in out.items() if rs})
     fwd = {(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
     drafted = _read(SELF)["word"] if SELF.exists() else {}
     for w, rs in out.items():
