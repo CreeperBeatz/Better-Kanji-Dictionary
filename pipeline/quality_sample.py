@@ -42,7 +42,9 @@ PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": (
          # Every pair whose kind changed in pipeline/synonym_kinds.py (2026-10-25), all of them.
          "kinds": ("kind", "line"),
          # The rows the site shows once every fix is in (2026-10-25): what ships, measured again.
-         "final": ("pair", "line")}
+         "final": ("pair", "line"),
+         # The Bulgarian of the word lines and sense notes (pipeline/translate_bg.py), against the English.
+         "bg": ("text", "ex")}
 GRADES = ("ok", "minor", "major")
 
 
@@ -144,12 +146,30 @@ def _kinds(rng: random.Random, n: int) -> list[dict]:
     return rng.sample(out, min(n, len(out)))
 
 
+def _bg(rng: random.Random, n: int) -> list[dict]:
+    """Half lines, half sense notes, from data/word_lines_bg.json, each beside its English."""
+    bg = json.loads((DATA / "word_lines_bg.json").read_text(encoding="utf-8"))
+    notes = json.loads((DATA / "word_sense_notes.json").read_text(encoding="utf-8"))
+    lines = sorted(bg["lines"].items())
+    out = [{"key": f"line|{i}", "kind": "line", "en": en, "bg": b} for i, (en, b) in
+           ((i, lines[i]) for i in rng.sample(range(len(lines)), min(n // 2, len(lines))))]
+    keys = [k for k in sorted(bg["notes"]) if k.split("|")[0] in notes]
+    for k in rng.sample(keys, min(n - len(out), len(keys))):
+        w, i = k.split("|")
+        nt, b = notes[w][int(i)], bg["notes"][k]
+        out.append({"key": f"note|{k}", "kind": "note", **{f: v for f, v in _word(int(w)).items() if f != "senses"},
+                    "sense": _word(int(w))["senses"][int(i)] if int(i) < len(_word(int(w))["senses"]) else None,
+                    "en": nt["nuance"], "bg": b["nuance"],
+                    **({"ex": {"ja": nt["ex"]["ja"], "en": nt["ex"]["en"], "bg": b["ex"]}} if nt.get("ex") and b.get("ex") else {})})
+    return out
+
+
 def prepare(which: str, n: int, size: int) -> None:
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}")
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
-             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "final": _final}[which](rng, n)
+             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "final": _final, "bg": _bg}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
@@ -176,7 +196,7 @@ def grades(batch: str) -> tuple[dict, list[str]]:
         it = by.get(k)
         if not it:
             continue
-        need = [p for p in parts if not (p == "line" and "line" not in it)]
+        need = [p for p in parts if not (p == "line" and "line" not in it) and not (p == "ex" and "ex" not in it)]
         if not isinstance(v, dict) or any(v.get(p) not in GRADES for p in need):
             probs.append(f"{batch}: {k}: grade each of {', '.join(need)} as ok, minor or major")
         elif any(v.get(p) != "ok" for p in need) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):

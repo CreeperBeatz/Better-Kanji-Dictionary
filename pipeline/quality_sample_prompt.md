@@ -113,3 +113,19 @@ Graded as "synonyms", with two more kinds, as defined under "kinds":
 `pair` (two words that go together, not opposites) and `polite` (separate
 words in different registers; `register` gives each). Neither has a line;
 grade only `pair` for them, as you would grade an antonym.
+
+## dataset "bg"
+
+Bulgarian translations of English texts on the word pages, for Bulgarian
+learners. `kind` line: a line on a synonym or a mix-up; `kind` note: the
+note on one sense of a `word` (with its `sense`), and maybe an example
+`ex` (Japanese `ja`, English `en`, Bulgarian `bg`).
+Parts: `text` (the Bulgarian `bg` against the English `en`) and `ex` (the
+example's Bulgarian against the Japanese; only where there is an `ex`).
+- `major`: says something the English does not (a wrong fact, a wrong
+  register, a wrong word), drops a fact that matters, broken or unnatural
+  Bulgarian a reader would trip on, the Japanese changed, кандзи for
+  канджи. For `ex`: a wrong meaning against the Japanese.
+- `minor`: right but stiff, a calque of the English, a weaker word choice.
+- `ok`: right, and reads as natural Bulgarian.
+You know Bulgarian well; judge as a careful Bulgarian editor would.
