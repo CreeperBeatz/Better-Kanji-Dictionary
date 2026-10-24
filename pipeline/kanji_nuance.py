@@ -303,6 +303,10 @@ def merge() -> None:
                 out[kind][k] = line
                 for f in ("en", "bg", "mismatch", "wrongLabel"):
                     fixed[f] = fixed.get(f, 0) + (f in v)
+    # канджи is neuter, as everywhere in the app; some drafts made it masculine (обичайният канджи).
+    for lines in (out["similar"], out["mixup"]):
+        for v in lines.values():
+            v["bg"] = re.sub(r"\b(\w+)ият канджи\b", r"\1ото канджи", v["bg"]).replace("Отделен канджи", "Отделно канджи")
     (DRAFTS / "nuances.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     site = ROOT / "data" / "kanji_nuances.json"
     if site.exists():

@@ -359,6 +359,44 @@ checked (527 ok, 5 doubtful, 2 wrong; the 7 not ok stay out). In the sandbox
 data/review or prod yet. Left: words where every sense fits no group (D-027
 style): 自首, 出自, 張本人, 得度, 連理, 身代, 総花, 活発, 丁度, 目方.
 
+### D-029 · Kanji listed as close in a meaning they do not share
+*Found 2026-10-24.* The Opus check of the similar-kanji nuance lines
+(pipeline/kanji_nuance.py verify, then a second look at every hidden pair)
+found 120 of 3,174 pairs where no meaning of the other kanji is close to the
+meaning it is listed under: 火 水 月 木 金 土 beside 日 "Sunday" (other weekdays),
+知 beside 分 "divide" (close only to 分かる), 談 話 述 陳 beside 語 "language"
+(close only to its "tell" meaning), 柔 beside 優 "superior".
+Source: the meaning groups' `similar` lists.
+**Status: open.** The kanji page hides these rows (`mismatch` in
+data/kanji_nuances.json, server/synonyms.kanji_not_close); the lists
+themselves are unchanged. Left: take the pairs out of the lists, or move
+them to the meaning they share, in the review store.
+
+### D-030 · The other kanji's meaning shown on a similar-kanji row is a guess
+*Found 2026-10-24.* A row beside a meaning names which meaning of the other
+kanji is close: the one that lists this kanji back, else the one worded most
+alike (search.close, kanji_nuance._match). The guess is wrong for at least 26
+pairs, e.g. 家 shown as "expert, -ist" beside 屋 "house", 株 as "shares"
+beside 根 "root".
+**Status: open.** The check flagged them (`wrongLabel` in
+data/kanji_nuances.json) and wrote the line for the meaning that is close;
+the label shown is still the guess.
+
+### D-031 · Tatoeba sentences are shown rebuilt from the index, not as written
+*Found 2026-10-24.* The sentence table keeps the jpn_indices line, and the
+sentence is rebuilt from its tokens (search._sentence). That loses all
+punctuation and every word the index does not list: names and figures
+(彼はチェスター区選出の議員に当選した comes back 彼は区選出の議員に当選した,
+石の上にも三年 as 石の上にも年), and tokens without a {surface} come back in their
+dictionary spelling (かもしれない as かも知れない).
+Source: build_db's sentence stage.
+**Status: partly fixed.** The sense notes' examples are put back as Tatoeba
+writes them (sense_evidence.restore; 7,508 punctuation only, 80 replaced by
+the real sentence and its human translation, 17 left). The example sentences
+on word pages still show the rebuilt text. Left: keep Tatoeba's own text
+(pipeline/data/tatoeba/jpn_sentences.tsv.bz2) in the sentence table and mark
+the word in it.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

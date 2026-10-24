@@ -98,6 +98,16 @@ def _plain(ja: str) -> str:
 PUNCT = re.compile(r"[。、！？!?.,，．「」『』（）()・…\s　]")
 
 
+def _mark_at(text: str, word: str, before: str) -> str | None:
+    """The word marked where it stood: after `before`, punctuation aside (楽しい【歌】を歌おう)."""
+    at = text.find(word)
+    while at >= 0:
+        if PUNCT.sub("", text[:at]) == before:
+            return f"{text[:at]}【{word}】{text[at + len(word):]}"
+        at = text.find(word, at + 1)
+    return None
+
+
 def restore(notes: dict) -> dict:
     """Every Tatoeba example as Tatoeba writes it. The drafts took sentences rebuilt from
     the index, which drops punctuation and every word it does not index: names, figures
@@ -126,7 +136,7 @@ def restore(notes: dict) -> dict:
             found = real.get(plain, [])
             same = [(j, e) for j, e in found if PUNCT.sub("", j) == plain]
             if same:
-                ja = _mark(same[0][0], word)
+                ja = _mark(same[0][0], word) or _mark_at(same[0][0], word, ex["ja"][:ex["ja"].index("【")])
                 if ja:
                     n["ex"] = {**ex, "ja": ja}
                     stats["punctuation back"] += 1
