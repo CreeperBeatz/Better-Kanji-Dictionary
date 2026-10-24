@@ -1238,6 +1238,8 @@ def related_words(word_id: int) -> list[dict]:
     others = _fetch_words(list({r[2] for r in rows}))
     return [{"sense": r[0], "kind": r[1], "word": others[r[2]], "otherSense": r[3], "line": r[4],
              "ownLine": r[5] if len(r) > 5 else None,
+             **({"lineBg": synonyms.line_bg(r[4]), "ownLineBg": synonyms.line_bg(r[5] if len(r) > 5 else None)}
+                if r[1] in ("syn", "mix") else {}),
              **({"why": r[6] if len(r) > 6 else "sound"} if r[1] == "mix" else {})}
             for r in rows if r[2] in others]
 

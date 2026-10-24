@@ -172,8 +172,10 @@ export interface SenseNote {
   /** main: the meanings to learn the word by; secondary: met later; rare: barely met. */
   rank: 'main' | 'secondary' | 'rare'
   nuance: string
-  /** The word in it in 【】; src t = a Tatoeba sentence, d = written for it. */
-  ex: { ja: string; en: string; src: 't' | 'd' } | null
+  /** The nuance in Bulgarian, where translated. */
+  nuanceBg?: string
+  /** The word in it in 【】; src t = a Tatoeba sentence, d = written for it; bg, its Bulgarian. */
+  ex: { ja: string; en: string; src: 't' | 'd'; bg?: string } | null
 }
 
 /** A word close to one sense of another, and how (server/synonyms.py). */
@@ -195,6 +197,9 @@ export interface RelatedWord {
   ownLine: string | null
   /** mix: read the same (sound) or one English word for two (meaning). */
   why?: 'sound' | 'meaning'
+  /** The two lines in Bulgarian, where translated. */
+  lineBg?: string | null
+  ownLineBg?: string | null
 }
 
 export interface Sense {

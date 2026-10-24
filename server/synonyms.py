@@ -20,6 +20,10 @@ kanji easy to mix up that no usage card tells apart. Both English and Bulgarian.
 data/word_sense_notes.json (pipeline/sense_notes.py merge): word id -> one note
 per sense, {rank: main|secondary|rare, nuance, ex: {ja (the word in 【】), en, src} | null}.
 
+data/word_lines_bg.json (pipeline/translate_bg.py merge): the Bulgarian of both,
+{lines: {English line: Bulgarian}, notes: {"word id|sense": {nuance, ex}}}. A text
+with no Bulgarian yet (fixed in English since) is shown in English.
+
 Any file missing, there is just nothing to show.
 """
 
@@ -54,8 +58,28 @@ def _notes() -> dict:
     return _load("word_sense_notes.json")
 
 
+@cache
+def _bg() -> dict:
+    return _load("word_lines_bg.json")
+
+
+def line_bg(line: str | None) -> str | None:
+    return line and _bg().get("lines", {}).get(line)
+
+
 def sense_notes(word_id: int) -> list[dict] | None:
-    return _notes().get(str(word_id))
+    """The notes, each with its Bulgarian (nuanceBg, ex.bg) where translated."""
+    notes = _notes().get(str(word_id))
+    if not notes:
+        return notes
+    bg = _bg().get("notes", {})
+    out = []
+    for i, n in enumerate(notes):
+        b = n and bg.get(f"{word_id}|{i}")
+        if b:
+            n = {**n, "nuanceBg": b["nuance"], **({"ex": {**n["ex"], "bg": b["ex"]}} if n.get("ex") and b.get("ex") else {})}
+        out.append(n)
+    return out
 
 
 def word_rows(word_id: int) -> list[list]:

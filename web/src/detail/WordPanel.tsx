@@ -216,8 +216,9 @@ function NoteExample({ ja }: { ja: string }) {
  */
 function SenseNoteView({ note, lang }: { note: SenseNote; lang: Lang }) {
   const t = S(lang)
+  const bg = lang === 'bg' ? note.nuanceBg : undefined
   const en =
-    lang === 'bg' ? (
+    lang === 'bg' && !bg ? (
       <span className="entry-fallback" title={t('notTranslated')}>
         EN
       </span>
@@ -225,7 +226,7 @@ function SenseNoteView({ note, lang }: { note: SenseNote; lang: Lang }) {
   return (
     <div className="sense-note">
       <p className="sense-nuance">
-        {note.nuance}
+        {bg ?? note.nuance}
         {en}
       </p>
       {note.ex && (
@@ -233,7 +234,7 @@ function SenseNoteView({ note, lang }: { note: SenseNote; lang: Lang }) {
           <span lang="ja" className="sense-example-ja">
             <NoteExample ja={note.ex.ja} />
           </span>
-          <span className="sense-example-en">{note.ex.en}</span>
+          <span className="sense-example-en">{(lang === 'bg' && note.ex.bg) || note.ex.en}</span>
         </p>
       )}
     </div>
@@ -247,9 +248,10 @@ function senseLine(w: Word, n: number, lang: Lang): string | null {
 }
 
 /**
- * What sits beside one sense: ! words read the same, ≈ synonyms, ↔ opposites,
- * in the blocks a kanji's meaning has them in. The lines are English for now;
- * on a Bulgarian page they say so, as an untranslated gloss does.
+ * What sits beside one sense: ! words easy to mix up, ≈ synonyms, ↔ opposites,
+ * & pairs, 敬 polite forms, in the blocks a kanji's meaning has them in. On a
+ * Bulgarian page a line is in Bulgarian where translated; one that is not yet
+ * says so, as an untranslated gloss does.
  */
 function SenseAside({
   word,
@@ -270,25 +272,28 @@ function SenseAside({
     focusMeaningNext(focusKey(r.word.id), String((r.otherSense ?? 1) - 1))
     onWord(r.word)
   }
-  const en =
-    lang === 'bg' ? (
-      <span className="entry-fallback" title={t('notTranslated')}>
-        EN
-      </span>
-    ) : null
+  const en = (
+    <span className="entry-fallback" title={t('notTranslated')}>
+      EN
+    </span>
+  )
+  // A line in the page's language: on a Bulgarian page its Bulgarian, else the English marked EN.
+  const said = (line: string | null, bg?: string | null) =>
+    lang === 'bg' && bg ? { text: bg, mark: null } : { text: line, mark: lang === 'bg' && line ? en : null }
   const rows = (kind: RelatedWord['kind']) =>
     related
       .filter((r) => r.kind === kind)
       .map((r) => {
         const m = senseLine(r.word, (r.otherSense ?? 1) - 1, lang)
+        const l = said(r.line, r.lineBg)
         return (
           <CloseRow
             key={r.word.id}
             glyph={r.word.headword}
             sub={r.word.reading}
             sense={m && t('withMeaning', { m })}
-            line={r.line}
-            lineMark={en}
+            line={l.text}
+            lineMark={l.mark}
             title={t('openAt', { word: r.word.headword })}
             warm={warmWord(r.word.id)}
             onOpen={() => open(r)}
@@ -297,7 +302,7 @@ function SenseAside({
       })
   const mix = related.filter((r) => r.kind === 'mix')
   // When to write this word, as each other one's line says when to write that one.
-  const ownMix = [...new Set(mix.map((r) => r.ownLine).filter(Boolean))]
+  const ownMix = [...new Map(mix.filter((r) => r.ownLine).map((r) => [r.ownLine, said(r.ownLine, r.ownLineBg)])).values()]
   const syn = rows('syn')
   const ant = rows('ant')
   const pair = rows('pair')
@@ -333,9 +338,9 @@ function SenseAside({
                 <span className="usage-keyword">{senseLine(word, sense, lang)}</span>
               </p>
               {ownMix.map((l) => (
-                <p key={l} className="spelling-def">
-                  {l}
-                  {en}
+                <p key={l.text} className="spelling-def">
+                  {l.text}
+                  {l.mark}
                 </p>
               ))}
             </li>
@@ -352,8 +357,8 @@ function SenseAside({
                 </button>
                 {r.line && (
                   <p className="spelling-def">
-                    {r.line}
-                    {en}
+                    {said(r.line, r.lineBg).text}
+                    {said(r.line, r.lineBg).mark}
                   </p>
                 )}
               </li>
