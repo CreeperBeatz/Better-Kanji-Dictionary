@@ -4,6 +4,7 @@
     # one Opus subagent per in/*.json, each reading pipeline/translate_bg_prompt.md (pilot ~5 first)
     python pipeline/translate_bg.py check [--batch L-000]
     python pipeline/translate_bg.py merge              # -> data/word_lines_bg.json
+    python pipeline/translate_bg.py flags              # English texts the translators found wrong (enIssue)
 
 What is translated: every line the word pages show (data/word_synonyms.json:
 how a synonym differs, when to write a mix-up, both ways), once per text,
@@ -199,6 +200,19 @@ def check(only: str | None) -> None:
     print(f"{done} of {len(batches)} batches complete")
 
 
+def flags() -> None:
+    """The English texts a translator marked as looking wrong (`enIssue`), with the batch and key."""
+    n = 0
+    for p in sorted(OUT.glob("*.json")):
+        src = {it["key"]: it for it in ws._read(IN / p.name)["items"]}
+        for k, v in (ws._read(p).get("items") or {}).items():
+            if isinstance(v, dict) and isinstance(v.get("enIssue"), str) and v["enIssue"].strip():
+                it = src.get(k, {})
+                print(f"{p.stem} {k} | {it.get('en') or it.get('nuance')} | {v['enIssue']}")
+                n += 1
+    print(f"{n} flagged")
+
+
 def merge() -> None:
     out = {"lines": {}, "notes": {}}
     for p in sorted(IN.glob("*.json")):
@@ -223,8 +237,9 @@ def main() -> None:
     p = sub.add_parser("check")
     p.add_argument("--batch")
     sub.add_parser("merge")
+    sub.add_parser("flags")
     a = ap.parse_args()
-    {"prepare": prepare, "check": lambda: check(a.batch), "merge": merge}[a.cmd]()
+    {"prepare": prepare, "check": lambda: check(a.batch), "merge": merge, "flags": flags}[a.cmd]()
 
 
 if __name__ == "__main__":

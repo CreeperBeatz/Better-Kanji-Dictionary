@@ -66,6 +66,13 @@ the example; `ex` is null when the item has no `ex`.
 - Grammar words of English that have no Bulgarian twin (the "-ing" form,
   articles) are not to be copied; say what they mean in Bulgarian.
 
+## When the English looks wrong
+
+Translate it as written; do not fix facts yourself. But add
+`"enIssue": "what looks wrong"` to that item (a wrong fact, a mix-up with
+another word, a line that contradicts itself, an unclear phrase), so the
+English can be fixed and the line translated again.
+
 ## Output
 
 ```json
