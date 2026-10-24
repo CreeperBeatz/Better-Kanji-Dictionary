@@ -29,8 +29,9 @@ For each pair, judge with your own knowledge of Japanese:
      詰まらない, 合わす / 合わせる). Two really different words that share a
      spelling are fine (解ける とける / ほどける).
    - An antonym: the plain opposite in this sense (勝つ / 負ける). It is
-     `wrong` for a negative form, a mere contrast, or an opposite only in
-     another sense.
+     `wrong` for a grammatical negative form (できる / できない), a mere
+     contrast, or an opposite only in another sense. An established word
+     made with 不・非・無・未 is a real antonym (人気 / 不人気, 公式 / 非公式).
      Pairs that differ by sex are antonyms here (祖父 / 祖母, 少年 / 少女);
      other pairs of the same kind are not (硬貨 / 紙幣).
    - `doubtful`: a careful dictionary might list it, but it would mislead a

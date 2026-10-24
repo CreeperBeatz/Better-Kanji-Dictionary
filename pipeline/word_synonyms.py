@@ -133,7 +133,18 @@ def resolve(text: str, reading: str | None = None, best: bool = True) -> list[in
         # A reading that matches none of them names another word (被る こうむる is not 被る かぶる).
         found = [x for x in found if x[1] == hira(reading)]
     ids = list(dict.fromkeys(w for w, _ in found))
+    if re.fullmatch(r"[぀-ヿー]+", text):
+        # Kana alone names the word headed so (はい yes, not 肺 lung), else one usually written
+        # in kana (どう: 如何, not 銅), before a kanji word that only reads so.
+        words = scope()
+        ids.sort(key=lambda w: (words[w]["word"] != text, not _usually_kana(w)))
     return ids[:1] if best else ids
+
+
+@cache
+def _usually_kana(wid: int) -> bool:
+    return any("uk" in (r[0] or "").split(",") for r in proposals.connect().execute(
+        "SELECT misc FROM sense WHERE word_id = ? ORDER BY ord LIMIT 2", (wid,)))
 
 
 def _short(gloss: str, n: int = GLOSS) -> str:
