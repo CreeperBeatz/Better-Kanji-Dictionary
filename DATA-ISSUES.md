@@ -409,6 +409,28 @@ not 処: right as it is.
 Source: char_form kind=old (KANJIDIC variants).
 **Status: open.**
 
+### D-033 · Word synonyms removed by a rule that did not fit
+*Found 2026-10-24,* by sorting once every pair a check or a rule had removed
+(pipeline/synonym_removed.py, 579 pairs, Opus). 46 were real pairs (8%):
+- the same-word code rule (word_synonyms.same_word) was wrong for 12 of 52.
+  It tests the spelling and the reading apart, so 落ちる (おちる) is "お + 散る
+  (ちる)", 男の子 is "男子 with の", お腹 is "お + 腹" though it reads おなか
+  against はら, and 兎に角 is "兎角 with に";
+- the Opus checks were wrong for 34 of 511: a broader-word or other-form rule
+  taken too far (子 / 子供, 名 / 名前, 弱る / 弱まる), or the wrong sense judged
+  (接する, 回 / 度).
+15 more fit no kind the data has (a box issue): keigo counterparts (仰る /
+言う, くれる / くださる), words that share an English gloss but differ in
+scope (近代 / 現代, 美術 / 芸術, 消極的 / ネガティブ, 割る / 壊す), old variants
+(メーター / メートル), letter short forms (ＣＭ), set pairs and series (大 /
+小, 級 / 段, 並・上・特上).
+Source: the rules in word_synonyms (filter, prompts) and the Opus checks.
+**Status: partly fixed** (feat/word-synonyms). The 46 are back on both words
+(export reads the "keep" verdicts). Open: same_word must test spelling and
+reading together before any new run (a first try that did so also let
+through 金曜 / 金曜日 and 定期 / 定期的, whose tails read び and てき); the 15
+box cases wait for Dani.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
