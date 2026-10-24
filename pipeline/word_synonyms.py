@@ -790,6 +790,9 @@ SITE = proposals.ROOT / "data" / "word_synonyms.json"
 SELF = proposals.DRAFTS / "self-nuance" / "self.json"  # pipeline/self_nuance.py merge
 # Every run pair that went through the skeptic: the JLPT run, its senses past the 8th, the pilot.
 SITE_RUNS = (("word-synonyms-jlpt", ("A", "B")), ("word-synonyms-jlpt", ("E", "F")), ("word-synonyms", ("C", "D")))
+# Antonyms Dani decided that no run drafted: (word, sense, other, other's sense), senses from 1; shown both ways.
+# 2026-10-24: 上 superior <-> 下 inferior, in place of 下位 (which pairs with 上位).
+DECIDED_ANT = ((1352130, 5, 1184140, 5),)
 
 
 def export(bar: float = 0.6) -> None:
@@ -822,6 +825,12 @@ def export(bar: float = 0.6) -> None:
             out[x].append([a["aSense"] - 1, "mix", y, a["bSense"], a["onA"].strip(), a["onB"].strip()])
             out[y].append([a["bSense"] - 1, "mix", x, a["aSense"], a["onB"].strip(), a["onA"].strip()])
             stats["mix"] += 2
+        for x, a, y, b in DECIDED_ANT:
+            for w, i, o, n in ((x, a - 1, y, b), (y, b - 1, x, a)):
+                if (w, i, "ant", o) not in seen:
+                    seen.add((w, i, "ant", o))
+                    out[w].append([i, "ant", o, n, None])
+                    stats["ant decided"] += 1
     finally:
         DRAFTS, IN, OUT, RUNS = saved
     # The second look at the weak spots (pipeline/synonym_recheck.py): a pair dropped goes from
