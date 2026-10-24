@@ -388,6 +388,12 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
     )
   }
   const glosses = w.senses.map((s) => glossOf(s, lang))
+  // The main meanings on top, then the ones met later, then the rare; each keeps
+  // JMdict's number, which the synonym rows and a kanji's words name it by.
+  const RANK = { main: 0, secondary: 1, rare: 2 }
+  const order = w.senses
+    .map((_, i) => i)
+    .sort((a, b) => RANK[entry?.senseNotes?.[a]?.rank ?? 'secondary'] - RANK[entry?.senseNotes?.[b]?.rank ?? 'secondary'] || a - b)
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
   const rank = rankOf(w, lang)
 
@@ -419,7 +425,9 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
       )}
 
       <ol className="entry-senses">
-        {w.senses.map((s, i) => {
+        {order.map((i, k) => {
+          const s = w.senses[i]
+          const prev = k > 0 ? w.senses[order[k - 1]] : null
           const [lead, ...rest] = glosses[i].value.split(';').map((g) => g.trim())
           const note = entry?.senseNotes?.[i]
           return (
@@ -438,7 +446,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                 </p>
                 {/* Part of speech only where it changes, as a printed dictionary does. */}
                 {(s.pos.length > 0 || s.misc.length > 0) &&
-                  (i === 0 || s.pos.join() !== w.senses[i - 1].pos.join() || s.misc.length > 0) && (
+                  (!prev || s.pos.join() !== prev.pos.join() || s.misc.length > 0) && (
                     <p className="entry-pos">
                       {[...s.pos, ...s.misc].map((code, j) => {
                         const tag = tagLabel(code, lang)
