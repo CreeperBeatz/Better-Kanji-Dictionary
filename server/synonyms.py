@@ -65,6 +65,12 @@ def kanji_nuance(char: str, meaning: str, other: str) -> dict | None:
     return _text(_kanji().get("similar", {}).get(f"{char}|{meaning}|{other}"))
 
 
+def kanji_not_close(char: str, meaning: str, other: str) -> bool:
+    """Whether `other` is listed beside `char`'s `meaning` by mistake: the check found
+    it does not share the meaning (DATA-ISSUES.md), so its row is not shown."""
+    return bool((_kanji().get("similar", {}).get(f"{char}|{meaning}|{other}") or {}).get("mismatch"))
+
+
 def kanji_mixup(a: str, b: str, reading: str) -> dict | None:
     """When to write `a` and when `b` on `reading`: {en, bg}."""
     x, y = sorted((a, b))

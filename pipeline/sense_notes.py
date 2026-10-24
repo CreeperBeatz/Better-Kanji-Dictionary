@@ -5,6 +5,11 @@
     # one subagent per in/*.json, each reading pipeline/sense_notes_prompt.md
     python pipeline/sense_notes.py check [--batch P-000]
     python pipeline/sense_notes.py merge                     # -> data/word_sense_notes.json
+    python pipeline/sense_evidence.py                        # dictionary hints for the check
+    python pipeline/sense_notes.py verify-prepare            # verify/in/V-*.json
+    # one Opus subagent per verify/in/*.json, each reading pipeline/sense_notes_verify_prompt.md
+    python pipeline/sense_notes.py verify-check [--batch V-000]
+    python pipeline/sense_notes.py merge                     # the drafts with the check's fixes
 
 A word's synonym rows each said how the word itself differs from that synonym,
 so a sense with three synonyms described the word three ways (古い "stale":
@@ -24,6 +29,7 @@ import argparse
 import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,6 +40,8 @@ import word_synonyms as ws  # noqa: E402
 
 DRAFTS = ROOT / "data" / "drafts" / "sense-notes"
 IN, OUT = DRAFTS / "in", DRAFTS / "out"
+VIN, VOUT = DRAFTS / "verify" / "in", DRAFTS / "verify" / "out"
+EVIDENCE = DRAFTS / "evidence.json"  # pipeline/sense_evidence.py
 SITE = ROOT / "data" / "word_sense_notes.json"
 NUANCE = 170  # characters
 EXAMPLE = 45  # characters of Japanese
@@ -173,15 +181,133 @@ def check(only: str | None) -> None:
         print(f"{total} valid words in {len(batches)} batches")
 
 
-def merge() -> None:
+def _drafts() -> dict:
     out = {}
     for p in sorted(IN.glob("*.json")):
         good, probs = _problems(p.stem)
         if probs:
             print(f"{p.stem}: {len(probs)} problems, {len(good)} words taken")
         out.update(good)
+    return out
+
+
+def verify_prepare(size: int) -> None:
+    """Every drafted note to an Opus check, with what pipeline/sense_evidence.py found beside it."""
+    VIN.mkdir(parents=True, exist_ok=True)
+    VOUT.mkdir(parents=True, exist_ok=True)
+    notes, sc = _drafts(), ws.scope()
+    ev = json.loads(EVIDENCE.read_text(encoding="utf-8"))
+    ids = sorted((int(k) for k in notes), key=ws._rank)
+    for b, i in enumerate(range(0, len(ids), size)):
+        items = []
+        for wid in ids[i:i + size]:
+            k, w = str(wid), sc[wid]
+            flags, offer = ev["flags"].get(k, []), ev["offer"].get(k, {})
+            items.append({
+                "id": wid, "word": w["word"], "reading": w["reading"], "jlpt": w["jlpt"],
+                "senses": [{"n": n + 1, "pos": pos, "misc": misc, "gloss": gloss, "note": notes[k][n],
+                            **({"flags": [f"{kind}{': ' + d if d else ''}" for s, kind, d in flags if s == n]}
+                               if any(s == n for s, _, _ in flags) else {}),
+                            **({"offered": [{"ja": o["ja"], "en": o["en"]} for o in offer[str(n)]]} if str(n) in offer else {})}
+                           for n, (pos, misc, gloss) in enumerate(w["senses"][:len(notes[k])])],
+                "sentences": _sentences(wid),
+            })
+        name = f"V-{b:03d}"
+        ws._dump(VIN / f"{name}.json", {"batch": name, "items": items})
+    print(f"V: {len(ids)} words, {sum(len(notes[str(w)]) for w in ids)} senses, {-(-len(ids) // size)} batches")
+
+
+def _verdicts(batch: str) -> tuple[dict, list[str]]:
+    """{word id: [None (ok) | {rank?, nuance?, ex?, why}]} for one V batch."""
+    src = ws._read(VIN / f"{batch}.json")
+    path = VOUT / f"{batch}.json"
+    if not path.exists():
+        return {}, [f"{batch}: no output"]
+    try:
+        got = ws._read(path)
+    except json.JSONDecodeError as e:
+        return {}, [f"{batch}: not JSON ({e})"]
+    items = got.get("items") if isinstance(got, dict) else None
+    if not isinstance(items, dict):
+        return {}, [f"{batch}: no `items` object"]
+    good, probs = {}, []
+    for it in src["items"]:
+        wid = str(it["id"])
+        vs = items.get(wid)
+        if not isinstance(vs, list) or len(vs) != len(it["senses"]):
+            probs.append(f"{batch}: {wid} {it['word']} needs a list of {len(it['senses'])} verdicts")
+            continue
+        offered = set(it["sentences"]) | {o["ja"].replace("【", "").replace("】", "") for s in it["senses"] for o in s.get("offered", [])}
+        out, after = [], []
+        for s, v in zip(it["senses"], vs):
+            where = f"{batch}: {wid} {it['word']} sense {s['n']}"
+            if v == "ok":
+                out.append(None)
+                after.append(s["note"])
+                continue
+            if not isinstance(v, dict) or not isinstance(v.get("why"), str) or not v["why"].strip() \
+                    or not ({"rank", "nuance", "ex"} & v.keys()) or v.keys() - {"rank", "nuance", "ex", "why"}:
+                probs.append(f"{where}: \"ok\", or {{the fields that change (rank, nuance, ex), why}}")
+                continue
+            note = {**s["note"], **{f: v[f] for f in ("rank", "nuance", "ex") if f in v}}
+            ex = note.get("ex")
+            if note["rank"] not in ("main", "secondary", "rare"):
+                probs.append(f"{where}: rank is main, secondary or rare")
+            elif not isinstance(note["nuance"], str) or not note["nuance"].strip() or len(note["nuance"]) > NUANCE:
+                probs.append(f"{where}: one nuance sentence, at most {NUANCE} characters")
+            elif ex is not None and not (
+                    isinstance(ex, dict) and all(isinstance(ex.get(f), str) and ex[f].strip() for f in ("ja", "en"))
+                    and ex["ja"].count("【") == 1 and ex["ja"].count("】") == 1 and ex.get("src") in ("t", "d")):
+                probs.append(f"{where}: ex is null or {{ja with the word in one 【】, en, src t|d}}")
+            elif "ex" in v and ex and ex["src"] == "t" and ex["ja"].replace("【", "").replace("】", "") not in offered:
+                probs.append(f"{where}: src t, but not one of `sentences` or `offered`, word for word")
+            else:
+                fix = {f: v[f] for f in ("rank", "nuance", "ex") if f in v}
+                if fix.get("nuance"):
+                    fix["nuance"] = fix["nuance"].strip()
+                out.append({**fix, "why": v["why"].strip()})
+                after.append(note)
+                continue
+            out.append("bad")
+        if len(out) == len(it["senses"]) and "bad" not in out:
+            if not any(n["rank"] == "main" for n in after):
+                probs.append(f"{batch}: {wid} {it['word']}: at least one sense stays main")
+            else:
+                good[wid] = out
+    return good, probs
+
+
+def verify_check(only: str | None) -> None:
+    batches = [only] if only else sorted(p.stem for p in VIN.glob("*.json"))
+    total, done = 0, 0
+    for b in batches:
+        good, probs = _verdicts(b)
+        total += len(good)
+        done += not probs
+        if probs or only:
+            print(f"{b}: {len(good)} valid words, {len(probs)} problems")
+            for p in probs[:30]:
+                print("   ", p)
+    if not only:
+        print(f"{total} valid words; {done} of {len(batches)} batches complete")
+
+
+def merge() -> None:
+    out = _drafts()
+    fixed = Counter()
+    for p in sorted(VIN.glob("*.json")):
+        good, probs = _verdicts(p.stem)
+        if probs:
+            print(f"{p.stem}: {len(probs)} problems in the check, {len(good)} words taken")
+        for wid, vs in good.items():
+            for n, v in enumerate(vs):
+                fixed["checked"] += 1
+                if v:
+                    out[wid][n] = {**out[wid][n], **{f: v[f] for f in ("rank", "nuance", "ex") if f in v}}
+                    fixed.update(f for f in ("rank", "nuance", "ex") if f in v)
     ws._dump(SITE, out)
-    print(f"{len(out)} words -> {SITE}")
+    print(f"{len(out)} words -> {SITE}" + (f"; checked {fixed['checked']} senses, fixed rank {fixed['rank']}, "
+                                           f"nuance {fixed['nuance']}, ex {fixed['ex']}" if fixed else ""))
 
 
 def main() -> None:
@@ -193,12 +319,20 @@ def main() -> None:
     p.add_argument("--size", type=int, default=40)
     p = sub.add_parser("check")
     p.add_argument("--batch")
+    p = sub.add_parser("verify-prepare")
+    p.add_argument("--size", type=int, default=60)
+    p = sub.add_parser("verify-check")
+    p.add_argument("--batch")
     sub.add_parser("merge")
     a = ap.parse_args()
     if a.cmd == "prepare":
         prepare(a.pilot, a.size)
     elif a.cmd == "check":
         check(a.batch)
+    elif a.cmd == "verify-prepare":
+        verify_prepare(a.size)
+    elif a.cmd == "verify-check":
+        verify_check(a.batch)
     else:
         merge()
 

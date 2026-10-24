@@ -1130,7 +1130,8 @@ def kanji_page(char: str) -> dict:
             "on": [{"reading": r, "words": [starred(marked(w), w) for w in pick(by[r], first)]} for r in on],
             "also": [{"reading": r, "words": [starred(marked(w), w) for w in by[r][:ALSO_WORDS]]} for r in also],
             "exceptions": [starred(as_here(r), r["word_id"]) for r in exceptions],
-            "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
+            "similar": [close(c, s) for c in s.get("similar") or []
+                        if c not in mixed and not synonyms.kanji_not_close(char, s["id"], c)],
             "mixups": here,
             # The patterns it builds words in (〜人 "a person from …": 日本人, 村人), each with its examples.
             "uses": [{"id": u["id"], "en": u["en"], "bg": u.get("bg"), "about": u.get("about"), "aboutBg": u.get("aboutBg"),

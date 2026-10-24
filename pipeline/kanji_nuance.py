@@ -3,7 +3,10 @@
     python pipeline/kanji_nuance.py prepare [--size 100]
     # one Opus subagent per data/drafts/kanji-nuance/in/*.json, each reading pipeline/kanji_nuance_prompt.md
     python pipeline/kanji_nuance.py check [--batch S-000]
-    python pipeline/kanji_nuance.py merge          # -> data/drafts/kanji-nuance/nuances.json
+    python pipeline/kanji_nuance.py verify-prepare # verify/in/KS-*.json, KM-*.json
+    # one Opus subagent per verify/in/*.json, each reading pipeline/kanji_nuance_verify_prompt.md
+    python pipeline/kanji_nuance.py verify-check [--batch KS-000]
+    python pipeline/kanji_nuance.py merge          # -> data/drafts/kanji-nuance/nuances.json + data/kanji_nuances.json
 
 Scope: jōyō kanji and kanji with a JLPT level.
 
@@ -34,6 +37,7 @@ from server import review  # noqa: E402
 
 DRAFTS = ROOT / "data" / "drafts" / "kanji-nuance"
 IN, OUT = DRAFTS / "in", DRAFTS / "out"
+VIN, VOUT = DRAFTS / "verify" / "in", DRAFTS / "verify" / "out"
 DB = ROOT / "data" / "betterrtk.sqlite"
 NUANCE = 160  # characters
 _PLAIN = {"the", "and", "for", "with", "something", "someone", "one", "its", "that", "this", "from", "into"}
@@ -174,7 +178,7 @@ def check(only: str | None) -> None:
         print(f"{total} valid items in {len(batches)} batches")
 
 
-def merge() -> None:
+def _drafts() -> dict:
     out = {"similar": {}, "mixup": {}}
     for p in sorted(IN.glob("*.json")):
         good, probs = _problems(p.stem)
@@ -182,8 +186,109 @@ def merge() -> None:
             print(f"{p.stem}: skipped, {len(probs)} problems")
             continue
         out["similar" if p.stem.startswith("S") else "mixup"].update(good)
+    return out
+
+
+def verify_prepare(size: int) -> None:
+    """Every drafted line, with what it was drafted from, to an Opus check (KS-*, KM-*)."""
+    VIN.mkdir(parents=True, exist_ok=True)
+    VOUT.mkdir(parents=True, exist_ok=True)
+    lines = _drafts()
+    for kind, pre in (("similar", "S"), ("mixup", "M")):
+        items = [{**it, "line": {"en": v["en"], "bg": v["bg"]}, **({"mismatch": True} if v.get("mismatch") else {})}
+                 for p in sorted(IN.glob(f"{pre}-*.json")) for it in json.loads(p.read_text(encoding="utf-8"))["items"]
+                 if (v := lines[kind].get(it["key"]))]
+        for i in range(0, len(items), size):
+            name = f"K{pre}-{i // size:03d}"
+            (VIN / f"{name}.json").write_text(json.dumps({"batch": name, "kind": kind, "items": items[i:i + size]},
+                                                         ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"{kind}: {len(items)} lines, {-(-len(items) // size)} batches")
+
+
+def _verdicts(batch: str) -> tuple[dict, list[str]]:
+    """{key: None (ok) | {en?, bg?, mismatch?, why}} for one check batch."""
+    src = json.loads((VIN / f"{batch}.json").read_text(encoding="utf-8"))
+    path = VOUT / f"{batch}.json"
+    if not path.exists():
+        return {}, [f"{batch}: no output"]
+    try:
+        got = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        return {}, [f"{batch}: not JSON ({e})"]
+    items = got.get("items") if isinstance(got, dict) else None
+    if not isinstance(items, dict):
+        return {}, [f"{batch}: no `items` object"]
+    keys = {it["key"] for it in src["items"]}
+    probs = [f"{batch}: missing {k}" for k in keys - items.keys()] + [f"{batch}: unknown {k}" for k in items.keys() - keys]
+    fields = {"en", "bg", "mismatch"} if src["kind"] == "similar" else {"en", "bg"}
+    limit = NUANCE if src["kind"] == "similar" else 2 * NUANCE
+    good = {}
+    for k, v in items.items():
+        if k not in keys:
+            continue
+        if v == "ok":
+            good[k] = None
+            continue
+        if not isinstance(v, dict) or not isinstance(v.get("why"), str) or not v["why"].strip() \
+                or not (fields & v.keys()) or v.keys() - fields - {"why"}:
+            probs.append(f"{batch}: {k}: \"ok\", or {{the fields that change ({', '.join(sorted(fields))}), why}}")
+            continue
+        if any(not isinstance(v[f], str) or not v[f].strip() for f in ("en", "bg") if f in v):
+            probs.append(f"{batch}: {k}: en and bg are text")
+        elif "mismatch" in v and not isinstance(v["mismatch"], bool):
+            probs.append(f"{batch}: {k}: mismatch is true or false")
+        elif len(v.get("en", "")) > limit or len(v.get("bg", "")) > limit + 60:
+            probs.append(f"{batch}: {k}: too long")
+        elif "кандзи" in v.get("bg", "").lower():
+            probs.append(f"{batch}: {k}: Bulgarian writes канджи, never кандзи")
+        elif re.search(r"\b(synonym of|similar to)\b", v.get("en", ""), re.I):
+            probs.append(f"{batch}: {k}: say the difference, not 'similar to'")
+        else:
+            good[k] = {f: v[f].strip() if isinstance(v[f], str) else v[f] for f in v}
+    return good, probs
+
+
+def verify_check(only: str | None) -> None:
+    batches = [only] if only else sorted(p.stem for p in VIN.glob("*.json"))
+    total, done = 0, 0
+    for b in batches:
+        good, probs = _verdicts(b)
+        total += len(good)
+        done += not probs
+        if probs or only:
+            print(f"{b}: {len(good)} valid, {len(probs)} problems")
+            for p in probs[:30]:
+                print("   ", p)
+    if not only:
+        print(f"{total} valid items; {done} of {len(batches)} batches complete")
+
+
+def merge() -> None:
+    """The drafts with the check's fixes -> nuances.json, and the copy the site reads (keeping its `self`)."""
+    out = _drafts()
+    fixed = {}
+    for p in sorted(VIN.glob("*.json")):
+        good, probs = _verdicts(p.stem)
+        if probs:
+            print(f"{p.stem}: {len(probs)} problems in the check, {len(good)} taken")
+        kind = "similar" if p.stem.startswith("KS") else "mixup"
+        for k, v in good.items():
+            fixed["checked"] = fixed.get("checked", 0) + 1
+            if v:
+                line = {**out[kind][k], **{f: v[f] for f in ("en", "bg", "mismatch") if f in v}}
+                if not line.get("mismatch"):
+                    line.pop("mismatch", None)
+                out[kind][k] = line
+                for f in ("en", "bg", "mismatch"):
+                    fixed[f] = fixed.get(f, 0) + (f in v)
     (DRAFTS / "nuances.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"{len(out['similar'])} nuances, {len(out['mixup'])} mix-up notes -> {DRAFTS / 'nuances.json'}")
+    site = ROOT / "data" / "kanji_nuances.json"
+    if site.exists():
+        out = {**json.loads(site.read_text(encoding="utf-8")), **out}
+    site.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    mism = sum(1 for v in out["similar"].values() if v.get("mismatch"))
+    print(f"{len(out['similar'])} nuances ({mism} pairs listed by mistake), {len(out['mixup'])} mix-up notes "
+          f"-> {DRAFTS / 'nuances.json'}, {site}" + (f"; check: {fixed}" if fixed else ""))
 
 
 def main() -> None:
@@ -193,12 +298,20 @@ def main() -> None:
     p.add_argument("--size", type=int, default=100)
     p = sub.add_parser("check")
     p.add_argument("--batch")
+    p = sub.add_parser("verify-prepare")
+    p.add_argument("--size", type=int, default=100)
+    p = sub.add_parser("verify-check")
+    p.add_argument("--batch")
     sub.add_parser("merge")
     a = ap.parse_args()
     if a.cmd == "prepare":
         prepare(a.size)
     elif a.cmd == "check":
         check(a.batch)
+    elif a.cmd == "verify-prepare":
+        verify_prepare(a.size)
+    elif a.cmd == "verify-check":
+        verify_check(a.batch)
     else:
         merge()
 
