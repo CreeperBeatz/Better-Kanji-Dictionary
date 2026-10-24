@@ -4665,20 +4665,61 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
-.entry-forms {
-  margin: 16px 0 0;
+/* Every way to write the word, at the top of its entry: the headword first
+   and brightest, the seldom ones dimmer, each tagged where it is old or rare. */
+.entry-spellings {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 10px 0 4px;
+}
+
+.entry-spellings-label {
+  flex: none;
   font-size: calc(12px * var(--type));
   color: var(--muted);
 }
 
-.entry-form {
-  margin-right: 10px;
+.entry-spellings ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry-spelling {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
   font-family: var(--mincho);
-  font-size: calc(15px * var(--type));
+  font-size: calc(18px * var(--type));
   color: var(--paper-dim);
 }
 
-.entry-form[data-rare] {
+.entry-spelling[data-main] {
+  color: var(--paper);
+}
+
+.entry-spelling[data-rare] {
+  color: var(--muted);
+}
+
+.entry-spelling .entry-char {
+  font: inherit;
+  color: inherit;
+}
+
+.entry-old-char {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.entry-spelling-tag {
+  font-family: var(--gothic);
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 

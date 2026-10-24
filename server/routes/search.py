@@ -1195,7 +1195,24 @@ def word_entry(word_id: int) -> dict:
         "examples": [_sentence(r["text"], w["headword"]) for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
+        "spelling": spelling_kanji(w),
     }
+
+
+def spelling_kanji(w: dict) -> dict:
+    """The kanji of the word's other spellings: which have a page to open (旧 in 旧い), and
+    which are the old form of another (學 for 学, so 學校 is 学校 in old kanji)."""
+    chars = list(dict.fromkeys(c for f in w["forms"] if not f["kana"] for c in f["text"]
+                               if "一" <= c <= "鿿" or "㐀" <= c <= "䶿"))
+    if not chars:
+        return {"open": [], "old": {}}
+    ph = ",".join("?" * len(chars))
+    old = {r["other"]: r["char"] for r in query(
+        f"SELECT char, other FROM char_form WHERE kind = 'old' AND other IN ({ph})", tuple(chars))}
+    from .graph import _fetch
+
+    pages = _fetch(chars)
+    return {"open": [c for c in chars if c in pages], "old": old}
 
 
 def related_words(word_id: int) -> list[dict]:

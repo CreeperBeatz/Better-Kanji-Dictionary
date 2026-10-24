@@ -1,7 +1,7 @@
 /**
  * One dictionary entry in the rail, the way a pocket dictionary lays it out:
- * the word, its reading and accent, every sense, and then the kanji it is
- * written with -- each of which opens that character.
+ * the word, its reading and accent, every way to write it, every sense, and
+ * then the kanji it is written with -- each of which opens that character.
  *
  * Each sense is a card, as each meaning of a kanji is, numbered: smaller,
  * and always open. Under its glosses, what sits beside it, as beside a
@@ -36,7 +36,12 @@ const S = strings(
     open: 'Open {char}',
     notTranslated: 'not yet translated',
     machine: 'Bulgarian glosses are machine-translated',
-    alsoWritten: 'also written',
+    spellings: 'Written',
+    rare: 'rare',
+    rareTitle: 'Seldom written so',
+    oldKanji: 'old kanji',
+    oldTitle: 'The same spelling in old kanji, as before 1946',
+    oldOf: '{old}: the old form of {char}',
     writtenWith: 'Written with',
     inSentence: 'In a sentence',
     needsConnection: 'Example sentences need a connection.',
@@ -60,7 +65,12 @@ const S = strings(
     open: 'Отворете {char}',
     notTranslated: 'още не е преведено',
     machine: 'Българските значения са машинен превод',
-    alsoWritten: 'пише се и',
+    spellings: 'Пише се',
+    rare: 'рядко',
+    rareTitle: 'Рядко се пише така',
+    oldKanji: 'стари канджи',
+    oldTitle: 'Същото изписване със стари канджи, както преди 1946',
+    oldOf: '{old}: старата форма на {char}',
     writtenWith: 'Пише се с',
     inSentence: 'В изречение',
     needsConnection: 'Примерните изречения изискват връзка с интернет.',
@@ -160,6 +170,66 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
         </p>
       )}
       <WordMeta word={w} />
+    </div>
+  )
+}
+
+/**
+ * Every way to write the word, as a dictionary prints them beside the
+ * headword: 古い, 旧い, 故い. The headword first; a spelling in old kanji
+ * (學校 for 学校) or seldom used says so. A kanji with a page opens it; an old
+ * one says what it is the old form of. Its reading is in the head, so only
+ * other kana (キレイ) are here.
+ */
+function Spellings({ word: w, entry, onPick }: { word: Word; entry: WordEntry | null; onPick: (char: string) => void }) {
+  const lang = useLang()
+  const t = S(lang)
+  const old = entry?.spelling?.old ?? {}
+  const open = new Set(entry?.spelling?.open ?? [])
+  const forms = w.forms.filter((f) => f.text !== w.reading)
+  if (!forms.some((f) => f.text !== w.headword)) return null
+  const texts = new Set(forms.map((f) => f.text))
+  // In old kanji: with its old kanji made new, it is another of the word's spellings.
+  const isOld = (text: string) => [...text].some((c) => old[c]) && texts.has([...text].map((c) => old[c] ?? c).join(''))
+  const shown = [...forms.filter((f) => f.text === w.headword), ...forms.filter((f) => f.text !== w.headword)]
+  return (
+    <div className="entry-spellings">
+      <span className="entry-spellings-label">{t('spellings')}</span>
+      <ul>
+        {shown.map((f) => {
+          const tag = isOld(f.text) ? 'old' : f.rare ? 'rare' : null
+          return (
+            <li key={f.text} className="entry-spelling" data-main={f.text === w.headword || undefined} data-rare={tag === 'rare' || undefined}>
+              <span lang="ja">
+                {[...f.text].map((ch, i) =>
+                  f.text !== w.headword && open.has(ch) ? (
+                    <button
+                      key={i}
+                      className="entry-char"
+                      {...warmKanji(ch)}
+                      onClick={() => onPick(ch)}
+                      title={old[ch] ? t('oldOf', { old: ch, char: old[ch] }) : t('open', { char: ch })}
+                    >
+                      {ch}
+                    </button>
+                  ) : old[ch] ? (
+                    <span key={i} className="entry-old-char" title={t('oldOf', { old: ch, char: old[ch] })}>
+                      {ch}
+                    </span>
+                  ) : (
+                    <span key={i}>{ch}</span>
+                  ),
+                )}
+              </span>
+              {tag && (
+                <span className="entry-spelling-tag" title={t(tag === 'old' ? 'oldTitle' : 'rareTitle')}>
+                  {t(tag === 'old' ? 'oldKanji' : 'rare')}
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -331,7 +401,6 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
       </section>
     )
   }
-  const others = w.forms.filter((f) => f.text !== w.headword && f.text !== w.reading)
   const glosses = w.senses.map((s) => glossOf(s, lang))
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
   const rank = rankOf(w, lang)
@@ -346,6 +415,8 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
       ) : (
         rank && <p className="entry-rank entry-rank-line">{rank}</p>
       )}
+
+      <Spellings word={w} entry={entry} onPick={onPick} />
 
       {/* The verb's other half: 開ける for 開く, and the other way. */}
       {entry && entry.pairs.length > 0 && (
@@ -402,17 +473,6 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
         })}
       </ol>
       {machine && <p className="entry-machine">{t('machine')}</p>}
-
-      {others.length > 0 && (
-        <p className="entry-forms">
-          <span>{t('alsoWritten')}</span>{' '}
-          {others.map((f, i) => (
-            <span key={i} className="entry-form" data-rare={f.rare || undefined}>
-              {f.text}
-            </span>
-          ))}
-        </p>
-      )}
 
       {entry && entry.kanji.length > 0 && (
         <div className="entry-kanji">
