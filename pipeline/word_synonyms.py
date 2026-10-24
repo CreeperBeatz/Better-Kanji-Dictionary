@@ -7,6 +7,8 @@
     python pipeline/word_synonyms.py skeptic-prepare [--size 120]
     # one Opus subagent per skeptic/in/*.json, each reading pipeline/word_synonyms_skeptic_prompt.md
     python pipeline/word_synonyms.py check-skeptic [--batch SAB-000]
+    python pipeline/word_synonyms.py prepare-late --runs E,F   # JLPT words' senses after the first FIRST
+    python pipeline/word_synonyms.py skeptic-recheck   # pairs whose other word had senses cut off, all shown
     # --runs C,D on skeptic-prepare, check-skeptic, evaluate and sample: another model's two runs
     # (prepare --runs C,D asks the same pilot words again)
     python pipeline/word_synonyms.py evaluate
@@ -56,7 +58,8 @@ DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "word-synonyms")
 SOURCES = proposals.ROOT / "pipeline" / "data"
 WIKTIONARY = proposals.DRAFTS / "word-synonyms" / "wiktionary.json"  # whatever --drafts says
 
-SENSES = 8  # of a word's JMdict senses, at most this many
+SENSES = 40  # of a word's JMdict senses, at most this many (JLPT words have up to 27)
+FIRST = 8  # the runs A,B saw only this many; prepare --late drafts the rest
 OTHER_SENSES = 4  # of a candidate's senses, shown to tell which one is meant
 GLOSS = 140  # characters of a sense's English
 CANDIDATES = 20  # synonym candidates per word
@@ -324,8 +327,9 @@ def same_word(a: int, b: int) -> bool:
     return False
 
 
-def candidates(wid: int) -> tuple[list[int], list[int]]:
-    """A word's synonym candidates (best first, every sense taking turns) and its antonym candidates."""
+def candidates(wid: int, first: int = 0) -> tuple[list[int], list[int]]:
+    """A word's synonym candidates (best first, every sense taking turns) and its antonym candidates;
+    with `first`, for the senses after it only."""
     words = scope()
     me = words[wid]
     mine = {hira(me["reading"])} | {t for t, v in forms().items() if any(w == wid for w, _ in v)}
@@ -337,6 +341,8 @@ def candidates(wid: int) -> tuple[list[int], list[int]]:
 
     per_sense: list[Counter] = [Counter() for _ in me["senses"][:SENSES]]
     for i, (_, _, g) in enumerate(me["senses"][:SENSES]):
+        if i < first:
+            continue
         for p in _phrases(g):
             hits = {o for o, _ in idx.get(p, ())}
             if len(hits) > DF_MAX:
@@ -346,7 +352,7 @@ def candidates(wid: int) -> tuple[list[int], list[int]]:
                     per_sense[i][o] += 1 / math.log2(1 + len(hits))
     opposites: list[int] = []
     for i, kind, o, _ in _jmdict_refs().get(wid, ()):
-        if not fine(o) or i >= SENSES:
+        if not fine(o) or not first <= i < SENSES:
             continue
         if kind == "ant":
             opposites.append(o)
@@ -364,7 +370,7 @@ def candidates(wid: int) -> tuple[list[int], list[int]]:
                     wn[o] += 0.8 / math.sqrt(max(1, len(peers) - 1))
     # Each sense in turn gives its next best; WordNet (no sense) takes a turn too,
     # and Wiktionary's list goes first when it is used (not in the pilot, which checked against it).
-    lanes = [[o for o, _ in c.most_common()] for c in per_sense] + [[o for o, _ in wn.most_common()]]
+    lanes = [[o for o, _ in c.most_common()] for c in per_sense[first:]] + [[o for o, _ in wn.most_common()]]
     if WIKTIONARY_CANDIDATES:
         listed = wiktionary_pairs().get(wid, {})
         lanes.insert(0, [o for o in sorted(listed.get("syn", ()), key=_rank) if fine(o)])
@@ -400,14 +406,15 @@ def _pilot_words(n: int, rng: random.Random) -> list[int]:
     return out
 
 
-def _entry(wid: int, rng: random.Random, shuffle: bool) -> dict:
+def _entry(wid: int, rng: random.Random, shuffle: bool, first: int = 0) -> dict:
+    """With `first`: only the senses after it (numbered as in JMdict); the answers are read as if padded."""
     w = scope()[wid]
-    syn, ant = candidates(wid)
+    syn, ant = candidates(wid, first)
     if shuffle:
         syn = rng.sample(syn, len(syn))
     return {
-        "id": wid, "word": w["word"], "reading": w["reading"], "senses": senses_of(wid),
-        "candidates": [_brief(o) for o in syn], "opposites": [_brief(o) for o in ant],
+        "id": wid, "word": w["word"], "reading": w["reading"], **({"first": first} if first else {}),
+        "senses": senses_of(wid)[first:], "candidates": [_brief(o) for o in syn], "opposites": [_brief(o) for o in ant],
     }
 
 
@@ -440,6 +447,22 @@ def prepare(pilot: int, size: int, runs: list[str], jlpt: bool = False, skip: li
             _dump(IN / f"{name}.json", {"batch": name, "run": run, "words": entries[b:b + size]})
     print(f"{len(words)} words, {len(runs)} runs, {math.ceil(len(words) / size)} batches each;"
           f" {stats['candidates'] / len(words) / len(runs):.1f} candidates and {stats['opposites'] / len(words) / len(runs):.1f} opposites a word")
+
+
+def prepare_late(size: int, runs: list[str]) -> None:
+    """Runs A,B saw a word's first FIRST senses only: batches for the rest of every JLPT word's senses."""
+    if any(f for r in runs for f in IN.glob(f"{r}-*.json")):
+        raise SystemExit(f"{IN} has batches for {runs} already")
+    rng = random.Random(23)
+    words = sorted(w for w, x in scope().items() if x["jlpt"] and len(x["senses"]) > FIRST)
+    for r, run in enumerate(runs):
+        order = words if r == 0 else rng.sample(words, len(words))
+        entries = [_entry(w, rng, shuffle=r > 0, first=FIRST) for w in order]
+        for b in range(0, len(entries), size):
+            name = f"{run}-{b // size:03d}"
+            _dump(IN / f"{name}.json", {"batch": name, "run": run, "words": entries[b:b + size]})
+    print(f"{len(words)} words, {sum(len(scope()[w]['senses']) - FIRST for w in words)} senses after the first {FIRST};"
+          f" {len(runs)} runs, {math.ceil(len(words) / size)} batches each")
 
 
 # ---------------------------------------------------------------- reading the runs
@@ -516,7 +539,7 @@ def read_run(run: str, only: str | None = None) -> tuple[dict[int, list[dict]], 
             if isinstance(v, str):
                 problems.append(f"{inp.stem}: {w['id']} {w['word']}: {v}")
             else:
-                good[w["id"]] = v
+                good[w["id"]] = [{}] * w.get("first", 0) + v
         extra = set(answers) - {str(w["id"]) for w in batch["words"]}
         if extra:
             problems.append(f"{inp.stem}: ids not asked: {sorted(extra)[:5]}")
@@ -619,6 +642,25 @@ def skeptic_prepare(size: int) -> None:
         name = f"{_sk_name()}-{len(earlier) + b // size:03d}"
         _dump(sin / f"{name}.json", {"batch": name, "pairs": items[b:b + size]})
     print(f"{len(items)} new pairs (both runs >= {SKEPTIC_BAR}) in {math.ceil(len(items) / size)} batches; {len(asked)} asked before")
+
+
+def skeptic_recheck() -> None:
+    """One more batch: the pairs asked before whose other word showed fewer senses than it has.
+    A later batch's verdict replaces an earlier one's (read_skeptic reads them in order)."""
+    sin, _ = _sk_folders()
+    earlier = sorted(sin.glob(f"{_sk_name()}-*.json"))
+    verdicts, _ = read_skeptic()
+    items = {}
+    for f in earlier:
+        for p in _read(f)["pairs"]:
+            o = p["other"]["id"]
+            if len(p["other"]["senses"]) < len(scope()[o]["senses"][:SENSES]):
+                a = verdicts.get(p["key"], {})
+                given = p["nuances"] + ([a["nuance"]] if a.get("verdict") == "ok" and a.get("nuance") else [])
+                items[p["key"]] = {**p, "other": _brief(o, SENSES), "nuances": list(dict.fromkeys(given))}
+    name = f"{_sk_name()}-{len(earlier):03d}"
+    _dump(sin / f"{name}.json", {"batch": name, "pairs": list(items.values())})
+    print(f"{len(items)} pairs again, with all of the other word's senses, in {name}")
 
 
 def read_skeptic(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
@@ -765,6 +807,10 @@ def main() -> int:
     p.add_argument("--runs", default="A,B")
     ck = sub.add_parser("check")
     ck.add_argument("--batch", help="just this batch, e.g. A-000")
+    pl = sub.add_parser("prepare-late")
+    pl.add_argument("--size", type=int, default=20)
+    pl.add_argument("--runs", default="E,F")
+    sr = sub.add_parser("skeptic-recheck")
     sp = sub.add_parser("skeptic-prepare")
     sp.add_argument("--size", type=int, default=120)
     cs = sub.add_parser("check-skeptic")
@@ -773,10 +819,10 @@ def main() -> int:
     sm = sub.add_parser("sample")
     sm.add_argument("--n", type=int, default=30)
     sm.add_argument("--bar", type=float, default=0.8)
-    for sp_ in (sp, cs, ev, sm):
+    for sp_ in (sp, sr, cs, ev, sm):
         sp_.add_argument("--runs", default="A,B", help="the two runs to combine, e.g. C,D for another model")
     args = ap.parse_args()
-    if args.cmd in ("skeptic-prepare", "check-skeptic", "evaluate", "sample"):
+    if args.cmd in ("skeptic-prepare", "skeptic-recheck", "check-skeptic", "evaluate", "sample"):
         RUNS = tuple(args.runs.split(","))
     DRAFTS, IN, OUT = proposals.folders(args.drafts or DRAFTS)
     if args.cmd == "wiktionary":
@@ -786,6 +832,11 @@ def main() -> int:
         prepare(args.pilot, args.size, args.runs.split(","), args.jlpt, args.skip)
     elif args.cmd == "check":
         check(args.batch)
+    elif args.cmd == "prepare-late":
+        WIKTIONARY_CANDIDATES = True
+        prepare_late(args.size, args.runs.split(","))
+    elif args.cmd == "skeptic-recheck":
+        skeptic_recheck()
     elif args.cmd == "skeptic-prepare":
         skeptic_prepare(args.size)
     elif args.cmd == "check-skeptic":
