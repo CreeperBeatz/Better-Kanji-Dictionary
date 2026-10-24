@@ -1,6 +1,7 @@
 """A second look at the weak spots of the word synonyms (Dani, 2026-10-24).
 
     python pipeline/synonym_recheck.py prepare [--size 120]   # data/drafts/synonym-recheck/in/R-*.json
+    python pipeline/synonym_recheck.py prepare --mirrored     # W-*.json: the pairs export mirrors (2026-10-24)
     # one Opus subagent per in/*.json, each reading pipeline/synonym_recheck_prompt.md
     python pipeline/synonym_recheck.py check [--batch R-000]
     python pipeline/word_synonyms.py export                   # applies the verdicts (RECHECK)
@@ -12,6 +13,9 @@ check did not cover twice:
 - `floor`: pairs both drafts gave only the lowest confidence kept (0.6);
 - `mixup`: words read the same and easy to mix up, one Opus pass only;
 - `both ways`: a pair shown on both words, whose two lines must agree.
+- `mirrored`: a pair export shows on the other word too; that line is the
+  quick Sonnet "own line" (pipeline/self_nuance.py), measured at 4.3% major.
+  Its batches (W-*) sort after R-*, so their verdicts win.
 
 One item per pair (both directions together where both are shown). Verdict:
 "ok", {"line"?, "reverse"?, "why"} with the lines to show instead, or
@@ -71,18 +75,21 @@ def _side(wid: int, sense: int) -> dict:
     return {"word": w["word"], "reading": w["reading"], "sense": ws.senses_of(wid)[sense]}
 
 
-def prepare(size: int) -> None:
+def prepare(size: int, mirrored_only: bool = False) -> None:
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     site = json.loads(ws.SITE.read_text(encoding="utf-8"))
     rows = {(int(w), r[0], r[1], r[2], r[3]): r for w, rs in site.items() for r in rs}
-    rewritten, floor = _drafted()
+    mirrored = {tuple(int(x) if x.isdigit() else x for x in k.split("|")) for k in ws._read(ws.MIRRORED)} if mirrored_only else set()
+    rewritten, floor = _drafted() if not mirrored_only else (set(), set())
     items, seen, why = [], set(), Counter()
     for (w, i, kind, o, n), r in sorted(rows.items()):
         if (w, i, kind, o, n) in seen:
             continue
         back = rows.get((o, n - 1, kind, w, i + 1))
         reasons = [x for x, hit in (
+            ("mirrored", kind == "syn" and ((w, i, kind, o, n) in mirrored or (o, n - 1, kind, w, i + 1) in mirrored)),
+        ) if hit] if mirrored_only else [x for x, hit in (
             ("rewritten", (w, i, kind, o) in rewritten or (back and (o, n - 1, kind, w) in rewritten)),
             ("floor", (w, i, kind, o) in floor or (back and (o, n - 1, kind, w) in floor)),
             ("mixup", kind == "mix"),
@@ -101,7 +108,7 @@ def prepare(size: int) -> None:
             "shownBothWays": back is not None,
         })
     for b in range(0, len(items), size):
-        name = f"R-{b // size:03d}"
+        name = f"{'W' if mirrored_only else 'R'}-{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "items": items[b:b + size]})
     print(f"{len(items)} pairs ({dict(why)}) in {-(-len(items) // size)} batches -> {IN}")
 
@@ -192,11 +199,12 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--size", type=int, default=120)
+    p.add_argument("--mirrored", action="store_true")
     p = sub.add_parser("check")
     p.add_argument("--batch")
     a = ap.parse_args()
     if a.cmd == "prepare":
-        prepare(a.size)
+        prepare(a.size, a.mirrored)
     else:
         check(a.batch)
 

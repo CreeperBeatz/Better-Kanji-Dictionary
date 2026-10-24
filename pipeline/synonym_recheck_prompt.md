@@ -22,7 +22,7 @@ Each item: `key`, `kind` (synonym | antonym | mixup), `why` it is here,
 
 `why`: `rewritten` (the line was written by the first check and read by no
 one since), `floor` (the drafts were only just sure enough), `mixup` (one
-pass only), `both ways` (the two lines must agree with each other).
+pass only), `both ways` (the two lines must agree with each other), `mirrored` (the pair is shown on both words; one of its two lines was a quick draft read by no one, so check both lines with care).
 
 ## What is right
 
