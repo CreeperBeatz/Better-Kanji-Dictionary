@@ -22,7 +22,12 @@ For each pair, judge with your own knowledge of Japanese:
      of the same kind (犬 / 猫), only a related word (医者 / 病院), another
      form of the same word (始まる / 始める), a short or polite form of the
      same word (金曜 / 金曜日, 訓 / 訓読み, お風呂 / 風呂), or fits only
-     another sense of the word.
+     another sense of the word. The same word written or read another way
+     is `wrong` too: the same kanji with another reading of the same word
+     (居る おる / いる, 抱く いだく / だく, 明日 あした / あす), a kana
+     spelling (ほどく / 解く), a colloquial contraction (つまんない /
+     詰まらない, 合わす / 合わせる). Two really different words that share a
+     spelling are fine (解ける とける / ほどける).
    - An antonym: the plain opposite in this sense (勝つ / 負ける). It is
      `wrong` for a negative form, a mere contrast, or an opposite only in
      another sense.

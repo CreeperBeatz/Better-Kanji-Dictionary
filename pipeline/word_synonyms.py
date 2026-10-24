@@ -259,19 +259,32 @@ def _jmdict_refs() -> dict[int, list[tuple[int, str, int | None, str]]]:
     words = scope()
     out: dict[int, list] = defaultdict(list)
     text = gzip.open(SOURCES / "JMdict_e.gz", "rt", encoding="utf-8").read()
+    raw: dict[int, list[tuple[int, str, list[str], int | None]]] = {}
     for m in re.finditer(r"<entry>.*?</entry>", text, re.S):
         e = m.group(0)
         wid = int(re.search(r"<ent_seq>(\d+)", e).group(1))
         if wid not in words:
             continue
+        refs = raw.setdefault(wid, [])
         for i, s in enumerate(re.findall(r"<sense>.*?</sense>", e, re.S)):
             for kind, ref in re.findall(r"<(xref|ant)>([^<]*)</\1>", s):
                 parts = ref.split("・")
                 n = int(parts[-1]) if parts[-1].isdigit() else None
-                parts = [p for p in parts if not p.isdigit()]
-                targets = resolve(parts[0], parts[1] if len(parts) > 1 else None)
-                for t in targets:
-                    out[wid].append((i, kind, t, n))
+                refs.append((i, kind, [p for p in parts if not p.isdigit()], n))
+    named = {wid: {p[0] for _, _, p, _ in refs} for wid, refs in raw.items()}
+    for wid, refs in raw.items():
+        mine = {words[wid]["word"], words[wid]["reading"]}
+        for i, kind, parts, n in refs:
+            if len(parts) > 1:
+                targets = resolve(parts[0], parts[1])
+            else:
+                # A bare spelling several entries share (不便 ふべん / 不憫 ふびん, イエス yes / Jesus):
+                # the one that names this word back, else the best.
+                every = resolve(parts[0], None, best=False)
+                back = [t for t in every if named.get(t, set()) & mine]
+                targets = back[:1] or every[:1]
+            for t in targets:
+                out[wid].append((i, kind, t, n))
     return out
 
 
