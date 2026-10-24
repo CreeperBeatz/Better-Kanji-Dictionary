@@ -159,13 +159,30 @@ def check(only: str | None) -> None:
         print(f"{total} valid items, {dict(c)}; {done} of {len(batches)} batches complete")
 
 
+def _decided() -> set[tuple[int, int, str, int]]:
+    """Pairs Dani decided (an `override` on the first check's verdict): 2026-10-24, established
+    不・非・無 words are antonyms (運 / 不運). No later check drops them."""
+    out = set()
+    for f in proposals.DRAFTS.glob("word-synonyms*/skeptic/out/*.json"):
+        for k, v in (ws._read(f).get("pairs") or {}).items():
+            if isinstance(v, dict) and v.get("override"):
+                w, n, kind, o = k.split(":")
+                out |= {(int(w), int(n) - 1, kind, int(o)), (int(o), None, kind, int(w))}
+    return out
+
+
 def all_verdicts() -> dict[str, dict | None]:
-    """Every complete batch's verdicts, for word_synonyms.export."""
+    """Every complete batch's verdicts, for word_synonyms.export; never a drop of a pair Dani decided."""
     out = {}
     for p in sorted(IN.glob("*.json")):
         good, probs = verdicts(p.stem)
         if not probs:
             out.update(good)
+    decided = _decided()
+    for k, v in list(out.items()):
+        w, i, kind, o, _ = k.split("|")
+        if v and v.get("drop") and ((int(w), int(i), kind, int(o)) in decided or (int(w), None, kind, int(o)) in decided):
+            out[k] = None
     return out
 
 
