@@ -2,10 +2,18 @@
  * One dictionary entry in the rail, the way a pocket dictionary lays it out:
  * the word, its reading and accent, every sense, and then the kanji it is
  * written with -- each of which opens that character.
+ *
+ * Under a sense, what sits beside it, as beside a meaning on a kanji's page
+ * (detail/Close.tsx): ! the words read the same that are easy to mix up with
+ * it, ≈ its synonyms, each with how it differs, and ↔ its opposites -- each
+ * row opening that word at its matching sense.
  */
 
 import { useEffect, useState } from 'react'
-import { api, type Word, type WordEntry } from '../api'
+import { api, type RelatedWord, type Word, type WordEntry } from '../api'
+import { reducedMotion } from '../media'
+import { AsideTitle, CloseRow } from './Close'
+import { bringToTop, focusMeaningNext, takeMeaningFocus } from './meaningFocus'
 import { strings, useLang, type Lang } from '../i18n'
 import { glossOf, meaningsOf } from '../i18n/content'
 import { tagLabel } from '../i18n/grammar'
@@ -35,6 +43,12 @@ const S = strings(
     pairVt: 'Transitive pair',
     pairVi: 'Intransitive pair',
     pairTitle: 'Open {word}',
+    synonyms: 'Synonyms',
+    opposites: 'Opposites',
+    mixups: 'Easy to mix up',
+    mixupsHint: 'Other words with the same reading.',
+    withMeaning: 'With the meaning: {m}',
+    openAt: 'Open {word} at this meaning',
   },
   {
     amongFrequent: 'сред {n}-те най-чести думи',
@@ -53,8 +67,19 @@ const S = strings(
     pairVt: 'Преходен вариант',
     pairVi: 'Непреходен вариант',
     pairTitle: 'Отворете {word}',
+    synonyms: 'Синоними',
+    opposites: 'Антоними',
+    mixups: 'Лесно се бъркат',
+    mixupsHint: 'Други думи със същото четене.',
+    withMeaning: 'Със значение: {m}',
+    openAt: 'Отворете {word} на това значение',
   },
 )
+
+/** Where a word's sense is on its page, for a row on another word's to bring it into view. */
+const senseAnchor = (id: number, n: number) => `sense-${id}-${n}`
+/** The key a word's page takes its sense to show by (meaningFocus), apart from a kanji's. */
+const focusKey = (id: number) => `word:${id}`
 
 interface Props {
   id: number
@@ -138,6 +163,119 @@ export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: strin
   )
 }
 
+/** A sense in a line: its first glosses. */
+function senseLine(w: Word, n: number, lang: Lang): string | null {
+  const s = w.senses[n]
+  return s ? glossOf(s, lang).value.split(';').slice(0, 2).join(';') : null
+}
+
+/**
+ * What sits beside one sense: ! words read the same, ≈ synonyms, ↔ opposites,
+ * in the blocks a kanji's meaning has them in. The lines are English for now;
+ * on a Bulgarian page they say so, as an untranslated gloss does.
+ */
+function SenseAside({
+  word,
+  sense,
+  related,
+  lang,
+  onWord,
+}: {
+  word: Word
+  sense: number
+  related: RelatedWord[]
+  lang: Lang
+  onWord: (w: Word) => void
+}) {
+  const t = S(lang)
+  if (!related.length) return null
+  const open = (r: RelatedWord) => {
+    focusMeaningNext(focusKey(r.word.id), String(r.otherSense - 1))
+    onWord(r.word)
+  }
+  const en =
+    lang === 'bg' ? (
+      <span className="entry-fallback" title={t('notTranslated')}>
+        EN
+      </span>
+    ) : null
+  const rows = (kind: RelatedWord['kind']) =>
+    related
+      .filter((r) => r.kind === kind)
+      .map((r) => {
+        const m = senseLine(r.word, r.otherSense - 1, lang)
+        return (
+          <CloseRow
+            key={r.word.id}
+            glyph={r.word.headword}
+            sub={r.word.reading}
+            sense={m && t('withMeaning', { m })}
+            line={r.line}
+            lineMark={en}
+            title={t('openAt', { word: r.word.headword })}
+            warm={warmWord(r.word.id)}
+            onOpen={() => open(r)}
+          />
+        )
+      })
+  const mix = related.filter((r) => r.kind === 'mix')
+  const syn = rows('syn')
+  const ant = rows('ant')
+  return (
+    <>
+      {mix.length > 0 && (
+        <section className="aside-block mixup" title={t('mixupsHint')}>
+          <AsideTitle icon="!">{t('mixups')}</AsideTitle>
+          <ul className="usage-spellings">
+            <li data-self>
+              <p className="usage-head">
+                <span className="usage-spelling" lang="ja">
+                  {word.headword}
+                </span>
+                <span className="usage-reading" lang="ja">
+                  {word.reading}
+                </span>
+                <span className="usage-keyword">{senseLine(word, sense, lang)}</span>
+              </p>
+            </li>
+            {mix.map((r) => (
+              <li key={r.word.id}>
+                <button className="usage-head" title={t('openAt', { word: r.word.headword })} {...warmWord(r.word.id)} onClick={() => open(r)}>
+                  <span className="usage-spelling" lang="ja">
+                    {r.word.headword}
+                  </span>
+                  <span className="usage-reading" lang="ja">
+                    {r.word.reading}
+                  </span>
+                  <span className="usage-keyword">{senseLine(r.word, r.otherSense - 1, lang)}</span>
+                </button>
+                {r.line && (
+                  <p className="spelling-def">
+                    {r.line}
+                    {en}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {syn.length > 0 && (
+        <section className="aside-block meaning-similar">
+          <AsideTitle icon="≈">{t('synonyms')}</AsideTitle>
+          <ul>{syn}</ul>
+        </section>
+      )}
+      {ant.length > 0 && (
+        <section className="aside-block meaning-similar opposites">
+          <AsideTitle icon="↔">{t('opposites')}</AsideTitle>
+          <ul>{ant}</ul>
+        </section>
+      )}
+    </>
+  )
+}
+
 export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: Props) {
   const lang = useLang()
   const t = S(lang)
@@ -162,6 +300,17 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
     return () => {
       stale = true
     }
+  }, [id])
+
+  // Opened from a row on another word's page: its matching sense comes into view and glows a moment.
+  useEffect(() => {
+    const n = takeMeaningFocus(focusKey(id))
+    if (n === null) return
+    return bringToTop(senseAnchor(id, Number(n)), !reducedMotion(), (el) => {
+      el.classList.remove('sense-flash')
+      void el.offsetWidth // so the glow starts again on a second visit
+      el.classList.add('sense-flash')
+    })
   }, [id])
 
   const w = entry?.word ?? word
@@ -204,7 +353,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
 
       <ol className="entry-senses">
         {w.senses.map((s, i) => (
-          <li key={i}>
+          <li key={i} id={senseAnchor(w.id, i)}>
             {/* Part of speech only where it changes, as a printed dictionary does. */}
             {(s.pos.length > 0 || s.misc.length > 0) &&
               (i === 0 || s.pos.join() !== w.senses[i - 1].pos.join() || s.misc.length > 0) && (
@@ -228,6 +377,9 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                 </span>
               )}
             </p>
+            {entry?.related && (
+              <SenseAside word={w} sense={i} related={entry.related.filter((r) => r.sense === i)} lang={lang} onWord={onWord} />
+            )}
           </li>
         ))}
       </ol>

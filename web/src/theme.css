@@ -971,18 +971,36 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 16px;
 }
 
-/* Synonyms: one row a kanji -- the kanji, its keyword, and the
-   meaning of it that is close. */
+/* Synonyms: one row a kanji or word -- the kanji, its keyword (a word: its
+   reading), the meaning of it that is close, and under them how it differs.
+   The rows share their columns, so a block of words reads as a table. */
 .meaning-similar ul {
+  display: grid;
+  grid-template-columns: auto minmax(5em, auto) 1fr;
   list-style: none;
   margin: 0 0 4px;
   padding: 0;
 }
 
+.meaning-similar li {
+  display: contents;
+}
+
+/* Opposites, a word's only: in vermilion, apart from the synonyms' indigo. */
+.aside-block.opposites {
+  --tone: var(--shu);
+}
+
+.opposites .close-row:hover .close-kanji,
+.opposites .close-row:focus-visible .close-kanji {
+  color: var(--shu);
+}
+
 /* The whole row is one button: it opens the kanji at the shared meaning. */
 .close-row {
   display: grid;
-  grid-template-columns: auto minmax(5em, auto) 1fr;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
   gap: 0 10px;
   width: calc(100% + 12px);
@@ -1021,6 +1039,42 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .close-sense {
   font-size: calc(12px * var(--type));
   color: var(--paper-dim);
+}
+
+/* How it differs: under the keyword and the meaning, the glyph standing beside it. */
+.close-line {
+  grid-column: 2 / -1;
+  margin: 1px 0 2px;
+  font-size: calc(12.5px * var(--type));
+  line-height: 1.45;
+  color: var(--paper);
+}
+
+.close-line .entry-fallback,
+.spelling-def .entry-fallback {
+  margin-left: 6px;
+}
+
+/* A word's sense brought into view from another word's page glows a moment. */
+@keyframes sense-flash {
+  0%,
+  35% {
+    background: color-mix(in srgb, var(--ai-wash) 45%, transparent);
+    box-shadow: 0 0 0 1px var(--ai-deep);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.entry-senses > li {
+  scroll-margin-top: 56px;
+  border-radius: 3px;
+}
+
+.sense-flash {
+  animation: sense-flash 2.2s var(--ease) 0.25s both;
 }
 
 /* A meaning brought into view from another kanji's page glows a moment. */

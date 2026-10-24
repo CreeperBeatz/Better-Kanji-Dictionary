@@ -9,6 +9,10 @@
     python pipeline/word_synonyms.py check-skeptic [--batch SAB-000]
     python pipeline/word_synonyms.py prepare-late --runs E,F   # JLPT words' senses after the first FIRST
     python pipeline/word_synonyms.py skeptic-recheck   # pairs whose other word had senses cut off, all shown
+    python pipeline/word_synonyms.py same-reading-prepare   # words read the same that share a meaning (食料/食糧)
+    # one Opus subagent per same-reading/in/*.json, each reading pipeline/word_synonyms_same_reading_prompt.md
+    python pipeline/word_synonyms.py check-same-reading [--batch R-000]
+    python pipeline/word_synonyms.py export   # -> data/word_synonyms.json, what the site shows
     # --runs C,D on skeptic-prepare, check-skeptic, evaluate and sample: another model's two runs
     # (prepare --runs C,D asks the same pilot words again)
     python pipeline/word_synonyms.py evaluate
@@ -693,6 +697,135 @@ def check_skeptic(only: str | None = None) -> None:
         print("   ", p)
 
 
+# ---------------------------------------------------------------- read the same
+
+# The runs leave out every pair read the same: those are mix-ups as much as synonyms.
+# This pass asks about them on their own (Dani 2026-10-24): near (食料/食糧), sound
+# only (課程/過程), the same word (聞く/訊く). The site shows near and sound as
+# "easy to mix up" under the sense, with a line on each word's page about the other.
+
+SR_KINDS = ("near", "sound", "same", "wrong")
+SR_LINE = 180  # characters
+
+
+def _sr_folders() -> tuple[Path, Path]:
+    return DRAFTS / "same-reading" / "in", DRAFTS / "same-reading" / "out"
+
+
+def same_reading_pairs() -> list[tuple[int, int, list[str]]]:
+    """Two words read the same, one of them JLPT, that share a rare English phrase and are not one word."""
+    words, idx = scope(), _phrase_index()
+    by_reading: dict[str, list[int]] = defaultdict(list)
+    for wid, w in words.items():
+        by_reading[hira(w["reading"])].append(wid)
+    phrases = {wid: {p for _, _, g in w["senses"] for p in _phrases(g)} for wid, w in words.items()}
+    out = []
+    for ids in by_reading.values():
+        for a in ids:
+            for b in ids:
+                if b <= a or not (words[a]["jlpt"] or words[b]["jlpt"]) or same_word(a, b):
+                    continue
+                shared = sorted(p for p in phrases[a] & phrases[b] if len(idx.get(p, ())) <= DF_MAX)
+                if shared:
+                    out.append((a, b, shared[:4]))
+    return out
+
+
+def same_reading_prepare(size: int) -> None:
+    sin, sout = _sr_folders()
+    sout.mkdir(parents=True, exist_ok=True)
+    items = [{"key": f"{a}:{b}", "reading": hira(scope()[a]["reading"]),
+              "a": {k: v for k, v in _brief(a, SENSES).items() if k != "id"},
+              "b": {k: v for k, v in _brief(b, SENSES).items() if k != "id"}, "shared": shared}
+             for a, b, shared in same_reading_pairs()]
+    for i in range(0, len(items), size):
+        name = f"R-{i // size:03d}"
+        _dump(sin / f"{name}.json", {"batch": name, "items": items[i:i + size]})
+    print(f"{len(items)} pairs read the same in {math.ceil(len(items) / size)} batches in {sin}")
+
+
+def read_same_reading(only: str | None = None) -> tuple[dict[str, dict], list[str]]:
+    sin, sout = _sr_folders()
+    good: dict[str, dict] = {}
+    problems: list[str] = []
+    for inp, batch, got in proposals.outputs(sin, sout, f"{only or 'R-*'}.json", problems):
+        answers = got.get("items") if isinstance(got, dict) else None
+        if not isinstance(answers, dict):
+            problems.append(f"{inp.stem}: no \"items\" object")
+            continue
+        for it in batch["items"]:
+            a = answers.get(it["key"])
+            n = {"a": len(it["a"]["senses"]), "b": len(it["b"]["senses"])}
+            if not isinstance(a, dict) or a.get("kind") not in SR_KINDS:
+                problems.append(f"{inp.stem}: {it['key']} needs a kind: {', '.join(SR_KINDS)}")
+            elif a["kind"] in ("near", "sound"):
+                bad = [f"{x}Sense" for x in "ab" if not isinstance(a.get(f"{x}Sense"), int) or not 1 <= a[f"{x}Sense"] <= n[x]]
+                bad += [f for f in ("onA", "onB") if not isinstance(a.get(f), str) or not a[f].strip() or len(a[f]) > SR_LINE]
+                bad += [f"{f} says 'similar to'" for f in ("onA", "onB")
+                        if re.search(r"\b(synonym of|similar to)\b", str(a.get(f)), re.I)]
+                if bad:
+                    problems.append(f"{inp.stem}: {it['key']}: fix {', '.join(bad)} (lines at most {SR_LINE} characters)")
+                else:
+                    good[it["key"]] = a
+            elif not isinstance(a.get("why"), str) or not a["why"].strip():
+                problems.append(f"{inp.stem}: {it['key']} {a['kind']} needs a short why")
+            else:
+                good[it["key"]] = a
+        extra = set(answers) - {it["key"] for it in batch["items"]}
+        if extra:
+            problems.append(f"{inp.stem}: keys not asked: {sorted(extra)[:5]}")
+    return good, problems
+
+
+def check_same_reading(only: str | None = None) -> None:
+    good, problems = read_same_reading(only)
+    print(f"read the same: {len(good)} valid, {dict(Counter(a['kind'] for a in good.values()))}, {len(problems)} problems")
+    for p in problems[:30]:
+        print("   ", p)
+
+
+# ---------------------------------------------------------------- export
+
+SITE = proposals.ROOT / "data" / "word_synonyms.json"
+# Every run pair that went through the skeptic: the JLPT run, its senses past the 8th, the pilot.
+SITE_RUNS = (("word-synonyms-jlpt", ("A", "B")), ("word-synonyms-jlpt", ("E", "F")), ("word-synonyms", ("C", "D")))
+
+
+def export(bar: float = 0.6) -> None:
+    """data/word_synonyms.json: word id -> rows [sense index, kind, other id, other's sense, line], kind
+    syn / ant / mix (read the same). What the site shows under each sense."""
+    global DRAFTS, IN, OUT, RUNS
+    saved = DRAFTS, IN, OUT, RUNS
+    out: dict[int, list[list]] = defaultdict(list)
+    seen: set[tuple] = set()
+    stats = Counter()
+    try:
+        for folder, runs in SITE_RUNS:
+            DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / folder)
+            RUNS = runs
+            for wid, entry in final(bar).items():
+                for i, s in enumerate(entry):
+                    for kind in ("syn", "ant"):
+                        for it in s[kind]:
+                            if (wid, i, kind, it["id"]) not in seen:
+                                seen.add((wid, i, kind, it["id"]))
+                                out[wid].append([i, kind, it["id"], it["sense"], it["nuance"] or None])
+                                stats[kind] += 1
+        DRAFTS, IN, OUT = proposals.folders(proposals.DRAFTS / "word-synonyms-jlpt")
+        for key, a in read_same_reading()[0].items():
+            if a["kind"] not in ("near", "sound"):
+                continue
+            x, y = map(int, key.split(":"))
+            out[x].append([a["aSense"] - 1, "mix", y, a["bSense"], a["onA"].strip()])
+            out[y].append([a["bSense"] - 1, "mix", x, a["aSense"], a["onB"].strip()])
+            stats["mix"] += 2
+    finally:
+        DRAFTS, IN, OUT, RUNS = saved
+    rows = {str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
+    SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"{len(rows)} words, {dict(stats)} -> {SITE}")
+
+
 # ---------------------------------------------------------------- evaluation
 
 
@@ -811,6 +944,11 @@ def main() -> int:
     pl.add_argument("--size", type=int, default=20)
     pl.add_argument("--runs", default="E,F")
     sr = sub.add_parser("skeptic-recheck")
+    rp = sub.add_parser("same-reading-prepare")
+    rp.add_argument("--size", type=int, default=70)
+    rc = sub.add_parser("check-same-reading")
+    rc.add_argument("--batch", help="just this batch, e.g. R-000")
+    sub.add_parser("export")
     sp = sub.add_parser("skeptic-prepare")
     sp.add_argument("--size", type=int, default=120)
     cs = sub.add_parser("check-skeptic")
@@ -835,6 +973,12 @@ def main() -> int:
     elif args.cmd == "prepare-late":
         WIKTIONARY_CANDIDATES = True
         prepare_late(args.size, args.runs.split(","))
+    elif args.cmd == "same-reading-prepare":
+        same_reading_prepare(args.size)
+    elif args.cmd == "check-same-reading":
+        check_same_reading(args.batch)
+    elif args.cmd == "export":
+        export()
     elif args.cmd == "skeptic-recheck":
         skeptic_recheck()
     elif args.cmd == "skeptic-prepare":

@@ -159,6 +159,21 @@ export interface WordEntry {
   examples: { text: string; hit: [number, number] | null }[]
   /** The verb going the other way, が for を: 開ける for 開く; likeliest first. */
   pairs: Word[]
+  /** Its synonyms, opposites and words read the same, sense by sense; missing from the device's copy. */
+  related?: RelatedWord[]
+}
+
+/** A word close to one sense of another, and how (server/synonyms.py). */
+export interface RelatedWord {
+  /** Which of the word's senses, from 0. */
+  sense: number
+  /** ≈ a synonym, ↔ an opposite, ! read the same and easy to mix up. */
+  kind: 'syn' | 'ant' | 'mix'
+  word: Word
+  /** The other word's sense that matches, from 1. */
+  otherSense: number
+  /** How it differs, or when to write it; English only for now. */
+  line: string | null
 }
 
 export interface Sense {
@@ -216,6 +231,8 @@ export interface KanjiLite {
 /** A kanji close to one meaning of another, and which of its own meanings that is. */
 export interface CloseKanji extends KanjiLite {
   sense: { id: string; en: string | null; bg: string | null } | null
+  /** How it differs from the page's kanji in this meaning, where drafted. */
+  nuance?: { en: string; bg: string | null } | null
 }
 
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */
@@ -225,7 +242,8 @@ export interface MixUp {
   /** The page's kanji's meaning on that reading; missing in a pack from before it. */
   self?: CloseKanji['sense']
   /** Each with its meaning on that reading. */
-  kanji: (KanjiLite & { sense?: CloseKanji['sense'] })[]
+  /** `note`: when to write which, where no usage card tells them apart. */
+  kanji: (KanjiLite & { sense?: CloseKanji['sense']; note?: { en: string; bg: string | null } | null })[]
   usage: UsageCard | null
 }
 

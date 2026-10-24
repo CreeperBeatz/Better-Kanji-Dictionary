@@ -25,6 +25,7 @@ from .. import bg_overlay
 from .. import bulgarian as bg
 from .. import kanji_parts
 from .. import semantic as sem
+from .. import synonyms
 from ..db import get_db, query, query_one
 from ..errors import AppError
 from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_to_kana
@@ -1038,7 +1039,10 @@ def kanji_page(char: str) -> dict:
 
     # Each kanji with the meaning it has on that reading, this one (`self`) too.
     mixups = [
-        {"reading": r, "self": read_as(char, r), "kanji": [{**lite(c), "sense": read_as(c, r)} for c in dict.fromkeys(cs)],
+        {"reading": r, "self": read_as(char, r),
+         # With no usage card, a line on when to write which (pipeline/kanji_nuance.py), where drafted.
+         "kanji": [{**lite(c), "sense": read_as(c, r), **({} if r.split("・")[0] in card_of else {"note": synonyms.kanji_mixup(char, c, r)})}
+                   for c in dict.fromkeys(cs)],
          "usage": card_of.get(r.split("・")[0])}
         for r, cs in mix.items() if cs
     ]
@@ -1052,7 +1056,8 @@ def kanji_page(char: str) -> dict:
         g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
-        return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None}
+        return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None,
+                "nuance": synonyms.kanji_nuance(char, here["id"], c)}
 
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,
@@ -1187,7 +1192,18 @@ def word_entry(word_id: int) -> dict:
         "kanji": kanji,
         "examples": [_sentence(r["text"], w["headword"]) for r in rows],
         "pairs": verb_pairs(word_id),
+        "related": related_words(word_id),
     }
+
+
+def related_words(word_id: int) -> list[dict]:
+    """The word's synonyms (≈), opposites (↔) and the words read the same that are easy to
+    mix up with it (!), sense by sense (server/synonyms.py): each the other word, the
+    number of its sense that matches, and the line on how it differs or when to write it."""
+    rows = synonyms.word_rows(word_id)
+    others = _fetch_words(list({r[2] for r in rows}))
+    return [{"sense": i, "kind": kind, "word": others[o], "otherSense": n, "line": line}
+            for i, kind, o, n, line in rows if o in others]
 
 
 def verb_pairs(word_id: int) -> list[dict]:
