@@ -862,7 +862,20 @@ def export(bar: float = 0.6) -> None:
                 own = fwd.get((o, n - 1, w, i)) or (drafted.get(f"{w}:{i}:{o}:{n - 1}") or {}).get("en")
                 r.append(own)
                 stats["own line"] += bool(own)
-    rows = {str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
+    # Every pair on both words' pages: a row the other word lacks is mirrored there. Its line says how this
+    # word differs: the second look's `reverse` fix, else the own line; its own line is this row's line.
+    have = {(w, r[0], r[2]) for w, rs in out.items() for r in rs}
+    for w, rs in list(out.items()):
+        for r in list(rs):
+            i, kind, o, n = r[:4]
+            if kind == "mix" or (o, n - 1, w) in have:
+                continue
+            line = lines.get((o, n - 1, kind, w, i + 1)) or (r[5] if kind == "syn" else None)
+            out[o].append([n - 1, kind, w, i + 1, line] + ([r[4]] if kind == "syn" else []))
+            have.add((o, n - 1, w))
+            stats[f"{kind} mirrored"] += 1
+            stats[f"{kind} mirrored without line"] += kind == "syn" and not line
+    rows ={str(w): sorted(r, key=lambda r: (r[0], ("mix", "syn", "ant").index(r[1]))) for w, r in sorted(out.items())}
     SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{len(rows)} words, {dict(stats)} -> {SITE}")
 
