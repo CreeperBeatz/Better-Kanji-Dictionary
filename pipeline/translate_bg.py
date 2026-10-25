@@ -222,6 +222,8 @@ OPENERS = {"The everyday word": "Всекидневната дума", "Spoken":
 def _fix(text: str, en: str | None = None) -> str:
     for pat, new in FIXES:
         text = pat.sub(new, text)
+    if en and ("by itself" in en or "on its own" in en):  # "in itself" is само по себе си
+        text = text.replace("само по себе си", "от само себе си")
     if en:
         head = en.split(".")[0]
         want = OPENERS.get(head)
@@ -245,7 +247,7 @@ def merge() -> None:
             if p.stem.startswith("L"):
                 out["lines"][by[k]["en"]] = _fix(v["bg"], by[k]["en"])
             else:
-                out["notes"][k] = {"nuance": _fix(v["nuance"]), "ex": v["ex"] and _fix(v["ex"])}
+                out["notes"][k] = {"nuance": _fix(v["nuance"], by[k]["nuance"]), "ex": v["ex"] and _fix(v["ex"])}
     ws._dump(SITE, out)
     print(f"{len(out['lines'])} lines, {len(out['notes'])} notes -> {SITE}")
 
