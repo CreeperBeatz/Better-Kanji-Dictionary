@@ -4717,6 +4717,19 @@ button.usage-head:focus-visible .usage-spelling {
   margin: 10px 0 4px;
 }
 
+/* On the word's page two lines, "Written" and "Read as", their forms lined
+   up after the labels. */
+.entry-spellings[data-page] {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+}
+
+.entry-spellings-label {
+  font-size: calc(12px * var(--type));
+  color: var(--muted);
+}
+
 .entry-spelling-list {
   display: flex;
   flex-wrap: wrap;
