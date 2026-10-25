@@ -500,3 +500,9 @@ IDS and KanjiVG sometimes write 厂 for ⺁, which we treat as a different shape
 - A corrected Bulgarian gloss shows everywhere at once, but searching by
   Bulgarian text still finds the word by its old wording until it is
   exported (`python -m server.review export`) and the data is rebuilt.
+- Word synonyms leave out about 15,000 pairs that only one drafting run gave,
+  or both below 0.6 (2026-10-25). Nothing wrong is shown because of them, but
+  words miss real synonyms: a blind sample of 300 found 97.7% right (2.3%
+  major, mostly short forms). Task for when there are tokens to spare: an Opus
+  check of those pairs (`quality_sample.py` dataset `belowbar` shows how they
+  are drawn; about 125 agents at 120 pairs each), then export as usual.
