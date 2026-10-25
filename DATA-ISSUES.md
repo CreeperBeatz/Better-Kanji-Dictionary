@@ -461,6 +461,34 @@ blind: 0 major, 28 minor. Left: three pairs with the wrong partner (女房 /
 Only pairs that slipped into the runs were sorted: a run to find polite
 forms, mix-ups by meaning and pairs across all words is still to do.
 
+### D-036 · Register labels on word lines: relative, wrong, or one for all senses
+*Found 2026-10-25,* by the Bulgarian translators, who read every line and
+kept flagging register claims (実は "written", 基づく "everyday", 努めて
+"spoken"); the blind graders had let them pass as minor. Three causes: a
+label true only next to the paired word, written as a plain fact ("Formal."
+on 見解's row means more formal than 意見); plain misjudgments, mostly on'yomi
+words taken as formal or written and kana or mimetic words as spoken; one
+label for a word whose register changes with the sense (向き).
+Source: the drafting prompts (each synonym line says how the word differs,
+register first) and the Sonnet own lines.
+**Status: fixed locally** (feat/word-synonyms). Every text with a register
+claim, and every text a translator flagged, checked once by Opus with
+JMdict's register tags as evidence (pipeline/register_claims.py, 12,648
+texts): 2,545 fixed, most now explicit comparisons ("More formal than 意見").
+Applied: 3,237 synonym rows, 619 sense notes; Bulgarian redone for them.
+
+### D-037 · Senses JMdict keeps to another reading or spelling
+*Found 2026-10-25,* by the translators: 平日 read へいじつ showed a sense JMdict
+gives only for ひらび; 刀 its とう senses under かたな; この間 "meanwhile" is
+このかん. build_db read every sense as a sense of the headword and dropped
+<stagr>/<stagk>: 469 senses in 423 words, 127 of them on our pages.
+Source: build_db's dict stage.
+**Status: fixed locally** (feat/word-synonyms). data/sense_restrictions.json
+(pipeline/sense_restrictions.py) marks them on the word page ("read このかん
+in this sense"); the 130 notes and lines under them were checked again
+(123 fixed). Open: the search index and the sense table still carry no
+restriction.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
