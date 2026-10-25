@@ -52,8 +52,10 @@ the example; `ex` is null when the item has no `ex`.
   written (田中と申します, 〜した上で, 現代社会). Do not transliterate.
 - In the Bulgarian translation of an example, write Japanese names and
   terms in Cyrillic after the Hepburn reading, as in канджи (never the
-  Polivanov дз/си style of кандзи): Токио, Шитамачи, йокозуна, манджу.
-  In notes and lines, Japanese stays in Japanese.
+  Polivanov дз/си style of кандзи): Шитамачи, йокозуна, манджу. But a
+  word Bulgarian already uses keeps its usual Bulgarian spelling: дзен,
+  гейша, джудо, суши, кимоно, Токио. In notes and lines, Japanese stays
+  in Japanese.
 - Do not address the reader; where you must, use the formal вие.
 - No Latin letters inside Bulgarian words.
 - Terms, always these:
