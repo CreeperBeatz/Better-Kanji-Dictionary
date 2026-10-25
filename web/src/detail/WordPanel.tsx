@@ -65,6 +65,8 @@ const S = strings(
     secondaryTitle: 'Met regularly, after the main meanings',
     rareTitle: 'Seldom met',
     drafted: 'An example written for this meaning, not from a corpus',
+    readAs: 'read {r} in this sense',
+    writtenAs: 'written {k} in this sense',
   },
   {
     amongFrequent: 'сред {n}-те най-чести думи',
@@ -103,6 +105,8 @@ const S = strings(
     secondaryTitle: 'Среща се редовно, след основните значения',
     rareTitle: 'Среща се рядко',
     drafted: 'Пример, написан за това значение, не от корпус',
+    readAs: 'в това значение се чете {r}',
+    writtenAs: 'в това значение се пише {k}',
   },
 )
 
@@ -515,6 +519,14 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                       })}
                     </p>
                   )}
+                {/* A sense JMdict gives only for another reading or spelling (この間 "meanwhile" is このかん). */}
+                {entry?.senseOnly?.[i] && (
+                  <p className="entry-pos sense-only">
+                    {entry.senseOnly[i].r && t('readAs', { r: entry.senseOnly[i].r!.join('・') })}
+                    {entry.senseOnly[i].r && entry.senseOnly[i].k && ' · '}
+                    {entry.senseOnly[i].k && t('writtenAs', { k: entry.senseOnly[i].k!.join('・') })}
+                  </p>
+                )}
                 {/* How soon a learner meets it. Its place is kept, so the glosses line up. */}
                 <span className="sense-rank" title={note ? t(`${note.rank}Title`) : undefined}>
                   {note && note.rank !== 'secondary' && t(note.rank)}

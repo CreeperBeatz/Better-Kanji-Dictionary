@@ -163,6 +163,8 @@ export interface WordEntry {
   related?: RelatedWord[]
   /** One per sense: how soon a learner meets it, its nuance, an example; missing from the device's copy. */
   senseNotes?: SenseNote[] | null
+  /** Senses JMdict keeps to other readings (r) or spellings (k) than the headword's, by sense index. */
+  senseOnly?: Record<string, { r?: string[]; k?: string[] }> | null
   /** The kanji of its spellings: which have a page, and which are old forms (學 -> 学); missing from the device's copy. */
   spelling?: { open: string[]; old: Record<string, string> }
 }

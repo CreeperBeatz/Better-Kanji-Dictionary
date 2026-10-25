@@ -20,6 +20,9 @@ kanji easy to mix up that no usage card tells apart. Both English and Bulgarian.
 data/word_sense_notes.json (pipeline/sense_notes.py merge): word id -> one note
 per sense, {rank: main|secondary|rare, nuance, ex: {ja (the word in 【】), en, src} | null}.
 
+data/sense_restrictions.json (pipeline/sense_restrictions.py export): senses JMdict
+gives only for some readings or spellings of a word, other than the headword's.
+
 data/word_lines_bg.json (pipeline/translate_bg.py merge): the Bulgarian of both,
 {lines: {English line: Bulgarian}, notes: {"word id|sense": {nuance, ex}}}. A text
 with no Bulgarian yet (fixed in English since) is shown in English.
@@ -56,6 +59,16 @@ def _kanji() -> dict:
 @cache
 def _notes() -> dict:
     return _load("word_sense_notes.json")
+
+
+@cache
+def _only() -> dict:
+    return _load("sense_restrictions.json")
+
+
+def sense_only(word_id: int) -> dict | None:
+    """Senses JMdict keeps to other readings or spellings: sense index -> {r: readings, k: spellings}."""
+    return _only().get(str(word_id))
 
 
 @cache

@@ -1212,6 +1212,7 @@ def word_entry(word_id: int) -> dict:
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
         "senseNotes": synonyms.sense_notes(word_id),
+        "senseOnly": synonyms.sense_only(word_id),
         "spelling": spelling_kanji(w),
     }
 
