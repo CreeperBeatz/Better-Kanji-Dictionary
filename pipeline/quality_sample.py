@@ -1,6 +1,6 @@
 """Measured quality: a random sample of each AI-made dataset, graded blind (Dani, 2026-10-24).
 
-    python pipeline/quality_sample.py prepare notes|kanji|synonyms [--n 300 --size 50]
+    python pipeline/quality_sample.py prepare notes|kanji|synonyms [--n 300 --size 50] [--round 2]
     # one Opus subagent per in/*.json, each reading pipeline/quality_sample_prompt.md
     python pipeline/quality_sample.py check [--batch notes-000]
     python pipeline/quality_sample.py report           # error rates with their 95% bounds
@@ -164,14 +164,15 @@ def _bg(rng: random.Random, n: int) -> list[dict]:
     return out
 
 
-def prepare(which: str, n: int, size: int) -> None:
+def prepare(which: str, n: int, size: int, rnd: int = 1) -> None:
+    """A later round (after more fixes) draws a new sample, batches <which>-r<round>-NNN, reported apart."""
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
-    rng = random.Random(f"{SEED}-{which}")
+    rng = random.Random(f"{SEED}-{which}" + (f"-r{rnd}" if rnd > 1 else ""))
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
              "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "final": _final, "bg": _bg}[which](rng, n)
     for b in range(0, len(items), size):
-        name = f"{which}-{b // size:03d}"
+        name = f"{which}-{f'r{rnd}-' if rnd > 1 else ''}{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
     print(f"{which}: {len(items)} items in {-(-len(items) // size)} batches")
 
@@ -229,9 +230,13 @@ def _upper(k: int, n: int, z: float = 1.96) -> float:
 
 
 def report() -> None:
-    for which in PARTS:
+    samples = {}  # "final" or "final-r2" -> its batches
+    for p in sorted(IN.glob("*.json")):
+        samples.setdefault(p.stem.rsplit("-", 1)[0], []).append(p)
+    for name, paths in sorted(samples.items(), key=lambda kv: (list(PARTS).index(kv[0].split("-")[0]), kv[0])):
+        which = name.split("-")[0]
         got = {}
-        for p in sorted(IN.glob(f"{which}-*.json")):
+        for p in paths:
             g, probs = grades(p.stem)
             if not probs:
                 got.update(g)
@@ -240,7 +245,7 @@ def report() -> None:
         n = len(got)
         major = [k for k, v in got.items() if "major" in v.values()]
         minor = [k for k, v in got.items() if "minor" in v.values() and k not in major]
-        print(f"\n{which}: {n} graded; wrong (any part major) {len(major)} = {len(major) / n:.1%} "
+        print(f"\n{name}: {n} graded; wrong (any part major) {len(major)} = {len(major) / n:.1%} "
               f"(95% at most {_upper(len(major), n):.1%}); minor only {len(minor)} = {len(minor) / n:.1%}")
         for part in PARTS[which]:
             c = Counter(v[part] for v in got.values() if part in v)
@@ -281,6 +286,7 @@ def main() -> None:
     p.add_argument("which", choices=list(PARTS))
     p.add_argument("--n", type=int, default=300)
     p.add_argument("--size", type=int, default=50)
+    p.add_argument("--round", type=int, default=1)
     p = sub.add_parser("check")
     p.add_argument("--batch")
     sub.add_parser("report")
@@ -289,7 +295,7 @@ def main() -> None:
     p.add_argument("--n", type=int, default=30)
     a = ap.parse_args()
     if a.cmd == "prepare":
-        prepare(a.which, a.n, a.size)
+        prepare(a.which, a.n, a.size, a.round)
     elif a.cmd == "check":
         check(a.batch)
     elif a.cmd == "report":

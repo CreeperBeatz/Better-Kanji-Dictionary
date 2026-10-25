@@ -1,6 +1,7 @@
 """Register claims in the word lines, checked once, and made to say what they compare (Dani, 2026-10-25).
 
     python pipeline/register_claims.py prepare [--size 200]   # data/drafts/register-claims/in/G-*.json
+    python pipeline/register_claims.py flagged 2              # G-X02.json: texts flagged in Bulgarian round 2
     # one Opus subagent per in/*.json, each reading pipeline/register_claims_prompt.md
     python pipeline/register_claims.py check [--batch G-000]
     python pipeline/word_synonyms.py export                   # applies the fixes to synonym lines
@@ -116,6 +117,43 @@ def prepare(size: int) -> None:
     print(f"{len(items)} texts ({dict(why)}) in {-(-len(items) // size)} batches -> {IN}")
 
 
+def flagged(rnd: int) -> None:
+    """The texts the translators of a later Bulgarian round (translate_bg.py prepare --missing) flagged:
+    these are texts already fixed once, so the batch sorts after the others and its fixes go on top."""
+    site = json.loads(ws.SITE.read_text(encoding="utf-8"))
+    notes = json.loads(NOTES.read_text(encoding="utf-8"))
+    items = []
+    for p in sorted((BG / "out").glob(f"[LN]{rnd}-*.json")):
+        src = {it["key"]: it for it in ws._read(BG / "in" / p.name)["items"]}
+        for k, v in (ws._read(p).get("items") or {}).items():
+            note = isinstance(v, dict) and v.get("enIssue")
+            if not (isinstance(note, str) and note.strip() and k in src):
+                continue
+            if p.stem.startswith("N"):
+                w, i = (int(x) for x in k.split("|"))
+                n = (notes.get(str(w)) or [])[i] if i < len(notes.get(str(w)) or []) else None
+                if n:
+                    items.append({"key": f"{w}|{i}|note", "where": "sense note", "text": n["nuance"],
+                                  "about": {**_brief(w), "sense": i + 1}, **({"ex": n["ex"]} if n.get("ex") else {}),
+                                  "flags": [note.strip()]})
+                continue
+            text, seen = src[k]["en"], set()
+            for w, rs in site.items():
+                for r in rs:
+                    if r[1] not in ("syn", "mix"):
+                        continue
+                    for about, against, a_sense, b_sense, f in ((r[2], int(w), r[3], r[0] + 1, 4), (int(w), r[2], r[0] + 1, r[3], 5)):
+                        if len(r) > f and r[f] == text and (about, against) not in seen:
+                            seen.add((about, against))
+                            items.append({"key": f"{about}|{against}|{len(items)}",
+                                          "where": "synonym line" if r[1] == "syn" else "mixup line", "text": text,
+                                          "about": {**_brief(about), "sense": a_sense},
+                                          "against": {**_brief(against), "sense": b_sense}, "flags": [note.strip()]})
+    name = f"G-X{rnd:02d}"
+    ws._dump(IN / f"{name}.json", {"batch": name, "items": items})
+    print(f"{len(items)} flagged texts -> {IN / name}.json")
+
+
 def verdicts(batch: str) -> tuple[dict, list[str]]:
     src = ws._read(IN / f"{batch}.json")
     path = OUT / f"{batch}.json"
@@ -168,9 +206,9 @@ def fixes() -> tuple[dict[tuple[int, int, str], str], dict[tuple[int, int], dict
                 continue
             a, b, _ = it["key"].split("|")
             if it["where"] == "sense note":
-                notes[(int(a), int(b))] = v
+                notes[(int(a), int(b))] = {**notes.get((int(a), int(b)), {}), **v}  # a later batch on top
             elif "text" in v:
-                lines[(int(a), int(b), it["text"])] = v["text"]
+                lines[(int(a), int(b), it["text"])] = v["text"]  # a later fix is keyed by the fixed text
     return lines, notes
 
 
@@ -197,9 +235,13 @@ def main() -> None:
     p.add_argument("--size", type=int, default=200)
     p = sub.add_parser("check")
     p.add_argument("--batch")
+    p = sub.add_parser("flagged")
+    p.add_argument("round", type=int)
     a = ap.parse_args()
     if a.cmd == "prepare":
         prepare(a.size)
+    elif a.cmd == "flagged":
+        flagged(a.round)
     else:
         check(a.batch)
 

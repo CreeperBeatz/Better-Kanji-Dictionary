@@ -951,7 +951,9 @@ def export(bar: float = 0.6) -> None:
         for r in rs:
             if r[1] in ("syn", "mix"):
                 for f, about, against in ((4, r[2], w), (5, w, r[2])):
-                    if len(r) > f and (about, against, r[f]) in register:
+                    for _ in range(3):  # a text fixed, flagged and fixed again
+                        if not (len(r) > f and (about, against, r[f]) in register):
+                            break
                         r[f] = register[(about, against, r[f])]
                         stats["register fixed"] += 1
     rows = {str(w): sorted(r, key=lambda r: (r[0], KIND_ORDER.index(r[1]))) for w, r in sorted(out.items())}
