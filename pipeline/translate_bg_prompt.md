@@ -50,6 +50,10 @@ the example; `ex` is null when the item has no `ex`.
   Not childish, not bureaucratic.
 - Keep every Japanese word, phrase and example in the text exactly as
   written (田中と申します, 〜した上で, 現代社会). Do not transliterate.
+- In the Bulgarian translation of an example, write Japanese names and
+  terms in Cyrillic after the Hepburn reading, as in канджи (never the
+  Polivanov дз/си style of кандзи): Токио, Шитамачи, йокозуна, Мандзю
+  only where Hepburn has dz. In notes and lines, Japanese stays in Japanese.
 - Do not address the reader; where you must, use the formal вие.
 - No Latin letters inside Bulgarian words.
 - Terms, always these:
