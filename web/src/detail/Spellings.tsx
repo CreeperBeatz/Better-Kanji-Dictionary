@@ -2,7 +2,8 @@
  * Every way to write a word, as a dictionary prints them beside the headword:
  * 古い, 旧い, 故い. The same on its page and on its search card. The headword
  * first; a spelling in old kanji (學校 for 学校) or seldom used says so. Its
- * reading is under the headword, so only other kana (キレイ) are here.
+ * reading is under the headword, so only other kana are here: a kana spelling
+ * (キレイ) or another reading (消耗 しょうこう). So the row has no label.
  * After them, other words that are a form of this one: its short form (ＣＭ
  * for コマーシャル) or older form (メーター for メートル), or the full or standard
  * word it is a form of. Each opens that word.
@@ -13,7 +14,6 @@ import { warmKanji, warmWord } from '../warm'
 
 const S = strings(
   {
-    spellings: 'Written',
     rare: 'rare',
     rareTitle: 'Seldom written so',
     oldKanji: 'old kanji',
@@ -27,7 +27,6 @@ const S = strings(
     openWord: 'Open {word}',
   },
   {
-    spellings: 'Пише се',
     rare: 'рядко',
     rareTitle: 'Рядко се пише така',
     oldKanji: 'стари канджи',
@@ -66,7 +65,6 @@ export function Spellings({
   const shown = [...forms.filter((f) => f.text === w.headword), ...forms.filter((f) => f.text !== w.headword)]
   return (
     <span className="entry-spellings">
-      <span className="entry-spellings-label">{t('spellings')}</span>
       <span className="entry-spelling-list">
         {shown.map((f) => {
           const tag = f.old ? 'old' : f.rare ? 'rare' : null

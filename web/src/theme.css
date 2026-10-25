@@ -4717,12 +4717,6 @@ button.usage-head:focus-visible .usage-spelling {
   margin: 10px 0 4px;
 }
 
-.entry-spellings-label {
-  flex: none;
-  font-size: calc(12px * var(--type));
-  color: var(--muted);
-}
-
 .entry-spelling-list {
   display: flex;
   flex-wrap: wrap;

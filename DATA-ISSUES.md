@@ -489,6 +489,22 @@ in this sense"); the 130 notes and lines under them were checked again
 (123 fixed). Open: the search index and the sense table still carry no
 restriction.
 
+### D-038 · Other readings shown as spellings, with no sign they are less used
+*Found 2026-10-25,* by Dani: 消耗 has しょうもう under the headword, then
+しょうこう in "Spellings" as if it were one more way to write the word.
+しょうこう is a second reading (the original one; しょうもう is the usual
+慣用読み). Spellings shows every kana form but the first, so a reading of
+another sound lands there. Nothing marks it as less used: JMdict gives
+しょうこう no tag and no priority, and "rare" is set only from re_inf tags.
+Scale (common or JLPT words): 3,717 words have a second reading of another
+sound; 2,941 of those readings have no tag and no priority while the first
+reading has one (本名 ほんめい, 村 そん, 中指 ちゅうし). In kana-only words
+(ストア, ストアー) the other kana are real spellings.
+Source: Spellings.tsx (all kana forms but the reading) and build_db's rare flag.
+**Status: partly fixed** (fix/other-readings). The row lost its "Written"
+label, on the word page and the search card: it holds every other form, a
+spelling or a reading. Open: nothing marks an untagged reading as less used.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
