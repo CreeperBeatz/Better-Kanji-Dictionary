@@ -64,7 +64,8 @@ export function Spellings({
   if (!forms.some((f) => f.text !== w.headword) && !others.length) return null
   const open = new Set(kanji?.open ?? [])
   const old = kanji?.old ?? {}
-  const shown = [...forms.filter((f) => f.text === w.headword), ...forms.filter((f) => f.text !== w.headword)]
+  // A search card has the headword just above, big: there only the others.
+  const shown = [...(kanji ? forms.filter((f) => f.text === w.headword) : []), ...forms.filter((f) => f.text !== w.headword)]
   return (
     <span className="entry-spellings">
       <span className="entry-spelling-list">

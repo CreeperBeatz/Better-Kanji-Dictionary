@@ -4723,13 +4723,14 @@ button.usage-head:focus-visible .usage-spelling {
   gap: 4px 16px;
 }
 
-/* On a search card: smaller, between the head and the senses. */
+/* On a search card: between the head and the senses, under the reading's
+   size (14px), so the headword (21px) and its reading still lead. */
 .word-card .entry-spellings {
-  margin: 4px 0 2px;
+  margin: 2px 0 2px;
 }
 
 .word-card .entry-spelling {
-  font-size: calc(15px * var(--type));
+  font-size: calc(12px * var(--type));
 }
 
 .entry-spelling {
