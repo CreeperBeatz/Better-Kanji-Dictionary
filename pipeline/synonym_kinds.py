@@ -1,6 +1,8 @@
 """The new kinds of word pairs, sorted once (Dani, 2026-10-25).
 
     python pipeline/synonym_kinds.py prepare [--size 110]   # data/drafts/synonym-kinds/in/K-*.json
+    python pipeline/synonym_kinds.py prepare --freed         # in/F-*.json: the pairs the old same-word rule hid
+    python pipeline/synonym_kinds.py prepare --spoken        # in/S-*.json: spoken forms (やっぱり / やはり)
     # one Opus subagent per in/*.json, each reading pipeline/synonym_kinds_prompt.md
     python pipeline/synonym_kinds.py check [--batch K-000]
     python pipeline/synonym_kinds.py report
@@ -20,6 +22,18 @@ Sorting what was removed (D-033) found pairs no kind held. Dani's boxes:
 Asked: every antonym the site shows (it may be a pair or a polite form now),
 and every pair a check or rule removed (it may fit one of the new boxes).
 Pairs Dani decided are left as they are.
+
+Freed (D-033, 2026-10-25): the old same-word rule tested the spelling and the
+reading apart, and dropped pairs before any agent saw them (お腹 / 腹, ご飯 /
+飯, 目前 / 目の前). The pairs it hid that share a gloss are asked once here,
+with `syn` as one more kind.
+
+Spoken (Dani, 2026-10-25): an emphatic or colloquial spoken form of the same
+word with its own entry (やっぱり / やはり, すっごい / 凄い, 大っきい / 大きい)
+fit no kind, so the passes said none and the site showed nothing: a box
+problem. Kind `spoken`, shown in the spellings row like short and older.
+Candidates: readings that differ by an added っ, ん or ー (voicing and long
+vowels folded), sharing a gloss, one spelling's kanji within the other's.
 """
 
 from __future__ import annotations
@@ -27,7 +41,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
+import unicodedata
+from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,10 +55,11 @@ import word_synonyms as ws  # noqa: E402
 
 DRAFTS = ROOT / "data" / "drafts" / "synonym-kinds"
 IN, OUT = DRAFTS / "in", DRAFTS / "out"
-KINDS = ("ant", "pair", "polite", "mix", "short", "older", "none")
-SENSED = ("ant", "pair", "polite", "mix")  # shown under a sense; short and older are word-wide
+KINDS = ("syn", "ant", "pair", "polite", "mix", "short", "older", "spoken", "none")  # syn: freed and variant pairs only
+OPEN = ("freed", "variant")  # pairs asked with every kind open, syn too
+SENSED = ("syn", "ant", "pair", "polite", "mix")  # shown under a sense; short and older are word-wide
 REGISTERS = ("plain", "polite", "honorific", "humble")
-LINE = 180
+LINE = {"syn": 160, "mix": 180}
 
 
 def _brief(wid: int, sense: int | None) -> dict:
@@ -55,6 +71,116 @@ def _decided() -> set[frozenset]:
     out = {frozenset((w, o)) for w, _, kind, o in synonym_recheck._decided() if kind == "ant"}
     out |= {frozenset((x, y)) for x, _, y, _ in ws.DECIDED_ANT}
     return out
+
+
+def _old_same_word(a: int, b: int) -> bool:
+    """The same-word rule before D-033: spelling and reading tested apart, inserted kana allowed."""
+    x, y = ws.scope()[a], ws.scope()[b]
+    for p, q in ((x, y), (y, x)):
+        for k in ("word", "reading"):
+            s, t = p[k], q[k]
+            if any(t == m + s for m in "おご御") or any(t == s + m for m in ("日", "に", "と", "的")):
+                return True
+            if any(s.endswith(e) and t == s[:-len(e)] + f for e, f in (("ずる", "じる"), ("す", "せる"), ("る", "りる"))):
+                return True
+            if any(t[i] in "がにのっ" and t[:i] + t[i + 1:] == s for i in range(1, len(t) - 1)):
+                return True
+    return False
+
+
+def prepare_freed(size: int) -> None:
+    """Pairs the old rule called one word and the new one does not, that share a gloss (either word's
+    candidates), not on the site and not judged before."""
+    IN.mkdir(parents=True, exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
+    words = ws.scope()
+    by = {"word": defaultdict(set), "reading": defaultdict(set)}
+    for w, x in words.items():
+        by["word"][x["word"]].add(w)
+        by["reading"][x["reading"]].add(w)
+    old = set()
+    for w, x in words.items():
+        for k in ("word", "reading"):
+            s = x[k]
+            forms = [m + s for m in "おご御"] + [s + m for m in ("日", "に", "と", "的")]
+            forms += [s[:-len(e)] + f for e, f in (("ずる", "じる"), ("す", "せる"), ("る", "りる")) if s.endswith(e)]
+            forms += [s[:i] + c + s[i:] for i in range(1, len(s)) for c in "がにのっ"]
+            for t in forms:
+                old |= {frozenset((w, o)) for o in by[k].get(t, ()) if o != w and _old_same_word(w, o)}
+    site = json.loads(ws.SITE.read_text(encoding="utf-8"))
+    shown = {frozenset((int(w), r[2])) for w, rs in site.items() for r in rs}
+    judged = {frozenset((int(k.split("|")[0]), int(k.split("|")[3]))) for k in synonym_removed.all_verdicts()}  # w|i|kind|o
+    judged |= {frozenset((int(k.split("|")[0]), int(k.split("|")[2])))  # w|i|o|n
+               for k, v in all_verdicts().items() if v["item"]["now"] != "freed"}
+    cands = {}
+    items = []
+    for pair in sorted(old, key=sorted):
+        a, b = sorted(pair)
+        if ws.same_word(a, b) or pair in shown or pair in judged or pair in _decided():
+            continue
+        for w in (a, b):
+            if w not in cands:
+                syn, ant = ws.candidates(w)
+                cands[w] = set(syn) | set(ant)
+        if b not in cands[a] and a not in cands[b]:
+            continue
+        items.append({"key": f"{a}||{b}|", "now": "freed", "came": "hidden by the old same-word rule",
+                      "word": _brief(a, None), "other": _brief(b, None)})
+    for n in range(0, len(items), size):
+        name = f"F-{n // size:03d}"
+        ws._dump(IN / f"{name}.json", {"batch": name, "items": items[n:n + size]})
+    print(f"{len(old)} pairs the old rule called one word; {len(items)} freed with a shared gloss -> {IN}/F-*")
+
+
+def _skeleton(reading: str) -> str:
+    """The reading with っ, ん and ー dropped, voicing marks folded and repeats merged: やっぱり and やはり
+    are both やはり, おっきい and おおきい both おきい."""
+    s = "".join(unicodedata.normalize("NFD", c)[0] for c in ws.hira(reading) if c not in "っんー")
+    return "".join(c for i, c in enumerate(s) if i == 0 or c != s[i - 1])
+
+
+def prepare_spoken(size: int) -> None:
+    """Pairs whose readings differ by an added っ, ん or ー, that share a gloss, and whose spellings agree
+    (one's kanji within the other's, or one in kana): every kind open, `spoken` among them. Pairs already
+    given a kind other than none are not asked again; pairs shown under a sense are, with what they show."""
+    IN.mkdir(parents=True, exist_ok=True)
+    OUT.mkdir(parents=True, exist_ok=True)
+    words = ws.scope()
+    groups = defaultdict(list)
+    for w, x in words.items():
+        groups[_skeleton(x["reading"])].append(w)
+    phrases = {w: {p for _, _, g in x["senses"][:ws.SENSES] for p in ws._phrases(g)} for w, x in words.items()}
+    kanji = {w: {c for c in x["word"] if "\u3400" <= c <= "\u9fff"} for w, x in words.items()}
+    marks = lambda r: tuple(ws.hira(r).count(c) for c in "っんー")
+    site = json.loads(ws.SITE.read_text(encoding="utf-8"))
+    shown = defaultdict(set)
+    for w, rs in site.items():
+        for r in rs:
+            shown[frozenset((int(w), r[2]))].add(r[1])
+    sorted_ = {frozenset((int(k.split("|")[0]), int(k.split("|")[2]))): v for k, v in all_verdicts().items()
+               if v["item"]["now"] != "variant"}
+    items = []
+    for g in groups.values():
+        for n, a in enumerate(sorted(g)):
+            for b in sorted(g)[n + 1:]:
+                pair = frozenset((a, b))
+                ra, rb = words[a]["reading"], words[b]["reading"]
+                if ws.hira(ra) == ws.hira(rb) or marks(ra) == marks(rb) or ws.same_word(a, b) or not phrases[a] & phrases[b]:
+                    continue
+                if kanji[a] and kanji[b] and not (kanji[a] <= kanji[b] or kanji[b] <= kanji[a]):
+                    continue
+                before = sorted_.get(pair)
+                if pair in _decided() or (before and before["kind"] != "none"):
+                    continue
+                items.append({"key": f"{a}||{b}|", "now": "variant", "came": "readings differ by っ, ん or ー",
+                              **({"shown": sorted(shown[pair])} if shown.get(pair) else {}),
+                              **({"reason": f"an earlier pass said none: {before['why']}"} if before else {}),
+                              "word": _brief(a, None), "other": _brief(b, None)})
+    for n in range(0, len(items), size):
+        name = f"S-{n // size:03d}"
+        ws._dump(IN / f"{name}.json", {"batch": name, "items": items[n:n + size]})
+    print(f"{len(items)} pairs ({sum('shown' in it for it in items)} shown today, {sum('reason' in it for it in items)} said none before)"
+          f" -> {IN}/S-*")
 
 
 def prepare(size: int) -> None:
@@ -120,6 +246,9 @@ def verdicts(batch: str) -> tuple[dict, list[str]]:
         if not isinstance(v.get("why"), str) or not v["why"].strip():
             need.append("why")
         kind = v["kind"]
+        if kind == "syn" and it["now"] not in OPEN:
+            probs.append(f"{batch}: {k}: syn only for {' and '.join(OPEN)} pairs")
+            continue
         if kind in SENSED:
             for side, f in (("word", "wordSense"), ("other", "otherSense")):
                 if not isinstance(v.get(f), int) or not 1 <= v[f] <= len(it[side]["senses"]):
@@ -129,11 +258,11 @@ def verdicts(batch: str) -> tuple[dict, list[str]]:
             if not isinstance(reg, dict) or reg.get("word") not in REGISTERS or reg.get("other") not in REGISTERS \
                     or reg["word"] == reg["other"]:
                 need.append(f"register {{word, other}}, two different of {', '.join(REGISTERS)}")
-        if kind == "mix":
+        if kind in LINE:
             for f in ("line", "reverse"):
-                if not isinstance(v.get(f), str) or not v[f].strip() or len(v[f]) > LINE:
-                    need.append(f"{f} (at most {LINE} characters)")
-        if kind in ("short", "older") and v.get("full") not in ("word", "other"):
+                if not isinstance(v.get(f), str) or not v[f].strip() or len(v[f]) > LINE[kind]:
+                    need.append(f"{f} (at most {LINE[kind]} characters)")
+        if kind in ("short", "older", "spoken") and v.get("full") not in ("word", "other"):
             need.append("full: which one is the full or standard form, word or other")
         if need:
             probs.append(f"{batch}: {k}: {kind} needs {', '.join(need)}")
@@ -174,12 +303,12 @@ def report() -> None:
     c = Counter((v["item"]["now"], v["kind"]) for v in got.values())
     for (now, kind), n in sorted(c.items()):
         print(f"{now:5} -> {kind:7} {n}")
-    for kind in ("pair", "polite", "mix", "short", "older"):
+    for kind in ("syn", "pair", "polite", "mix", "short", "older", "spoken"):
         rows = [v for v in got.values() if v["kind"] == kind]
         print(f"\n{kind}: {len(rows)}")
         for v in rows[:40]:
             it = v["item"]
-            extra = f" {v['register']}" if kind == "polite" else f" full={v['full']}" if kind in ("short", "older") else ""
+            extra = f" {v['register']}" if kind == "polite" else f" full={v['full']}" if kind in ("short", "older", "spoken") else ""
             print(f"  {it['word']['word']} / {it['other']['word']} (was {it['now']}){extra}: {v['why'][:90]}")
 
 
@@ -189,11 +318,13 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--size", type=int, default=110)
+    p.add_argument("--freed", action="store_true")
+    p.add_argument("--spoken", action="store_true")
     p = sub.add_parser("check")
     p.add_argument("--batch")
     sub.add_parser("report")
     a = ap.parse_args()
-    {"prepare": lambda: prepare(a.size), "check": lambda: check(a.batch), "report": report}[a.cmd]()
+    {"prepare": lambda: (prepare_freed if a.freed else prepare_spoken if a.spoken else prepare)(a.size), "check": lambda: check(a.batch), "report": report}[a.cmd]()
 
 
 if __name__ == "__main__":

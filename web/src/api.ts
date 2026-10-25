@@ -182,14 +182,15 @@ export interface SenseNote {
 
 /** A word close to one sense of another, and how (server/synonyms.py). */
 export interface RelatedWord {
-  /** Which of the word's senses, from 0; -1 for a short or older form of the whole word. */
+  /** Which of the word's senses, from 0; -1 for a short, older or spoken form of the whole word. */
   sense: number
   /**
    * ≈ a synonym, ↔ an opposite, ! easy to mix up, a pair (祖父 / 祖母), a polite
    * counterpart (仰る / 言う); of the whole word: its short form (short), what it is
-   * the short form of (shortOf), its older form (older), what it is an older form of.
+   * the short form of (shortOf), its older form (older), what it is an older form of,
+   * its spoken form (spoken: やっぱり on やはり), what it is a spoken form of.
    */
-  kind: 'syn' | 'ant' | 'mix' | 'pair' | 'polite' | 'short' | 'shortOf' | 'older' | 'olderOf'
+  kind: 'syn' | 'ant' | 'mix' | 'pair' | 'polite' | 'short' | 'shortOf' | 'older' | 'olderOf' | 'spoken' | 'spokenOf'
   word: Word
   /** The other word's sense that matches, from 1; null for a form of the whole word. */
   otherSense: number | null

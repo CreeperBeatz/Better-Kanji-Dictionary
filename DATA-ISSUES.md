@@ -427,10 +427,28 @@ scope (近代 / 現代, 美術 / 芸術, 消極的 / ネガティブ, 割る / �
 小, 級 / 段, 並・上・特上).
 Source: the rules in word_synonyms (filter, prompts) and the Opus checks.
 **Status: partly fixed** (feat/word-synonyms). The 46 are back on both words
-(export reads the "keep" verdicts). Open: same_word must test spelling and
-reading together before any new run (a first try that did so also let
-through 金曜 / 金曜日 and 定期 / 定期的, whose tails read び and てき); the 15
-box cases wait for Dani.
+(export reads the "keep" verdicts). The 15 box cases became kinds (pair,
+polite, mix by meaning, short, older; synonym_kinds.py).
+*2026-10-25 (fix/same-word):* same_word now needs the spelling and the
+reading to change the same way: お/ご/御 with its reading on a kanji base,
+に・と・的 (てき) and 曜 + 日 (び) tails, ずる/じる, す/せる, る/りる on both;
+inserted kana (万一 / 万が一, but 兎角 / 兎に角) go to the agents. The old
+rule also hid candidates before any agent saw them: of the 2,897 pairs it
+called one word, 60 share a gloss and had never been judged. Sorted once
+(synonym_kinds.py F-*): 5 syn, 5 mix, 6 short, 1 older, 43 none; blind
+grade of all 60 (quality_sample "freed"): 3 major, 3 minor. Fixed: 締め切り
+/ 締め切り日 is no short form, and two lines; the other 2 majors are the
+open box below. An emphatic spoken form (思いっきり, 大っきい, 矢っ張り,
+すっごい, 余っ程, 何にも) fit no kind, so it showed nothing: a box issue, not
+a knowledge one (every pass knew the answer). Dani: new kind `spoken`, in
+the spellings row like short and older. Found by code (readings that differ
+by an added っ, ん or ー, a shared gloss, one spelling's kanji within the
+other's: 39 pairs, S-000), sorted with every kind open: 8 spoken (きちっと /
+きちんと moved there from synonyms), 1 short, 2 older, 6 syn (2 shown
+already, kept), 1 mix (フラグ / フラッグ), 21 none. Blind grade of all 39
+(quality_sample "spoken"): 1 major, 摂氏 / セ氏 left out (two current
+spellings of one name, no form kind fits): now synonyms, the line saying
+so. **Status: fixed.**
 
 ### D-034 · Word lines that call a Sino-Japanese word "native"
 *Found 2026-10-25,* by the second look at the mirrored synonym lines: the

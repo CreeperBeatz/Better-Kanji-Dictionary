@@ -10,7 +10,8 @@ polite (one is the honorific, humble or polite counterpart of the other: the
 line and own line are the two registers). The own line says the same of the
 word itself, beside it. Short and older forms are of the whole word (sense -1,
 no other sense): short / shortOf (ＣＭ is the short form of コマーシャル),
-older / olderOf (メーター is an older form of メートル).
+older / olderOf (メーター is an older form of メートル), spoken / spokenOf
+(やっぱり is a spoken form of やはり).
 
 data/kanji_nuances.json (pipeline/kanji_nuance.py merge): `similar`, keyed
 "kanji|meaning id|other", one line on how the other kanji differs in that

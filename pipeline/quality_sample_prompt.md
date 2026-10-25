@@ -107,6 +107,28 @@ Parts: `kind` (is this kind, with its register / full / senses, right?) and
 removed, a short form that is a different word, a wrong register) is
 `major`.
 
+## dataset "freed"
+
+Graded as "kinds", for word pairs that share an English gloss and that the
+dictionary had never shown. Two more kinds:
+- `syn`: a synonym: a learner can use `other` in place of the word, in this
+  sense, in some common sentences, with nearly the same meaning; `line`
+  (how `other` differs) and `reverse` (how the word differs) are graded
+  together as the part `line`.
+- `left out: no kind fits`: the dictionary shows nothing for the pair. It is
+  `major` if they are real synonyms, opposites, a mix-up a learner needs, or
+  a short or older form of one word.
+
+## dataset "spoken"
+
+Graded as "freed", for word pairs whose readings differ by an added っ, ん
+or ー (やっぱり / やはり). One more kind:
+- `spoken`: one is an emphatic or colloquial spoken form of the other, the
+  same word with its own entry (やっぱり / やはり, 大っきい / 大きい); `full`
+  says which is the standard form. Shown beside the spellings, not under a
+  sense. A word that has become its own word with its own use (一人っ子) as
+  `spoken` is `major`.
+
 ## dataset "final"
 
 Graded as "synonyms", with two more kinds, as defined under "kinds":
