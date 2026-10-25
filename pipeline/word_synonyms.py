@@ -308,27 +308,31 @@ def _jmdict_refs() -> dict[int, list[tuple[int, str, int | None, str]]]:
 
 
 WIKTIONARY_CANDIDATES = False  # prepare --wiktionary
-_POLITE = ("お", "ご", "御")
-_TAILS = ("日", "に", "と", "的")  # 金曜/金曜日, 余り/余りに, 必然/必然的
+# What may be added to a word, with what it adds to the reading. 日 only after 曜: 夏日 and 西日 are other words.
+_POLITE = {"お": ("お",), "ご": ("ご",), "御": ("お", "ご", "おん", "み")}
+_TAILS = {"に": ("に",), "と": ("と",), "的": ("てき",)}  # 余り/余りに, 必然/必然的
+_ENDS = (("ずる", "じる"), ("す", "せる"), ("る", "りる"))  # 論ずる/論じる, 済ます/済ませる, 足る/足りる
 
 
 def same_word(a: int, b: int) -> bool:
     """A short or polite form of the same word, which is no synonym (Dani, 2026-10-22):
-    風呂/お風呂, 見舞い/お見舞い, 金曜/金曜日, 余り/余りに, 論ずる/論じる, 済ます/済ませる."""
+    風呂/お風呂, 見舞い/お見舞い, 金曜/金曜日, 余り/余りに, 論ずる/論じる, 済ます/済ませる.
+    The spelling and the reading must change the same way (D-033): お腹 おなか is not お + 腹 はら, and
+    散る ちる is not in 落ちる おちる. The polite prefix needs a base with kanji (おおい is not お + おい).
+    Inserted kana (万一/万が一, 矢張り/矢っ張り) are left to the agents: 兎角/兎に角 and 幕内/幕の内 look the
+    same and are other words."""
     x, y = scope()[a], scope()[b]
     for p, q in ((x, y), (y, x)):
-        for k in ("word", "reading"):
-            s, t = p[k], q[k]
-            if any(t == m + s for m in _POLITE) or any(t == s + m for m in _TAILS):
-                return True
-            if s.endswith("ずる") and t == s[:-2] + "じる":  # 論ずる/論じる
-                return True
-            if s.endswith("す") and t == s[:-1] + "せる":  # 済ます/済ませる, 任す/任せる
-                return True
-            if s.endswith("る") and t == s[:-1] + "りる":  # 足る/足りる
-                return True
-            if any(t[i] in "がにのっ" and t[:i] + t[i + 1:] == s for i in range(1, len(t) - 1)):  # 万一/万が一, 役立つ/役に立つ, 矢張り/矢っ張り
-                return True
+        sw, sr, tw, tr = p["word"], p["reading"], q["word"], q["reading"]
+        kanji = any("\u3400" <= c <= "\u9fff" or c == "々" for c in sw)
+        if kanji and any(tw == m + sw and any(tr == r + sr for r in rs) for m, rs in _POLITE.items()):
+            return True
+        if any(tw == sw + m and any(tr == sr + r for r in rs) for m, rs in _TAILS.items()):
+            return True
+        if sw.endswith("曜") and tw == sw + "日" and tr == sr + "び":  # 金曜/金曜日
+            return True
+        if any(sw.endswith(e) and sr.endswith(e) and tw == sw[:-len(e)] + f and tr == sr[:-len(e)] + f for e, f in _ENDS):
+            return True
     return False
 
 
@@ -858,8 +862,15 @@ def export(bar: float = 0.6) -> None:
     out = defaultdict(list, {w: rs for w, rs in out.items() if rs})
     # Pairs removed wrongly (pipeline/synonym_removed.py, "keep"): back on both words, with their lines.
     import synonym_removed
+    removed = synonym_removed.all_verdicts()
+    # Pairs the old same-word rule dropped from the drafts were judged there one by one (D-033): the
+    # rule is stricter now, and their verdict decides, not the drafts.
+    ruled = {frozenset((int(k.split("|")[0]), int(k.split("|")[3]))) for k, v in removed.items()
+             if v["item"]["removedBy"] == "rule: same word"}
+    for w in out:
+        out[w] = [r for r in out[w] if r[1] not in ("syn", "ant") or frozenset((w, r[2])) not in ruled]
     at = {(w, r[0], r[2]) for w, rs in out.items() for r in rs}
-    for k, v in synonym_removed.all_verdicts().items():
+    for k, v in removed.items():
         if v["verdict"] != "keep":
             continue
         w, _, kind, o = k.split("|")
@@ -872,8 +883,8 @@ def export(bar: float = 0.6) -> None:
         at |= {(w, i, o), (o, n - 1, w)}
         stats[f"{kind} kept from removed"] += 1
     # Dani's kinds (pipeline/synonym_kinds.py): an opposite may now be a pair or a polite
-    # form, a removed pair may fit a new box. Short and older forms are of the whole word
-    # (sense -1), shown in its spellings row. Rows: pair [i, pair, o, n, None]; polite
+    # form, a removed pair may fit a new box, a pair the old same-word rule hid may be a synonym.
+    # Short and older forms are of the whole word (sense -1), shown in its spellings row. Rows: pair [i, pair, o, n, None]; polite
     # [.., other's register, own register]; mix by meaning [.., line, own line, "meaning"].
     # One verdict per two words: an opposite shown under several senses (上 / 下) keeps all
     # of its rows, which change kind together; the verdict's senses add a row if new.
@@ -904,6 +915,8 @@ def export(bar: float = 0.6) -> None:
                 rows = [i, kind, o, n, theirs, mine], [n - 1, kind, w, i + 1, mine, theirs]
             elif kind == "mix":
                 rows = [i, kind, o, n, v["line"], v["reverse"], "meaning"], [n - 1, kind, w, i + 1, v["reverse"], v["line"], "meaning"]
+            elif kind == "syn":  # a freed pair (D-033); own lines come from the other row below
+                rows = [i, kind, o, n, v["line"]], [n - 1, kind, w, i + 1, v["reverse"]]
             else:
                 rows = [i, kind, o, n, None], [n - 1, kind, w, i + 1, None]
             for a, row in zip((w, o), rows):  # each side apart: before mirroring, a row may be on one only

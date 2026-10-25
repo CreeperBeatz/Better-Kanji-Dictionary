@@ -12,13 +12,34 @@ Japanese. Do not write code to judge.
 ## Input
 
 Each item: `key`, `now` (`ant`: the site shows it as an opposite today;
-`none`: it was removed), `came` (where it comes from), sometimes a `reason`
+`none`: it was removed; `freed`: never judged, see below), `came` (where it comes from), sometimes a `reason`
 (why it was removed, and what a later check said), and `word` and `other`,
 each with its reading, JLPT level, all its JMdict `senses`, and the `sense`
 the pair was for when known.
 
 Synonyms are not asked here: a pair removed as "not a synonym" stays
 removed unless it fits one of the kinds below.
+
+Except `freed` pairs (batches F-*). An old code rule called them one word,
+because the spelling or the reading alone looked like a polite, short or
+other form of the other (お腹 / 腹 by spelling, 散る / 落ちる by reading), so
+no one has judged them. They share an English gloss. For them `syn` is one
+more kind, and every kind below is open. Many are noise from the rule (お金
+おかね / 金 きん "gold", 生徒 / 生): `none`. A real variant of the same word
+(仕方ない / 仕方がない, 大っきい / 大きい, 追っ手 / 追手) is `short` or
+`older` where that fits, else `none`.
+
+- `syn`: a learner can use `other` in place of the word, in this sense, in
+  some common sentences, with nearly the same meaning: お腹 / 腹, ご飯 / 飯,
+  目前 / 目の前. Not a broader or narrower word, not a word of the same kind,
+  not a related word, not another form of the same word. Give `line` (on the
+  word's page: how `other` differs) and `reverse` (on `other`'s page: how the
+  word differs). Simple technical English, short sentences, one fact each,
+  at most about 120 characters, an example in Japanese where it helps. Not
+  "similar to" or "a synonym of"; do not make either word the subject. The
+  two lines must agree. A register label true only next to the other word
+  says what it compares: "More formal than 飯." Do not call a word built
+  from on'yomi "native".
 
 ## The kinds
 
@@ -54,7 +75,7 @@ removed unless it fits one of the kinds below.
   opposite shown today that is not a real opposite, pair or polite form
   goes.
 
-For `ant`, `pair`, `polite` and `mix`, give `wordSense` and `otherSense`:
+For `syn`, `ant`, `pair`, `polite` and `mix`, give `wordSense` and `otherSense`:
 the sense numbers the pair is for (keep the given `sense` unless it is
 wrong). `short` and `older` are about the whole word: no senses.
 
@@ -62,6 +83,7 @@ wrong). `short` and `older` are about the whole word: no senses.
 
 ```json
 {"batch": "<BATCH>", "items": {
+  "<key>": {"kind": "syn", "wordSense": 1, "otherSense": 1, "line": "...", "reverse": "...", "why": "both 'belly' in speech"},
   "<key>": {"kind": "ant", "wordSense": 1, "otherSense": 1, "why": "plain opposites"},
   "<key>": {"kind": "pair", "wordSense": 1, "otherSense": 1, "why": "grandfather and grandmother"},
   "<key>": {"kind": "polite", "wordSense": 1, "otherSense": 1, "register": {"word": "honorific", "other": "plain"}, "why": "honorific of 言う"},
