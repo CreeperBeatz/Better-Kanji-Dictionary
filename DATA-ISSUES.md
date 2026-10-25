@@ -438,9 +438,17 @@ called one word, 60 share a gloss and had never been judged. Sorted once
 (synonym_kinds.py F-*): 5 syn, 5 mix, 6 short, 1 older, 43 none; blind
 grade of all 60 (quality_sample "freed"): 3 major, 3 minor. Fixed: 締め切り
 / 締め切り日 is no short form, and two lines; the other 2 majors are the
-open box below. Open: an emphatic spoken form
-(思いっきり, 大っきい, 矢っ張り, すっごい, 余っ程, 何にも) fits no kind, so
-it shows nothing (a box issue, for Dani).
+open box below. An emphatic spoken form (思いっきり, 大っきい, 矢っ張り,
+すっごい, 余っ程, 何にも) fit no kind, so it showed nothing: a box issue, not
+a knowledge one (every pass knew the answer). Dani: new kind `spoken`, in
+the spellings row like short and older. Found by code (readings that differ
+by an added っ, ん or ー, a shared gloss, one spelling's kanji within the
+other's: 39 pairs, S-000), sorted with every kind open: 8 spoken (きちっと /
+きちんと moved there from synonyms), 1 short, 2 older, 6 syn (2 shown
+already, kept), 1 mix (フラグ / フラッグ), 21 none. Blind grade of all 39
+(quality_sample "spoken"): 1 major, 摂氏 / セ氏 left out (two current
+spellings of one name, no form kind fits): now synonyms, the line saying
+so. **Status: fixed.**
 
 ### D-034 · Word lines that call a Sino-Japanese word "native"
 *Found 2026-10-25,* by the second look at the mirrored synonym lines: the
