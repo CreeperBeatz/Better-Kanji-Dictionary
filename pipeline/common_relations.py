@@ -178,9 +178,12 @@ def verdicts(batch: str) -> tuple[dict[int, list[dict]], list[str]]:
                 if not isinstance(it.get("sense"), int) or not 1 <= it["sense"] <= len(e["senses"]):
                     need.append(f"sense (1 to {len(e['senses'])})")
                 senses = ws.senses_of(other)
+                listed = " | ".join(f"{s[0]}. {s[3][:60]}" for s in senses[:12])
                 if not isinstance(it.get("otherSense"), int) or not 1 <= it["otherSense"] <= len(senses):
-                    need.append(f"otherSense, the sense of {o['word']} {o['reading']} (id {other}) that matches: "
-                                + " | ".join(f"{s[0]}. {s[3][:60]}" for s in senses[:12]))
+                    need.append(f"otherSense, the sense of {o['word']} {o['reading']} (id {other}) that matches: {listed}")
+                elif "id" not in it and len(senses) > 1 and it.get("checked") is not True:
+                    # An own word's senses were never shown: its otherSense was a guess (2026-10-25).
+                    need.append(f'"checked": true once otherSense is the right one of {o["word"]} {o["reading"]}: {listed}')
             if kind in LINE:
                 for f in ("line", "reverse"):
                     if not isinstance(it.get(f), str) or not it[f].strip() or len(it[f]) > LINE[kind]:

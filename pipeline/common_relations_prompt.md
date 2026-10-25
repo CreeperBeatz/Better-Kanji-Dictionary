@@ -70,8 +70,8 @@ ones) usually get nothing. At most 5 synonyms and 3 opposites a sense.
 offered (a synonym, an opposite, the full form of a short word: 安保 /
 安全保障) may be added with `word` (usual written form) and `reading`
 (hiragana) instead of `id`. Only common modern words. The checker tells you if the
-word is not in the dictionary's list, and shows its senses so you can give
-`otherSense`.
+word is not in the dictionary's list, and shows its senses: pick the
+right `otherSense` from them and add `"checked": true`.
 
 ## The lines
 
