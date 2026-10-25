@@ -129,6 +129,16 @@ or ー (やっぱり / やはり). One more kind:
   sense. A word that has become its own word with its own use (一人っ子) as
   `spoken` is `major`.
 
+## dataset "common"
+
+Graded as "spoken", for common words: every kind above, `syn` and `mix`
+with `line` (on the word's page, about `other`) and `reverse` (on
+`other`'s page, about the word), graded together as the part `line`. A
+`mix` is read the same or shares one English word. A line that labels a
+register true only beside the other word without naming it ("Formal."
+where only "more formal than X" holds), or that claims a word's origin
+wrongly, is at least `minor`; `major` if it misleads.
+
 ## dataset "final"
 
 Graded as "synonyms", with two more kinds, as defined under "kinds":

@@ -929,6 +929,16 @@ def export(bar: float = 0.6) -> None:
                 if (row[0], row[2]) not in {(r[0], r[2]) for r in out[a]}:
                     out[a].append(row)
         stats[f"kinds: {v['item']['now']} -> {kind}"] += 1
+    # The common words outside JLPT (pipeline/common_relations.py): final rows from one pass, both ways;
+    # a pair the site shows already keeps what it has.
+    import common_relations
+    for w, here, o, back in common_relations.rows():
+        if any(r[2] == o for r in out[w]) or any(r[2] == w for r in out[o]):
+            stats["common: shown already"] += 1
+            continue
+        out[w].append(here)
+        out[o].append(back)
+        stats[f"common: {here[1]}"] += 1
     fwd = {(w, r[0], r[2], r[3] - 1): r[4] for w, rs in out.items() for r in rs if r[1] == "syn"}
     drafted = _read(SELF)["word"] if SELF.exists() else {}
     for w, rs in out.items():

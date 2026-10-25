@@ -45,6 +45,8 @@ PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": (
          "freed": ("kind", "line"),
          # Every pair the spoken-form discovery asked (S-*), the ones left out too.
          "spoken": ("kind", "line"),
+         # The common words outside JLPT (pipeline/common_relations.py), what the site would show.
+         "common": ("kind", "line"),
          # The rows the site shows once every fix is in (2026-10-25): what ships, measured again.
          "final": ("pair", "line"),
          # The Bulgarian of the word lines and sense notes (pipeline/translate_bg.py), against the English.
@@ -159,6 +161,23 @@ def _spoken(rng: random.Random, n: int) -> list[dict]:
     return _kinds(rng, n, "variant")
 
 
+def _common(rng: random.Random, n: int) -> list[dict]:
+    import common_relations
+    out = []
+    for w, items in sorted(common_relations.all_verdicts().items()):
+        for it in items:
+            if it["sure"] < common_relations.SURE:
+                continue
+            o = it["other"]
+            out.append({"key": f"{w}|{it.get('sense') or ''}|{it['kind']}|{o}", "kind": it["kind"],
+                        "word": {**_word(w), **({"sense": it["sense"]} if it.get("sense") else {})},
+                        "other": {**_word(o), **({"sense": it["otherSense"]} if it.get("otherSense") else {})},
+                        **({"register": it["register"]} if "register" in it else {}),
+                        **({"full": it["full"]} if "full" in it else {}),
+                        **({"line": it["line"], "reverse": it["reverse"]} if it["kind"] in ("syn", "mix") else {})})
+    return rng.sample(out, min(n, len(out)))
+
+
 def _bg(rng: random.Random, n: int) -> list[dict]:
     """Half lines, half sense notes, from data/word_lines_bg.json, each beside its English."""
     bg = json.loads((DATA / "word_lines_bg.json").read_text(encoding="utf-8"))
@@ -183,7 +202,7 @@ def prepare(which: str, n: int, size: int, rnd: int = 1) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}" + (f"-r{rnd}" if rnd > 1 else ""))
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
-             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "spoken": _spoken, "final": _final, "bg": _bg}[which](rng, n)
+             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "spoken": _spoken, "common": _common, "final": _final, "bg": _bg}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{f'r{rnd}-' if rnd > 1 else ''}{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
