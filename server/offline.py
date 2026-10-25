@@ -61,7 +61,8 @@ from .db import DB_PATH
 # 4: no radicals (the radical picker is gone).
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
 # 6: the kanji pages (pages.json); each file's hash in the manifest.
-FORMAT = 6
+# 7: each word form says if it is seldom (a 4th field), 消耗's しょうこう.
+FORMAT = 7
 # Bump when a kanji page's shape changes (search.kanji_page): rebuilds pages.json alone.
 # 2: each mix-up's kanji with its meaning on that reading.
 # 3: up to 26 words a reading on each meaning, the rest after the key words.
@@ -388,8 +389,16 @@ def _whole(conn: sqlite3.Connection) -> dict[str, bytes]:
             pos_mask[i] |= _pos_mask(r[1])
 
     forms: dict[int, list] = {}
-    for r in conn.execute("SELECT word_id, text, kana, rare FROM word_form ORDER BY word_id, kana, ord"):
+    pri: dict[int, list[bool]] = {}
+    for r in conn.execute("SELECT word_id, text, kana, rare, pri FROM word_form ORDER BY word_id, kana, ord"):
         forms.setdefault(r[0], []).append([r[1], r[2], r[3]])
+        pri.setdefault(r[0], []).append(bool(r[4]))
+    from .routes.search import seldom_forms
+
+    for wid, fs in forms.items():
+        marks = seldom_forms([{"kana": f[1], "rare": f[2]} for f in fs], pri[wid])
+        for f, s in zip(fs, marks):
+            f.append(int(s))
 
     pairs: dict[int, list] = {}
     for r in conn.execute("SELECT word_id, other_id FROM verb_pair ORDER BY word_id, rank"):

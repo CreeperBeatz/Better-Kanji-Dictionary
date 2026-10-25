@@ -33,6 +33,14 @@ from .auth import require_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
+
+def seldom_forms(forms: list[dict], pri: list[bool]) -> list[bool]:
+    """A form JMdict gives no priority (ichi1, news1, nf..) while another of the
+    same kind has one: 消耗's しょうこう beside しょうもう. JMdict tags only some
+    such forms rare (rK, sK..), so this is what greys the rest (D-038)."""
+    common = {k for f, p in zip(forms, pri) if p for k in [f["kana"]]}
+    return [not p and not f["rare"] and f["kana"] in common for f, p in zip(forms, pri)]
+
 # Words in Latin or Cyrillic letters. Japanese among two or more of them is a
 # question about it -- "difference between 暑い and 熱い" -- not a word to look
 # up: the dictionary steps aside for Search by meaning, rather than answering
@@ -91,13 +99,19 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
                     "glossBg": bg_overlay.gloss(r["word_id"], r["ord"], r["gloss_bg"]),
                 }
             )
+    pri: dict[int, list[bool]] = {}
     for r in query(
-        f"SELECT word_id, text, kana, rare FROM word_form WHERE word_id IN ({ph}) ORDER BY word_id, kana, ord",
+        f"SELECT word_id, text, kana, rare, pri FROM word_form WHERE word_id IN ({ph}) ORDER BY word_id, kana, ord",
         tuple(ids),
     ):
         w = words.get(r["word_id"])
         if w:
             w["forms"].append({"text": r["text"], "kana": bool(r["kana"]), "rare": bool(r["rare"])})
+            pri.setdefault(r["word_id"], []).append(bool(r["pri"]))
+    for wid, w in words.items():
+        for f, s in zip(w["forms"], seldom_forms(w["forms"], pri.get(wid, []))):
+            if s:
+                f["seldom"] = True
     # A spelling in old kanji (學校): with its old kanji made new, another of the word's spellings.
     old = _old_kanji()
     for w in words.values():

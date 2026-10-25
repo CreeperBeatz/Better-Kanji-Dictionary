@@ -4708,8 +4708,8 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
-/* Every way to write the word, at the top of its entry: the headword first
-   and brightest, the seldom ones dimmer, each tagged where it is old or rare. */
+/* Every way to write or read the word, at the top of its entry: the headword
+   first, the seldom ones dimmer, each tagged where it is old or rare. */
 .entry-spellings {
   display: flex;
   align-items: baseline;
@@ -4717,8 +4717,15 @@ button.usage-head:focus-visible .usage-spelling {
   margin: 10px 0 4px;
 }
 
+/* On the word's page two lines, "Written" and "Read as", their forms lined
+   up after the labels. */
+.entry-spellings[data-page] {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+}
+
 .entry-spellings-label {
-  flex: none;
   font-size: calc(12px * var(--type));
   color: var(--muted);
 }
@@ -4729,13 +4736,14 @@ button.usage-head:focus-visible .usage-spelling {
   gap: 4px 16px;
 }
 
-/* On a search card: smaller, between the head and the senses. */
+/* On a search card: between the head and the senses, under the reading's
+   size (14px), so the headword (21px) and its reading still lead. */
 .word-card .entry-spellings {
-  margin: 4px 0 2px;
+  margin: 2px 0 2px;
 }
 
 .word-card .entry-spelling {
-  font-size: calc(15px * var(--type));
+  font-size: calc(12px * var(--type));
 }
 
 .entry-spelling {
@@ -4744,11 +4752,13 @@ button.usage-head:focus-visible .usage-spelling {
   gap: 5px;
   font-family: var(--mincho);
   font-size: calc(18px * var(--type));
-  color: var(--paper-dim);
+  color: var(--paper);
 }
 
-.entry-spelling[data-main] {
-  color: var(--paper);
+/* White for the common forms, grey for one JMdict leaves unmarked beside a
+   common one (消耗's しょうこう), greyer for one it tags rare. */
+.entry-spelling[data-seldom] {
+  color: var(--paper-dim);
 }
 
 .entry-spelling[data-rare] {

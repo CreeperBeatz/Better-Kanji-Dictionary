@@ -57,7 +57,7 @@ export interface KanjiPack {
 /** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt, verb pair ids */
 export type RawWord = [
   number, string, string, number, number | null, string | null,
-  [string | null, string | null, string, (string | null)?][], [string, number, number][], (number | null)?, number[]?,
+  [string | null, string | null, string, (string | null)?][], [string, number, number, number?][], (number | null)?, number[]?,
 ]
 
 /** Where the entries and stroke paths are kept: IndexedDB in the app, memory in tests. */
@@ -86,7 +86,7 @@ function toWord(r: RawWord): Word {
       gloss,
       glossBg: glossBg ?? null,
     })),
-    forms: r[7].map(([text, kana, rare]) => ({ text, kana: !!kana, rare: !!rare })),
+    forms: r[7].map(([text, kana, rare, seldom]) => ({ text, kana: !!kana, rare: !!rare, ...(seldom ? { seldom: true } : {}) })),
     // Absent from rows stored before words carried a level.
     jlpt: r[8] ?? null,
   }
