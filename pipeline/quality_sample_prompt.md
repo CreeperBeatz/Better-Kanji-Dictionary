@@ -107,6 +107,18 @@ Parts: `kind` (is this kind, with its register / full / senses, right?) and
 removed, a short form that is a different word, a wrong register) is
 `major`.
 
+## dataset "freed"
+
+Graded as "kinds", for word pairs that share an English gloss and that the
+dictionary had never shown. Two more kinds:
+- `syn`: a synonym: a learner can use `other` in place of the word, in this
+  sense, in some common sentences, with nearly the same meaning; `line`
+  (how `other` differs) and `reverse` (how the word differs) are graded
+  together as the part `line`.
+- `left out: no kind fits`: the dictionary shows nothing for the pair. It is
+  `major` if they are real synonyms, opposites, a mix-up a learner needs, or
+  a short or older form of one word.
+
 ## dataset "final"
 
 Graded as "synonyms", with two more kinds, as defined under "kinds":

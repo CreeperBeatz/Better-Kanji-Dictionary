@@ -427,10 +427,20 @@ scope (近代 / 現代, 美術 / 芸術, 消極的 / ネガティブ, 割る / �
 小, 級 / 段, 並・上・特上).
 Source: the rules in word_synonyms (filter, prompts) and the Opus checks.
 **Status: partly fixed** (feat/word-synonyms). The 46 are back on both words
-(export reads the "keep" verdicts). Open: same_word must test spelling and
-reading together before any new run (a first try that did so also let
-through 金曜 / 金曜日 and 定期 / 定期的, whose tails read び and てき); the 15
-box cases wait for Dani.
+(export reads the "keep" verdicts). The 15 box cases became kinds (pair,
+polite, mix by meaning, short, older; synonym_kinds.py).
+*2026-10-25 (fix/same-word):* same_word now needs the spelling and the
+reading to change the same way: お/ご/御 with its reading on a kanji base,
+に・と・的 (てき) and 曜 + 日 (び) tails, ずる/じる, す/せる, る/りる on both;
+inserted kana (万一 / 万が一, but 兎角 / 兎に角) go to the agents. The old
+rule also hid candidates before any agent saw them: of the 2,897 pairs it
+called one word, 60 share a gloss and had never been judged. Sorted once
+(synonym_kinds.py F-*): 5 syn, 5 mix, 6 short, 1 older, 43 none; blind
+grade of all 60 (quality_sample "freed"): 3 major, 3 minor. Fixed: 締め切り
+/ 締め切り日 is no short form, and two lines; the other 2 majors are the
+open box below. Open: an emphatic spoken form
+(思いっきり, 大っきい, 矢っ張り, すっごい, 余っ程, 何にも) fits no kind, so
+it shows nothing (a box issue, for Dani).
 
 ### D-034 · Word lines that call a Sino-Japanese word "native"
 *Found 2026-10-25,* by the second look at the mirrored synonym lines: the

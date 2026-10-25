@@ -41,6 +41,8 @@ PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": (
          "mirrored": ("pair", "line"), "mixup": ("pair", "line"), "belowbar": ("pair", "line"),
          # Every pair whose kind changed in pipeline/synonym_kinds.py (2026-10-25), all of them.
          "kinds": ("kind", "line"),
+         # Every pair the old same-word rule hid (D-033), as the kinds pass sorted it, the ones left out too.
+         "freed": ("kind", "line"),
          # The rows the site shows once every fix is in (2026-10-25): what ships, measured again.
          "final": ("pair", "line"),
          # The Bulgarian of the word lines and sense notes (pipeline/translate_bg.py), against the English.
@@ -128,22 +130,26 @@ def _belowbar(rng: random.Random, n: int) -> list[dict]:
     return out
 
 
-def _kinds(rng: random.Random, n: int) -> list[dict]:
+def _kinds(rng: random.Random, n: int, freed: bool = False) -> list[dict]:
     import synonym_kinds
     out = []
     for k, v in sorted(synonym_kinds.all_verdicts().items()):
         it = v["item"]
-        if v["kind"] == it["now"]:
+        if (it["now"] == "freed") != freed or v["kind"] == it["now"]:
             continue
-        kind = v["kind"] if v["kind"] != "none" else "removed: not an opposite"
+        kind = v["kind"] if v["kind"] != "none" else "left out: no kind fits" if freed else "removed: not an opposite"
         w, o = int(k.split("|")[0]), int(k.split("|")[2])
         out.append({"key": k, "kind": kind,
                     "word": {**_word(w), **({"sense": v["wordSense"]} if "wordSense" in v else {})},
                     "other": {**_word(o), **({"sense": v["otherSense"]} if "otherSense" in v else {})},
                     **({"register": v["register"]} if "register" in v else {}),
                     **({"full": v["full"]} if "full" in v else {}),
-                    **({"line": v["line"], "reverse": v["reverse"]} if v["kind"] == "mix" else {})})
+                    **({"line": v["line"], "reverse": v["reverse"]} if v["kind"] in ("mix", "syn") else {})})
     return rng.sample(out, min(n, len(out)))
+
+
+def _freed(rng: random.Random, n: int) -> list[dict]:
+    return _kinds(rng, n, freed=True)
 
 
 def _bg(rng: random.Random, n: int) -> list[dict]:
@@ -170,7 +176,7 @@ def prepare(which: str, n: int, size: int, rnd: int = 1) -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}" + (f"-r{rnd}" if rnd > 1 else ""))
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
-             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "final": _final, "bg": _bg}[which](rng, n)
+             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "final": _final, "bg": _bg}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{f'r{rnd}-' if rnd > 1 else ''}{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
