@@ -60,7 +60,9 @@ Give each related word one kind:
   `spoken`: one is an emphatic or colloquial spoken form, the same word
   (やっぱり / やはり, すっごい / 凄い). For these three give `full`: which is
   the full or standard form, `word` or `other`. They are about the whole
-  word: no senses.
+  word: no senses. When only one sense is the short form (軽 "light" and
+  軽 for 軽自動車), give `syn` on that sense instead, the line saying it is
+  the short form: "The full name. 軽 is its short form in speech."
 
 Most senses get nothing. Zero is a normal answer. Never add a word only to
 fill a list. Far senses (tagged `arch`, `obs`, `rare`, narrow technical
