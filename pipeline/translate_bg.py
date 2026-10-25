@@ -87,7 +87,10 @@ def _hints() -> dict[str, str]:
     return out
 
 
-def prepare() -> None:
+def prepare(missing: str | None = None) -> None:
+    """All texts, or with `missing` (a round name, "2"), only those with no Bulgarian yet: a line whose
+    English is new, a note whose English or example changed since it was translated (its `src`)."""
+    done = json.loads(SITE.read_text(encoding="utf-8")) if missing and SITE.exists() else {"lines": {}, "notes": {}}
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     site = json.loads(ws.SITE.read_text(encoding="utf-8"))
@@ -102,7 +105,8 @@ def prepare() -> None:
                     lines[text] = {"kind": {"syn": "synonym", "mix": "mixup"}[r[1]],
                                    "about": f"{sc[about]['word']} 【{sc[about]['reading']}】 {_gloss(about, i)}",
                                    "against": f"{sc[other]['word']} 【{sc[other]['reading']}】 {_gloss(other, n)}"}
-    items = [{"key": f"l{n:05d}", "en": t, **c} for n, (t, c) in enumerate(sorted(lines.items()))]
+    items = [{"key": f"l{missing or ''}{n:05d}", "en": t, **c} for n, (t, c) in enumerate(sorted(lines.items()))
+             if t not in done["lines"]]
     hints = _hints()
     notes = json.loads(NOTES.read_text(encoding="utf-8"))
     nitems = []
@@ -113,13 +117,16 @@ def prepare() -> None:
             if not nt:
                 continue
             ex = nt.get("ex")
+            had = done["notes"].get(f"{w}|{i}")
+            if had and had.get("src") == {"nuance": nt["nuance"], "ex": ex and ex["ja"]}:
+                continue
             hint = ex and hints.get(ex["ja"].replace("【", "").replace("】", ""))
             nitems.append({"key": f"{w}|{i}", "word": sc[int(w)]["word"], "reading": sc[int(w)]["reading"],
                            "gloss": _gloss(int(w), i), "nuance": nt["nuance"],
                            **({"ex": {"ja": ex["ja"], "en": ex["en"], **({"tatoebaBg": hint} if hint else {})}} if ex else {})})
     for prefix, rows in (("L", items), ("N", nitems)):
         for b in range(0, len(rows), SIZE[prefix]):
-            name = f"{prefix}-{b // SIZE[prefix]:03d}"
+            name = f"{prefix}{missing or ''}-{b // SIZE[prefix]:03d}"
             ws._dump(IN / f"{name}.json", {"batch": name, "items": rows[b:b + SIZE[prefix]]})
     print(f"lines {len(items)} in {-(-len(items) // SIZE['L'])} batches; notes {len(nitems)} "
           f"({sum('ex' in x for x in nitems)} examples, {sum('tatoebaBg' in x.get('ex', {}) for x in nitems)} with a Tatoeba hint) "
@@ -247,7 +254,8 @@ def merge() -> None:
             if p.stem.startswith("L"):
                 out["lines"][by[k]["en"]] = _fix(v["bg"], by[k]["en"])
             else:
-                out["notes"][k] = {"nuance": _fix(v["nuance"], by[k]["nuance"]), "ex": v["ex"] and _fix(v["ex"])}
+                out["notes"][k] = {"nuance": _fix(v["nuance"], by[k]["nuance"]), "ex": v["ex"] and _fix(v["ex"]),
+                                   "src": {"nuance": by[k]["nuance"], "ex": by[k].get("ex", {}).get("ja")}}
     ws._dump(SITE, out)
     print(f"{len(out['lines'])} lines, {len(out['notes'])} notes -> {SITE}")
 
@@ -256,13 +264,14 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("prepare")
+    p = sub.add_parser("prepare")
+    p.add_argument("--missing", metavar="ROUND", help="only texts with no Bulgarian yet, in batches L<ROUND>-*, N<ROUND>-*")
     p = sub.add_parser("check")
     p.add_argument("--batch")
     sub.add_parser("merge")
     sub.add_parser("flags")
     a = ap.parse_args()
-    {"prepare": prepare, "check": lambda: check(a.batch), "merge": merge, "flags": flags}[a.cmd]()
+    {"prepare": lambda: prepare(a.missing), "check": lambda: check(a.batch), "merge": merge, "flags": flags}[a.cmd]()
 
 
 if __name__ == "__main__":

@@ -76,8 +76,11 @@ def sense_notes(word_id: int) -> list[dict] | None:
     out = []
     for i, n in enumerate(notes):
         b = n and bg.get(f"{word_id}|{i}")
-        if b:
-            n = {**n, "nuanceBg": b["nuance"], **({"ex": {**n["ex"], "bg": b["ex"]}} if n.get("ex") and b.get("ex") else {})}
+        ex_ja = n and n.get("ex") and n["ex"]["ja"]
+        # Only while the English is what was translated: a note changed since has no Bulgarian yet.
+        src = (b or {}).get("src") or {"nuance": n and n["nuance"], "ex": ex_ja}
+        if b and src == {"nuance": n["nuance"], "ex": ex_ja}:
+            n ={**n, "nuanceBg": b["nuance"], **({"ex": {**n["ex"], "bg": b["ex"]}} if n.get("ex") and b.get("ex") else {})}
         out.append(n)
     return out
 
