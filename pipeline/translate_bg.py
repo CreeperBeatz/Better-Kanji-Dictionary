@@ -213,6 +213,27 @@ def flags() -> None:
     print(f"{n} flagged")
 
 
+# Applied at merge, so a re-merge keeps them: words with an established Bulgarian form, and one
+# rendering per frequent English label (the batches were alphabetical, so a label sat mostly in one).
+FIXES = ((re.compile(r"\bзен\b"), "дзен"), (re.compile(r"\bпелмени\b"), "гьоза"))
+OPENERS = {"The everyday word": "Всекидневната дума", "Spoken": "В говоримата реч"}
+
+
+def _fix(text: str, en: str | None = None) -> str:
+    for pat, new in FIXES:
+        text = pat.sub(new, text)
+    if en:
+        head = en.split(".")[0]
+        want = OPENERS.get(head)
+        if want and not text.startswith(want):
+            first, dot, rest = text.partition(".")
+            if head == "Spoken" and first == "Разговорно":
+                text = want + dot + rest
+            elif head == "The everyday word" and first.startswith("Ежедневната дума"):
+                text = want + first[len("Ежедневната дума"):] + dot + rest
+    return text
+
+
 def merge() -> None:
     out = {"lines": {}, "notes": {}}
     for p in sorted(IN.glob("*.json")):
@@ -222,9 +243,9 @@ def merge() -> None:
         by = {it["key"]: it for it in ws._read(p)["items"]}
         for k, v in good.items():
             if p.stem.startswith("L"):
-                out["lines"][by[k]["en"]] = v["bg"]
+                out["lines"][by[k]["en"]] = _fix(v["bg"], by[k]["en"])
             else:
-                out["notes"][k] = v
+                out["notes"][k] = {"nuance": _fix(v["nuance"]), "ex": v["ex"] and _fix(v["ex"])}
     ws._dump(SITE, out)
     print(f"{len(out['lines'])} lines, {len(out['notes'])} notes -> {SITE}")
 
