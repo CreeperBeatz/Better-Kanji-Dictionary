@@ -793,7 +793,7 @@ def check_same_reading(only: str | None = None) -> None:
 
 SITE = proposals.ROOT / "data" / "word_synonyms.json"
 SELF = proposals.DRAFTS / "self-nuance" / "self.json"  # pipeline/self_nuance.py merge
-KIND_ORDER = ("mix", "syn", "ant", "pair", "polite", "short", "shortOf", "older", "olderOf")  # as the page shows them
+KIND_ORDER = ("mix", "syn", "ant", "pair", "polite", "short", "shortOf", "older", "olderOf", "spoken", "spokenOf")  # as the page shows them
 MIRRORED = proposals.DRAFTS / "word-synonyms-jlpt" / "mirrored.json"  # rows shown only by mirroring, for quality_sample
 # Every run pair that went through the skeptic: the JLPT run, its senses past the 8th, the pilot.
 SITE_RUNS = (("word-synonyms-jlpt", ("A", "B")), ("word-synonyms-jlpt", ("E", "F")), ("word-synonyms", ("C", "D")))
@@ -884,7 +884,7 @@ def export(bar: float = 0.6) -> None:
         stats[f"{kind} kept from removed"] += 1
     # Dani's kinds (pipeline/synonym_kinds.py): an opposite may now be a pair or a polite
     # form, a removed pair may fit a new box, a pair the old same-word rule hid may be a synonym.
-    # Short and older forms are of the whole word (sense -1), shown in its spellings row. Rows: pair [i, pair, o, n, None]; polite
+    # Short, older and spoken forms are of the whole word (sense -1), shown in its spellings row. Rows: pair [i, pair, o, n, None]; polite
     # [.., other's register, own register]; mix by meaning [.., line, own line, "meaning"].
     # One verdict per two words: an opposite shown under several senses (上 / 下) keeps all
     # of its rows, which change kind together; the verdict's senses add a row if new.
@@ -904,8 +904,11 @@ def export(bar: float = 0.6) -> None:
                         mine, theirs = v["register"][reg], v["register"]["other" if reg == "word" else "word"]
                         kept.append([r[0], "polite", b, r[3], theirs, mine])
                 out[a] = kept
-        if kind in ("short", "older"):
+        if kind in ("short", "older", "spoken"):
             full, part = (o, w) if v["full"] == "other" else (w, o)
+            if v["item"]["now"] == "variant":  # one word: what a sense showed for the two goes (きちっと / きちんと)
+                for a, b in ((w, o), (o, w)):
+                    out[a] = [r for r in out[a] if r[2] != b]
             out[part].append([-1, f"{kind}Of", full, None, None])
             out[full].append([-1, kind, part, None, None])
         elif kind != "none":
@@ -915,7 +918,10 @@ def export(bar: float = 0.6) -> None:
                 rows = [i, kind, o, n, theirs, mine], [n - 1, kind, w, i + 1, mine, theirs]
             elif kind == "mix":
                 rows = [i, kind, o, n, v["line"], v["reverse"], "meaning"], [n - 1, kind, w, i + 1, v["reverse"], v["line"], "meaning"]
-            elif kind == "syn":  # a freed pair (D-033); own lines come from the other row below
+            elif kind == "syn":  # a freed or variant pair; own lines come from the other row below
+                if any(r[2] == o for r in out[w]) or any(r[2] == w for r in out[o]):
+                    stats["kinds: syn shown already"] += 1  # with lines checked since (急 / 緊急)
+                    continue
                 rows = [i, kind, o, n, v["line"]], [n - 1, kind, w, i + 1, v["reverse"]]
             else:
                 rows = [i, kind, o, n, None], [n - 1, kind, w, i + 1, None]

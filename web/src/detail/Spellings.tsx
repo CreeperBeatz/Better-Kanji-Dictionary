@@ -9,8 +9,8 @@
  * are white; one JMdict leaves unmarked beside a common one is grey (しょうこう),
  * and one it tags rare greyer still, with the tag.
  * After the spellings, other words that are a form of this one: its short form
- * (ＣＭ for コマーシャル) or older form (メーター for メートル), or the full or
- * standard word it is a form of. Each opens that word.
+ * (ＣＭ for コマーシャル), older form (メーター for メートル) or spoken form (やっぱり
+ * for やはり), or the full or standard word it is a form of. Each opens that word.
  */
 import type { RelatedWord, Word } from '../api'
 import { strings, useLang } from '../i18n'
@@ -32,6 +32,8 @@ const S = strings(
     shortOf: 'full form',
     older: 'older form',
     olderOf: 'standard form',
+    spoken: 'spoken form',
+    spokenOf: 'standard form',
     openWord: 'Open {word}',
   },
   {
@@ -48,6 +50,8 @@ const S = strings(
     shortOf: 'пълна форма',
     older: 'стара форма',
     olderOf: 'стандартна форма',
+    spoken: 'разговорна форма',
+    spokenOf: 'стандартна форма',
     openWord: 'Отворете {word}',
   },
 )
@@ -66,7 +70,7 @@ export function Spellings({
 }: {
   word: Word
   kanji?: { open: string[]; old: Record<string, string>; onPick: (char: string) => void }
-  /** Words that are a short or older form of this one, or that it is one of (sense -1). */
+  /** Words that are a short, older or spoken form of this one, or that it is one of (sense -1). */
   related?: { forms: RelatedWord[]; onWord: (w: Word) => void }
 }) {
   const t = S(useLang())
@@ -151,4 +155,4 @@ export function Spellings({
 }
 
 /** What the other word is to this one, by the kind of its row. */
-const FORM_TAGS = { short: 'short', shortOf: 'shortOf', older: 'older', olderOf: 'olderOf' } as const
+const FORM_TAGS = { short: 'short', shortOf: 'shortOf', older: 'older', olderOf: 'olderOf', spoken: 'spoken', spokenOf: 'spokenOf' } as const
