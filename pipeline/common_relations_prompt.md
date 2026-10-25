@@ -118,7 +118,8 @@ are guessing. Only 0.8 and above goes on the site; be honest, not flat.
   ],
   "1234561": []
 },
-"flags": {"1234560": "shown synonym 〜 is only a related word"}}
+"flags": {"1234560": "shown synonym 〜 is only a related word"},
+"notInList": [[1234561, "ant", 1, "始値", "はじめね"]]}
 ```
 
 - Every word in the input once, keyed by its id as a string; `[]` when it
@@ -127,6 +128,9 @@ are guessing. Only 0.8 and above goes on the site; be honest, not flat.
   offered word is one of the numbers shown with it. Whole-word kinds have
   neither.
 - `flags` is optional: only real problems with `shown` rows.
+- `notInList` is optional: items you dropped because the checker said the
+  word is not in the dictionary's list, as `[word id, kind, sense, word,
+  reading]` (`[1234560, "ant", 1, "始値", "はじめね"]`), for a later pass.
 
 Read the whole file first. Write valid JSON (UTF-8). Then run
 `.venv/Scripts/python.exe pipeline/common_relations.py check --batch <BATCH>`
