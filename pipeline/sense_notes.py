@@ -358,11 +358,20 @@ def merge() -> None:
             if nt and (int(wid), nt.get("nuance")) in origin:
                 ns[n] = {**nt, "nuance": origin[(int(wid), nt["nuance"])]}
                 fixed["origin"] += 1
+    import register_claims  # register claims checked once; a new example is one written for the dictionary
+    for (wid, n), v in register_claims.fixes()[1].items():
+        ns = out.get(str(wid)) or out.get(wid)
+        if ns and n < len(ns) and ns[n]:
+            if "text" in v:
+                ns[n] = {**ns[n], "nuance": v["text"]}
+            if "ex" in v:
+                ns[n] = {**ns[n], "ex": v["ex"] and {**v["ex"], "src": "d"}}
+            fixed["register"] += 1
     import sense_evidence
     print("Tatoeba examples:", sense_evidence.restore(out))
     ws._dump(SITE, out)
     print(f"{len(out)} words -> {SITE}" + (f"; checked {fixed['checked']} senses, fixed rank {fixed['rank']}, "
-                                           f"nuance {fixed['nuance']}, ex {fixed['ex']}, origin {fixed['origin']}" if fixed else ""))
+                                           f"nuance {fixed['nuance']}, ex {fixed['ex']}, origin {fixed['origin']}, register {fixed['register']}" if fixed else ""))
 
 
 def main() -> None:
