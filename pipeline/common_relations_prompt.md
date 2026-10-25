@@ -66,9 +66,10 @@ Most senses get nothing. Zero is a normal answer. Never add a word only to
 fill a list. Far senses (tagged `arch`, `obs`, `rare`, narrow technical
 ones) usually get nothing. At most 5 synonyms and 3 opposites a sense.
 
-**Your own words.** A clear, common synonym or opposite that is not offered
-may be added with `word` (usual written form) and `reading` (hiragana)
-instead of `id`. Only common modern words. The checker tells you if the
+**Your own words.** A clear, common related word of any kind that is not
+offered (a synonym, an opposite, the full form of a short word: 安保 /
+安全保障) may be added with `word` (usual written form) and `reading`
+(hiragana) instead of `id`. Only common modern words. The checker tells you if the
 word is not in the dictionary's list, and shows its senses so you can give
 `otherSense`.
 
