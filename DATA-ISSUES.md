@@ -501,9 +501,12 @@ sound; 2,941 of those readings have no tag and no priority while the first
 reading has one (本名 ほんめい, 村 そん, 中指 ちゅうし). In kana-only words
 (ストア, ストアー) the other kana are real spellings.
 Source: Spellings.tsx (all kana forms but the reading) and build_db's rare flag.
-**Status: partly fixed** (fix/other-readings). The row lost its "Written"
+**Status: fixed locally** (fix/other-readings). The row lost its "Written"
 label, on the word page and the search card: it holds every other form, a
-spelling or a reading. Open: nothing marks an untagged reading as less used.
+spelling or a reading. Common forms are white; a form with no JMdict priority
+beside one of its kind that has one is grey (しょうこう, ほんめい), a rare-tagged
+one greyer. build_db writes word_form.pri; pipeline/form_pri.py adds it to an
+existing database (prod needs it before the new server starts).
 
 ## Fixed
 

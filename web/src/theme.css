@@ -4708,8 +4708,8 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
-/* Every way to write the word, at the top of its entry: the headword first
-   and brightest, the seldom ones dimmer, each tagged where it is old or rare. */
+/* Every way to write or read the word, at the top of its entry: the headword
+   first, the seldom ones dimmer, each tagged where it is old or rare. */
 .entry-spellings {
   display: flex;
   align-items: baseline;
@@ -4738,11 +4738,13 @@ button.usage-head:focus-visible .usage-spelling {
   gap: 5px;
   font-family: var(--mincho);
   font-size: calc(18px * var(--type));
-  color: var(--paper-dim);
+  color: var(--paper);
 }
 
-.entry-spelling[data-main] {
-  color: var(--paper);
+/* White for the common forms, grey for one JMdict leaves unmarked beside a
+   common one (消耗's しょうこう), greyer for one it tags rare. */
+.entry-spelling[data-seldom] {
+  color: var(--paper-dim);
 }
 
 .entry-spelling[data-rare] {

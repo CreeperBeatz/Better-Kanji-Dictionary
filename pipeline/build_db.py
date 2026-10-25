@@ -205,7 +205,8 @@ def build_dict(db: sqlite3.Connection) -> None:
             text    TEXT NOT NULL,
             kana    INTEGER NOT NULL,       -- 1 = reading, 0 = written form
             ord     INTEGER NOT NULL,
-            rare    INTEGER NOT NULL        -- iK/rK/oK/sK -- keep, but rank last
+            rare    INTEGER NOT NULL,       -- iK/rK/oK/sK -- keep, but rank last
+            pri     INTEGER NOT NULL DEFAULT 0  -- has a ke_pri/re_pri (ichi1, news1, nf..)
         );
         CREATE INDEX idx_form_text ON word_form(text);
         -- Every search reads its words' spellings back by id; without this
@@ -256,7 +257,7 @@ def build_dict(db: sqlite3.Connection) -> None:
                     if m:
                         n = int(m.group(1))
                         best_nf = n if best_nf is None else min(best_nf, n)
-                store.append((text, rare))
+                store.append((text, rare, int(bool(pris))))
 
         if not rebs:
             continue
@@ -265,8 +266,8 @@ def build_dict(db: sqlite3.Connection) -> None:
         words.append((wid, headword, reading, common, best_nf))
 
         for kana, store in ((0, kebs), (1, rebs)):
-            for i, (text, rare) in enumerate(store):
-                forms.append((wid, text, kana, i, int(rare)))
+            for i, (text, rare, pri) in enumerate(store):
+                forms.append((wid, text, kana, i, int(rare), pri))
 
         for i, s in enumerate(entry.findall("sense")):
             glosses = [g.text for g in s.findall("gloss") if g.text]
@@ -281,7 +282,7 @@ def build_dict(db: sqlite3.Connection) -> None:
             ))
 
         # Which characters this word is written with, for "words using this kanji".
-        for text, rare in kebs:
+        for text, rare, _ in kebs:
             if rare:
                 continue
             for ch in text:
@@ -290,7 +291,7 @@ def build_dict(db: sqlite3.Connection) -> None:
                     chars.append((ch, wid))
 
     db.executemany("INSERT INTO word VALUES (?,?,?,?,?)", words)
-    db.executemany("INSERT INTO word_form VALUES (?,?,?,?,?)", forms)
+    db.executemany("INSERT INTO word_form VALUES (?,?,?,?,?,?)", forms)
     db.executemany("INSERT INTO sense VALUES (?,?,?,?,?)", senses)
     db.executemany("INSERT INTO word_char VALUES (?,?)", chars)
 

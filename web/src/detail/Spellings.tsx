@@ -4,6 +4,8 @@
  * first; a spelling in old kanji (學校 for 学校) or seldom used says so. Its
  * reading is under the headword, so only other kana are here: a kana spelling
  * (キレイ) or another reading (消耗 しょうこう). So the row has no label.
+ * Common forms are white; one JMdict leaves unmarked beside a common one is
+ * grey (しょうこう), and one it tags rare greyer still, with the tag.
  * After them, other words that are a form of this one: its short form (ＣＭ
  * for コマーシャル) or older form (メーター for メートル), or the full or standard
  * word it is a form of. Each opens that word.
@@ -69,7 +71,7 @@ export function Spellings({
         {shown.map((f) => {
           const tag = f.old ? 'old' : f.rare ? 'rare' : null
           return (
-            <span key={f.text} className="entry-spelling" data-main={f.text === w.headword || undefined} data-rare={tag === 'rare' || undefined}>
+            <span key={f.text} className="entry-spelling" data-main={f.text === w.headword || undefined} data-rare={tag === 'rare' || undefined} data-seldom={(!tag && f.seldom) || undefined}>
               <span lang="ja">
                 {[...f.text].map((ch, i) => {
                   const title = old[ch] ? t('oldOf', { old: ch, char: old[ch] }) : undefined
