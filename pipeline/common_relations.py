@@ -1,6 +1,6 @@
 """Related words for the common words outside JLPT, in one Opus pass (Dani, 2026-10-25).
 
-    python pipeline/common_relations.py prepare [--size 40]   # data/drafts/common-relations/in/C-*.json
+    python pipeline/common_relations.py prepare [--size 60]   # data/drafts/common-relations/in/C-*.json
     # one Opus subagent per in/*.json, each reading pipeline/common_relations_prompt.md
     python pipeline/common_relations.py check [--batch C-000]
     python pipeline/common_relations.py report
@@ -44,6 +44,12 @@ KINDS = SENSED + WHOLE
 REGISTERS = ("plain", "polite", "honorific", "humble")
 LINE = {"syn": 160, "mix": 180}
 SURE = 0.8  # what the site shows
+# Tokens (2026-10-25): candidates were 80% of a batch. The best 10 of them, three short senses each.
+CANDIDATES, OTHER_SENSES, GLOSS = 10, 3, 80
+
+
+def _brief(wid: int) -> dict:
+    return ws._brief(wid, OTHER_SENSES) | {"senses": [[s[0], s[1], s[3]] for s in ws.senses_of(wid, OTHER_SENSES, GLOSS)]}
 
 
 def _restricted() -> dict[int, dict]:
@@ -103,12 +109,13 @@ def prepare(size: int) -> None:
             continue
         w = words[wid]
         entries.append({"id": wid, "word": w["word"], "reading": w["reading"], "senses": _senses(wid, restricted),
-                        "candidates": [ws._brief(o) for o in syn], "opposites": [ws._brief(o) for o in ant],
-                        **({"readTheSame": [ws._brief(o) for o in peers]} if peers else {}),
+                        "candidates": [_brief(o) for o in syn[:CANDIDATES]], "opposites": [_brief(o) for o in ant],
+                        **({"readTheSame": [_brief(o) for o in peers]} if peers else {}),
                         **({"shown": shown[wid]} if shown.get(wid) else {})})
     for b in range(0, len(entries), size):
         name = f"C-{b // size:03d}"
-        ws._dump(IN / f"{name}.json", {"batch": name, "words": entries[b:b + size]})
+        (IN / f"{name}.json").write_text(json.dumps({"batch": name, "words": entries[b:b + size]}, ensure_ascii=False,
+                                                    separators=(",", ":")), encoding="utf-8")
     print(f"{len(entries)} words in {-(-len(entries) // size)} batches ({skipped} with nothing to ask left out) -> {IN}")
 
 
@@ -264,7 +271,7 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("prepare").add_argument("--size", type=int, default=40)
+    sub.add_parser("prepare").add_argument("--size", type=int, default=60)
     sub.add_parser("check").add_argument("--batch")
     sub.add_parser("report")
     a = ap.parse_args()
