@@ -72,6 +72,9 @@ Translate it as written; do not fix facts yourself. But add
 `"enIssue": "what looks wrong"` to that item (a wrong fact, a mix-up with
 another word, a line that contradicts itself, an unclear phrase), so the
 English can be fixed and the line translated again.
+The same for a Japanese example that is unnatural or wrong (a phrase a
+Japanese speaker would not say, the wrong word or reading): still
+translate it, and say so in `enIssue`.
 
 ## Output
 
