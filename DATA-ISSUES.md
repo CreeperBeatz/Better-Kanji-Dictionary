@@ -359,6 +359,136 @@ checked (527 ok, 5 doubtful, 2 wrong; the 7 not ok stay out). In the sandbox
 data/review or prod yet. Left: words where every sense fits no group (D-027
 style): 自首, 出自, 張本人, 得度, 連理, 身代, 総花, 活発, 丁度, 目方.
 
+### D-029 · Kanji listed as close in a meaning they do not share
+*Found 2026-10-24.* The Opus check of the similar-kanji nuance lines
+(pipeline/kanji_nuance.py verify, then a second look at every hidden pair)
+found 120 of 3,174 pairs where no meaning of the other kanji is close to the
+meaning it is listed under: 火 水 月 木 金 土 beside 日 "Sunday" (other weekdays),
+知 beside 分 "divide" (close only to 分かる), 談 話 述 陳 beside 語 "language"
+(close only to its "tell" meaning), 柔 beside 優 "superior".
+Source: the meaning groups' `similar` lists.
+**Status: open.** The kanji page hides these rows (`mismatch` in
+data/kanji_nuances.json, server/synonyms.kanji_not_close); the lists
+themselves are unchanged. Left: take the pairs out of the lists, or move
+them to the meaning they share, in the review store.
+
+### D-030 · The other kanji's meaning shown on a similar-kanji row is a guess
+*Found 2026-10-24.* A row beside a meaning names which meaning of the other
+kanji is close: the one that lists this kanji back, else the one worded most
+alike (search.close, kanji_nuance._match). The guess is wrong for at least 26
+pairs, e.g. 家 shown as "expert, -ist" beside 屋 "house", 株 as "shares"
+beside 根 "root".
+**Status: fixed locally** (2026-10-25, feat/word-synonyms). The check
+flagged them (`wrongLabel` in data/kanji_nuances.json) and wrote the line for
+the meaning that is close; those 26 rows now show no label rather than the
+guess (synonyms.kanji_wrong_label). Open: naming the right meaning instead.
+
+### D-031 · Tatoeba sentences are shown rebuilt from the index, not as written
+*Found 2026-10-24.* The sentence table keeps the jpn_indices line, and the
+sentence is rebuilt from its tokens (search._sentence). That loses all
+punctuation and every word the index does not list: names and figures
+(彼はチェスター区選出の議員に当選した comes back 彼は区選出の議員に当選した,
+石の上にも三年 as 石の上にも年), and tokens without a {surface} come back in their
+dictionary spelling (かもしれない as かも知れない).
+Source: build_db's sentence stage.
+**Status: fixed locally** (2026-10-24, feat/word-synonyms). The sentence
+table keeps Tatoeba's own text and translation (`real`, `en`; from
+pipeline/data/tatoeba/*_sentences.tsv.bz2, 149,855 of 150,075 sentences), and
+the word page marks the word in it by walking the index tokens through it in
+order (search._sentence; on 200,000 links the same word as before, 145 left
+unmarked where the index spells the word otherwise). The sense notes'
+examples are put back the same way (sense_evidence.restore; 17 left as
+rebuilt). Left for prod: the two Tatoeba files on the Pi and
+`build_db.py examples` there; an old db still shows the rebuilt text.
+
+### D-032 · Two old kanji forms missing
+*Found 2026-10-24,* reading every spelling tagged "old kanji" (331 in common
+or JLPT words, from 142 old/new pairs, all correct). Two old forms are not in
+char_form, so spellings with them are not tagged: 冩 (写: 冩眞) and 鬪 (闘:
+戰鬪, 鬪爭). 處 in 臺處 is tagged nowhere either, since 台所 is written with 所,
+not 処: right as it is.
+Source: char_form kind=old (KANJIDIC variants).
+**Status: open.**
+
+### D-033 · Word synonyms removed by a rule that did not fit
+*Found 2026-10-24,* by sorting once every pair a check or a rule had removed
+(pipeline/synonym_removed.py, 579 pairs, Opus). 46 were real pairs (8%):
+- the same-word code rule (word_synonyms.same_word) was wrong for 12 of 52.
+  It tests the spelling and the reading apart, so 落ちる (おちる) is "お + 散る
+  (ちる)", 男の子 is "男子 with の", お腹 is "お + 腹" though it reads おなか
+  against はら, and 兎に角 is "兎角 with に";
+- the Opus checks were wrong for 34 of 511: a broader-word or other-form rule
+  taken too far (子 / 子供, 名 / 名前, 弱る / 弱まる), or the wrong sense judged
+  (接する, 回 / 度).
+15 more fit no kind the data has (a box issue): keigo counterparts (仰る /
+言う, くれる / くださる), words that share an English gloss but differ in
+scope (近代 / 現代, 美術 / 芸術, 消極的 / ネガティブ, 割る / 壊す), old variants
+(メーター / メートル), letter short forms (ＣＭ), set pairs and series (大 /
+小, 級 / 段, 並・上・特上).
+Source: the rules in word_synonyms (filter, prompts) and the Opus checks.
+**Status: partly fixed** (feat/word-synonyms). The 46 are back on both words
+(export reads the "keep" verdicts). Open: same_word must test spelling and
+reading together before any new run (a first try that did so also let
+through 金曜 / 金曜日 and 定期 / 定期的, whose tails read び and てき); the 15
+box cases wait for Dani.
+
+### D-034 · Word lines that call a Sino-Japanese word "native"
+*Found 2026-10-25,* by the second look at the mirrored synonym lines: the
+quick own lines (pipeline/self_nuance.py, Sonnet) often opened with "Native
+word." on words built from on'yomi (点数, 場所, 助言, 娯楽, 王, 級). The same
+mistake was in lines the Opus checks had passed, graded minor at most.
+Source: drafted synonym lines; a few sense notes.
+**Status: fixed locally** (feat/word-synonyms). The second look (W-*, 6,141
+pairs) fixed 1,060 lines; then every shown text that says where a word comes
+from was checked once (pipeline/origin_claims.py, 1,485 texts): 143 fixed,
+179 rows on the site and 3 sense notes. Loanword claims were right; the
+errors sat in kanji words. Lesson: a measured sample can grade a systematic
+mistake as minor; look for the pattern behind repeated fixes.
+
+### D-035 · Word opposites that were pairs, and pairs no kind held
+*Found 2026-10-25,* when Dani's new kinds (D-033) were applied: every
+opposite the site showed and every removed pair was sorted once
+(pipeline/synonym_kinds.py, 1,758 pairs, Opus). 122 opposites were pairs
+(祖父 / 祖母, 甥 / 姪, 上旬 / 下旬) and 14 were no opposites at all (悪い /
+美しい, 悪い / 上手); 151 removed pairs fit a new box: 68 easy to mix up by
+meaning (近代 / 現代), 47 short forms (ＣＭ), 21 older forms (メーター), 9
+pairs, 6 polite forms (仰る / 言う).
+Source: the antonym rule (sex pairs as opposites, 2026-10-22) and the
+synonym-only question of the first runs.
+**Status: fixed locally** (feat/word-synonyms). All 287 changes graded
+blind: 0 major, 28 minor. Left: three pairs with the wrong partner (女房 /
+夫, 嫁 / 夫, ボーイ / 女の子) and "short form" on a base word (白 / 白色).
+Only pairs that slipped into the runs were sorted: a run to find polite
+forms, mix-ups by meaning and pairs across all words is still to do.
+
+### D-036 · Register labels on word lines: relative, wrong, or one for all senses
+*Found 2026-10-25,* by the Bulgarian translators, who read every line and
+kept flagging register claims (実は "written", 基づく "everyday", 努めて
+"spoken"); the blind graders had let them pass as minor. Three causes: a
+label true only next to the paired word, written as a plain fact ("Formal."
+on 見解's row means more formal than 意見); plain misjudgments, mostly on'yomi
+words taken as formal or written and kana or mimetic words as spoken; one
+label for a word whose register changes with the sense (向き).
+Source: the drafting prompts (each synonym line says how the word differs,
+register first) and the Sonnet own lines.
+**Status: fixed locally** (feat/word-synonyms). Every text with a register
+claim, and every text a translator flagged, checked once by Opus with
+JMdict's register tags as evidence (pipeline/register_claims.py, 12,648
+texts): 2,545 fixed, most now explicit comparisons ("More formal than 意見").
+Applied: 3,237 synonym rows, 619 sense notes; Bulgarian redone for them.
+
+### D-037 · Senses JMdict keeps to another reading or spelling
+*Found 2026-10-25,* by the translators: 平日 read へいじつ showed a sense JMdict
+gives only for ひらび; 刀 its とう senses under かたな; この間 "meanwhile" is
+このかん. build_db read every sense as a sense of the headword and dropped
+<stagr>/<stagk>: 469 senses in 423 words, 127 of them on our pages.
+Source: build_db's dict stage.
+**Status: fixed locally** (feat/word-synonyms). data/sense_restrictions.json
+(pipeline/sense_restrictions.py) marks them on the word page ("read このかん
+in this sense"); the 130 notes and lines under them were checked again
+(123 fixed). Open: the search index and the sense table still carry no
+restriction.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
@@ -398,3 +528,9 @@ IDS and KanjiVG sometimes write 厂 for ⺁, which we treat as a different shape
 - A corrected Bulgarian gloss shows everywhere at once, but searching by
   Bulgarian text still finds the word by its old wording until it is
   exported (`python -m server.review export`) and the data is rebuilt.
+- Word synonyms leave out about 15,000 pairs that only one drafting run gave,
+  or both below 0.6 (2026-10-25). Nothing wrong is shown because of them, but
+  words miss real synonyms: a blind sample of 300 found 97.7% right (2.3%
+  major, mostly short forms). Task for when there are tokens to spare: an Opus
+  check of those pairs (`quality_sample.py` dataset `belowbar` shows how they
+  are drawn; about 125 agents at 120 pairs each), then export as usual.

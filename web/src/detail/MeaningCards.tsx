@@ -4,8 +4,9 @@
  * then the on words -- each word saying its own reading, so no reading is
  * named twice. An on reading the meaning has in only a word or two is faded
  * at the end of its on words; its special readings are its exceptions. Then
- * the kanji close to it in meaning (≈), and the kanji easy to mix up on one
- * of its readings (!), with the 異字同訓 card that tells them apart, open.
+ * the kanji close to it in meaning (≈), each with how it differs, and the
+ * kanji easy to mix up on one of its readings (!), with the 異字同訓 card
+ * that tells them apart, open, or a line on when to write which.
  *
  * A few words at first, shared between kun and on by how many each has
  * (detail/lanes.ts); "show more" adds more in place, and past twenty the
@@ -27,6 +28,7 @@ import { reducedMotion } from '../media'
 import type { CloseKanji, KanjiLite, KanjiMeaning, KanjiPage, MeaningUse, MixUp, UsageCard, Word } from '../api'
 import { strings, useLang, type Lang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
+import { AsideTitle, CloseRow as Row } from './Close'
 import { bringToTop, focusMeaningNext, meaningAnchor, takeMeaningFocus } from './meaningFocus'
 import { FIRST_WORDS, MORE_WORDS, OPEN_UPTO, share } from './lanes'
 import { ReadingsLine, SpecialReadings } from './Readings'
@@ -349,37 +351,20 @@ function Uses({ uses, lang, row }: { uses: MeaningUse[]; lang: Lang; row: (w: Wo
  */
 function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c: string) => void }) {
   const t = S(lang)
-  const keyword = meaningsOf(k, lang).value[0]
   const sense = k.sense && ((lang === 'bg' && k.sense.bg) || k.sense.en)
   return (
-    <li>
-      <button
-        className="close-row"
-        title={t('openAt', { char: k.char })}
-        onClick={() => {
-          if (k.sense) focusMeaningNext(k.char, k.sense.id)
-          onKanji(k.char)
-        }}
-      >
-        <span className="close-kanji" lang="ja">
-          {k.char}
-        </span>
-        <span className="close-keyword">{keyword}</span>
-        {sense && <span className="close-sense">{t('withMeaning', { m: sense })}</span>}
-      </button>
-    </li>
-  )
-}
-
-/** A side block's title: its icon, then what it is -- ≈ synonyms, ! easy to mix up. */
-function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
-  return (
-    <p className="aside-title">
-      <span className="aside-icon" aria-hidden>
-        {icon}
-      </span>
-      {children}
-    </p>
+    <Row
+      glyph={k.char}
+      sub={meaningsOf(k, lang).value[0]}
+      sense={sense && t('withMeaning', { m: sense })}
+      line={k.nuance && ((lang === 'bg' && k.nuance.bg) || k.nuance.en)}
+      title={t('openAt', { char: k.char })}
+      warm={warmKanji(k.char)}
+      onOpen={() => {
+        if (k.sense) focusMeaningNext(k.char, k.sense.id)
+        onKanji(k.char)
+      }}
+    />
   )
 }
 
@@ -387,8 +372,9 @@ function AsideTitle({ icon, children }: { icon: string; children: ReactNode }) {
  * (!) Easy to mix up: this kanji and the others with the same reading, one
  * item each -- the spelling, how it reads, the kanji's meaning on that
  * reading (揚: "raise, hoist", not its keyword) -- and, where the 異字同訓
- * card has them, what each is for and an example. A heading opens its
- * kanji; the page's own is marked, not a link.
+ * card has them, what each is for and an example; where no card has them,
+ * a line on when to write which. A heading opens its kanji; the page's own
+ * is marked, not a link.
  */
 function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (c: string) => void }) {
   const lang = useLang()
@@ -430,6 +416,7 @@ function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (
                 <p className="usage-head">{head}</p>
               )}
               {spelled && <p className="spelling-def">{(lang === 'bg' && spelled.defBg) || spelled.defEn || spelled.def}</p>}
+              {!spelled && k && 'note' in k && k.note && <p className="spelling-def">{(lang === 'bg' && k.note.bg) || k.note.en}</p>}
               {spelled?.examples.slice(0, 1).map((e) => (
                 <p key={e.ja} className="usage-example">
                   <span lang="ja">{e.ja.replace(/\*/g, '')}</span> <span className="hint">{(lang === 'bg' && e.bg) || e.en}</span>

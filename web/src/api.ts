@@ -159,6 +159,49 @@ export interface WordEntry {
   examples: { text: string; hit: [number, number] | null }[]
   /** The verb going the other way, が for を: 開ける for 開く; likeliest first. */
   pairs: Word[]
+  /** Its synonyms, opposites and words read the same, sense by sense; missing from the device's copy. */
+  related?: RelatedWord[]
+  /** One per sense: how soon a learner meets it, its nuance, an example; missing from the device's copy. */
+  senseNotes?: SenseNote[] | null
+  /** Senses JMdict keeps to other readings (r) or spellings (k) than the headword's, by sense index. */
+  senseOnly?: Record<string, { r?: string[]; k?: string[] }> | null
+  /** The kanji of its spellings: which have a page, and which are old forms (學 -> 学); missing from the device's copy. */
+  spelling?: { open: string[]; old: Record<string, string> }
+}
+
+/** What one sense of a word is (pipeline/sense_notes.py). */
+export interface SenseNote {
+  /** main: the meanings to learn the word by; secondary: met later; rare: barely met. */
+  rank: 'main' | 'secondary' | 'rare'
+  nuance: string
+  /** The nuance in Bulgarian, where translated. */
+  nuanceBg?: string
+  /** The word in it in 【】; src t = a Tatoeba sentence, d = written for it; bg, its Bulgarian. */
+  ex: { ja: string; en: string; src: 't' | 'd'; bg?: string } | null
+}
+
+/** A word close to one sense of another, and how (server/synonyms.py). */
+export interface RelatedWord {
+  /** Which of the word's senses, from 0; -1 for a short or older form of the whole word. */
+  sense: number
+  /**
+   * ≈ a synonym, ↔ an opposite, ! easy to mix up, a pair (祖父 / 祖母), a polite
+   * counterpart (仰る / 言う); of the whole word: its short form (short), what it is
+   * the short form of (shortOf), its older form (older), what it is an older form of.
+   */
+  kind: 'syn' | 'ant' | 'mix' | 'pair' | 'polite' | 'short' | 'shortOf' | 'older' | 'olderOf'
+  word: Word
+  /** The other word's sense that matches, from 1; null for a form of the whole word. */
+  otherSense: number | null
+  /** How it differs, or when to write it (English only for now); polite: the other's register. */
+  line: string | null
+  /** The same of the page's own word, beside it; polite: its own register. */
+  ownLine: string | null
+  /** mix: read the same (sound) or one English word for two (meaning). */
+  why?: 'sound' | 'meaning'
+  /** The two lines in Bulgarian, where translated. */
+  lineBg?: string | null
+  ownLineBg?: string | null
 }
 
 export interface Sense {
@@ -179,7 +222,8 @@ export interface Word {
   jlpt: number | null
   pitch: string | null
   senses: Sense[]
-  forms: { text: string; kana: boolean; rare: boolean }[]
+  /** `old`: the spelling in old kanji (學校 for 学校); missing from the device's copy. */
+  forms: { text: string; kana: boolean; rare: boolean; old?: boolean }[]
   inflection?: string[]
   /** On a kanji's page: which kana of `reading` are that kanji's, [from, to): じょう in じょうしょう. */
   mark?: [number, number] | null
@@ -216,6 +260,8 @@ export interface KanjiLite {
 /** A kanji close to one meaning of another, and which of its own meanings that is. */
 export interface CloseKanji extends KanjiLite {
   sense: { id: string; en: string | null; bg: string | null } | null
+  /** How it differs from the page's kanji in this meaning, where drafted. */
+  nuance?: { en: string; bg: string | null } | null
 }
 
 /** Kanji easy to mix up on a kun reading they share, and the usage card that tells them apart, if any. */
@@ -225,7 +271,8 @@ export interface MixUp {
   /** The page's kanji's meaning on that reading; missing in a pack from before it. */
   self?: CloseKanji['sense']
   /** Each with its meaning on that reading. */
-  kanji: (KanjiLite & { sense?: CloseKanji['sense'] })[]
+  /** `note`: when to write which, where no usage card tells them apart. */
+  kanji: (KanjiLite & { sense?: CloseKanji['sense']; note?: { en: string; bg: string | null } | null })[]
   usage: UsageCard | null
 }
 

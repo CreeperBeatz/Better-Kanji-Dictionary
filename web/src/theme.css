@@ -971,18 +971,49 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   margin-top: 16px;
 }
 
-/* Synonyms: one row a kanji -- the kanji, its keyword, and the
-   meaning of it that is close. */
+/* Synonyms: one row a kanji or word -- the kanji, its keyword (a word: its
+   reading), the meaning of it that is close, and under them how it differs.
+   The rows share their columns, so a block of words reads as a table. */
 .meaning-similar ul {
+  display: grid;
+  grid-template-columns: auto minmax(5em, auto) 1fr;
   list-style: none;
   margin: 0 0 4px;
   padding: 0;
 }
 
+.meaning-similar li {
+  display: contents;
+}
+
+/* Narrow, as on a phone, what is said of it goes under the kanji or word,
+   the width of the block: the meaning, then the lines. A long word does not
+   push them into a thin column. */
+.meaning-similar {
+  container-type: inline-size;
+}
+
+@container (max-width: 420px) {
+  .meaning-similar :is(.close-sense, .close-line) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Opposites, a word's only: in vermilion, apart from the synonyms' indigo. */
+.aside-block.opposites {
+  --tone: var(--shu);
+}
+
+.opposites .close-row:hover .close-kanji,
+.opposites .close-row:focus-visible .close-kanji {
+  color: var(--shu);
+}
+
 /* The whole row is one button: it opens the kanji at the shared meaning. */
 .close-row {
   display: grid;
-  grid-template-columns: auto minmax(5em, auto) 1fr;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: baseline;
   gap: 0 10px;
   width: calc(100% + 12px);
@@ -1021,6 +1052,150 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 .close-sense {
   font-size: calc(12px * var(--type));
   color: var(--paper-dim);
+}
+
+/* How it differs: under the keyword and the meaning, the glyph standing beside it. */
+.close-line {
+  grid-column: 2 / -1;
+  margin: 1px 0 2px;
+  font-size: calc(12.5px * var(--type));
+  line-height: 1.45;
+  color: var(--paper);
+}
+
+.close-line .entry-fallback,
+.spelling-def .entry-fallback {
+  margin-left: 6px;
+}
+
+/* A word's senses as cards, numbered as a kanji's meanings are: smaller, not
+   held to the top, and always open, so no caret. */
+.entry-senses > li.sense-card {
+  margin-top: 8px;
+  padding: 0 10px 8px;
+  font-size: inherit;
+}
+
+.sense-card header {
+  position: static;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 2px 9px;
+  margin: 0 -10px;
+  padding: 8px 10px 2px;
+}
+
+.sense-card .meaning-n {
+  width: calc(19px * var(--type));
+  height: calc(19px * var(--type));
+  margin-top: 1px;
+  font-size: calc(11px * var(--type));
+}
+
+.sense-card .entry-gloss {
+  margin: 0;
+}
+
+.sense-lead {
+  font-weight: 600;
+}
+
+.sense-card .rest {
+  color: var(--paper-dim);
+}
+
+/* How soon a learner meets the sense: "main" in the accent, "rare" dim, a
+   secondary one says nothing; its badge says the same, filled for main. */
+.sense-rank {
+  grid-column: 3;
+  grid-row: 1;
+  font-size: calc(11px * var(--type));
+  color: var(--muted);
+}
+
+.sense-card[data-rank='main'] .sense-rank {
+  color: var(--ai);
+}
+
+.sense-card[data-rank='main'] .meaning-n {
+  background: var(--paper);
+}
+
+.sense-card[data-rank='secondary'] .meaning-n,
+.sense-card[data-rank='rare'] .meaning-n {
+  color: var(--paper-dim);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--paper-dim);
+}
+
+.sense-card[data-rank='rare'] .meaning-n {
+  opacity: 0.6;
+}
+
+/* What the sense is, under its glosses: the nuance, then an example. */
+.sense-note {
+  margin: 6px 0 0 calc(19px * var(--type) + 9px);
+}
+
+.sense-nuance {
+  margin: 0;
+  font-size: calc(13px * var(--type));
+  line-height: 1.5;
+  color: var(--paper);
+}
+
+.sense-example {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 6px 0 0;
+}
+
+.sense-example-ja {
+  font-family: var(--mincho);
+  font-size: calc(15px * var(--type));
+  color: var(--paper);
+}
+
+.sense-example-ja mark {
+  color: var(--ai);
+  background: none;
+}
+
+.sense-example-en {
+  font-size: calc(12px * var(--type));
+  color: var(--paper-dim);
+}
+
+/* Its part of speech under the glosses, in line with them. */
+.sense-card .entry-pos {
+  grid-column: 2;
+}
+
+.sense-card .aside-block {
+  margin-top: 10px;
+}
+
+/* A word's sense brought into view from another word's page glows a moment. */
+@keyframes sense-flash {
+  0%,
+  35% {
+    background: color-mix(in srgb, var(--ai-wash) 45%, transparent);
+    box-shadow: 0 0 0 1px var(--ai-deep);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.entry-senses > li {
+  scroll-margin-top: 56px;
+}
+
+.sense-flash {
+  animation: sense-flash 2.2s var(--ease) 0.25s both;
 }
 
 /* A meaning brought into view from another kanji's page glows a moment. */
@@ -4413,9 +4588,11 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
+/* Cards, each with its own number (.sense-card): no list numbers, no indent. */
 .entry-senses {
   margin: 18px 0 0;
-  padding: 0 0 0 20px;
+  padding: 0;
+  list-style: none;
 }
 
 /* On a phone, first in the entry, the head being above the tabs. */
@@ -4531,20 +4708,84 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--muted);
 }
 
-.entry-forms {
-  margin: 16px 0 0;
+/* Every way to write the word, at the top of its entry: the headword first
+   and brightest, the seldom ones dimmer, each tagged where it is old or rare. */
+.entry-spellings {
+  display: flex;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 10px 0 4px;
+}
+
+.entry-spellings-label {
+  flex: none;
   font-size: calc(12px * var(--type));
   color: var(--muted);
 }
 
-.entry-form {
-  margin-right: 10px;
-  font-family: var(--mincho);
+.entry-spelling-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+/* On a search card: smaller, between the head and the senses. */
+.word-card .entry-spellings {
+  margin: 4px 0 2px;
+}
+
+.word-card .entry-spelling {
   font-size: calc(15px * var(--type));
+}
+
+.entry-spelling {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--mincho);
+  font-size: calc(18px * var(--type));
   color: var(--paper-dim);
 }
 
-.entry-form[data-rare] {
+.entry-spelling[data-main] {
+  color: var(--paper);
+}
+
+.entry-spelling[data-rare] {
+  color: var(--muted);
+}
+
+.entry-spelling .entry-char {
+  font: inherit;
+  color: inherit;
+}
+
+.entry-old-char {
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+/* Another word that is a form of this one (ＣＭ, メーター): it opens that word. */
+.entry-form-word {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 4px;
+}
+
+.entry-form-word:hover {
+  text-decoration-color: currentColor;
+}
+
+.entry-spelling-tag {
+  font-family: var(--gothic);
+  font-size: calc(11px * var(--type));
   color: var(--muted);
 }
 

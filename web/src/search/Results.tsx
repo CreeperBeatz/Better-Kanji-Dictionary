@@ -28,6 +28,7 @@ import { Pitch } from './Pitch'
 import { MarkedReading } from './MarkedReading'
 import { Valency } from './Valency'
 import { WordsWith } from './WordsWith'
+import { Spellings } from '../detail/Spellings'
 import { InstallNote } from '../install/InstallGuide'
 import { warmKanji, warmWord } from '../warm'
 
@@ -337,6 +338,7 @@ function WordRowView({
             </span>
           )}
         </span>
+        <Spellings word={w} />
         {w.inflection && w.inflection.length > 0 && (
           <span className="word-inflection">{w.inflection.map((r) => inflectionLabel(r, lang)).join(', ')}</span>
         )}

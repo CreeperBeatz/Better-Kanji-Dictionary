@@ -25,6 +25,7 @@ from .. import bg_overlay
 from .. import bulgarian as bg
 from .. import kanji_parts
 from .. import semantic as sem
+from .. import synonyms
 from ..db import get_db, query, query_one
 from ..errors import AppError
 from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_to_kana
@@ -97,6 +98,13 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
         w = words.get(r["word_id"])
         if w:
             w["forms"].append({"text": r["text"], "kana": bool(r["kana"]), "rare": bool(r["rare"])})
+    # A spelling in old kanji (學校): with its old kanji made new, another of the word's spellings.
+    old = _old_kanji()
+    for w in words.values():
+        texts = {f["text"] for f in w["forms"]}
+        for f in w["forms"]:
+            if any(c in old for c in f["text"]) and "".join(old.get(c, c) for c in f["text"]) in texts:
+                f["old"] = True
 
     # One query for every word's accent, not one each: a kanji's page fetches hundreds.
     heads = sorted({w["headword"] for w in words.values()})
@@ -107,6 +115,12 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
     for w in words.values():
         w["pitch"] = pitch.get((w["headword"], w["reading"]))
     return words
+
+
+@functools.cache
+def _old_kanji() -> dict[str, str]:
+    """Each old kanji and its new form: 學 -> 学."""
+    return {r["other"]: r["char"] for r in query("SELECT char, other FROM char_form WHERE kind = 'old'")}
 
 
 def _order(w: dict, sort: str, desc: bool) -> tuple:
@@ -1038,7 +1052,10 @@ def kanji_page(char: str) -> dict:
 
     # Each kanji with the meaning it has on that reading, this one (`self`) too.
     mixups = [
-        {"reading": r, "self": read_as(char, r), "kanji": [{**lite(c), "sense": read_as(c, r)} for c in dict.fromkeys(cs)],
+        {"reading": r, "self": read_as(char, r),
+         # With no usage card, a line on when to write which (pipeline/kanji_nuance.py), where drafted.
+         "kanji": [{**lite(c), "sense": read_as(c, r), **({} if r.split("・")[0] in card_of else {"note": synonyms.kanji_mixup(char, c, r)})}
+                   for c in dict.fromkeys(cs)],
          "usage": card_of.get(r.split("・")[0])}
         for r, cs in mix.items() if cs
     ]
@@ -1052,7 +1069,11 @@ def kanji_page(char: str) -> dict:
         g = next((g for g in groups if char in (g.get("similar") or [])), None) or max(
             groups, key=lambda g: len(_wording(g) & mine), default=None
         )
-        return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None}
+        if synonyms.kanji_wrong_label(char, here["id"], c):
+            g = None  # the check found the guess wrong (D-030): no label rather than a false one
+        return {**lite(c), "sense": {"id": g["id"], "en": g.get("en"), "bg": g.get("bg")} if g else None,
+                # How it differs; what this kanji is in the meaning, its card says.
+                "nuance": synonyms.kanji_nuance(char, here["id"], c)}
 
     def as_here(r) -> dict:
         """The word as written and read here, which may not be how its entry heads it,
@@ -1111,7 +1132,8 @@ def kanji_page(char: str) -> dict:
             "on": [{"reading": r, "words": [starred(marked(w), w) for w in pick(by[r], first)]} for r in on],
             "also": [{"reading": r, "words": [starred(marked(w), w) for w in by[r][:ALSO_WORDS]]} for r in also],
             "exceptions": [starred(as_here(r), r["word_id"]) for r in exceptions],
-            "similar": [close(c, s) for c in s.get("similar") or [] if c not in mixed],
+            "similar": [close(c, s) for c in s.get("similar") or []
+                        if c not in mixed and not synonyms.kanji_not_close(char, s["id"], c)],
             "mixups": here,
             # The patterns it builds words in (〜人 "a person from …": 日本人, 村人), each with its examples.
             "uses": [{"id": u["id"], "en": u["en"], "bg": u.get("bg"), "about": u.get("about"), "aboutBg": u.get("aboutBg"),
@@ -1141,11 +1163,11 @@ def kanji_page(char: str) -> dict:
 @router.get("/examples/{headword}")
 def examples(headword: str, limit: int = Query(5, ge=1, le=30)) -> dict:
     rows = query(
-        "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
-        "WHERE sw.headword = ? LIMIT ?",
+        f"SELECT s.text, {'s.real' if _sentence_real() else 'NULL'} AS real FROM sentence_word sw "
+        "JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ? LIMIT ?",
         (headword, limit),
     )
-    return {"headword": headword, "sentences": [r["text"] for r in rows]}
+    return {"headword": headword, "sentences": [r["real"] or r["text"] for r in rows]}
 
 
 @router.get("/word/{word_id}")
@@ -1178,16 +1200,49 @@ def word_entry(word_id: int) -> dict:
             kanji.append({**nodes[c], "curated": curated.get(c)})
 
     rows = query(
-        "SELECT s.text FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
-        "WHERE sw.headword = ? ORDER BY LENGTH(s.text) LIMIT 6",
+        f"SELECT s.text, {'s.real' if _sentence_real() else 'NULL'} AS real FROM sentence_word sw "
+        "JOIN sentence s ON s.id = sw.sentence_id "
+        "WHERE sw.headword = ? ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
         (w["headword"],),
     )
     return {
         "word": w,
         "kanji": kanji,
-        "examples": [_sentence(r["text"], w["headword"]) for r in rows],
+        "examples": [_sentence(r["text"], r["real"], w["headword"]) for r in rows],
         "pairs": verb_pairs(word_id),
+        "related": related_words(word_id),
+        "senseNotes": synonyms.sense_notes(word_id),
+        "senseOnly": synonyms.sense_only(word_id),
+        "spelling": spelling_kanji(w),
     }
+
+
+def spelling_kanji(w: dict) -> dict:
+    """The kanji of the word's other spellings: which have a page to open (旧 in 旧い), and
+    which are the old form of another (學 for 学, so 學校 is 学校 in old kanji)."""
+    chars = list(dict.fromkeys(c for f in w["forms"] if not f["kana"] for c in f["text"]
+                               if "一" <= c <= "鿿" or "㐀" <= c <= "䶿"))
+    if not chars:
+        return {"open": [], "old": {}}
+    from .graph import _fetch
+
+    pages, old = _fetch(chars), _old_kanji()
+    return {"open": [c for c in chars if c in pages], "old": {c: old[c] for c in chars if c in old}}
+
+
+def related_words(word_id: int) -> list[dict]:
+    """The word's synonyms (≈), opposites (↔) and the words read the same that are easy to
+    mix up with it (!), sense by sense (server/synonyms.py): each the other word, the
+    number of its sense that matches, the line on how it differs or when to write it, and
+    the line on how this word differs from it."""
+    rows = synonyms.word_rows(word_id)
+    others = _fetch_words(list({r[2] for r in rows}))
+    return [{"sense": r[0], "kind": r[1], "word": others[r[2]], "otherSense": r[3], "line": r[4],
+             "ownLine": r[5] if len(r) > 5 else None,
+             **({"lineBg": synonyms.line_bg(r[4]), "ownLineBg": synonyms.line_bg(r[5] if len(r) > 5 else None)}
+                if r[1] in ("syn", "mix") else {}),
+             **({"why": r[6] if len(r) > 6 else "sound"} if r[1] == "mix" else {})}
+            for r in rows if r[2] in others]
 
 
 def verb_pairs(word_id: int) -> list[dict]:
@@ -1200,20 +1255,44 @@ def verb_pairs(word_id: int) -> list[dict]:
 _ANNOTATION = re.compile(r"\(.*?\)|\[.*?\]|~")
 
 
-def _sentence(indexed: str, headword: str) -> dict:
-    """Rebuild the sentence from a Tatoeba index line, and find the word in it.
+@functools.cache
+def _sentence_real() -> bool:
+    """Whether the db keeps Tatoeba's own text (built after D-031); an older one does not."""
+    return any(r["name"] == "real" for r in query("PRAGMA table_info(sentence)"))
 
-    The stored text is the jpn_indices B-line, one token per space:
+
+def _sentence(indexed: str, real: str | None, headword: str) -> dict:
+    """The sentence as Tatoeba writes it, and where the word is in it.
+
+    `indexed` is the jpn_indices B-line, one token per space:
     `lemma(reading)[sense]{surface}` -- only the lemma is mandatory, and the
     surface form, when given, is what the sentence actually says. Matching on
-    the lemma is what lets 食べた be marked as an example of 食べる.
+    the lemma is what lets 食べた be marked as an example of 食べる. The tokens
+    are found in `real` in order, so the word's own place is marked, not an
+    earlier look-alike. Without `real` (an old db), the sentence is rebuilt from
+    the tokens, which loses punctuation and every word the index skips (D-031).
     """
-    text = ""
-    hit = None
+    tokens = []
     for token in indexed.split():
         brace = token.find("{")
         lemma = _ANNOTATION.sub("", token[:brace] if brace >= 0 else token)
-        surface = token[brace + 1 : token.find("}", brace)] if brace >= 0 else lemma
+        tokens.append((lemma, token[brace + 1 : token.find("}", brace)] if brace >= 0 else lemma))
+    if real:
+        at, hit = 0, None
+        for lemma, surface in tokens:
+            pos = real.find(surface, at)
+            if pos < 0:
+                continue  # a token without its surface form, in dictionary spelling
+            if hit is None and lemma == headword:
+                hit = [pos, pos + len(surface)]
+            at = pos + len(surface)
+        if hit is None:
+            word = next((s for lemma, s in tokens if lemma == headword), None)
+            pos = real.find(word) if word else -1
+            hit = [pos, pos + len(word)] if pos >= 0 else None
+        return {"text": real, "hit": hit}
+    text, hit = "", None
+    for lemma, surface in tokens:
         if hit is None and lemma == headword:
             hit = [len(text), len(text) + len(surface)]
         text += surface
