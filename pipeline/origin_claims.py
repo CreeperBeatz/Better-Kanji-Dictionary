@@ -116,12 +116,11 @@ def fixes() -> dict[tuple[int, str], str]:
         for it in ws._read(p)["items"]:
             v = good.get(it["key"])
             if v:
-                wid = ids.get((it["word"], it["reading"]))
-                if wid is None:
-                    found = [w for w in ws.resolve(it["word"], it["reading"], best=False)
-                             if ws.scope()[w]["reading"] == it["reading"]]
-                    wid = ids[(it["word"], it["reading"])] = found[0] if found else None
-                if wid is not None:
+                # Every word so written and read (位 くらい is two words): the text says which one it is about.
+                if (it["word"], it["reading"]) not in ids:
+                    ids[(it["word"], it["reading"])] = [w for w in ws.resolve(it["word"], it["reading"], best=False)
+                                                        if ws.scope()[w]["reading"] == it["reading"]]
+                for wid in ids[(it["word"], it["reading"])]:
                     out[(wid, it["text"])] = v["text"]
     return out
 

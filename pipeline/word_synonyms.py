@@ -127,7 +127,8 @@ def forms() -> dict[str, list[tuple[int, str]]]:
             out[text].append((wid, hira(words[wid]["reading"])))
     for w in words.values():  # the reading itself, for words written in kana
         out[w["reading"]].append((w["id"], hira(w["reading"])))
-    return {t: sorted(set(v), key=lambda x: _rank(x[0])) for t, v in out.items()}
+    # Ties by id: a set's order changes from run to run (hash seed), and with it which word resolve picks.
+    return {t: sorted(set(v), key=lambda x: (_rank(x[0]), x[0])) for t, v in out.items()}
 
 
 def resolve(text: str, reading: str | None = None, best: bool = True) -> list[int]:
