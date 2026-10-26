@@ -216,6 +216,68 @@ def all_verdicts() -> dict[int, list[dict]]:
     return out
 
 
+# Rows the site shows that the run's agents flagged (`report`), and a few found while running, decided
+# once (2026-10-26). By word pair, both ways, on the final rows: (word, other, what).
+#   drop: the pair goes (rare, literary or slang use; a short form of one sense only; the same word)
+#   mix: a synonym that is better a mix-up by meaning; its two lines stay
+#   sense N: the pair moves to the word's sense N
+#   spoken: a short form that is really a spoken form
+FIXES = [
+    (1217730, 1584680, "drop"),   # 顔 / 面 (おもて): literary
+    (1269990, 1383690, "drop"),   # 後任 / 跡継ぎ: an heir, not the next holder of a post
+    (1263960, 1546270, "drop"),   # 言い回し / 用語: a term, not a turn of phrase
+    (1505550, 1179760, "drop"),   # 文通 / 往復: only in 往復書簡
+    (1596470, 1477910, "drop"),   # 聡明 / 発明 "clever": old, rare
+    (1305410, 1151120, "drop"),   # 仕返し / 挨拶 sense 5: rare ironic use
+    (1843020, 1467640, "drop"),   # 芸妓 / 猫 "geisha": old slang
+    (1140590, 2647190, "drop"),   # リーダー / 長 (おさ): literary
+    (1566735, 1012100, "drop"),   # 彷徨く / 間誤付く "loiter": rare
+    (1520920, 1520890, "drop"),   # 北極圏 / 北極: short form of one sense only
+    (1670710, 1524810, "drop"),   # 幕の内 / 幕内: short form of the sumo sense only
+    (1305380, 2013800, "drop"),   # 仕舞う / ちゃう: ちゃう shortens てしまう, not しまう
+    (1119460, 1119470, "drop"),   # ベクター / ベクトル: one word, two spellings
+    (1504190, 1504200, "drop"),   # 分別 ふんべつ / ぶんべつ: same spelling; the readings section's job (Dani)
+    (1251780, 1401090, "mix"),    # 継承 / 相続
+    (1180510, 1521990, "mix"),    # 押収 / 没収
+    (1211440, 1211630, "mix"),    # 完結 / 完了
+    (1019530, 1146810, "mix"),    # アルファベット / ローマ字
+    (1150620, 1575660, "mix"),    # 愛嬌 / 愛想
+    (1424290, 1213150, "mix"),    # 中国語 / 漢語
+    (1361250, 1303400, "sense 3"),  # 振り切る / 撒く: break off from a pursuer
+    (1624030, 1455670, "sense 2"),  # 独白 / 独り言: talking to oneself
+    (1064480, 1375260, "sense 2"),  # ジェンダー / 性 sense 4: grammatical gender
+    (1008190, 2450680, "spoken"),   # 詰らない / つまんない
+]
+
+
+def apply_fixes(out: dict[int, list], stats) -> None:
+    """FIXES on word_synonyms.export's final rows (after mirroring)."""
+    for w, o, what in FIXES:
+        mine = [r for r in out.get(w, []) if r[2] == o]
+        theirs = [r for r in out.get(o, []) if r[2] == w]
+        if not (mine or theirs):
+            stats["fix: pair not found"] += 1
+            continue
+        if what == "drop":
+            out[w] = [r for r in out[w] if r[2] != o]
+            out[o] = [r for r in out[o] if r[2] != w]
+        elif what == "mix":
+            for rs in (mine, theirs):
+                for r in rs:
+                    if r[1] == "syn":
+                        r[1:] = ["mix", r[2], r[3], r[4], r[5] if len(r) > 5 else None, "meaning"]
+        elif what.startswith("sense "):
+            n = int(what.split()[1])
+            for r in mine:
+                r[0] = n - 1
+            for r in theirs:
+                r[3] = n
+        elif what == "spoken":
+            for r in mine + theirs:
+                r[1] = r[1].replace("short", "spoken")
+        stats[f"fix: {what.split()[0]}"] += 1
+
+
 def rows() -> list[tuple[int, list, int, list]]:
     """(word, its row, other, the other's row) for every item sure enough, as word_synonyms.export adds them."""
     out = []

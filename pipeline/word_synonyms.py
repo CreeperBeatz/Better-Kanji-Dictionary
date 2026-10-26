@@ -986,6 +986,7 @@ def export(bar: float = 0.6) -> None:
                             break
                         r[f] = register[(about, against, r[f])]
                         stats["register fixed"] += 1
+    common_relations.apply_fixes(out, stats)
     rows = {str(w): sorted(r, key=lambda r: (r[0], KIND_ORDER.index(r[1]))) for w, r in sorted(out.items())}
     SITE.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     _dump(MIRRORED, mirrored)
