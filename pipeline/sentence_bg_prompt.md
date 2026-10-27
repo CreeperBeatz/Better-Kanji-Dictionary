@@ -17,7 +17,8 @@ Each item: `key`, `ja` (the sentence as Tatoeba writes it), `en` (Tatoeba's
 English translation, or null), and `words`: the words whose page shows it,
 each with its reading and first English meaning, so you know which word the
 learner is looking at. Sometimes `tatoebaBg`: a Bulgarian translation from
-Tatoeba. Output: `{"bg": "..."}`.
+Tatoeba. In R-* batches, `issue`: what an earlier reader found wrong with
+the sentence; judge it yourself. Output: `{"bg": "..."}`.
 
 ## How to translate
 
@@ -51,12 +52,23 @@ Tatoeba. Output: `{"bg": "..."}`.
 
 ## When the English or the Japanese looks wrong
 
-Still translate from the Japanese. But add `"issue": "what looks wrong"` to
-that item when Tatoeba's English says something the Japanese does not (a
-wrong meaning, a mistranslated word, a different tense or person), or when
-the Japanese itself is unnatural or wrong (a phrase a Japanese speaker would
-not say, the wrong word). Not for English that is only loose or
-old-fashioned but means the same.
+Always give `bg`. Add `"issue": "what looks wrong"`, and one of these:
+
+- **The English is wrong**: Tatoeba's English says something the Japanese
+  does not (a wrong meaning, a mistranslated word, a different tense or
+  person, words added or dropped: まだ蕾だ given as "still in bloom"). Add
+  `"enFix"`: a correct English translation of the Japanese, plain and
+  natural, as short as the sentence allows. English pages show it in place
+  of Tatoeba's. Not for English that is only loose or old-fashioned but
+  means the same ("You are secure from danger here" is fine).
+- **The Japanese is wrong**: a typo (自信 for 自身), a wrong word (規制正しく),
+  broken grammar (多く学生), a calque of an English saying no Japanese
+  speaker would use, or a phrase a native speaker would not write. Add
+  `"broken": true`: the sentence is taken off the word pages, so a learner
+  never copies it. Give `bg` for what the sentence means to say.
+
+When unsure whether the Japanese is wrong or only unusual, it is not
+broken: say so in `issue` and leave `broken` out.
 
 ## Output
 
@@ -64,7 +76,10 @@ old-fashioned but means the same.
 {"batch": "<BATCH>", "items": {
   "s191321": {"bg": "Приятно и безопасно пътуване."},
   "s177862": {"bg": "Тук си в безопасност."},
-  "s123456": {"bg": "...", "issue": "the English says 'yesterday'; the Japanese says 'today' (今日)"}
+  "s186619": {"bg": "Цветята още са в пъпки.", "issue": "the English says 'still in bloom'; まだ蕾 is still in bud",
+              "enFix": "The flowers are still in bud."},
+  "s138290": {"bg": "Много студенти не успяха да предадат заданията си.", "issue": "多く学生 should be 多くの学生",
+              "broken": true}
 }}
 ```
 

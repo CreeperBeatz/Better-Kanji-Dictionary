@@ -84,7 +84,18 @@ def _sentences_bg() -> dict:
 
 def sentence_bg(sentence_id: int) -> str | None:
     """A Tatoeba example sentence in Bulgarian (pipeline/sentence_bg.py merge), if translated."""
-    return _sentences_bg().get(str(sentence_id))
+    return _sentences_bg().get("bg", {}).get(str(sentence_id))
+
+
+def sentence_en(sentence_id: int) -> str | None:
+    """Our English for a sentence whose Tatoeba English says something the Japanese does not."""
+    return _sentences_bg().get("en", {}).get(str(sentence_id))
+
+
+@cache
+def sentences_broken() -> frozenset[int]:
+    """Sentences whose Japanese is wrong (a typo, broken grammar): kept off the word pages."""
+    return frozenset(int(s) for s in _sentences_bg().get("broken", []))
 
 
 def line_bg(line: str | None) -> str | None:

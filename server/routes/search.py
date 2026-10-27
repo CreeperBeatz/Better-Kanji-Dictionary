@@ -1223,14 +1223,15 @@ def word_entry(word_id: int) -> dict:
     rows = query(
         f"SELECT s.id, s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
         f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine} "
-        "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
+        "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 12",
         tuple(args),
     )
+    rows = [r for r in rows if r["id"] not in synonyms.sentences_broken()][:6]
     return {
         "word": w,
         "kanji": kanji,
-        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": r["en"], "bg": synonyms.sentence_bg(r["id"])}
-                     for r in rows],
+        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": synonyms.sentence_en(r["id"]) or r["en"],
+                      "bg": synonyms.sentence_bg(r["id"])} for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
         "senseNotes": synonyms.sense_notes(word_id),
