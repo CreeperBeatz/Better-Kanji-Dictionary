@@ -566,6 +566,21 @@ move to them (FIXES `other`), with the lines and Bulgarian they had. Open: a
 rule for which out-of-scope entries spelled like ours to take, when there is
 frequency evidence beyond JMdict's tags.
 
+### D-040 · Example sentences of another entry with the same headword
+*Found 2026-10-27,* checking the two entries D-039 took in. A word's sentences
+are those whose index token has its headword (sentence_word.headword); the
+token's reading or JMdict id is dropped. So 片 ビラ "handbill" shows ペンス
+sentences (ペンス is also written 片), and フライ "deep-fried food" shows フライを
+打ち上げた, a fly ball, which the index tags #2843891.
+Scale: 277 headwords are shared by two or more in-scope entries (580 entries);
+108,393 sentence tokens are on them, 107,380 with a reading or entry id in the
+index.
+Source: build_db's examples stage (TOKEN keeps the lemma only) and
+search.word_entry (by headword).
+**Status: open.** To do: keep the token's reading and #id in sentence_word,
+and match a word by id where the index gives one, else by a reading among its
+kana forms; a token with neither stays on every entry of that headword.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot
