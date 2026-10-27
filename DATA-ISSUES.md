@@ -526,6 +526,46 @@ beside one of its kind that has one is grey (しょうこう, ほんめい), a r
 one greyer. build_db writes word_form.pri; pipeline/form_pri.py adds it to an
 existing database (prod needs it before the new server starts).
 
+### D-039 · Word pairs that point at another entry spelled the same
+*Found 2026-10-27,* by the round-7 Bulgarian translators. 飛球 is paired with
+フライ "deep-fried food", 散らし with ビラ "villa", 往々 with しばしば "(blinking)
+repeatedly". The lines are right; the entry is not. A drafted word given as
+spelling and reading is turned into an entry by word_synonyms.resolve, which
+ranks the entries spelled so and takes the first, never by meaning. When the
+meant entry is out of scope (the handbill ビラ and the fly-ball フライ are not
+marked common), only the wrong one is left to take; with both in scope, the
+kana sort put the headword しばしば before 屡々 read so.
+Scale: of the 35,766 rows the site shows, 3,634 point at a word spelled like
+another JMdict entry (1,414 of them from pipeline/common_relations.py), 2,659
+where one of those entries is out of scope. Most are likely right; none are
+checked.
+Source: word_synonyms.resolve, used by the synonym drafts and common_relations.
+**Status: fixed locally** (feat/common-relations, 2026-10-27). 飛球 / フライ and
+散らし / ビラ are dropped (common_relations FIXES). New drafts cannot repeat it:
+word_synonyms.homographs finds every JMdict entry spelled and read so, in scope
+or not, and both checkers ask an own word with more than one for the `id` of
+the one meant (an id out of scope: drop it). The runs done before are read as
+they were, so the export does not move. The kana sort now takes the commoner of
+the words headed so or usually kana: 往々 pairs with 屡々 (both lines have
+Bulgarian), the only row that moved.
+The 3,634 above counts every row whose other word shares a spelling, however it
+got there; a word offered by id was picked with its senses shown. What resolve
+picked by rank is narrower: 50 shown pairs (100 rows), typed in by the drafters
+and read like more than one entry (24 from the synonym runs, 26 from
+common_relations; 37 with a rival out of scope). All 50 checked by hand
+(2026-10-27): 47 point at the entry meant; three did not, each a question
+problem (the drafter knew the word; resolve picked by rank), none a knowledge
+one. ナット / ボルト and ビジター / ホーム move to the bolt and the home entries
+(FIXES `other`); もの / 門 is dropped: もん is a form of もの itself, so the pair
+was the word with itself. No lines changed, so no Bulgarian.
+Scope, for now by hand (Dani, 2026-10-27): the handbill ビラ (片) and the fly
+ball フライ are taken as common (build_db.COMMON_TOO; pipeline/common_too.py
+for a database built before; prod needs it, the bg stage and `load-bg` for
+their two cards). Their Bulgarian is words-s005; 散らし / ビラ and 飛球 / フライ
+move to them (FIXES `other`), with the lines and Bulgarian they had. Open: a
+rule for which out-of-scope entries spelled like ours to take, when there is
+frequency evidence beyond JMdict's tags.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

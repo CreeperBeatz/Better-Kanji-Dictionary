@@ -168,6 +168,15 @@ def build_graph(db: sqlite3.Connection) -> None:
     print("  highest fan-out: " + "  ".join(f"{c}={len(r)}" for c, r in top))
 
 
+# Entries JMdict does not mark common that we take as common, picked by hand (D-039): each is
+# spelled and read like a common entry that means something else, and is the one learners meet.
+# pipeline/common_too.py sets them in a database built before.
+COMMON_TOO = {
+    2509520,  # 片 ビラ "handbill; flyer", beside ビラ "villa"
+    2843891,  # フライ "fly (ball)", beside フライ "deep-fried food"
+}
+
+
 @stage("dict", "JMdict_e -> words, senses, nf frequency ranks, search indexes")
 def build_dict(db: sqlite3.Connection) -> None:
     import gzip
@@ -261,6 +270,7 @@ def build_dict(db: sqlite3.Connection) -> None:
 
         if not rebs:
             continue
+        common = common or int(wid in COMMON_TOO)
         headword = kebs[0][0] if kebs else rebs[0][0]
         reading = rebs[0][0]
         words.append((wid, headword, reading, common, best_nf))

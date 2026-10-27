@@ -70,7 +70,11 @@ numbers shown with it.
 candidates or opposites, you may add it: give `word` (its usual written
 form) and `reading` (hiragana) instead of `id`, and `sense` as `null`. Add
 only common modern words a learner meets (JLPT level or newspaper words).
-At most 2 own words per sense. Most antonyms will be your own words.
+At most 2 own words per sense. Most antonyms will be your own words. When
+the dictionary has several entries spelled and read so (ボルト "volt" and
+"bolt"), the checker lists them: add the `id` of the one you mean to the
+item, keeping `word` and `reading`; if it says that entry is not in the
+list, drop the item.
 
 **Far senses.** Senses tagged `arch`, `obs` or `rare`, and narrow technical
 senses, usually get nothing.
