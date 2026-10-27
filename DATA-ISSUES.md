@@ -577,9 +577,18 @@ Scale: 277 headwords are shared by two or more in-scope entries (580 entries);
 index.
 Source: build_db's examples stage (TOKEN keeps the lemma only) and
 search.word_entry (by headword).
-**Status: open.** To do: keep the token's reading and #id in sentence_word,
-and match a word by id where the index gives one, else by a reading among its
-kana forms; a token with neither stays on every entry of that headword.
+**Status: fixed locally** (fix/d040-example-entries, 2026-10-27). The examples
+stage keeps, for a headword several entries share, the entry the token names
+(sentence_word.entry), else its reading or a surface that is one of their kana
+forms as it stands (片{ペンス}: ぺんす); word_entry shows a word the sentences
+for its entry, or for none, or read as one of its kana forms. A db built before
+shows them as it did. 450 in-scope words show other sentences now, 137 none
+(米 メートル had rice, 印 いん had しるし, 一分 いちぶ had いっぷん). Prod needs
+`build_db.py examples` (jpn_indices and the Tatoeba files).
+Known limit: the index's own tags are sometimes wrong. It reads every 吐く as
+つく, 暴言を吐いた and ３回吐きました included, so 吐く はく "vomit" shows none and
+吐く つく shows them. pipeline/sense_notes.py still picks its examples by
+headword alone (the notes are drafted already).
 
 ## Fixed
 

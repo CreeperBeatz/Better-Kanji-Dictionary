@@ -539,15 +539,40 @@ def build_examples(db: sqlite3.Connection) -> None:
         );
         CREATE TABLE sentence_word (
             headword    TEXT NOT NULL,
-            sentence_id INTEGER NOT NULL
+            sentence_id INTEGER NOT NULL,
+            entry       INTEGER,        -- the JMdict entry the index names (#id), if one with this headword
+            reading     TEXT            -- else its reading, in hiragana, if the index tells (D-040)
         );
         CREATE INDEX idx_sw_head ON sentence_word(headword);
     """)
 
     # Each token is headword(reading){surface}[sense]~ -- we want the headword,
     # which is a real JMdict form, so examples attach by lemma rather than by
-    # substring match.
-    TOKEN = re.compile(r"^([^(\[{~|]+)")
+    # substring match. Entries sharing a headword (フライ fried food / fly ball,
+    # 片 ビラ / ペンス) are told apart by what the token says: an entry id (#2843891)
+    # that is one of them, else a reading, else a surface that is one of their
+    # kana forms as it stands (片{ペンス}); a token with none of these is on all (D-040).
+    TOKEN = re.compile(r"^([^(\[{~|]+)(?:\(([^)]*)\))?(?:\[\d+\])?(?:\{([^}]*)\})?")
+    kata = str.maketrans({chr(c): chr(c - 0x60) for c in range(0x30A1, 0x30F7)})
+    entries: dict[str, set[int]] = {}
+    for wid, head in db.execute("SELECT id, headword FROM word"):
+        entries.setdefault(head, set()).add(wid)
+    shared = {h: ws for h, ws in entries.items() if len(ws) > 1}
+    kana: dict[str, set[str]] = {}
+    for h, ws in shared.items():
+        kana[h] = {t.translate(kata) for (t,) in db.execute(
+            f"SELECT text FROM word_form WHERE kana = 1 AND word_id IN ({','.join('?' * len(ws))})", sorted(ws))}
+
+    def which(head: str, paren: str | None, surface: str | None) -> tuple[int | None, str | None]:
+        if head not in shared:
+            return None, None
+        if paren and paren.startswith("#") and paren[1:].isdigit() and int(paren[1:]) in shared[head]:
+            return int(paren[1:]), None
+        if paren and not paren.startswith("#"):
+            return None, paren.translate(kata)
+        if surface and surface.translate(kata) in kana[head]:
+            return None, surface.translate(kata)
+        return None, None
 
     # The index line alone rebuilds a sentence without its punctuation and
     # without every word it does not index (石の上にも三年 came back 石の上にも年),
@@ -589,13 +614,14 @@ def build_examples(db: sqlite3.Connection) -> None:
             head = m.group(1)
             if head and (head, sid) not in seen:
                 seen.add((head, sid))
-                links.append((head, sid))
+                links.append((head, sid, *which(head, m.group(2), m.group(3))))
 
     db.executemany("INSERT OR IGNORE INTO sentence VALUES (?,?,?,?)", sentences)
-    db.executemany("INSERT INTO sentence_word VALUES (?,?)", links)
+    db.executemany("INSERT INTO sentence_word VALUES (?,?,?,?)", links)
     print(f"  sentences     {len(sentences):>7,} indexed Japanese sentences, "
           f"{sum(1 for s in sentences if s[2]):,} with Tatoeba's own text")
-    print(f"  links         {len(links):>7,} word-to-sentence links")
+    print(f"  links         {len(links):>7,} word-to-sentence links, "
+          f"{sum(1 for x in links if x[2] or x[3]):,} to one of the entries sharing a headword")
 
 
 BG_OUT = ROOT / "pipeline" / "translate" / "out"

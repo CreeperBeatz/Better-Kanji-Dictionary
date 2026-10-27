@@ -1213,12 +1213,18 @@ def word_entry(word_id: int) -> dict:
         if c in nodes:
             kanji.append({**nodes[c], "curated": curated.get(c)})
 
-    real = _sentence_real()
+    real, mine, args = _sentence_real(), "", [w["headword"]]
+    if _sentence_entries():
+        # Of the entries sharing this headword, the sentences the index gives to this one (D-040).
+        kana = sorted({f["text"].translate(_KATA) for f in w["forms"] if f["kana"]})
+        mine = (f" AND (sw.entry = ? OR (sw.entry IS NULL AND (sw.reading IS NULL"
+                f"{' OR sw.reading IN (' + ','.join('?' * len(kana)) + ')' if kana else ''})))")
+        args += [word_id, *kana]
     rows = query(
         f"SELECT s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
-        "JOIN sentence s ON s.id = sw.sentence_id "
-        "WHERE sw.headword = ? ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
-        (w["headword"],),
+        f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine} "
+        "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
+        tuple(args),
     )
     return {
         "word": w,
@@ -1274,6 +1280,14 @@ _ANNOTATION = re.compile(r"\(.*?\)|\[.*?\]|~")
 def _sentence_real() -> bool:
     """Whether the db keeps Tatoeba's own text and its English (built after D-031); an older one does not."""
     return any(r["name"] == "real" for r in query("PRAGMA table_info(sentence)"))
+
+
+_KATA = str.maketrans({chr(c): chr(c - 0x60) for c in range(0x30A1, 0x30F7)})
+
+
+def _sentence_entries() -> bool:
+    """Whether the db says which of the entries sharing a headword a sentence is for (D-040)."""
+    return any(r["name"] == "entry" for r in query("PRAGMA table_info(sentence_word)"))
 
 
 def _sentence(indexed: str, real: str | None, headword: str) -> dict:
