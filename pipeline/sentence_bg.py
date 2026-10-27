@@ -236,6 +236,16 @@ def sample(n: int) -> None:
     print(f"{len(pick)} -> {DRAFTS / 'sample.md'}")
 
 
+def senses(given: str) -> None:
+    """Every meaning of a word as `words` gives it ("通 【つう】"), for a translator about to mark notFor."""
+    wid = _word_id(given)
+    if wid is None:
+        print(f"{given}: not one of our words")
+        return
+    for i, (pos, _, gloss) in enumerate(ws.scope()[wid]["senses"], 1):
+        print(f"{i}. {gloss} ({pos})")
+
+
 def merge() -> None:
     """The S batches, then R (a re-ask of flagged items) over them."""
     out = {"bg": {}, "en": {}, "broken": set(), "notFor": {}}
@@ -277,11 +287,13 @@ def main() -> None:
     p.add_argument("--batches", required=True, help="comma-separated, as S-000,S-001")
     p.add_argument("--name", default="R-000")
     p.add_argument("--no-english", action="store_true", help="the items with no English and no enFix")
+    p = sub.add_parser("senses")
+    p.add_argument("word", help='as `words` gives it, up to the 】: "通 【つう】"')
     sub.add_parser("merge")
     sub.add_parser("flags")
     a = ap.parse_args()
     {"prepare": lambda: prepare(a.size, a.missing), "check": lambda: check(a.batch), "sample": lambda: sample(a.n),
-     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "merge": merge, "flags": flags}[a.cmd]()
+     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "senses": lambda: senses(a.word), "merge": merge, "flags": flags}[a.cmd]()
 
 
 if __name__ == "__main__":

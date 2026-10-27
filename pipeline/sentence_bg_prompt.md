@@ -86,7 +86,11 @@ broken: say so in `issue` and leave `broken` out.
   (勤務中 is 中 【ちゅう】 "during", a meaning of that word too; 色 for
   "complexion"). Use `notFor` only where the sentence does not have that
   word at all: another word written alike, a name, or a piece of a longer
-  word (人文学 is not 文学).
+  word (人文学 is not 文学). Before every `notFor`, list all the word's
+  meanings with `PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe
+  pipeline/sentence_bg.py senses "通 【つう】"`; if one of them is the meaning
+  in the sentence (通 as the counter for letters is meaning 2), it is not
+  `notFor`.
 
 ## Output
 
