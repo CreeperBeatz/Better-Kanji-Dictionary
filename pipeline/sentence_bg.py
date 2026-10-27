@@ -200,7 +200,7 @@ def check(only: str | None) -> None:
     batches = [only] if only else sorted(p.stem for p in IN.glob("*.json"))
     done = 0
     for b in batches:
-        good, probs = verdicts(b)
+        good, probs = (audit_verdicts if b.startswith("A") else verdicts)(b)
         done += not probs
         if probs or only:
             print(f"{b}: {len(good)} valid, {len(probs)} problems")
@@ -260,11 +260,57 @@ def senses(given: str) -> None:
             print(f"{i}. {gloss} ({pos})")
 
 
+AUDIT_ASK = {  # shown for two entries written alike, which no batch could tell apart then: ask for both
+    223578: "ダイヤ", 218083: "ダイヤ", 77544: "ダイヤ", 99062: "位", 232777: "位"}
+
+
+def audit_prepare(size: int) -> None:
+    """A-*: every notFor, and the sentences in AUDIT_ASK, for a second look with all of the word's senses shown."""
+    site, raw = _site(), shown(raw=True)
+    db = proposals.connect()
+    texts = {sid: (real, en) for sid, real, en in db.execute("SELECT id, real, en FROM sentence")}
+    issues = {}
+    for p in sorted(OUT.glob("*.json")):
+        for k, v in (ws._read(p).get("items") or {}).items():
+            if isinstance(v, dict) and v.get("issue"):
+                issues[k[1:]] = v["issue"]
+    pairs = [(int(s), w, "off") for s, ws_ in site["notFor"].items() for w in ws_]
+    pairs += [(s, w, "ask") for s, head in AUDIT_ASK.items() for w in raw.get(s, []) if ws.scope()[w]["word"] == head]
+    items = []
+    for sid, wid, now in pairs:
+        real, en = texts[sid]
+        items.append({"key": f"s{sid}|{wid}", "ja": real, "en": site["en"].get(str(sid)) or en, "now": now,
+                      "word": _context(wid), "senses": [f"{i}. {g}" for i, (_, _, g) in enumerate(ws.scope()[wid]["senses"], 1)],
+                      **({"issue": issues[str(sid)]} if str(sid) in issues else {})})
+    for b in range(0, len(items), size):
+        name = f"A-{b // size:03d}"
+        ws._dump(IN / f"{name}.json", {"batch": name, "items": items[b:b + size]})
+    print(f"{len(items)} items ({sum(x['now'] == 'ask' for x in items)} to ask) in {-(-len(items) // size)} batches A-*")
+
+
+def audit_verdicts(batch: str) -> tuple[dict[str, str], list[str]]:
+    src = {it["key"]: it for it in ws._read(IN / f"{batch}.json")["items"]}
+    path = OUT / f"{batch}.json"
+    if not path.exists():
+        return {}, [f"{batch}: no output"]
+    got = ws._read(path).get("items") or {}
+    probs = [f"{batch}: missing {k}" for k in src.keys() - got.keys()]
+    good = {}
+    for k, v in got.items():
+        if k not in src:
+            probs.append(f"{batch}: unknown {k}")
+        elif not isinstance(v, dict) or v.get("verdict") not in ("off", "keep") or not str(v.get("why") or "").strip():
+            probs.append(f"{batch}: {k}: needs {{verdict: off | keep, why}}")
+        else:
+            good[k] = v["verdict"]
+    return good, probs
+
+
 def merge() -> None:
-    """The S batches, then R (a re-ask of flagged items) over them."""
+    """The S batches, then R (a re-ask of flagged items) over them, then the A audit of notFor."""
     out = {"bg": {}, "en": {}, "broken": set(), "notFor": {}}
     raw = shown(raw=True)  # a notFor names one of the words the sentence was shown for
-    for p in sorted(IN.glob("*.json"), key=lambda p: (p.stem.startswith("R"), p.stem)):
+    for p in sorted(IN.glob("[SR]*.json"), key=lambda p: (p.stem.startswith("R"), p.stem)):
         if not (OUT / p.name).exists():
             continue
         good, probs = verdicts(p.stem)
@@ -282,6 +328,20 @@ def merge() -> None:
                 out["en"][sid] = v["en"]
             if v.get("broken"):
                 out["broken"].add(sid)
+    for p in sorted(IN.glob("A-*.json")):
+        if not (OUT / p.name).exists():
+            continue
+        good, probs = audit_verdicts(p.stem)
+        if probs:
+            print(f"{p.stem}: {len(probs)} problems, {len(good)} taken")
+        for k, verdict in good.items():
+            sid, wid = k[1:].split("|")
+            words = set(out["notFor"].get(sid, []))
+            (words.add if verdict == "off" else words.discard)(int(wid))
+            if words:
+                out["notFor"][sid] = sorted(words)
+            else:
+                out["notFor"].pop(sid, None)
     ws._dump(SITE, {**out, "broken": sorted(out["broken"], key=int)})
     print(f"{len(out['bg'])} sentences, {len(out['en'])} English fixed, {len(out['broken'])} broken,"
           f" {len(out['notFor'])} off a word's page -> {SITE}")
@@ -304,11 +364,13 @@ def main() -> None:
     p.add_argument("--no-english", action="store_true", help="the items with no English and no enFix")
     p = sub.add_parser("senses")
     p.add_argument("word", help='as `words` gives it, up to the 】: "通 【つう】"')
+    p = sub.add_parser("audit-prepare")
+    p.add_argument("--size", type=int, default=200)
     sub.add_parser("merge")
     sub.add_parser("flags")
     a = ap.parse_args()
     {"prepare": lambda: prepare(a.size, a.missing), "check": lambda: check(a.batch), "sample": lambda: sample(a.n),
-     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "senses": lambda: senses(a.word), "merge": merge, "flags": flags}[a.cmd]()
+     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "senses": lambda: senses(a.word), "audit-prepare": lambda: audit_prepare(a.size), "merge": merge, "flags": flags}[a.cmd]()
 
 
 if __name__ == "__main__":
