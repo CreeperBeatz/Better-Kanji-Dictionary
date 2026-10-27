@@ -4891,6 +4891,15 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--paper-dim);
 }
 
+/* Tatoeba's English under the sentence, as a sense note's example has it. */
+.entry-example-en {
+  display: block;
+  font-family: var(--gothic);
+  font-size: calc(12px * var(--type));
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .entry-examples mark {
   background: none;
   color: var(--paper);

@@ -155,8 +155,8 @@ export interface MapResponse {
 export interface WordEntry {
   word: Word
   kanji: (KanjiNode & { curated: string | null })[]
-  /** `hit` is the [start, end) of the word itself, inflected as it appears. */
-  examples: { text: string; hit: [number, number] | null }[]
+  /** `hit` is the [start, end) of the word itself, inflected as it appears; `en`, Tatoeba's English. */
+  examples: { text: string; hit: [number, number] | null; en?: string | null }[]
   /** The verb going the other way, が for を: 開ける for 開く; likeliest first. */
   pairs: Word[]
   /** Its synonyms, opposites and words read the same, sense by sense; missing from the device's copy. */
