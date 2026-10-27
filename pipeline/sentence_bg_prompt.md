@@ -90,7 +90,9 @@ broken: say so in `issue` and leave `broken` out.
   meanings with `PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe
   pipeline/sentence_bg.py senses "通 【つう】"`; if one of them is the meaning
   in the sentence (通 as the counter for letters is meaning 2), it is not
-  `notFor`.
+  `notFor`. When two of `words` are written alike (ダイヤ 【ダイヤ】 "diamond" and
+  ダイヤ 【ダイヤ】 "timetable"), give the whole line from `words` instead, its
+  meaning included, so the right one comes off.
 
 ## Output
 

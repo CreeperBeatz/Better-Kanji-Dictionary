@@ -133,6 +133,9 @@ def _word_id(given: str, among: list[int] | None = None) -> int | None:
     """"一時 【いちじ】" -> that word's id: the one of `among` (the words the sentence is shown for) written so,
     else the best of those spelled and read so (kana alone is ambiguous: そう is 箏 and 相 and more)."""
     if among:
+        for w in among:  # the whole line first: two words may be written alike (ダイヤ diamond, ダイヤ timetable)
+            if _context(w) == given:
+                return w
         for w in among:
             if _context(w).split("】")[0] + "】" == given:
                 return w
@@ -144,8 +147,9 @@ def _word_id(given: str, among: list[int] | None = None) -> int | None:
 def _bad_extra(v: dict, it: dict) -> str | None:
     """What is wrong with an item's enFix, broken, notFor or issue, if anything."""
     words = [w.split("】")[0] + "】" for w in it["words"]]
-    if "notFor" in v and (not isinstance(v["notFor"], list) or not v["notFor"] or any(w not in words for w in v["notFor"])):
-        return f"notFor as a list of words from `words`, each up to its 】: {', '.join(words)}"
+    if "notFor" in v and (not isinstance(v["notFor"], list) or not v["notFor"]
+                          or any(w not in words and w not in it["words"] for w in v["notFor"])):
+        return f"notFor as a list of words from `words`, each up to its 】 (or the whole line): {', '.join(words)}"
     if "enFix" in v and (not isinstance(v["enFix"], str) or not v["enFix"].strip() or CYRILLIC.search(v["enFix"])):
         return "enFix as an English sentence"
     if "broken" in v and v["broken"] is not True:
