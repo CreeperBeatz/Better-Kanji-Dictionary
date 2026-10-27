@@ -119,17 +119,28 @@ def prepare(size: int) -> None:
     print(f"{len(entries)} words in {-(-len(entries) // size)} batches ({skipped} with nothing to ask left out) -> {IN}")
 
 
-def _resolve(it: dict, offered: dict[int, dict]) -> tuple[int | None, str | None]:
-    """The other word's id, or why it has none."""
+def _resolve(it: dict, offered: dict[int, dict], strict: bool = False) -> tuple[int | None, str | None]:
+    """The other word's id, or why it has none. An own word may carry the id of the entry meant, one of
+    those spelled so; `strict` asks for it when there are several (D-039)."""
+    own = isinstance(it.get("word"), str) and isinstance(it.get("reading"), str)
     if isinstance(it.get("id"), int):
-        return (it["id"], None) if it["id"] in offered else (None, f"id {it['id']} was not offered; give word + reading")
-    if not (isinstance(it.get("word"), str) and isinstance(it.get("reading"), str)):
+        if it["id"] in offered:
+            return it["id"], None
+        if not own:
+            return None, f"id {it['id']} was not offered; give word + reading"
+        bad = ws.picked_homograph(it)
+        return (None, bad) if bad else (it["id"], None)
+    if not own:
         return None, "give id (an offered word) or word + reading"
+    if strict and len(found := ws.homographs(it["word"], it["reading"])) > 1 and found[0] in ws.scope():
+        return None, f"{it['word']} {it['reading']} is {len(found)} entries: add the id of the one meant. {ws.homograph_list(found)}"
     found = ws.resolve(it["word"], it["reading"])
     return (found[0], None) if found else (None, f"{it['word']} {it['reading']} is not in the dictionary's word list: drop it")
 
 
-def verdicts(batch: str) -> tuple[dict[int, list[dict]], list[str]]:
+def verdicts(batch: str, strict: bool = False) -> tuple[dict[int, list[dict]], list[str]]:
+    """A batch's items by word id. `strict` is the checker's: the batches done before its homograph
+    rule (2026-10-27) are read as they were, so the export does not move."""
     src = ws._read(IN / f"{batch}.json")
     path = OUT / f"{batch}.json"
     if not path.exists():
@@ -160,7 +171,7 @@ def verdicts(batch: str) -> tuple[dict[int, list[dict]], list[str]]:
                 probs.append(f"{at}: kind is one of {', '.join(KINDS)}")
                 continue
             kind = it["kind"]
-            other, why = _resolve(it, offered)
+            other, why = _resolve(it, offered, strict)
             if other is None:
                 probs.append(f"{at}: {why}")
                 continue
@@ -181,7 +192,7 @@ def verdicts(batch: str) -> tuple[dict[int, list[dict]], list[str]]:
                 listed = " | ".join(f"{s[0]}. {s[3][:60]}" for s in senses[:12])
                 if not isinstance(it.get("otherSense"), int) or not 1 <= it["otherSense"] <= len(senses):
                     need.append(f"otherSense, the sense of {o['word']} {o['reading']} (id {other}) that matches: {listed}")
-                elif "id" not in it and len(senses) > 1 and it.get("checked") is not True:
+                elif ("id" not in it or other not in offered) and len(senses) > 1 and it.get("checked") is not True:
                     # An own word's senses were never shown: its otherSense was a guess (2026-10-25).
                     need.append(f'"checked": true once otherSense is the right one of {o["word"]} {o["reading"]}: {listed}')
             if kind in LINE:
@@ -239,7 +250,6 @@ FIXES = [
     (1504190, 1504200, "drop"),   # 分別 ふんべつ / ぶんべつ: same spelling; the readings section's job (Dani)
     (1626800, 1111050, "drop"),   # 飛球 / フライ "deep-fried food": the fly-ball フライ is out of scope (D-039)
     (1303440, 1105970, "drop"),   # 散らし / ビラ "villa": the handbill ビラ is out of scope (D-039)
-    (1588820, 2179090, "drop"),   # 往々 / しばしば "blinking": meant 屡々 "often" (D-039)
     (1251780, 1401090, "mix"),    # 継承 / 相続
     (1180510, 1521990, "mix"),    # 押収 / 没収
     (1211440, 1211630, "mix"),    # 完結 / 完了
@@ -313,7 +323,7 @@ def check(only: str | None) -> None:
     batches = [only] if only else sorted(p.stem for p in IN.glob("C-*.json"))
     done, c = 0, Counter()
     for b in batches:
-        good, probs = verdicts(b)
+        good, probs = verdicts(b, strict=True)
         done += not probs
         c.update(it["kind"] for items in good.values() for it in items)
         if probs or only:

@@ -73,7 +73,10 @@ offered (a synonym, an opposite, the full form of a short word: 安保 /
 安全保障) may be added with `word` (usual written form) and `reading`
 (hiragana) instead of `id`. Only common modern words. The checker tells you if the
 word is not in the dictionary's list, and shows its senses: pick the
-right `otherSense` from them and add `"checked": true`.
+right `otherSense` from them and add `"checked": true`. When several
+entries are spelled and read so (ボルト "volt" and "bolt"), it lists them:
+add the `id` of the one you mean, keeping `word` and `reading`; if that
+entry is not in the list, drop the item.
 
 ## The lines
 

@@ -131,22 +131,66 @@ def forms() -> dict[str, list[tuple[int, str]]]:
     return {t: sorted(set(v), key=lambda x: (_rank(x[0]), x[0])) for t, v in out.items()}
 
 
-def resolve(text: str, reading: str | None = None, best: bool = True) -> list[int]:
-    """Our words for a written form (and reading, when known): the best one, or all that match."""
+def _spelled(text: str, reading: str | None) -> tuple[str, str | None]:
+    """A drafted form as JMdict files it: no brackets, a する verb as its noun (称賛する)."""
     text = (text or "").strip().strip("【】[]「」")
-    if text not in forms() and text.endswith("する") and len(text) > 2:  # 称賛する: JMdict files the noun
+    if text not in forms() and text.endswith("する") and len(text) > 2:
         text, reading = text[:-2], reading[:-2] if reading and reading.endswith("する") else reading
+    return text, reading
+
+
+def resolve(text: str, reading: str | None = None, best: bool = True) -> list[int]:
+    """Our words for a written form (and reading, when known): the best one, or all that match.
+
+    By spelling and rank, never by meaning: a drafted word that homographs() finds more than one
+    entry for is asked for its id instead (D-039)."""
+    text, reading = _spelled(text, reading)
     found = forms().get(text) or []
     if reading:
         # A reading that matches none of them names another word (被る こうむる is not 被る かぶる).
         found = [x for x in found if x[1] == hira(reading)]
     ids = list(dict.fromkeys(w for w, _ in found))
     if re.fullmatch(r"[぀-ヿー]+", text):
-        # Kana alone names the word headed so (はい yes, not 肺 lung), else one usually written
-        # in kana (どう: 如何, not 銅), before a kanji word that only reads so.
+        # Kana alone names the word headed so (はい yes, not 肺 lung) or one usually written in kana
+        # (どう: 如何, not 銅), before a kanji word that only reads so; among those, the commoner
+        # (しばしば: 屡々 "often", not しばしば "blinking").
         words = scope()
-        ids.sort(key=lambda w: (words[w]["word"] != text, not _usually_kana(w)))
+        ids.sort(key=lambda w: words[w]["word"] != text and not _usually_kana(w))
     return ids[:1] if best else ids
+
+
+def homographs(text: str, reading: str | None = None) -> list[int]:
+    """Every JMdict entry, ours or not, spelled so (and read so): ours first, best first.
+
+    resolve() sees only our words, so to it the handbill ビラ (片) is no rival to the villa ビラ."""
+    text, reading = _spelled(text, reading)
+    db = proposals.connect()
+    ids = [w for (w,) in db.execute("SELECT DISTINCT word_id FROM word_form WHERE text = ?", (text,))]
+    if reading:
+        ids = [w for w in ids if hira(reading) in {hira(t) for (t,) in db.execute(
+            "SELECT text FROM word_form WHERE word_id = ? AND kana = 1", (w,))}]
+    words = scope()
+    return sorted(ids, key=lambda w: (w not in words, _rank(w) if w in words else (), w))
+
+
+def homograph_list(ids: list[int]) -> str:
+    """The entries to choose from, each with its first senses, for a checker's message."""
+    db, words = proposals.connect(), scope()
+    out = []
+    for w in ids:
+        head, reading = db.execute("SELECT headword, reading FROM word WHERE id = ?", (w,)).fetchone()
+        glosses = [_short(g, 60) for (g,) in db.execute("SELECT gloss FROM sense WHERE word_id = ? ORDER BY ord LIMIT 4", (w,))]
+        out.append(f"id {w} {head} {reading}{'' if w in words else ' (not in the list)'}: {' | '.join(glosses)}")
+    return "; ".join(out)
+
+
+def picked_homograph(it: dict) -> str | None:
+    """An own word given with the id of one of the entries spelled so: why that id won't do, if it won't."""
+    if it["id"] not in homographs(it["word"], it["reading"]):
+        return f"id {it['id']} is not spelled {it['word']} {it['reading']}"
+    if it["id"] not in scope():
+        return f"id {it['id']} ({it['word']} {it['reading']}) is not in the dictionary's word list: drop it"
+    return None
 
 
 @cache
@@ -477,16 +521,22 @@ def prepare_late(size: int, runs: list[str]) -> None:
 # ---------------------------------------------------------------- reading the runs
 
 
-def _valid_item(it, offered: dict[int, int], own_ok: bool, kind: str) -> str | None:
+def _valid_item(it, offered: dict[int, int], own_ok: bool, kind: str, strict: bool = False) -> str | None:
     if not isinstance(it, dict):
         return "not an object"
-    if "id" in it:
+    own = own_ok and isinstance(it.get("word"), str) and isinstance(it.get("reading"), str)
+    if "id" in it and (it["id"] in offered or not own):
         if it["id"] not in offered:
             return f"id {it['id']} was not offered"
         n = it.get("sense")
         if not isinstance(n, int) or not 1 <= n <= offered[it["id"]]:
             return f"id {it['id']}: sense must be one of its numbers"
-    elif own_ok and isinstance(it.get("word"), str) and isinstance(it.get("reading"), str):
+    elif own:
+        if "id" in it and (bad := picked_homograph(it)):
+            return bad
+        if "id" not in it and strict and len(found := homographs(it["word"], it["reading"])) > 1 and found[0] in scope():
+            # resolve() would pick by rank; the drafter knows which is meant (D-039).
+            return f"{it['word']} {it['reading']} is {len(found)} entries: add the id of the one meant. {homograph_list(found)}"
         if "sense" in it and it["sense"] is not None and not isinstance(it["sense"], int):
             return f"{it['word']}: sense must be a number or null"
     else:
@@ -502,7 +552,7 @@ def _valid_item(it, offered: dict[int, int], own_ok: bool, kind: str) -> str | N
     return None
 
 
-def _valid(entry, w: dict) -> list[dict] | str:
+def _valid(entry, w: dict, strict: bool = False) -> list[dict] | str:
     if not isinstance(entry, list) or len(entry) != len(w["senses"]):
         return f"needs exactly {len(w['senses'])} sense objects"
     syn = {c["id"]: len(scope()[c["id"]]["senses"][:SENSES]) for c in w["candidates"]}
@@ -515,7 +565,7 @@ def _valid(entry, w: dict) -> list[dict] | str:
         for kind, offered in (("syn", syn), ("ant", {**ant, **syn})):
             seen = set()
             for it in s.get(kind, []):
-                bad = _valid_item(it, offered, True, kind)
+                bad = _valid_item(it, offered, True, kind, strict)
                 if bad:
                     return f"sense {i + 1} {kind}: {bad}"
                 key = it.get("id") or (it["word"], it["reading"])
@@ -531,7 +581,9 @@ def _inputs(run: str) -> dict[int, dict]:
     return {w["id"]: w for f in sorted(IN.glob(f"{run}-*.json")) for w in _read(f)["words"]}
 
 
-def read_run(run: str, only: str | None = None) -> tuple[dict[int, list[dict]], list[str]]:
+def read_run(run: str, only: str | None = None, strict: bool = False) -> tuple[dict[int, list[dict]], list[str]]:
+    """A run's valid words. `strict` (check) also asks an own word spelled like several entries for its
+    id; the runs done before that rule (2026-10-27) are read as they were, so the export does not move."""
     good: dict[int, list[dict]] = {}
     problems: list[str] = []
     for inp, batch, got in proposals.outputs(IN, OUT, f"{only or run + '-*'}.json", problems):
@@ -544,7 +596,7 @@ def read_run(run: str, only: str | None = None) -> tuple[dict[int, list[dict]], 
             if entry is None:
                 problems.append(f"{inp.stem}: {w['id']} {w['word']} missing")
                 continue
-            v = _valid(entry, w)
+            v = _valid(entry, w, strict)
             if isinstance(v, str):
                 problems.append(f"{inp.stem}: {w['id']} {w['word']}: {v}")
             else:
@@ -558,7 +610,7 @@ def read_run(run: str, only: str | None = None) -> tuple[dict[int, list[dict]], 
 def check(only: str | None = None) -> None:
     runs = sorted({f.stem.split("-")[0] for f in IN.glob("*.json")}) if not only else [only.split("-")[0]]
     for run in runs:
-        good, problems = read_run(run, only)
+        good, problems = read_run(run, only, strict=True)
         print(f"run {run}: {len(good)} words valid, {len(problems)} problems")
         for p in problems[:30]:
             print("   ", p)

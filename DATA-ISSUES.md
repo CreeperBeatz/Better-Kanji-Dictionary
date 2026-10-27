@@ -540,13 +540,22 @@ another JMdict entry (1,414 of them from pipeline/common_relations.py), 2,659
 where one of those entries is out of scope. Most are likely right; none are
 checked.
 Source: word_synonyms.resolve, used by the synonym drafts and common_relations.
-**Status: open.** The three found are dropped (common_relations FIXES,
-feat/common-relations); 往々 / 屡々 is not on the site yet. To do: one Opus
-check of the 3,634 rows with both entries' senses shown (keep, move to the
-other entry, or drop; about 30 batches of 120), then export and Bulgarian for
-the changed lines; a drafted word whose spelling and reading match more than
-one entry confirmed against the picked entry's senses, as an own word's sense
-is (606600a); and whether scope should take entries like the handbill ビラ.
+**Status: partly fixed** (feat/common-relations, 2026-10-27). 飛球 / フライ and
+散らし / ビラ are dropped (common_relations FIXES). New drafts cannot repeat it:
+word_synonyms.homographs finds every JMdict entry spelled and read so, in scope
+or not, and both checkers ask an own word with more than one for the `id` of
+the one meant (an id out of scope: drop it). The runs done before are read as
+they were, so the export does not move. The kana sort now takes the commoner of
+the words headed so or usually kana: 往々 pairs with 屡々 (both lines have
+Bulgarian), the only row that moved.
+The 3,634 above counts every row whose other word shares a spelling, however it
+got there; a word offered by id was picked with its senses shown. What resolve
+picked by rank is narrower: 50 shown pairs (100 rows), typed in by the drafters
+and read like more than one entry (24 from the synonym runs, 26 from
+common_relations; 37 with a rival out of scope). At least three are wrong:
+ナット / ボルト "volt" (meant bolt), ビジター / ホーム "platform" (home), 門 / もの
+(もん typed for 物). To do: one check of those 50 (keep, move, drop), then
+export; and whether scope should take entries like the handbill ビラ.
 
 ## Fixed
 
