@@ -557,8 +557,14 @@ common_relations; 37 with a rival out of scope). All 50 checked by hand
 problem (the drafter knew the word; resolve picked by rank), none a knowledge
 one. ナット / ボルト and ビジター / ホーム move to the bolt and the home entries
 (FIXES `other`); もの / 門 is dropped: もん is a form of もの itself, so the pair
-was the word with itself. No lines changed, so no Bulgarian. Open: whether
-scope should take entries like the handbill ビラ.
+was the word with itself. No lines changed, so no Bulgarian.
+Scope, for now by hand (Dani, 2026-10-27): the handbill ビラ (片) and the fly
+ball フライ are taken as common (build_db.COMMON_TOO; pipeline/common_too.py
+for a database built before; prod needs it, the bg stage and `load-bg` for
+their two cards). Their Bulgarian is words-s005; 散らし / ビラ and 飛球 / フライ
+move to them (FIXES `other`), with the lines and Bulgarian they had. Open: a
+rule for which out-of-scope entries spelled like ours to take, when there is
+frequency evidence beyond JMdict's tags.
 
 ## Fixed
 

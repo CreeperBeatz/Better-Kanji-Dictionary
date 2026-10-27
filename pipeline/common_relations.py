@@ -249,8 +249,6 @@ FIXES = [
     (1305380, 2013800, "drop"),   # 仕舞う / ちゃう: ちゃう shortens てしまう, not しまう
     (1119460, 1119470, "drop"),   # ベクター / ベクトル: one word, two spellings
     (1504190, 1504200, "drop"),   # 分別 ふんべつ / ぶんべつ: same spelling; the readings section's job (Dani)
-    (1626800, 1111050, "drop"),   # 飛球 / フライ "deep-fried food": the fly-ball フライ is out of scope (D-039)
-    (1303440, 1105970, "drop"),   # 散らし / ビラ "villa": the handbill ビラ is out of scope (D-039)
     (2780660, 1584800, "drop"),   # もの / 門 "gate": もん typed for もの, a form of もの itself (D-039)
     (1251780, 1401090, "mix"),    # 継承 / 相続
     (1180510, 1521990, "mix"),    # 押収 / 没収
@@ -264,6 +262,8 @@ FIXES = [
     (1008190, 2450680, "spoken"),   # 詰らない / つまんない
     (1090480, 1124390, "other 2853387"),  # ナット / ボルト "volt": the bolt (D-039)
     (1104750, 1121740, "other 2855797"),  # ビジター / ホーム "platform": home (D-039)
+    (1626800, 1111050, "other 2843891"),  # 飛球 / フライ "deep-fried food": the fly ball (D-039, build_db.COMMON_TOO)
+    (1303440, 1105970, "other 2509520"),  # 散らし / ビラ "villa": the handbill (D-039, build_db.COMMON_TOO)
 ]
 
 
