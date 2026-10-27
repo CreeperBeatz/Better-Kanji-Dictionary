@@ -14,7 +14,8 @@ own knowledge of Japanese and Bulgarian. Do not write code to translate.
 ## The items
 
 Each item: `key`, `ja` (the sentence as Tatoeba writes it), `en` (Tatoeba's
-English translation, or null), and `words`: the words whose page shows it,
+English translation, or null: then give `enFix`, your English, with no
+`issue` needed), and `words`: the words whose page shows it,
 each with its reading and first English meaning, so you know which word the
 learner is looking at. Sometimes `tatoebaBg`: a Bulgarian translation from
 Tatoeba. In R-* batches, `issue`: what an earlier reader found wrong with

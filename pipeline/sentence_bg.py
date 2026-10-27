@@ -111,16 +111,21 @@ def prepare(size: int, missing: str | None) -> None:
           f" Tatoeba's own text left out) in {-(-len(items) // size)} batches {prefix}-* -> {IN}")
 
 
-def refix(batches: list[str]) -> None:
-    """R-000: the items of these batches flagged with an `issue` but neither enFix nor broken, asked again."""
+def refix(batches: list[str], name: str = "R-000", no_english: bool = False) -> None:
+    """R-*: the items of these batches flagged with an `issue` but neither enFix nor broken, asked again;
+    with `no_english`, those Tatoeba has no English for that were done with no enFix of their own."""
     items = []
     for b in batches:
         src = {it["key"]: it for it in ws._read(IN / f"{b}.json")["items"]}
         for k, v in (ws._read(OUT / f"{b}.json").get("items") or {}).items():
-            if isinstance(v, dict) and v.get("issue") and not v.get("enFix") and not v.get("broken"):
+            if not isinstance(v, dict):
+                continue
+            if no_english and not src[k]["en"] and not v.get("enFix"):
+                items.append(src[k])
+            elif not no_english and v.get("issue") and not v.get("enFix") and not v.get("broken"):
                 items.append({**src[k], "issue": v["issue"]})
-    ws._dump(IN / "R-000.json", {"batch": "R-000", "items": items})
-    print(f"{len(items)} flagged items -> {IN / 'R-000.json'}")
+    ws._dump(IN / f"{name}.json", {"batch": name, "items": items})
+    print(f"{len(items)} items -> {IN / f'{name}.json'}")
 
 
 def _word_id(given: str) -> int | None:
@@ -139,7 +144,9 @@ def _bad_extra(v: dict, it: dict) -> str | None:
         return "enFix as an English sentence"
     if "broken" in v and v["broken"] is not True:
         return "broken as true, or left out"
-    if (v.get("enFix") or v.get("broken") or v.get("notFor")) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):
+    if not it["en"] and not v.get("enFix"):
+        return "enFix: Tatoeba has no English for this sentence, so give yours"
+    if (v.get("broken") or v.get("notFor") or (v.get("enFix") and it["en"])) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):
         return "an issue saying what is wrong"
     return None
 
@@ -166,12 +173,13 @@ def verdicts(batch: str) -> tuple[dict[str, dict], list[str]]:
         if not isinstance(v, dict):
             probs.append(f"{batch}: {k}: an object {{bg, ...}}")
             continue
-        # With no English, the length is measured against about three times the Japanese.
-        bad = tb._bad_bg(it["en"] or "." * 3 * len(it["ja"]), v.get("bg"))
+        # The length is measured against the English, or with none about three times the Japanese; the
+        # English's own Japanese (a "・") is not asked for, as translate_bg asks it of a line.
+        bad = tb._bad_bg(tb.JA.sub("", it["en"] or "") or "." * 3 * len(it["ja"]), v.get("bg"))
         bad = f"bg needs {bad}" if bad else (f"needs {x}" if (x := _bad_extra(v, it)) else None)
         if bad:
             probs.append(f"{batch}: {k}: {bad}")
-        else:
+        if not bad or bad.startswith("needs enFix: Tatoeba has no English"):  # the Bulgarian stands without it
             good[k] = {"bg": v["bg"].strip(), **({"en": v["enFix"].strip()} if v.get("enFix") else {}),
                        **({"broken": True} if v.get("broken") else {}),
                        **({"notFor": v["notFor"]} if v.get("notFor") else {})}
@@ -267,11 +275,13 @@ def main() -> None:
     p.add_argument("--n", type=int, default=40)
     p = sub.add_parser("refix")
     p.add_argument("--batches", required=True, help="comma-separated, as S-000,S-001")
+    p.add_argument("--name", default="R-000")
+    p.add_argument("--no-english", action="store_true", help="the items with no English and no enFix")
     sub.add_parser("merge")
     sub.add_parser("flags")
     a = ap.parse_args()
     {"prepare": lambda: prepare(a.size, a.missing), "check": lambda: check(a.batch), "sample": lambda: sample(a.n),
-     "refix": lambda: refix(a.batches.split(",")), "merge": merge, "flags": flags}[a.cmd]()
+     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "merge": merge, "flags": flags}[a.cmd]()
 
 
 if __name__ == "__main__":
