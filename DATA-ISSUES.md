@@ -526,6 +526,28 @@ beside one of its kind that has one is grey (しょうこう, ほんめい), a r
 one greyer. build_db writes word_form.pri; pipeline/form_pri.py adds it to an
 existing database (prod needs it before the new server starts).
 
+### D-039 · Word pairs that point at another entry spelled the same
+*Found 2026-10-27,* by the round-7 Bulgarian translators. 飛球 is paired with
+フライ "deep-fried food", 散らし with ビラ "villa", 往々 with しばしば "(blinking)
+repeatedly". The lines are right; the entry is not. A drafted word given as
+spelling and reading is turned into an entry by word_synonyms.resolve, which
+ranks the entries spelled so and takes the first, never by meaning. When the
+meant entry is out of scope (the handbill ビラ and the fly-ball フライ are not
+marked common), only the wrong one is left to take; with both in scope, the
+kana sort put the headword しばしば before 屡々 read so.
+Scale: of the 35,766 rows the site shows, 3,634 point at a word spelled like
+another JMdict entry (1,414 of them from pipeline/common_relations.py), 2,659
+where one of those entries is out of scope. Most are likely right; none are
+checked.
+Source: word_synonyms.resolve, used by the synonym drafts and common_relations.
+**Status: open.** The three found are dropped (common_relations FIXES,
+feat/common-relations); 往々 / 屡々 is not on the site yet. To do: one Opus
+check of the 3,634 rows with both entries' senses shown (keep, move to the
+other entry, or drop; about 30 batches of 120), then export and Bulgarian for
+the changed lines; a drafted word whose spelling and reading match more than
+one entry confirmed against the picked entry's senses, as an own word's sense
+is (606600a); and whether scope should take entries like the handbill ビラ.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

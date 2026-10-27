@@ -237,6 +237,9 @@ FIXES = [
     (1305380, 2013800, "drop"),   # 仕舞う / ちゃう: ちゃう shortens てしまう, not しまう
     (1119460, 1119470, "drop"),   # ベクター / ベクトル: one word, two spellings
     (1504190, 1504200, "drop"),   # 分別 ふんべつ / ぶんべつ: same spelling; the readings section's job (Dani)
+    (1626800, 1111050, "drop"),   # 飛球 / フライ "deep-fried food": the fly-ball フライ is out of scope (D-039)
+    (1303440, 1105970, "drop"),   # 散らし / ビラ "villa": the handbill ビラ is out of scope (D-039)
+    (1588820, 2179090, "drop"),   # 往々 / しばしば "blinking": meant 屡々 "often" (D-039)
     (1251780, 1401090, "mix"),    # 継承 / 相続
     (1180510, 1521990, "mix"),    # 押収 / 没収
     (1211440, 1211630, "mix"),    # 完結 / 完了
