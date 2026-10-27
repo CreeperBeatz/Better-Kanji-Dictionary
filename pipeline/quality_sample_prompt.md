@@ -161,3 +161,4 @@ example's Bulgarian against the Japanese; only where there is an `ex`).
 - `minor`: right but stiff, a calque of the English, a weaker word choice.
 - `ok`: right, and reads as natural Bulgarian.
 You know Bulgarian well; judge as a careful Bulgarian editor would.
+Dataset "bglate" is graded the same way; it has lines only.

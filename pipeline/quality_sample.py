@@ -50,7 +50,9 @@ PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": (
          # The rows the site shows once every fix is in (2026-10-25): what ships, measured again.
          "final": ("pair", "line"),
          # The Bulgarian of the word lines and sense notes (pipeline/translate_bg.py), against the English.
-         "bg": ("text", "ex")}
+         "bg": ("text", "ex"),
+         # The same, only the lines the later rounds translated (translate_bg.py prepare --missing 7 and on, 2026-10-27).
+         "bglate": ("text", "ex")}
 GRADES = ("ok", "minor", "major")
 
 
@@ -196,13 +198,26 @@ def _bg(rng: random.Random, n: int) -> list[dict]:
     return out
 
 
+def _bglate(rng: random.Random, n: int, since: int = 7) -> list[dict]:
+    """Lines only, from the Bulgarian rounds `since` and on (batches L<round>-*), as the site shows them now."""
+    bg = json.loads((DATA / "word_lines_bg.json").read_text(encoding="utf-8"))
+    src = DATA / "drafts" / "translate-bg" / "in"
+    late = {it["en"] for p in src.glob("L*-*.json") if int(p.stem[1:].split("-")[0] or 1) >= since
+            for it in ws._read(p)["items"]}
+    shown = {t for rs in json.loads(ws.SITE.read_text(encoding="utf-8")).values() for r in rs
+             if r[1] in ("syn", "mix") for t in r[4:6] if t}
+    lines = sorted((en, bg["lines"][en]) for en in late & shown if en in bg["lines"])
+    return [{"key": f"line|{i}", "kind": "line", "en": en, "bg": b} for i, (en, b) in
+            ((i, lines[i]) for i in rng.sample(range(len(lines)), min(n, len(lines))))]
+
+
 def prepare(which: str, n: int, size: int, rnd: int = 1) -> None:
     """A later round (after more fixes) draws a new sample, batches <which>-r<round>-NNN, reported apart."""
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}" + (f"-r{rnd}" if rnd > 1 else ""))
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
-             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "spoken": _spoken, "common": _common, "final": _final, "bg": _bg}[which](rng, n)
+             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "spoken": _spoken, "common": _common, "final": _final, "bg": _bg, "bglate": _bglate}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{f'r{rnd}-' if rnd > 1 else ''}{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
