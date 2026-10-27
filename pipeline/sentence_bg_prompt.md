@@ -81,6 +81,12 @@ broken: say so in `issue` and leave `broken` out.
   見方). Add `"notFor": ["一時 【いちじ】"]`: each such word as `words` gives
   it, up to and including the 】. The sentence comes off that word's page
   only. With an `issue`, as above; it may come with `enFix` or `broken`.
+  `words` shows only a word's first meaning, and most words have more: a
+  sentence that uses another meaning of the same word is right where it is
+  (勤務中 is 中 【ちゅう】 "during", a meaning of that word too; 色 for
+  "complexion"). Use `notFor` only where the sentence does not have that
+  word at all: another word written alike, a name, or a piece of a longer
+  word (人文学 is not 文学).
 
 ## Output
 
