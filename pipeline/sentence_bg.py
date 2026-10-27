@@ -21,8 +21,11 @@ the word pages, and the next shortest takes its place, which a --missing round
 translates) and gives a correct English where Tatoeba's is wrong (`enFix`).
 The pilot (S-000..S-004) came before those two fields: R-000 asks its flagged items again.
 
+A sentence the index files under a word it does not have in that meaning (一時 read
+ひととき under 一時 いちじ) is marked `notFor` that word, and comes off its page only.
+
 data/sentence_bg.json: {"bg": {sentence id: Bulgarian}, "en": {sentence id: English
-in place of Tatoeba's}, "broken": [sentence ids]}.
+in place of Tatoeba's}, "broken": [sentence ids], "notFor": {sentence id: [word ids]}}.
 """
 
 from __future__ import annotations
@@ -50,13 +53,14 @@ CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 
 
 def _site() -> dict:
-    return ws._read(SITE) if SITE.exists() else {"bg": {}, "en": {}, "broken": []}
+    return {"bg": {}, "en": {}, "broken": [], "notFor": {}, **(ws._read(SITE) if SITE.exists() else {})}
 
 
 def shown() -> dict[int, list[int]]:
     """Sentence id -> the words in scope that show it, best ranked first; the same query as search.word_entry."""
     db = proposals.connect()
-    broken = set(_site()["broken"])
+    site = _site()
+    broken, not_for = set(site["broken"]), site["notFor"]
     entries = any(r[1] == "entry" for r in db.execute("PRAGMA table_info(sentence_word)"))
     out: dict[int, list[int]] = {}
     for wid in sorted(ws.scope(), key=lambda w: (ws._rank(w), w)):
@@ -68,7 +72,7 @@ def shown() -> dict[int, list[int]]:
             args += [wid, *kana]
         rows = db.execute(f"SELECT s.id FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
                           f"WHERE sw.headword = ?{mine} ORDER BY LENGTH(COALESCE(s.real, s.text)) LIMIT {2 * SHOWN}", args)
-        for sid in [s for (s,) in rows if str(s) not in broken][:SHOWN]:
+        for sid in [s for (s,) in rows if str(s) not in broken and wid not in not_for.get(str(s), [])][:SHOWN]:
             out.setdefault(sid, []).append(wid)
     return out
 
@@ -119,13 +123,23 @@ def refix(batches: list[str]) -> None:
     print(f"{len(items)} flagged items -> {IN / 'R-000.json'}")
 
 
-def _bad_extra(v: dict) -> str | None:
-    """What is wrong with an item's enFix, broken or issue, if anything."""
+def _word_id(given: str) -> int | None:
+    """"一時 【いちじ】" -> that word's id."""
+    head, _, reading = given.partition(" 【")
+    found = ws.homographs(head, reading.rstrip("】"))
+    return found[0] if found and found[0] in ws.scope() else None
+
+
+def _bad_extra(v: dict, it: dict) -> str | None:
+    """What is wrong with an item's enFix, broken, notFor or issue, if anything."""
+    words = [w.split("】")[0] + "】" for w in it["words"]]
+    if "notFor" in v and (not isinstance(v["notFor"], list) or not v["notFor"] or any(w not in words for w in v["notFor"])):
+        return f"notFor as a list of words from `words`, each up to its 】: {', '.join(words)}"
     if "enFix" in v and (not isinstance(v["enFix"], str) or not v["enFix"].strip() or CYRILLIC.search(v["enFix"])):
         return "enFix as an English sentence"
     if "broken" in v and v["broken"] is not True:
         return "broken as true, or left out"
-    if (v.get("enFix") or v.get("broken")) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):
+    if (v.get("enFix") or v.get("broken") or v.get("notFor")) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):
         return "an issue saying what is wrong"
     return None
 
@@ -154,12 +168,13 @@ def verdicts(batch: str) -> tuple[dict[str, dict], list[str]]:
             continue
         # With no English, the length is measured against about three times the Japanese.
         bad = tb._bad_bg(it["en"] or "." * 3 * len(it["ja"]), v.get("bg"))
-        bad = f"bg needs {bad}" if bad else (f"needs {x}" if (x := _bad_extra(v)) else None)
+        bad = f"bg needs {bad}" if bad else (f"needs {x}" if (x := _bad_extra(v, it)) else None)
         if bad:
             probs.append(f"{batch}: {k}: {bad}")
         else:
             good[k] = {"bg": v["bg"].strip(), **({"en": v["enFix"].strip()} if v.get("enFix") else {}),
-                       **({"broken": True} if v.get("broken") else {})}
+                       **({"broken": True} if v.get("broken") else {}),
+                       **({"notFor": v["notFor"]} if v.get("notFor") else {})}
     return good, probs
 
 
@@ -185,6 +200,7 @@ def flags() -> None:
             if isinstance(v, dict) and isinstance(v.get("issue"), str) and v["issue"].strip():
                 it = src.get(k, {})
                 what = "BROKEN" if v.get("broken") else (f"enFix: {v['enFix']}" if v.get("enFix") else "-")
+                what += f" | notFor {', '.join(v['notFor'])}" if v.get("notFor") else ""
                 print(f"{p.stem} {k} | {it.get('ja')} | {it.get('en')} | {v['issue']} | {what}")
                 n += 1
     print(f"{n} flagged")
@@ -214,7 +230,7 @@ def sample(n: int) -> None:
 
 def merge() -> None:
     """The S batches, then R (a re-ask of flagged items) over them."""
-    out = {"bg": {}, "en": {}, "broken": set()}
+    out = {"bg": {}, "en": {}, "broken": set(), "notFor": {}}
     for p in sorted(IN.glob("*.json"), key=lambda p: (p.stem.startswith("R"), p.stem)):
         if not (OUT / p.name).exists():
             continue
@@ -226,12 +242,16 @@ def merge() -> None:
             out["bg"][sid] = tb._fix(v["bg"])
             out["en"].pop(sid, None)
             out["broken"].discard(sid)
+            out["notFor"].pop(sid, None)
+            if v.get("notFor"):
+                out["notFor"][sid] = sorted({w for w in map(_word_id, v["notFor"]) if w})
             if v.get("en"):
                 out["en"][sid] = v["en"]
             if v.get("broken"):
                 out["broken"].add(sid)
     ws._dump(SITE, {**out, "broken": sorted(out["broken"], key=int)})
-    print(f"{len(out['bg'])} sentences, {len(out['en'])} English fixed, {len(out['broken'])} broken -> {SITE}")
+    print(f"{len(out['bg'])} sentences, {len(out['en'])} English fixed, {len(out['broken'])} broken,"
+          f" {len(out['notFor'])} off a word's page -> {SITE}")
 
 
 def main() -> None:

@@ -37,8 +37,12 @@ the sentence; judge it yourself. Output: `{"bg": "..."}`.
 - A proverb or set phrase (蛙の面に水, 猿も木から落ちる) gets the Bulgarian
   proverb or phrase that means the same, if there is a well-known one;
   otherwise say plainly what it means. Never invent a proverb.
-- Numbers as digits (６ペンス: 6 пенса); full-width digits become normal ones.
-  Units and money in Bulgarian (グラム: грама, 円: йени, ドル: долара).
+- Numbers as a careful Bulgarian writer would: digits for measures, money,
+  dates, times and figures (６ペンス: 6 пенса, 1500 грама, в 7 часа), words in
+  proverbs and set phrases (Какъвто е на три години, такъв е и на сто) and
+  for small counts in plain prose where words read better (веднъж седмично,
+  двама приятели). Full-width digits become normal ones. Units and money in
+  Bulgarian (グラム: грама, 円: йени, ドル: долара).
 - Japanese names and terms in Cyrillic after the Hepburn reading, as in
   канджи (never the Polivanov дз/си style of кандзи): Шитамачи, йокозуна,
   манджу, 太郎: Таро. A word Bulgarian already uses keeps its usual
@@ -69,6 +73,13 @@ Always give `bg`. Add `"issue": "what looks wrong"`, and one of these:
 
 When unsure whether the Japanese is wrong or only unusual, it is not
 broken: say so in `issue` and leave `broken` out.
+
+- **Shown for the wrong word**: the sentence does not have a word from
+  `words` in that word's meaning (一時 read ひととき on the page of 一時
+  【いちじ】 "one o'clock"; the name 谷雄 on the page of 雄; 味方 on the page of
+  見方). Add `"notFor": ["一時 【いちじ】"]`: each such word as `words` gives
+  it, up to and including the 】. The sentence comes off that word's page
+  only. With an `issue`, as above; it may come with `enFix` or `broken`.
 
 ## Output
 

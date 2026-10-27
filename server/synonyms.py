@@ -92,6 +92,11 @@ def sentence_en(sentence_id: int) -> str | None:
     return _sentences_bg().get("en", {}).get(str(sentence_id))
 
 
+def sentence_not_for(sentence_id: int, word_id: int) -> bool:
+    """Whether the index files this sentence under a word it does not have in that meaning (一時 ひととき under いちじ)."""
+    return word_id in _sentences_bg().get("notFor", {}).get(str(sentence_id), ())
+
+
 @cache
 def sentences_broken() -> frozenset[int]:
     """Sentences whose Japanese is wrong (a typo, broken grammar): kept off the word pages."""

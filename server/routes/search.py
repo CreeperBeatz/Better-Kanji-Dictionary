@@ -1226,7 +1226,7 @@ def word_entry(word_id: int) -> dict:
         "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 12",
         tuple(args),
     )
-    rows = [r for r in rows if r["id"] not in synonyms.sentences_broken()][:6]
+    rows = [r for r in rows if r["id"] not in synonyms.sentences_broken() and not synonyms.sentence_not_for(r["id"], word_id)][:6]
     return {
         "word": w,
         "kanji": kanji,
