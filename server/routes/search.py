@@ -1213,8 +1213,9 @@ def word_entry(word_id: int) -> dict:
         if c in nodes:
             kanji.append({**nodes[c], "curated": curated.get(c)})
 
+    real = _sentence_real()
     rows = query(
-        f"SELECT s.text, {'s.real' if _sentence_real() else 'NULL'} AS real FROM sentence_word sw "
+        f"SELECT s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
         "JOIN sentence s ON s.id = sw.sentence_id "
         "WHERE sw.headword = ? ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
         (w["headword"],),
@@ -1222,7 +1223,7 @@ def word_entry(word_id: int) -> dict:
     return {
         "word": w,
         "kanji": kanji,
-        "examples": [_sentence(r["text"], r["real"], w["headword"]) for r in rows],
+        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": r["en"]} for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
         "senseNotes": synonyms.sense_notes(word_id),
@@ -1271,7 +1272,7 @@ _ANNOTATION = re.compile(r"\(.*?\)|\[.*?\]|~")
 
 @functools.cache
 def _sentence_real() -> bool:
-    """Whether the db keeps Tatoeba's own text (built after D-031); an older one does not."""
+    """Whether the db keeps Tatoeba's own text and its English (built after D-031); an older one does not."""
     return any(r["name"] == "real" for r in query("PRAGMA table_info(sentence)"))
 
 

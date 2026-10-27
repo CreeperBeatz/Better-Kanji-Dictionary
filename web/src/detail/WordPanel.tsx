@@ -578,7 +578,10 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
           <ul>
             {entry.examples.map((ex, i) => (
               <li key={i}>
-                <Example text={ex.text} hit={ex.hit} />
+                <span lang="ja">
+                  <Example text={ex.text} hit={ex.hit} />
+                </span>
+                {ex.en && <span className="entry-example-en">{ex.en}</span>}
               </li>
             ))}
           </ul>
