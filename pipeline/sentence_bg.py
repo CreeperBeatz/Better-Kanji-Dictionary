@@ -56,10 +56,11 @@ def _site() -> dict:
     return {"bg": {}, "en": {}, "broken": [], "notFor": {}, **(ws._read(SITE) if SITE.exists() else {})}
 
 
-def shown() -> dict[int, list[int]]:
-    """Sentence id -> the words in scope that show it, best ranked first; the same query as search.word_entry."""
+def shown(raw: bool = False) -> dict[int, list[int]]:
+    """Sentence id -> the words in scope that show it, best ranked first; the same query as search.word_entry.
+    `raw`: as the batches were prepared, before any sentence was marked broken or notFor."""
     db = proposals.connect()
-    site = _site()
+    site = _site() if not raw else {"broken": [], "notFor": {}}
     broken, not_for = set(site["broken"]), site["notFor"]
     entries = any(r[1] == "entry" for r in db.execute("PRAGMA table_info(sentence_word)"))
     out: dict[int, list[int]] = {}
@@ -128,8 +129,13 @@ def refix(batches: list[str], name: str = "R-000", no_english: bool = False) -> 
     print(f"{len(items)} items -> {IN / f'{name}.json'}")
 
 
-def _word_id(given: str) -> int | None:
-    """"一時 【いちじ】" -> that word's id."""
+def _word_id(given: str, among: list[int] | None = None) -> int | None:
+    """"一時 【いちじ】" -> that word's id: the one of `among` (the words the sentence is shown for) written so,
+    else the best of those spelled and read so (kana alone is ambiguous: そう is 箏 and 相 and more)."""
+    if among:
+        for w in among:
+            if _context(w).split("】")[0] + "】" == given:
+                return w
     head, _, reading = given.partition(" 【")
     found = ws.homographs(head, reading.rstrip("】"))
     return found[0] if found and found[0] in ws.scope() else None
@@ -237,18 +243,23 @@ def sample(n: int) -> None:
 
 
 def senses(given: str) -> None:
-    """Every meaning of a word as `words` gives it ("通 【つう】"), for a translator about to mark notFor."""
-    wid = _word_id(given)
-    if wid is None:
+    """Every meaning of a word as `words` gives it ("通 【つう】"), for a translator about to mark notFor;
+    every entry so written, when there are several (そう), the one in `words` by its first meaning."""
+    head, _, reading = given.partition(" 【")
+    ids = [w for w in ws.homographs(head, reading.rstrip("】")) if w in ws.scope()]
+    if not ids:
         print(f"{given}: not one of our words")
-        return
-    for i, (pos, _, gloss) in enumerate(ws.scope()[wid]["senses"], 1):
-        print(f"{i}. {gloss} ({pos})")
+    for wid in ids:
+        if len(ids) > 1:
+            print(f"== {_context(wid)}")
+        for i, (pos, _, gloss) in enumerate(ws.scope()[wid]["senses"], 1):
+            print(f"{i}. {gloss} ({pos})")
 
 
 def merge() -> None:
     """The S batches, then R (a re-ask of flagged items) over them."""
     out = {"bg": {}, "en": {}, "broken": set(), "notFor": {}}
+    raw = shown(raw=True)  # a notFor names one of the words the sentence was shown for
     for p in sorted(IN.glob("*.json"), key=lambda p: (p.stem.startswith("R"), p.stem)):
         if not (OUT / p.name).exists():
             continue
@@ -262,7 +273,7 @@ def merge() -> None:
             out["broken"].discard(sid)
             out["notFor"].pop(sid, None)
             if v.get("notFor"):
-                out["notFor"][sid] = sorted({w for w in map(_word_id, v["notFor"]) if w})
+                out["notFor"][sid] = sorted({w for g in v["notFor"] if (w := _word_id(g, raw.get(int(sid))))})
             if v.get("en"):
                 out["en"][sid] = v["en"]
             if v.get("broken"):
