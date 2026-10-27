@@ -77,6 +77,16 @@ def _bg() -> dict:
     return _load("word_lines_bg.json")
 
 
+@cache
+def _sentences_bg() -> dict:
+    return _load("sentence_bg.json")
+
+
+def sentence_bg(sentence_id: int) -> str | None:
+    """A Tatoeba example sentence in Bulgarian (pipeline/sentence_bg.py merge), if translated."""
+    return _sentences_bg().get(str(sentence_id))
+
+
 def line_bg(line: str | None) -> str | None:
     return line and _bg().get("lines", {}).get(line)
 

@@ -1221,7 +1221,7 @@ def word_entry(word_id: int) -> dict:
                 f"{' OR sw.reading IN (' + ','.join('?' * len(kana)) + ')' if kana else ''})))")
         args += [word_id, *kana]
     rows = query(
-        f"SELECT s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
+        f"SELECT s.id, s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
         f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine} "
         "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
         tuple(args),
@@ -1229,7 +1229,8 @@ def word_entry(word_id: int) -> dict:
     return {
         "word": w,
         "kanji": kanji,
-        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": r["en"]} for r in rows],
+        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": r["en"], "bg": synonyms.sentence_bg(r["id"])}
+                     for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
         "senseNotes": synonyms.sense_notes(word_id),

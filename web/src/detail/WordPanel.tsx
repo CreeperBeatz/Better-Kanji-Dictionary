@@ -581,7 +581,9 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
                 <span lang="ja">
                   <Example text={ex.text} hit={ex.hit} />
                 </span>
-                {ex.en && <span className="entry-example-en">{ex.en}</span>}
+                {((lang === 'bg' && ex.bg) || ex.en) && (
+                  <span className="entry-example-en">{(lang === 'bg' && ex.bg) || ex.en}</span>
+                )}
               </li>
             ))}
           </ul>
