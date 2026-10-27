@@ -540,7 +540,7 @@ another JMdict entry (1,414 of them from pipeline/common_relations.py), 2,659
 where one of those entries is out of scope. Most are likely right; none are
 checked.
 Source: word_synonyms.resolve, used by the synonym drafts and common_relations.
-**Status: partly fixed** (feat/common-relations, 2026-10-27). 飛球 / フライ and
+**Status: fixed locally** (feat/common-relations, 2026-10-27). 飛球 / フライ and
 散らし / ビラ are dropped (common_relations FIXES). New drafts cannot repeat it:
 word_synonyms.homographs finds every JMdict entry spelled and read so, in scope
 or not, and both checkers ask an own word with more than one for the `id` of
@@ -552,10 +552,13 @@ The 3,634 above counts every row whose other word shares a spelling, however it
 got there; a word offered by id was picked with its senses shown. What resolve
 picked by rank is narrower: 50 shown pairs (100 rows), typed in by the drafters
 and read like more than one entry (24 from the synonym runs, 26 from
-common_relations; 37 with a rival out of scope). At least three are wrong:
-ナット / ボルト "volt" (meant bolt), ビジター / ホーム "platform" (home), 門 / もの
-(もん typed for 物). To do: one check of those 50 (keep, move, drop), then
-export; and whether scope should take entries like the handbill ビラ.
+common_relations; 37 with a rival out of scope). All 50 checked by hand
+(2026-10-27): 47 point at the entry meant; three did not, each a question
+problem (the drafter knew the word; resolve picked by rank), none a knowledge
+one. ナット / ボルト and ビジター / ホーム move to the bolt and the home entries
+(FIXES `other`); もの / 門 is dropped: もん is a form of もの itself, so the pair
+was the word with itself. No lines changed, so no Bulgarian. Open: whether
+scope should take entries like the handbill ビラ.
 
 ## Fixed
 

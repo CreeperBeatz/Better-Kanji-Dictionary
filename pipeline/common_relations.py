@@ -233,6 +233,7 @@ def all_verdicts() -> dict[int, list[dict]]:
 #   mix: a synonym that is better a mix-up by meaning; its two lines stay
 #   sense N: the pair moves to the word's sense N
 #   spoken: a short form that is really a spoken form
+#   other ID: the pair is with entry ID, spelled like `other` (D-039); sense numbers stay
 FIXES = [
     (1217730, 1584680, "drop"),   # 顔 / 面 (おもて): literary
     (1269990, 1383690, "drop"),   # 後任 / 跡継ぎ: an heir, not the next holder of a post
@@ -250,6 +251,7 @@ FIXES = [
     (1504190, 1504200, "drop"),   # 分別 ふんべつ / ぶんべつ: same spelling; the readings section's job (Dani)
     (1626800, 1111050, "drop"),   # 飛球 / フライ "deep-fried food": the fly-ball フライ is out of scope (D-039)
     (1303440, 1105970, "drop"),   # 散らし / ビラ "villa": the handbill ビラ is out of scope (D-039)
+    (2780660, 1584800, "drop"),   # もの / 門 "gate": もん typed for もの, a form of もの itself (D-039)
     (1251780, 1401090, "mix"),    # 継承 / 相続
     (1180510, 1521990, "mix"),    # 押収 / 没収
     (1211440, 1211630, "mix"),    # 完結 / 完了
@@ -260,6 +262,8 @@ FIXES = [
     (1624030, 1455670, "sense 2"),  # 独白 / 独り言: talking to oneself
     (1064480, 1375260, "sense 2"),  # ジェンダー / 性 sense 4: grammatical gender
     (1008190, 2450680, "spoken"),   # 詰らない / つまんない
+    (1090480, 1124390, "other 2853387"),  # ナット / ボルト "volt": the bolt (D-039)
+    (1104750, 1121740, "other 2855797"),  # ビジター / ホーム "platform": home (D-039)
 ]
 
 
@@ -288,6 +292,12 @@ def apply_fixes(out: dict[int, list], stats) -> None:
         elif what == "spoken":
             for r in mine + theirs:
                 r[1] = r[1].replace("short", "spoken")
+        elif what.startswith("other "):
+            new = int(what.split()[1])
+            for r in mine:
+                r[2] = new
+            out[o] = [r for r in out[o] if r[2] != w]
+            out.setdefault(new, []).extend(theirs)
         stats[f"fix: {what.split()[0]}"] += 1
 
 
