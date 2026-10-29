@@ -23,6 +23,11 @@ The pilot (S-000..S-004) came before those two fields: R-000 asks its flagged it
 
 A sentence the index files under a word it does not have in that meaning (一時 read
 ひととき under 一時 いちじ) is marked `notFor` that word, and comes off its page only.
+The next one comes up in its place, from the twelve the page looks at (LOOKS): so
+`audit-prepare --unseen` asks about every one of the twelve of a word that has lost
+any, and a word the index files only others' sentences under (every 地方 under じかた,
+though they read ちほう) ends with none. `--recheck 3` asks again about the ones a
+translator let by, for the words that lost three or more.
 
 data/sentence_bg.json: {"bg": {sentence id: Bulgarian}, "en": {sentence id: English
 in place of Tatoeba's}, "broken": [sentence ids], "notFor": {sentence id: [word ids]}}.
@@ -48,7 +53,8 @@ DRAFTS = ROOT / "data" / "drafts" / "sentence-bg"
 IN, OUT = DRAFTS / "in", DRAFTS / "out"
 SITE = ROOT / "data" / "sentence_bg.json"
 SHOWN = 6  # sentences per word, as search.word_entry
-CONTEXT = 2  # words a sentence is shown for, given as context
+LOOKS = 2 * SHOWN  # sentences search.word_entry looks at for those six: taken off, none further down comes up
+CONTEXT = 12  # words a sentence is shown for, given as context: all of them, so each can be marked notFor
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 
 
@@ -56,24 +62,29 @@ def _site() -> dict:
     return {"bg": {}, "en": {}, "broken": [], "notFor": {}, **(ws._read(SITE) if SITE.exists() else {})}
 
 
+def _filed(db, wid: int, limit: int, raw: bool = False) -> list[int]:
+    """The sentences the index files under a word, shortest first, as search.word_entry asks for them."""
+    mine, args = "", [ws.scope()[wid]["word"]]
+    if any(r[1] == "entry" for r in db.execute("PRAGMA table_info(sentence_word)")):
+        kana = sorted({ws.hira(t) for (t,) in db.execute("SELECT text FROM word_form WHERE word_id = ? AND kana = 1", (wid,))})
+        mine = (" AND (sw.entry = ? OR (sw.entry IS NULL AND (sw.reading IS NULL"
+                + (" OR sw.reading IN (" + ",".join("?" * len(kana)) + ")" if kana else "") + ")))")
+        args += [wid, *kana]
+    return [s for (s,) in db.execute(f"SELECT s.id FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
+                                     f"WHERE sw.headword = ?{mine}{' AND s.real IS NOT NULL' if not raw else ''} "
+                                     f"ORDER BY LENGTH(COALESCE(s.real, s.text)) LIMIT {limit}", args)]
+
+
 def shown(raw: bool = False) -> dict[int, list[int]]:
     """Sentence id -> the words in scope that show it, best ranked first; the same query as search.word_entry.
-    `raw`: as the batches were prepared, before any sentence was marked broken or notFor."""
+    `raw`: as the batches were prepared, before any sentence was marked broken or notFor, or left out for
+    having no text of Tatoeba's own."""
     db = proposals.connect()
     site = _site() if not raw else {"broken": [], "notFor": {}}
     broken, not_for = set(site["broken"]), site["notFor"]
-    entries = any(r[1] == "entry" for r in db.execute("PRAGMA table_info(sentence_word)"))
     out: dict[int, list[int]] = {}
     for wid in sorted(ws.scope(), key=lambda w: (ws._rank(w), w)):
-        mine, args = "", [ws.scope()[wid]["word"]]
-        if entries:
-            kana = sorted({ws.hira(t) for (t,) in db.execute("SELECT text FROM word_form WHERE word_id = ? AND kana = 1", (wid,))})
-            mine = (" AND (sw.entry = ? OR (sw.entry IS NULL AND (sw.reading IS NULL"
-                    + (" OR sw.reading IN (" + ",".join("?" * len(kana)) + ")" if kana else "") + ")))")
-            args += [wid, *kana]
-        rows = db.execute(f"SELECT s.id FROM sentence_word sw JOIN sentence s ON s.id = sw.sentence_id "
-                          f"WHERE sw.headword = ?{mine} ORDER BY LENGTH(COALESCE(s.real, s.text)) LIMIT {2 * SHOWN}", args)
-        for sid in [s for (s,) in rows if str(s) not in broken and wid not in not_for.get(str(s), [])][:SHOWN]:
+        for sid in [s for s in _filed(db, wid, LOOKS, raw) if str(s) not in broken and wid not in not_for.get(str(s), [])][:SHOWN]:
             out.setdefault(sid, []).append(wid)
     return out
 
@@ -264,8 +275,10 @@ AUDIT_ASK = {  # shown for two entries written alike, which no batch could tell 
     223578: "ダイヤ", 218083: "ダイヤ", 77544: "ダイヤ", 99062: "位", 232777: "位"}
 
 
-def audit_prepare(size: int) -> None:
-    """A-*: every notFor, and the sentences in AUDIT_ASK, for a second look with all of the word's senses shown."""
+def audit_prepare(size: int, unseen: bool = False, recheck: int | None = None) -> None:
+    """A-*: every notFor, and the sentences in AUDIT_ASK, for a second look with all of the word's senses shown.
+    With `unseen`, after the A batches there are: the words a sentence is or may come to be shown for that no
+    S or R batch gave as context (CONTEXT was 2 then) and no A batch has asked about yet."""
     site, raw = _site(), shown(raw=True)
     db = proposals.connect()
     texts = {sid: (real, en) for sid, real, en in db.execute("SELECT id, real, en FROM sentence")}
@@ -274,8 +287,30 @@ def audit_prepare(size: int) -> None:
         for k, v in (ws._read(p).get("items") or {}).items():
             if isinstance(v, dict) and v.get("issue"):
                 issues[k[1:]] = v["issue"]
-    pairs = [(int(s), w, "off") for s, ws_ in site["notFor"].items() for w in ws_]
-    pairs += [(s, w, "ask") for s, head in AUDIT_ASK.items() for w in raw.get(s, []) if ws.scope()[w]["word"] == head]
+    first = 0
+    if unseen:
+        seen: dict[int, set[str]] = {}
+        for p in IN.glob("[SR]*.json"):
+            for it in ws._read(p)["items"]:
+                seen.setdefault(int(it["key"][1:]), set()).update(it["words"])
+        asked = {it["key"] for p in IN.glob("A-*.json") for it in ws._read(p)["items"]}
+        first = 1 + max((int(p.stem[2:]) for p in IN.glob("A-*.json")), default=-1)
+        # As the pages are now, and all LOOKS of a word that has lost any: a sentence that comes up in another's
+        # place may have been translated for another word, and the next taken off brings up the next.
+        now = [(s, w) for s, wids in shown().items() for w in wids]
+        lost: dict[int, int] = {}
+        for wids in site["notFor"].values():
+            for w in wids:
+                lost[w] = lost.get(w, 0) + 1
+        now += [(s, w) for w in sorted(lost, key=lambda w: (ws._rank(w), w)) for s in _filed(db, w, LOOKS)
+                if str(s) not in site["broken"] and w not in site["notFor"].get(str(s), [])]
+        # A translator shown the word let some by (every すれば was the verb): with `recheck`, a word that has
+        # lost that many has the rest of its twelve asked about too.
+        pairs = [(s, w, "ask") for s, w in dict.fromkeys(now) if f"s{s}|{w}" not in asked
+                 and (_context(w) not in seen.get(s, set()) or (recheck and lost.get(w, 0) >= recheck))]
+    else:
+        pairs = [(int(s), w, "off") for s, ws_ in site["notFor"].items() for w in ws_]
+        pairs += [(s, w, "ask") for s, head in AUDIT_ASK.items() for w in raw.get(s, []) if ws.scope()[w]["word"] == head]
     items = []
     for sid, wid, now in pairs:
         real, en = texts[sid]
@@ -283,9 +318,10 @@ def audit_prepare(size: int) -> None:
                       "word": _context(wid), "senses": [f"{i}. {g}" for i, (_, _, g) in enumerate(ws.scope()[wid]["senses"], 1)],
                       **({"issue": issues[str(sid)]} if str(sid) in issues else {})})
     for b in range(0, len(items), size):
-        name = f"A-{b // size:03d}"
+        name = f"A-{first + b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "items": items[b:b + size]})
-    print(f"{len(items)} items ({sum(x['now'] == 'ask' for x in items)} to ask) in {-(-len(items) // size)} batches A-*")
+    print(f"{len(items)} items ({sum(x['now'] == 'ask' for x in items)} to ask) in {-(-len(items) // size)} batches"
+          f" A-{first:03d} on")
 
 
 def audit_verdicts(batch: str) -> tuple[dict[str, str], list[str]]:
@@ -366,11 +402,13 @@ def main() -> None:
     p.add_argument("word", help='as `words` gives it, up to the 】: "通 【つう】"')
     p = sub.add_parser("audit-prepare")
     p.add_argument("--size", type=int, default=200)
+    p.add_argument("--unseen", action="store_true", help="the words shown for that no translator saw, in new A batches")
+    p.add_argument("--recheck", type=int, metavar="OFF", help="with --unseen: also those a translator saw, of words with OFF or more off")
     sub.add_parser("merge")
     sub.add_parser("flags")
     a = ap.parse_args()
     {"prepare": lambda: prepare(a.size, a.missing), "check": lambda: check(a.batch), "sample": lambda: sample(a.n),
-     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "senses": lambda: senses(a.word), "audit-prepare": lambda: audit_prepare(a.size), "merge": merge, "flags": flags}[a.cmd]()
+     "refix": lambda: refix(a.batches.split(","), a.name, a.no_english), "senses": lambda: senses(a.word), "audit-prepare": lambda: audit_prepare(a.size, a.unseen, a.recheck), "merge": merge, "flags": flags}[a.cmd]()
 
 
 if __name__ == "__main__":

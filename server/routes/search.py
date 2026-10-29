@@ -1222,8 +1222,9 @@ def word_entry(word_id: int) -> dict:
         args += [word_id, *kana]
     rows = query(
         f"SELECT s.id, s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
-        f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine} "
-        "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 12",
+        f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine}"
+        # A sentence Tatoeba has no text for would show only the index's words, 体温 を 計る (D-041).
+        f"{' AND s.real IS NOT NULL' if real else ''} ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 12",
         tuple(args),
     )
     rows = [r for r in rows if r["id"] not in synonyms.sentences_broken() and not synonyms.sentence_not_for(r["id"], word_id)][:6]

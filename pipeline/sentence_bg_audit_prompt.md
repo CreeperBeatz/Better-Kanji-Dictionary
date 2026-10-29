@@ -19,8 +19,8 @@ that decides.
 Each item: `key`, `ja` (the sentence), `en` (its English), `word` (the word
 whose page it is on, with its reading and first meaning), `senses` (all of that
 word's meanings, numbered), `now` (`off`: a translator took it off this page;
-`ask`: the sentence is shown on two words written alike and nobody has decided
-yet which one it belongs to), and sometimes `issue`, what the translator wrote.
+`ask`: nobody has decided yet, either because the sentence is shown on two
+words written alike or because no translator was shown this word), and sometimes `issue`, what the translator wrote.
 
 ## The rule
 
@@ -47,8 +47,8 @@ It does not belong (`off`) when the sentence has something else:
 When the word in the sentence is a typo for another word (友に for 共に), it is
 `off` this word's page.
 
-For `ask` items there are two words written alike; say for this one whether
-the sentence belongs on its page.
+For `ask` items, say for this word whether the sentence belongs on its page.
+Most will: say `off` only for one of the cases above.
 
 ## Output
 

@@ -588,7 +588,43 @@ shows them as it did. 450 in-scope words show other sentences now, 137 none
 Known limit: the index's own tags are sometimes wrong. It reads every 吐く as
 つく, 暴言を吐いた and ３回吐きました included, so 吐く はく "vomit" shows none and
 吐く つく shows them. pipeline/sense_notes.py still picks its examples by
-headword alone (the notes are drafted already).
+headword alone (the notes are drafted already). The tags D-040 cannot read are
+caught one sentence at a time by D-041's notFor.
+
+### D-041 · Example sentences: wrong English, broken Japanese, wrong word
+*Found 2026-10-27,* translating the 50,094 Tatoeba sentences the word pages show
+into Bulgarian (pipeline/sentence_bg.py): each translator read the Japanese
+against Tatoeba's English and the words it is shown for. Three kinds:
+- Tatoeba's English says what the Japanese does not (まだ蕾だ "still in bloom",
+  仕事を始めよう "Let us start our week"), or there is none: 2,464 sentences.
+- The Japanese is wrong: typos (自信 for 自身, 社会保証), wrong words (規制正しく),
+  broken grammar (多く学生), calques of English sayings: 414 sentences.
+- The index files the sentence under a word it does not have: another word
+  written alike or read otherwise (値 ね under 値 あたい, ボタン "button" under
+  牡丹, 一月 いちがつ under ひとつき), a name (ボーイング, 啄木, Mr White), a piece of
+  a longer word (人文学 under 文学), a verb form under its noun (読み終える under
+  読み): about 700 word pages.
+Source: Tatoeba (the sentences and their English) and jpn_indices (the filing).
+**Status: fixed locally** (feat/sentence-bg, 2026-10-27). data/sentence_bg.json:
+`en` replaces Tatoeba's English on English pages, `broken` sentences leave the
+pages, `notFor` takes a sentence off one word's page (search.word_entry); the
+next shortest takes its place. Every notFor was checked again with all of the
+word's senses (A-000..003: 30 put back, 中 ちゅう "during", 通 つう the counter
+for letters, うち "home"), and every word a sentence is or may come to be shown
+for that its translator never saw as context (only the first two were given).
+That is all twelve sentences a page looks at, for each word that lost any: a
+sentence moving up may have been translated for another word, and the index
+files some words' sentences under them wholesale (every 地方 under じかた,
+though they read ちほう; every すれば under the conjunction). A translator shown
+such a word let some by, so for the 75 words that had lost three or more, the
+rest of their twelve were asked again (A-023..024: 78 of 276 off). じかた and
+すれば now show none (A-004..024: 3,474 asked, 345 taken off). The 70 sentences Tatoeba
+has no text for, shown as the index's words alone (体温 を 計る), are left out.
+Known limits: whether a verb form belongs on its noun's page (手伝いに来て on
+手伝い), or a sentence on a word inside a longer one (津波警報 on 津波, デモ隊 on
+デモ), was judged sentence by sentence and is not quite even; 頑張って "do your
+best!" is filed every がんばる sentence by the index and keeps one; Tatoeba's
+English that is only loose or old-fashioned is kept.
 
 ## Fixed
 
