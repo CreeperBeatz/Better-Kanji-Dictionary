@@ -77,6 +77,32 @@ def _bg() -> dict:
     return _load("word_lines_bg.json")
 
 
+@cache
+def _sentences_bg() -> dict:
+    return _load("sentence_bg.json")
+
+
+def sentence_bg(sentence_id: int) -> str | None:
+    """A Tatoeba example sentence in Bulgarian (pipeline/sentence_bg.py merge), if translated."""
+    return _sentences_bg().get("bg", {}).get(str(sentence_id))
+
+
+def sentence_en(sentence_id: int) -> str | None:
+    """Our English for a sentence whose Tatoeba English says something the Japanese does not."""
+    return _sentences_bg().get("en", {}).get(str(sentence_id))
+
+
+def sentence_not_for(sentence_id: int, word_id: int) -> bool:
+    """Whether the index files this sentence under a word it does not have in that meaning (一時 ひととき under いちじ)."""
+    return word_id in _sentences_bg().get("notFor", {}).get(str(sentence_id), ())
+
+
+@cache
+def sentences_broken() -> frozenset[int]:
+    """Sentences whose Japanese is wrong (a typo, broken grammar): kept off the word pages."""
+    return frozenset(int(s) for s in _sentences_bg().get("broken", []))
+
+
 def line_bg(line: str | None) -> str | None:
     return line and _bg().get("lines", {}).get(line)
 

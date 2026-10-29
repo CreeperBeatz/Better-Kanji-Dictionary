@@ -1221,15 +1221,18 @@ def word_entry(word_id: int) -> dict:
                 f"{' OR sw.reading IN (' + ','.join('?' * len(kana)) + ')' if kana else ''})))")
         args += [word_id, *kana]
     rows = query(
-        f"SELECT s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
-        f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine} "
-        "ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 6",
+        f"SELECT s.id, s.text, {'s.real' if real else 'NULL'} AS real, {'s.en' if real else 'NULL'} AS en FROM sentence_word sw "
+        f"JOIN sentence s ON s.id = sw.sentence_id WHERE sw.headword = ?{mine}"
+        # A sentence Tatoeba has no text for would show only the index's words, 体温 を 計る (D-041).
+        f"{' AND s.real IS NOT NULL' if real else ''} ORDER BY LENGTH(COALESCE(real, s.text)) LIMIT 12",
         tuple(args),
     )
+    rows = [r for r in rows if r["id"] not in synonyms.sentences_broken() and not synonyms.sentence_not_for(r["id"], word_id)][:6]
     return {
         "word": w,
         "kanji": kanji,
-        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": r["en"]} for r in rows],
+        "examples": [{**_sentence(r["text"], r["real"], w["headword"]), "en": synonyms.sentence_en(r["id"]) or r["en"],
+                      "bg": synonyms.sentence_bg(r["id"])} for r in rows],
         "pairs": verb_pairs(word_id),
         "related": related_words(word_id),
         "senseNotes": synonyms.sense_notes(word_id),
