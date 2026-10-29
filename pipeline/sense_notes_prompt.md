@@ -46,6 +46,9 @@ at most ~150 characters, plain English in short words (ASD-STE100 style).
   "Loanword" (or the language) only for a katakana word from a Western language.
 - A sense with `only` belongs to that reading or spelling (the page marks it):
   the nuance is about the word so read or written, and the example uses it.
+- The word is the one read as `reading`. The same kanji read another way is
+  another word: 一分 read いちぶ is never "one minute" (いっぷん), and its
+  example must be read いちぶ too.
 
 ### `rank` -- main | secondary | rare
 
@@ -68,7 +71,8 @@ meaning**, with the word as it appears marked once in 【】 (inflected as it is
 - Else write a short, natural, everyday sentence a native speaker would say,
   `"src": "d"`. Plain form unless the meaning needs polite speech. Use common
   kanji; no rare words around it.
-- `null` for a `rare` sense where an example would not help.
+- `null` only for a `rare` sense where an example would not help; every
+  `main` and `secondary` sense gets one, even a long name (農業協同組合).
 
 ## Work
 
