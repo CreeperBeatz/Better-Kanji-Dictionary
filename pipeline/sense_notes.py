@@ -49,6 +49,7 @@ import gzip
 import json
 import re
 import sys
+import time
 from collections import Counter
 from functools import cache
 from pathlib import Path
@@ -67,6 +68,7 @@ SITE = ROOT / "data" / "word_sense_notes.json"
 RESTRICTIONS = ROOT / "data" / "sense_restrictions.json"  # pipeline/sense_restrictions.py
 SENTENCE_BG = ROOT / "data" / "sentence_bg.json"  # pipeline/sentence_bg.py: broken and notFor
 COMMON, COMMON_SIZE = "K", 80  # the common words with no JLPT level: 1.4 senses each, against 2.1
+SETTLE = 180  # seconds an out file must be left alone before its check is written
 NUANCE = 170  # characters
 EXAMPLE = 45  # characters of Japanese
 OFFERED = 12  # Tatoeba sentences offered per word
@@ -348,10 +350,16 @@ def verify_prepare_common() -> None:
     """VK-n for each K-n that checks clean and has no VK-n yet: the same words, so the two series stay in step."""
     VIN.mkdir(parents=True, exist_ok=True)
     VOUT.mkdir(parents=True, exist_ok=True)
+    settled = time.time() - SETTLE  # an out file written just now may still be an agent's work in progress
     ready = [p.stem for p in sorted(IN.glob(f"{COMMON}-*.json"))
-             if (OUT / p.name).exists() and not (VIN / f"V{p.name}").exists() and not _problems(p.stem)[1]]
+             if (OUT / p.name).exists() and (OUT / p.name).stat().st_mtime < settled
+             and not (VIN / f"V{p.name}").exists() and not _problems(p.stem)[1]]
+    fresh = [p.stem for p in sorted(OUT.glob(f"{COMMON}-*.json"))
+             if p.stat().st_mtime >= settled and not (VIN / f"V{p.name}").exists()]
+    if fresh:
+        print(f"left for later, written in the last {SETTLE} s: {' '.join(fresh)}")
     if not ready:
-        print("no K batch is drafted, clean and without its VK batch")
+        print("no K batch is drafted, clean, settled and without its VK batch")
         return
     if not _evidence_fresh(ready):
         raise SystemExit("evidence.json is older than some of these drafts: run pipeline/sense_evidence.py first")
@@ -492,12 +500,17 @@ def status(show: int) -> None:
             todo.append(b)
         else:
             (bad if _problems(b)[1] else clean).append(b)
-    vtodo, vbad, vdone, unwritten = [], [], [], []
+    vtodo, vbad, vdone, unwritten, stale = [], [], [], [], []
     for b in clean:
         v = f"V{b}"
         if not (VIN / f"{v}.json").exists():
             unwritten.append(b)
-        elif not (VOUT / f"{v}.json").exists():
+            continue
+        drafts = _problems(b)[0]
+        seen = {str(it["id"]): [s["note"] for s in it["senses"]] for it in ws._read(VIN / f"{v}.json")["items"]}
+        if seen != drafts:
+            stale.append(v)  # the draft changed after its check was written: the verdicts may not fit it
+        if not (VOUT / f"{v}.json").exists():
             vtodo.append(v)
         else:
             (vbad if _verdicts(v)[1] else vdone).append(v)
@@ -512,9 +525,13 @@ def status(show: int) -> None:
     print(f"  check to run        {len(vtodo):>4}  next: {' '.join(vtodo[:show])}")
     print(f"  check, problems     {len(vbad):>4}  {' '.join(vbad[:show])}")
     print(f"  checked             {len(vdone):>4}  ({len(checked)} words)")
+    print(f"  draft changed since its check was written {len(stale)}  {' '.join(stale[:show])}")
     print(f"  on the site         {sum(str(w) in site for w in words):>4} words; checked, not merged: "
           f"{sum(str(w) not in site for w in checked)}")
     print("\nNext, in this order (each step is safe to repeat; run status again after any of them):")
+    if stale:
+        print(f"  - Redo the check of a changed draft: delete verify/in/VK-n.json and verify/out/VK-n.json, "
+              f"then write and run it again ({' '.join(stale)}).")
     if bad or vbad:
         print(f"  - Fix: a batch with problems has an out file that does not check. Run `check --batch K-n` or "
               f"`verify-check --batch VK-n` and give it back to an agent with the problems (or delete the out file to redo it).")
