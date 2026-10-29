@@ -16,8 +16,9 @@ list), `senses` and `sentences`.
 Each sense: `n` (JMdict's number), `pos`, `misc` (JMdict tags: arch, obs, rare,
 dated, hist, col, sl, uk ...), and where JMdict has them `field` (math, econ,
 law, sumo, Buddh ...: a specialist term, usually `rare` for a learner unless
-the field is everyday), `dialect` (ksb = Kansai ...) and `info` (JMdict's own
-note on the sense); `gloss`; and `note` -- the draft:
+the field is everyday), `dialect` (ksb = Kansai ...), `info` (JMdict's own
+note on the sense) and `only` (JMdict keeps the sense to another reading or
+spelling: "read このかん"; the note and example must be about that one); `gloss`; and `note` -- the draft:
 `{rank, nuance, ex: {ja (the word in 【】), en, src: "t" Tatoeba | "d" drafted} | null}`.
 
 Some senses also have:
@@ -53,7 +54,14 @@ and how it is used, its register, what it stresses. Fix it if:
 - it misses something a learner must know: archaic or dated, rude or vulgar,
   usually written in kana, mostly in a fixed phrase;
 - it starts with the word itself, says "a word that means" or "similar to",
-  names a synonym, or holds an example.
+  names a synonym, or holds an example;
+- a register claim is not true of the word on its own in this sense: check it
+  against the `misc` tags (a claim against col, form, pol ... is almost always
+  wrong); an on'yomi word is not formal or written for that alone, a kana or
+  mimetic word not spoken for that alone;
+- it says where the word comes from ("native word", "Sino-Japanese", "from
+  Chinese"): take that out. "Loanword" stays only on a katakana word from a
+  Western language.
 Do not rewrite a nuance that is true and useful just to word it your way.
 
 **ex** -- a short sentence (at most ~40 characters) that shows the word *in

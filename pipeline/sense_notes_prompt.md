@@ -7,9 +7,11 @@ sense of a dictionary entry. Read your input file
 
 Each input item is a word: `id`, `word`, `reading`, `jlpt` (5 = N5, null = not
 on the list), `senses` (JMdict, numbered from 1: part of speech, misc tags, the
-English glosses, and `synonyms` -- other words close in that sense, each with a
-line on how *that* word differs from this one), and `sentences` (real Tatoeba
-sentences with the word, shortest first; may be empty).
+English glosses, `only` where JMdict keeps the sense to another reading or
+spelling ("read このかん": この間 read このかん, not このあいだ, in this sense), and
+`synonyms` -- other words close in that sense, each with a line on how *that*
+word differs from this one), and `sentences` (real Tatoeba sentences with the
+word, shortest first; may be empty).
 
 ## Output
 
@@ -34,6 +36,16 @@ at most ~150 characters, plain English in short words (ASD-STE100 style).
 - Not "a word that means"; not "similar to". No examples inside the nuance.
 - Good: "The everyday word for anything not new, from objects to ideas; neutral in tone."
 - Good: "Of food or air that has sat too long; often with a slight sense of disgust."
+- **Register claims must be true of the word on its own**, in this sense:
+  check them against the `misc` tags (col, form, pol, hon, hum, sl, vulg ...);
+  a claim against a tag is almost always wrong. A word built from on'yomi is
+  not formal or written for that alone; a kana or mimetic word is not spoken
+  for that alone. Where the register changes with the sense, say it per sense.
+- **No claims about where a word comes from** ("native word", "Sino-Japanese",
+  "from Chinese"): they were often wrong, and a learner does not need them.
+  "Loanword" (or the language) only for a katakana word from a Western language.
+- A sense with `only` belongs to that reading or spelling (the page marks it):
+  the nuance is about the word so read or written, and the example uses it.
 
 ### `rank` -- main | secondary | rare
 
