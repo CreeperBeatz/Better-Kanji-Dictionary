@@ -225,7 +225,9 @@ def flags() -> None:
 FIXES = ((re.compile(r"\bзен\b"), "дзен"), (re.compile(r"\bпелмени\b"), "гьоза"),
          # Round 9, agents apart: the baseball batter in three spellings; -ър as in питчър, кечър.
          (re.compile(r"(?<![А-Яа-я])([Бб])ат(?:ьо|е)р(ът|а|и|ите)?(?![А-Яа-я])"), r"\1атър\2"),
-         (re.compile(r"(?<![А-Яа-я])Канон(?![А-Яа-я])"), "Каннон"), (re.compile(r"\bпатинко\b"), "пачинко"))
+         (re.compile(r"(?<![А-Яа-я])Канон(?![А-Яа-я])"), "Каннон"), (re.compile(r"\bпатинко\b"), "пачинко"),
+         # "Seen in history" is about history texts; "в историята" reads as "it happened in history" (blind sample).
+         (re.compile(r"(Среща се(?: \w+)? )в историята\b"), r"\1в исторически текстове"))
 OPENERS = {"The everyday word": "Всекидневната дума", "Spoken": "В говоримата реч"}
 
 
@@ -246,9 +248,15 @@ def _fix(text: str, en: str | None = None) -> str:
     return text
 
 
+def _round(p: Path) -> tuple:
+    """Later rounds last, so their text wins: by number, since N10-000 sorts before N9-000 by name."""
+    head, _, rest = p.stem.partition("-")
+    return (int(head[1:] or 1), head[0], rest)
+
+
 def merge() -> None:
     out = {"lines": {}, "notes": {}}
-    for p in sorted(IN.glob("*.json")):
+    for p in sorted(IN.glob("*.json"), key=_round):
         good, probs = verdicts(p.stem)
         if probs:
             print(f"{p.stem}: {len(probs)} problems, {len(good)} taken")
