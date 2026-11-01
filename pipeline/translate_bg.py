@@ -222,7 +222,10 @@ def flags() -> None:
 
 # Applied at merge, so a re-merge keeps them: words with an established Bulgarian form, and one
 # rendering per frequent English label (the batches were alphabetical, so a label sat mostly in one).
-FIXES = ((re.compile(r"\bзен\b"), "дзен"), (re.compile(r"\bпелмени\b"), "гьоза"))
+FIXES = ((re.compile(r"\bзен\b"), "дзен"), (re.compile(r"\bпелмени\b"), "гьоза"),
+         # Round 9, agents apart: the baseball batter in three spellings; -ър as in питчър, кечър.
+         (re.compile(r"(?<![А-Яа-я])([Бб])ат(?:ьо|е)р(ът|а|и|ите)?(?![А-Яа-я])"), r"\1атър\2"),
+         (re.compile(r"(?<![А-Яа-я])Канон(?![А-Яа-я])"), "Каннон"), (re.compile(r"\bпатинко\b"), "пачинко"))
 OPENERS = {"The everyday word": "Всекидневната дума", "Spoken": "В говоримата реч"}
 
 

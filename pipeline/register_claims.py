@@ -1,7 +1,7 @@
 """Register claims in the word lines, checked once, and made to say what they compare (Dani, 2026-10-25).
 
     python pipeline/register_claims.py prepare [--size 200]   # data/drafts/register-claims/in/G-*.json
-    python pipeline/register_claims.py flagged 2              # G-X02.json: texts flagged in Bulgarian round 2
+    python pipeline/register_claims.py flagged 2 [--size 100] # G-X02.json (or G-X02-0, -1 ..): texts flagged in Bulgarian round 2
     # one Opus subagent per in/*.json, each reading pipeline/register_claims_prompt.md
     python pipeline/register_claims.py check [--batch G-000]
     python pipeline/word_synonyms.py export                   # applies the fixes to synonym lines
@@ -117,7 +117,7 @@ def prepare(size: int) -> None:
     print(f"{len(items)} texts ({dict(why)}) in {-(-len(items) // size)} batches -> {IN}")
 
 
-def flagged(rnd: int) -> None:
+def flagged(rnd: int, size: int = 0) -> None:
     """The texts the translators of a later Bulgarian round (translate_bg.py prepare --missing) flagged:
     these are texts already fixed once, so the batch sorts after the others and its fixes go on top."""
     site = json.loads(ws.SITE.read_text(encoding="utf-8"))
@@ -150,8 +150,14 @@ def flagged(rnd: int) -> None:
                                           "about": {**_brief(about), "sense": a_sense},
                                           "against": {**_brief(against), "sense": b_sense}, "flags": [note.strip()]})
     name = f"G-X{rnd:02d}"
-    ws._dump(IN / f"{name}.json", {"batch": name, "items": items})
-    print(f"{len(items)} flagged texts -> {IN / name}.json")
+    if not size:
+        ws._dump(IN / f"{name}.json", {"batch": name, "items": items})
+        print(f"{len(items)} flagged texts -> {IN / name}.json")
+        return
+    for b in range(0, len(items), size):
+        part = f"{name}-{b // size}"
+        ws._dump(IN / f"{part}.json", {"batch": part, "items": items[b:b + size]})
+    print(f"{len(items)} flagged texts -> {IN / name}-0..{(len(items) - 1) // size}.json")
 
 
 def verdicts(batch: str) -> tuple[dict, list[str]]:
@@ -237,11 +243,12 @@ def main() -> None:
     p.add_argument("--batch")
     p = sub.add_parser("flagged")
     p.add_argument("round", type=int)
+    p.add_argument("--size", type=int, default=0)
     a = ap.parse_args()
     if a.cmd == "prepare":
         prepare(a.size)
     elif a.cmd == "flagged":
-        flagged(a.round)
+        flagged(a.round, a.size)
     else:
         check(a.batch)
 

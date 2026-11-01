@@ -52,7 +52,9 @@ PARTS = {"notes": ("rank", "nuance", "ex"), "kanji": ("en", "bg"), "synonyms": (
          # The Bulgarian of the word lines and sense notes (pipeline/translate_bg.py), against the English.
          "bg": ("text", "ex"),
          # The same, only the lines the later rounds translated (translate_bg.py prepare --missing 7 and on, 2026-10-27).
-         "bglate": ("text", "ex")}
+         "bglate": ("text", "ex"),
+         # The sense notes of the rounds from 9 on (2026-11-01): the common words outside JLPT.
+         "bgnotes": ("text", "ex")}
 GRADES = ("ok", "minor", "major")
 
 
@@ -211,13 +213,31 @@ def _bglate(rng: random.Random, n: int, since: int = 7) -> list[dict]:
             ((i, lines[i]) for i in rng.sample(range(len(lines)), min(n, len(lines))))]
 
 
+def _bgnotes(rng: random.Random, n: int, since: int = 9) -> list[dict]:
+    """Sense notes only, from the Bulgarian rounds `since` and on (batches N<round>-*), as the site shows them now."""
+    bg = json.loads((DATA / "word_lines_bg.json").read_text(encoding="utf-8"))
+    notes = json.loads((DATA / "word_sense_notes.json").read_text(encoding="utf-8"))
+    src = DATA / "drafts" / "translate-bg" / "in"
+    late = sorted({it["key"] for p in src.glob("N*-*.json") if int(p.stem[1:].split("-")[0] or 1) >= since
+                   for it in ws._read(p)["items"]} & bg["notes"].keys())
+    out = []
+    for k in rng.sample(late, min(n, len(late))):
+        w, i = k.split("|")
+        nt, b, word = notes[w][int(i)], bg["notes"][k], _word(int(w))
+        out.append({"key": f"note|{k}", "kind": "note", **{f: v for f, v in word.items() if f != "senses"},
+                    "sense": word["senses"][int(i)] if int(i) < len(word["senses"]) else None,
+                    "en": nt["nuance"], "bg": b["nuance"],
+                    **({"ex": {"ja": nt["ex"]["ja"], "en": nt["ex"]["en"], "bg": b["ex"]}} if nt.get("ex") and b.get("ex") else {})})
+    return out
+
+
 def prepare(which: str, n: int, size: int, rnd: int = 1) -> None:
     """A later round (after more fixes) draws a new sample, batches <which>-r<round>-NNN, reported apart."""
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     rng = random.Random(f"{SEED}-{which}" + (f"-r{rnd}" if rnd > 1 else ""))
     items = {"notes": _notes, "kanji": _kanji, "synonyms": _synonyms, "mirrored": _mirrored,
-             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "spoken": _spoken, "common": _common, "final": _final, "bg": _bg, "bglate": _bglate}[which](rng, n)
+             "mixup": _mixup, "belowbar": _belowbar, "kinds": _kinds, "freed": _freed, "spoken": _spoken, "common": _common, "final": _final, "bg": _bg, "bglate": _bglate, "bgnotes": _bgnotes}[which](rng, n)
     for b in range(0, len(items), size):
         name = f"{which}-{f'r{rnd}-' if rnd > 1 else ''}{b // size:03d}"
         ws._dump(IN / f"{name}.json", {"batch": name, "dataset": which, "items": items[b:b + size]})
