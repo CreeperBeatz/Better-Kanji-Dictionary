@@ -626,6 +626,64 @@ Known limits: whether a verb form belongs on its noun's page (手伝いに来て
 best!" is filed every がんばる sentence by the index and keeps one; Tatoeba's
 English that is only loose or old-fashioned is kept.
 
+### D-042 · Senses that belong to another reading than the page shows
+*Found 2026-11-01,* by the Bulgarian translators of round 9. One JMdict entry
+holds several readings, and most senses carry no tag saying which reading they
+go with. The page heads the entry with one reading, and the note was written
+for it: 紅 くれない with the lipstick sense (read べに), 十八番 おはこ with "No. 18"
+(じゅうはちばん), 半月 はんげつ with "half a month" (はんつき), 上皮 うわかわ with
+epithelium (じょうひ).
+Scale: 59 flags in round 9, 40 of them on entries with several readings. Those
+words were read only for translating, not checked for this. 1,704 words with
+notes have 2+ readings and 2+ senses (5,052 senses); only 169 of them have a
+JMdict restriction (D-037 covers those).
+Source: JMdict leaves the link out; the drafts took the headword's reading.
+**Status: fixed locally** (feat/common-sense-notes, 2026-11-02). The flagged notes
+now say how the word is read in that sense (register_claims G-X09-*). Then every
+note on those 1,704 words (5,052) was asked once, with all readings, spellings,
+JMdict restrictions and field tags (pipeline/sense_readings.py, G-Y42-000..020 +
+F00, Opus): 113 fixed (2.2%), 106 notes and 24 examples. Most extra readings are
+variants for every sense; the misses were old or specialist senses (実を結ぶ is み,
+妻子 "wife" つまこ, 頭 "boss" かしら, 判 paper sizes ばん, 鶏 as food とり, 型 after a
+noun がた), suffixes, and katakana words with one form per sense (タッグ, ジャージ,
+リコーダー). Bulgarian: round N11.
+
+### D-043 · Wrong or doubtful JMdict English seen in round 9
+*Found 2026-11-01,* by the same translators. JMdict's English is not edited here;
+these are for checking and sending upstream. Not confirmed against a second source.
+- 1336710 重文 "sentenced formed of" (typo), 1400400 巣食う "to luck" (typo),
+  1555900 瑠璃 "mall blue" (typo).
+- 1450650 陶磁 "clay", 1381700 青砥 "millstone" (a whetstone?), 1551860 立法府
+  "assize; court", 1671350 新巻 "lightly roasted" (salted), 1673970 舞台監督 "stage
+  director" (stage manager), 1713930 対校 "pertaining to school" (between schools),
+  1820980 形質 "allele" (trait), 1161550 一環 "monocyclic".
+- Headwords: 1569480 甦 read よみがえ looks cut short; 1896520 電算 でんそろ reads
+  as でんさん to anyone.
+Source: JMdict.
+**Status: open.** The sense notes say what is right where the note could; the
+glosses on the page are unchanged.
+
+### D-044 · JMdict field tags never reached the notes
+*Found 2026-11-02,* in the D-042 check. build_db keeps a sense's part of
+speech and misc tags but not its `<field>` (go, Buddh, med, baseb, sumo …),
+so the sense-note drafters and checkers never saw it. 壁 sense 4 "wall (of
+stones)" is the go term; its note described a stone wall round a field.
+Scale: 3,045 senses of 2,613 in-scope words carry a field tag. Most glosses
+name their field anyway ("home run"); how many notes are wrong is not known.
+Source: our build (pipeline/build_db.py drops `<field>`).
+**Status: fixed locally** (feat/common-sense-notes, 2026-11-02). Every note on a
+tagged sense was asked once with its tags: the 1,704 D-042 words in G-Y42 (+F00 for
+the 41 tagged senses of the two batches asked before the tags were given), the
+other 2,629 tagged senses (2,294 words) in G-Y44-000..010 (sense_readings.py
+fields, sense_fields_prompt.md, Opus): 161 fixed (6.1%; 146 notes, 45 examples).
+Most: the everyday meaning or a neighbouring sense in place of the term (仕事
+{physics} work = force × distance, 翻訳 {biol} mRNA to protein, 連続 {math}
+continuous, インバーター {comp} the NOT gate, ジャーナル {comp} a change log, 切る {go}
+the cut); then wrong facts inside the field (告訴 goes to police or prosecutors,
+not a court; 関取 and 幕 are divisions, not ranks; 急性 is sudden, not severe;
+定石 are corner sequences). Most frequent words had most (36 of 250 in G-Y44-000).
+Bulgarian: round N12. Open: the tag is still not on the page.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

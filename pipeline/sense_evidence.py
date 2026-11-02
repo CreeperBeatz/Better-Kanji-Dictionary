@@ -154,7 +154,8 @@ def restore(notes: dict) -> dict:
 
 
 def run() -> None:
-    notes = json.loads(SITE.read_text(encoding="utf-8"))
+    import sense_notes  # the drafts of words not on the site yet (the common words, K-*), before their check
+    notes = sense_notes._drafts() | json.loads(SITE.read_text(encoding="utf-8"))
     sc = ws.scope()
     jpn = _sentences(RAW / "tatoeba" / "jpn_sentences.tsv.bz2")
     eng = _sentences(RAW / "tatoeba" / "eng_sentences.tsv.bz2")
