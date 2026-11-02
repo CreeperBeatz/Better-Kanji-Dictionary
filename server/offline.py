@@ -52,8 +52,8 @@ from array import array
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import bg_overlay, scope
-from .db import DB_PATH
+from . import bg_overlay, scope, synonyms
+from .db import DB_PATH, file_stamp
 
 # Bump when the pack's layout changes, so every client fetches a new one.
 # 2: Bulgarian glosses, kanji meanings and their indexes.
@@ -62,14 +62,16 @@ from .db import DB_PATH
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
 # 6: the kanji pages (pages.json); each file's hash in the manifest.
 # 7: each word form says if it is seldom (a 4th field), 消耗's しょうこう.
-FORMAT = 7
+# 8: each word's senses in our order (an 11th field), where not JMdict's.
+FORMAT = 8
 # Bump when a kanji page's shape changes (search.kanji_page): rebuilds pages.json alone.
 # 2: each mix-up's kanji with its meaning on that reading.
 # 3: up to 26 words a reading on each meaning, the rest after the key words.
 # 4: a meaning's best examples starred, first in each part.
 # 5: a word under each of its meanings, with the sense that has it (焼く under "bake").
 # 6: each meaning's uses, the patterns it builds words in, with their examples.
-PAGES_FORMAT = 6
+# 7: `senseAt` where the sense is not the first in the word's order (0 can be one).
+PAGES_FORMAT = 7
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -90,13 +92,6 @@ _failed: str | None = None
 # ---------------------------------------------------------------- freshness
 
 
-def _stamp(p: Path) -> str:
-    try:
-        s = p.stat()
-        return f"{s.st_mtime_ns}:{s.st_size}"
-    except FileNotFoundError:
-        return "-"
-
 
 def source_key(fresh: bool = False) -> tuple[str, str]:
     """(key, pages): each changes whenever what it covers does, `pages` the kanji
@@ -111,7 +106,8 @@ def source_key(fresh: bool = False) -> tuple[str, str]:
 
     whole, pages = pack_key(fresh)
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", f"{PAGES_FORMAT}|{pages}"
+    # The sense notes, as the server read them, set the order of each word's senses.
+    return f"{FORMAT}|{file_stamp(DB_PATH)}|{file_stamp(wal)}|{synonyms.notes_stamp()}|{whole}", f"{PAGES_FORMAT}|{pages}"
 
 
 def _on_disk() -> dict | None:
@@ -404,15 +400,20 @@ def _whole(conn: sqlite3.Connection) -> dict[str, bytes]:
     for r in conn.execute("SELECT word_id, other_id FROM verb_pair ORDER BY word_id, rank"):
         pairs.setdefault(r[0], []).append(r[1])
 
-    for n, lo in enumerate(range(0, len(words), WORD_CHUNK)):
-        chunk = [
-            [
-                w["id"], w["headword"], w["reading"], w["common"], w["nf"],
-                pitch.get((w["headword"], w["reading"])),
-                senses.get(w["id"], []), forms.get(w["id"], []), w["jlpt"], pairs.get(w["id"], []),
-            ]
-            for w in words[lo : lo + WORD_CHUNK]
+    def row(w) -> list:
+        ss = senses.get(w["id"], [])
+        out = [
+            w["id"], w["headword"], w["reading"], w["common"], w["nf"],
+            pitch.get((w["headword"], w["reading"])),
+            ss, forms.get(w["id"], []), w["jlpt"], pairs.get(w["id"], []),
         ]
+        # The senses in our order, only where it is not JMdict's: few words have one.
+        if order := synonyms.sense_order(w["id"], len(ss)):
+            out.append(order)
+        return out
+
+    for n, lo in enumerate(range(0, len(words), WORD_CHUNK)):
+        chunk = [row(w) for w in words[lo : lo + WORD_CHUNK]]
         files[f"words-{n:02d}.json"] = _json(chunk)
     del senses, forms, pairs
 

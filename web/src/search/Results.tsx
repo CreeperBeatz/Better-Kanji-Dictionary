@@ -31,6 +31,7 @@ import { WordsWith } from './WordsWith'
 import { Spellings } from '../detail/Spellings'
 import { InstallNote } from '../install/InstallGuide'
 import { warmKanji, warmWord } from '../warm'
+import { firstSense, leadSense, senseNo, senseOrder } from '../senses'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -283,12 +284,11 @@ function remember(key: string, r: SearchResponse) {
 /** Memoised: while a new search is on its way the old rows stay as they are. */
 const WordRow = memo(WordRowView)
 
-/** The senses a row shows, by number: the first three, or under a meaning one of its later
- *  senses has (焼く under "bake"), that sense first, its number kept. */
-function senseOrder(w: Word): number[] {
-  const all = w.senses.map((_, i) => i)
-  const at = w.senseAt && w.senses[w.senseAt] ? w.senseAt : 0
-  return [at, ...all.filter((i) => i !== at)].slice(0, 3)
+/** The senses a row shows: the word's first three, or under a meaning another of its senses
+ *  has (焼く under "bake"), that sense first; each keeps its number. */
+function rowSenses(w: Word): number[] {
+  const at = leadSense(w)
+  return [at, ...senseOrder(w).filter((i) => i !== at)].slice(0, 3)
 }
 
 function WordRowView({
@@ -344,12 +344,12 @@ function WordRowView({
         )}
         <span className="word-foot">
           <span className="word-gloss">
-            {senseOrder(w).map((i) => {
+            {rowSenses(w).map((i) => {
               const s = w.senses[i]
               const g = glossOf(s, lang)
               return (
                 <span key={i} className="sense" data-fallback={g.fallback || undefined}>
-                  {w.senses.length > 1 && <b>{i + 1}</b>}
+                  {w.senses.length > 1 && <b>{senseNo(w, i)}</b>}
                   {g.value}
                   {g.fallback && (
                     <b className="gloss-fallback" title={t('notTranslated')}>
@@ -854,6 +854,7 @@ function HomePage({
       }
       case 'word': {
         const w = v.word
+        const first = firstSense(w)
         return (
           <button {...warmWord(w.id)} onClick={() => onWord(w)}>
             <span className="recent-head" lang="ja">
@@ -864,7 +865,7 @@ function HomePage({
                 {w.reading}
               </span>
             )}
-            {w.senses[0] && <span className="recent-gloss">{glossOf(w.senses[0], lang).value}</span>}
+            {first && <span className="recent-gloss">{glossOf(first, lang).value}</span>}
           </button>
         )
       }

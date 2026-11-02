@@ -37,7 +37,10 @@ import json
 from functools import cache
 from pathlib import Path
 
+from .db import file_stamp
+
 DATA = Path(__file__).resolve().parent.parent / "data"
+NOTES_PATH = DATA / "word_sense_notes.json"
 
 
 def _load(name: str) -> dict:
@@ -58,8 +61,18 @@ def _kanji() -> dict:
 
 
 @cache
+def _notes_read() -> tuple[dict, str]:
+    stamp = file_stamp(NOTES_PATH)
+    return _load(NOTES_PATH.name), stamp
+
+
 def _notes() -> dict:
-    return _load("word_sense_notes.json")
+    return _notes_read()[0]
+
+
+def notes_stamp() -> str:
+    """The sense notes file as this process read it: the offline pack's words carry their order."""
+    return _notes_read()[1]
 
 
 @cache
@@ -105,6 +118,21 @@ def sentences_broken() -> frozenset[int]:
 
 def line_bg(line: str | None) -> str | None:
     return line and _bg().get("lines", {}).get(line)
+
+
+_RANK = {"main": 0, "secondary": 1, "rare": 2}
+
+
+def sense_order(word_id: int, count: int) -> list[int] | None:
+    """The word's senses (0-based) in our order: main, then secondary, then rare, JMdict's order
+    within each. The site numbers senses by it; the index stays the sense's id everywhere else.
+    None where it is JMdict's own order (and for a word with no notes)."""
+    notes = _notes().get(str(word_id))
+    if not notes:
+        return None
+    rank = [_RANK.get((notes[i] or {}).get("rank"), 1) if i < len(notes) else 1 for i in range(count)]
+    order = sorted(range(count), key=lambda i: (rank[i], i))
+    return None if order == list(range(count)) else order
 
 
 def sense_notes(word_id: int) -> list[dict] | None:

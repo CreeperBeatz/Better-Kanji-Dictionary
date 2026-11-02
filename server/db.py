@@ -11,6 +11,15 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "betterrtk.sqlite"
 
+
+def file_stamp(p: Path) -> str:
+    """When the file last changed and its size: "-" if it is not there."""
+    try:
+        s = p.stat()
+        return f"{s.st_mtime_ns}:{s.st_size}"
+    except FileNotFoundError:
+        return "-"
+
 _local = threading.local()
 
 

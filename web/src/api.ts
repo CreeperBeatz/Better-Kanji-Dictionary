@@ -223,6 +223,9 @@ export interface Word {
   jlpt: number | null
   pitch: string | null
   senses: Sense[]
+  /** The senses' indexes in our order (main, secondary, rare), which the site numbers them
+   *  by (web/src/senses.ts); absent where it is JMdict's own. */
+  order?: number[]
   /** `old`: the spelling in old kanji (學校 for 学校); missing from the device's copy. */
   /** seldom: JMdict marks another form of its kind common, not this one (消耗's しょうこう). */
   forms: { text: string; kana: boolean; rare: boolean; seldom?: boolean; old?: boolean }[]
@@ -235,8 +238,8 @@ export interface Word {
   as?: string | null
   /** On a kanji's page and in its words: one of its meaning's best examples, the words to know it by. */
   star?: boolean
-  /** Under a meaning: the sense of the word that has it (0-based), where not its first --
-   *  焼く under "bake" is sense 2, "to roast; to grill; to bake". */
+  /** Under a meaning: the sense of the word that has it (its index, from 0), where not the
+   *  first in `order` -- 焼く under "bake" is "to roast; to grill; to bake". */
   senseAt?: number
   /** Under a meaning that is not the word's main one: that main one (焼く: "burn"). */
   alsoOf?: { id: string; en: string | null; bg: string | null }

@@ -54,10 +54,12 @@ export interface KanjiPack {
   inner?: Record<string, number[]>
 }
 
-/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt, verb pair ids */
+/** id, headword, reading, common, nf, pitch, senses [pos, misc, gloss, glossBg], forms [text, kana, rare], jlpt, verb pair ids,
+ *  the senses in our order (null where JMdict's) */
 export type RawWord = [
   number, string, string, number, number | null, string | null,
   [string | null, string | null, string, (string | null)?][], [string, number, number, number?][], (number | null)?, number[]?,
+  (number[] | null)?,
 ]
 
 /** Where the entries and stroke paths are kept: IndexedDB in the app, memory in tests. */
@@ -89,6 +91,7 @@ function toWord(r: RawWord): Word {
     forms: r[7].map(([text, kana, rare, seldom]) => ({ text, kana: !!kana, rare: !!rare, ...(seldom ? { seldom: true } : {}) })),
     // Absent from rows stored before words carried a level.
     jlpt: r[8] ?? null,
+    ...(r[10] ? { order: r[10] } : {}),
   }
 }
 
