@@ -638,7 +638,7 @@ words were read only for translating, not checked for this. 1,704 words with
 notes have 2+ readings and 2+ senses (5,052 senses); only 169 of them have a
 JMdict restriction (D-037 covers those).
 Source: JMdict leaves the link out; the drafts took the headword's reading.
-**Status: fixed locally** (feat/common-sense-notes, 2026-11-02). The flagged notes
+**Status: fixed** (feat/common-sense-notes, 2026-11-02; deployed 2026-11-02, 568ec6b). The flagged notes
 now say how the word is read in that sense (register_claims G-X09-*). Then every
 note on those 1,704 words (5,052) was asked once, with all readings, spellings,
 JMdict restrictions and field tags (pipeline/sense_readings.py, G-Y42-000..020 +
@@ -671,7 +671,7 @@ stones)" is the go term; its note described a stone wall round a field.
 Scale: 3,045 senses of 2,613 in-scope words carry a field tag. Most glosses
 name their field anyway ("home run"); how many notes are wrong is not known.
 Source: our build (pipeline/build_db.py drops `<field>`).
-**Status: fixed locally** (feat/common-sense-notes, 2026-11-02). Every note on a
+**Status: fixed** (feat/common-sense-notes, 2026-11-02; deployed 2026-11-02, 568ec6b). Every note on a
 tagged sense was asked once with its tags: the 1,704 D-042 words in G-Y42 (+F00 for
 the 41 tagged senses of the two batches asked before the tags were given), the
 other 2,629 tagged senses (2,294 words) in G-Y44-000..010 (sense_readings.py
