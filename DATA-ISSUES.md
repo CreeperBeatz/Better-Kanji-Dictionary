@@ -358,6 +358,21 @@ Only 及び stays major. Random kanji: 16 of 42 flagged, all minor in the end,
 almost all common words in no group (相場, 死者, 若干, 車線, 中堅). Found the known
 real gaps 照, 及, 采; missed 並びに and 一膳 (not common, so not in the input).
 Real new meanings found: 幸 "imperial visit" (御幸), 干 "stems of the cycle" (干支).
+Focus run (2026-11-02, all 692 other kanji with a common word in no group on prod;
+47 Opus screeners, then 34 Sonnet skeptics: 9 hard batches with the web for majors,
+misplacements and new groups, 25 easy batches judged from the senses, the web
+when unsure): 1,072 flags, every one of the 1,539 hidden common words (232 in the
+top 6k, e.g. 積極的, 代表, 手続き, 問い合わせ, 当然) has a fix. Skeptic: 914 right,
+129 right with another fix, 23 unsure, 6 wrong (伝法, 手本, 二枚目, 大通り, 円建て,
+発電: their current place is fine). Of the hidden words: 1,296 placed as proposed,
+214 with the skeptic's other fix, 27 unsure. 29 of 30 major flags confirmed, e.g.
+実際 under 際 "edge", 自作 under 作 "crops", 口々 under "entrance", 結構 under 構
+"structure", 中々 under 中, 都合 under "join". 28 new groups confirmed, among them
+及 "and", 致 "reach" (一致), 消 "wane" (消極的), 故 "on purpose" (故意), 師 "army",
+卒 "sudden" (脳卒中), 暴 "expose" (暴露), 樹 "establish" (樹立), 洋 "East or West".
+Drafts in data/drafts/meaning-gaps/focus. Nothing applied: the other-fix verdicts
+are free text and need structuring, new groups need Bulgarian, and loading on
+prod needs Dani's go.
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
