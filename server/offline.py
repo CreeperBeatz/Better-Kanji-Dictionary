@@ -52,7 +52,7 @@ from array import array
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from . import bg_overlay, scope
+from . import bg_overlay, scope, synonyms
 from .db import DB_PATH
 
 # Bump when the pack's layout changes, so every client fetches a new one.
@@ -62,14 +62,16 @@ from .db import DB_PATH
 # 5: per kanji, the common words that have it further in (kanji.json `inner`).
 # 6: the kanji pages (pages.json); each file's hash in the manifest.
 # 7: each word form says if it is seldom (a 4th field), 消耗's しょうこう.
-FORMAT = 7
+# 8: each word's senses in our order (an 11th field), where not JMdict's.
+FORMAT = 8
 # Bump when a kanji page's shape changes (search.kanji_page): rebuilds pages.json alone.
 # 2: each mix-up's kanji with its meaning on that reading.
 # 3: up to 26 words a reading on each meaning, the rest after the key words.
 # 4: a meaning's best examples starred, first in each part.
 # 5: a word under each of its meanings, with the sense that has it (焼く under "bake").
 # 6: each meaning's uses, the patterns it builds words in, with their examples.
-PAGES_FORMAT = 6
+# 7: `senseAt` where the sense is not the first in the word's order (0 can be one).
+PAGES_FORMAT = 7
 
 OUT = DB_PATH.parent / "offline"
 CURRENT = OUT / "current.json"
@@ -111,7 +113,9 @@ def source_key(fresh: bool = False) -> tuple[str, str]:
 
     whole, pages = pack_key(fresh)
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{whole}", f"{PAGES_FORMAT}|{pages}"
+    # The sense notes set the order of each word's senses.
+    notes = _stamp(synonyms.NOTES_PATH)
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{notes}|{whole}", f"{PAGES_FORMAT}|{pages}"
 
 
 def _on_disk() -> dict | None:
@@ -410,6 +414,7 @@ def _whole(conn: sqlite3.Connection) -> dict[str, bytes]:
                 w["id"], w["headword"], w["reading"], w["common"], w["nf"],
                 pitch.get((w["headword"], w["reading"])),
                 senses.get(w["id"], []), forms.get(w["id"], []), w["jlpt"], pairs.get(w["id"], []),
+                synonyms.sense_order(w["id"], len(senses.get(w["id"], []))),
             ]
             for w in words[lo : lo + WORD_CHUNK]
         ]

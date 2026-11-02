@@ -26,6 +26,7 @@ import { Valency } from '../search/Valency'
 import { WordMeta } from './HeadMeta'
 import { ReportButton } from '../reports/ReportButton'
 import { warmKanji, warmWord } from '../warm'
+import { senseOrder } from '../senses'
 
 const S = strings(
   {
@@ -444,12 +445,8 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
     )
   }
   const glosses = w.senses.map((s) => glossOf(s, lang))
-  // The main meanings on top, then the ones met later, then the rare; each keeps
-  // JMdict's number, which the synonym rows and a kanji's words name it by.
-  const RANK = { main: 0, secondary: 1, rare: 2 }
-  const order = w.senses
-    .map((_, i) => i)
-    .sort((a, b) => RANK[entry?.senseNotes?.[a]?.rank ?? 'secondary'] - RANK[entry?.senseNotes?.[b]?.rank ?? 'secondary'] || a - b)
+  // The main meanings on top, then the ones met later, then the rare, numbered so.
+  const order = senseOrder(w)
   const machine = lang === 'bg' && glosses.some((g) => !g.fallback)
   const rank = rankOf(w, lang)
 
@@ -494,7 +491,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
             <li key={i} id={senseAnchor(w.id, i)} className="meaning sense-card" data-rank={note?.rank}>
               {/* Its number and glosses, as a kanji meaning's title: the first gloss leads. */}
               <header>
-                <span className="meaning-n">{i + 1}</span>
+                <span className="meaning-n">{k + 1}</span>
                 <p className="entry-gloss">
                   <span className="sense-lead">{lead}</span>
                   {rest.length > 0 && <span className="rest">; {rest.join('; ')}</span>}

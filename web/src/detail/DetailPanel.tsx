@@ -18,6 +18,7 @@ import { focusWordsNext } from './meaningFocus'
 import { Readings, SpecialReadings } from './Readings'
 import { Meanings } from './MeaningCards'
 import { warmWord } from '../warm'
+import { leadSense, senseNo } from '../senses'
 
 const S = strings(
   {
@@ -247,7 +248,8 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
   const special = here?.data.special ?? []
   const vocabRow = (w: Word) => {
     // The sense that has this meaning: 焼く under "bake" is "to roast", its second.
-    const at = w.senseAt && w.senses[w.senseAt] ? w.senseAt : 0
+    const at = leadSense(w)
+    const n = senseNo(w, at)
     const main = w.alsoOf && ((lang === 'bg' && w.alsoOf.bg) || w.alsoOf.en)
     return (
       <li key={`${w.id}-${w.headword}`}>
@@ -257,9 +259,9 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
             <MarkedReading reading={w.reading} mark={w.mark} />
           </span>
           <span className="vocab-gloss">
-            {at > 0 && (
-              <b className="vocab-sense-n" title={main ? t('senseAlso', { n: at + 1, main }) : t('senseN', { n: at + 1 })}>
-                {at + 1}
+            {n > 1 && (
+              <b className="vocab-sense-n" title={main ? t('senseAlso', { n, main }) : t('senseN', { n })}>
+                {n}
               </b>
             )}
             {w.senses[at] && glossOf(w.senses[at], lang).value.split(';')[0]}

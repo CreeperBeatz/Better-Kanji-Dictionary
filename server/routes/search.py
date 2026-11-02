@@ -128,6 +128,8 @@ def _fetch_words(ids: list[int]) -> dict[int, dict]:
     } if heads else {}
     for w in words.values():
         w["pitch"] = pitch.get((w["headword"], w["reading"]))
+        if order := synonyms.sense_order(w["id"], len(w["senses"])):
+            w["order"] = order
     return words
 
 
@@ -802,11 +804,13 @@ def _also_in(ids: list[int], meanings: dict) -> dict[str, list[int]]:
 
 def _in_card(word: dict, wid: int, group: str, meanings: dict, senses: list[dict], best: set[int] | list[int]) -> dict:
     """A word as a meaning's card lists it: starred if one of the meaning's best examples;
-    `senseAt`, the sense of the word that has this meaning, where not its first (焼く's
-    "to roast; to bake" under "bake"); `alsoOf`, the word's main meaning, where this is
-    another of its meanings."""
+    `senseAt`, the sense of the word that has this meaning (JMdict's index), where not the
+    first in the word's `order` (焼く's "to roast; to bake" under "bake"); `alsoOf`, the
+    word's main meaning, where this is another of its meanings."""
     out = {**word, "star": True} if wid in best else dict(word)
-    if n := meanings.get("at", {}).get(wid, {}).get(group):
+    # The placements name a sense only where it is not JMdict's first.
+    n = meanings.get("at", {}).get(wid, {}).get(group, 0)
+    if n != word.get("order", [0])[0]:
         out["senseAt"] = n
     main = meanings["placed"].get(wid)
     if main != group and (g := next((x for x in senses if x["id"] == main), None)):
