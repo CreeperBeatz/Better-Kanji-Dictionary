@@ -202,6 +202,8 @@ def add(user_id: str, text: str, subject: str | None = None, context: Any = None
         if kind is None:
             raise AppError(400, "report_file_type", "pictures only: PNG, JPEG or WebP")
         kinds.append(kind)
+    # Before the lock: the data version reads the review store and .git, and nothing here needs the lock.
+    context = {**_clean_context(context), **_data_version()}
     with _lock:
         conn = _db()
         since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
@@ -219,7 +221,7 @@ def add(user_id: str, text: str, subject: str | None = None, context: Any = None
                 names.append({"name": name, "type": IMAGE_TYPES[kind], "bytes": len(raw)})
         r = {
             "id": rid, "created": _now(), "by": user_id, "subject": subject, "text": text,
-            "context": {**_clean_context(context), **_data_version()}, "files": names,
+            "context": context, "files": names,
             "status": "open", "reply": None, "closed_at": None, "closed_by": None,
         }
         try:
@@ -245,18 +247,23 @@ def get(report_id: str) -> dict:
 
 def _labels(rows: list[dict]) -> None:
     """Each report's subject as people read it: the kanji, or the word's headword."""
-    from .db import query_one
+    from .db import query
 
+    ids = {int(s[5:]) for r in rows if (s := r.get("subject") or "").startswith("word:")}
+    heads: dict[int, str] = {}
+    if ids:
+        try:
+            # One query for the page, not one per row.
+            heads = {w["id"]: w["headword"] for w in query(
+                f"SELECT id, headword FROM word WHERE id IN ({','.join('?' * len(ids))})", tuple(ids))}
+        except Exception:  # noqa: BLE001 -- no database: the id has to do
+            pass
     for r in rows:
         s = r.get("subject") or ""
         if s.startswith("kanji:"):
             r["label"] = s[6:]
         elif s.startswith("word:"):
-            try:
-                w = query_one("SELECT headword FROM word WHERE id = ?", (int(s[5:]),))
-            except Exception:  # noqa: BLE001 -- no database: the id has to do
-                w = None
-            r["label"] = w["headword"] if w else s
+            r["label"] = heads.get(int(s[5:]), s)
 
 
 def listing(status: str | None = None, limit: int = 200, offset: int = 0) -> dict:
@@ -293,6 +300,8 @@ def mine(user_id: str, limit: int = 100) -> dict:
 def set_status(report_id: str, status: str, reply: str | None, by: str) -> dict:
     if status not in STATUSES:
         raise AppError(400, "bad_status", "status is one of {s}", s=", ".join(STATUSES))
+    if reply is not None and not isinstance(reply, str):
+        raise AppError(400, "bad_request", "the reply is text")
     reply = (reply or "").strip()[:MAX_REPLY] or None
     with _lock:
         r = get(report_id)
@@ -318,10 +327,18 @@ def file_path(report_id: str, name: str, user: dict) -> tuple[Path, str]:
 
 def export(dest: Path, everything: bool = False) -> int:
     """Reports as dest/reports.json, their pictures under dest/files/<id>/; each with the
-    reporter's username (no email)."""
+    reporter's username (no email). Read-only: it runs on the Pi over ssh, so it never
+    makes the database, its schema or the first import (`_db` does those, as the server)."""
     dest.mkdir(parents=True, exist_ok=True)
     q = "SELECT body FROM report" + ("" if everything else " WHERE status = 'open'") + " ORDER BY created"
-    rows = [_row(b) for (b,) in _all(q)]
+    if not DB.exists():
+        rows = []
+    else:
+        conn = sqlite3.connect(f"{DB.resolve().as_uri()}?mode=ro", uri=True, timeout=30)
+        try:
+            rows = [_row(b) for (b,) in conn.execute(q)]
+        finally:
+            conn.close()
     users = auth._load()["users"]
     for r in rows:
         u = users.get(r["by"])

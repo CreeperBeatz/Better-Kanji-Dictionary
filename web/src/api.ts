@@ -426,14 +426,12 @@ export interface Author {
   avatar: string | null
 }
 
-export type Role = 'user' | 'reviewer' | 'admin'
+export type Role = 'user' | 'admin'
 
 export interface User extends Author {
   email: string
-  /** Admin is the site's owner; reviewers are approved by hand; everyone else is a user. */
+  /** Admin is the site's owner; everyone else is a user (no reviewers since 2026-11-02). */
   role: Role
-  /** Your latest request to become a reviewer, if you made one. */
-  contribution: { id: string; status: 'open' | 'approved' | 'declined'; created: string; decided: string | null } | null
 }
 
 /** A note as the associations tab shows it: yours, or someone's public one. */

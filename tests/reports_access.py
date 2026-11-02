@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 import requests as httpx  # the venv has requests; same calls
-from harness import Checks, Server
+from harness import Checks, Server, use_sandbox
 
 from server import reports
 from server.routes import reports as reports_routes
@@ -26,7 +26,8 @@ JPG = b"\xff\xd8\xff\xe0" + b"\0" * 64
 
 def main() -> int:
     srv = Server(reports_routes.router)
-    reports.use_dir(srv.tmp / "reports")
+    # The review store too: the first open imports its old suggestions, and the data version reads it.
+    use_sandbox(srv.tmp)
     base = f"http://127.0.0.1:{srv.port}"
 
     def h(who: str | None) -> dict:

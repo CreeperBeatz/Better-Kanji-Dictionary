@@ -4,7 +4,7 @@
  * became of them. Checking and fixing happen in Claude Code
  * (python -m server.reports export / close), not here.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type Author, type ReportStatus, type UserReport } from '../api'
 import { useAuth } from '../account/auth'
 import { Avatar } from '../account/Avatar'
@@ -61,6 +61,16 @@ const S = strings(
 type Key = Parameters<ReturnType<typeof S>>[0]
 type People = Record<string, Author & { email: string }>
 
+/** A path on this site, never another host: the browser reads //x and /\x as hosts. */
+function sitePath(url: string | undefined): url is string {
+  if (!url?.startsWith('/')) return false
+  try {
+    return new URL(url, window.location.origin).origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
 export function ReportsScreen({ onClose }: { onClose: () => void }) {
   const lang = useLang()
   const t = S(lang)
@@ -78,15 +88,20 @@ export function ReportsScreen({ onClose }: { onClose: () => void }) {
     onClose()
   })
 
+  // Only the latest load's answer is shown: a slower one for a tab left already is dropped.
+  const asked = useRef(0)
   const load = useCallback(() => {
     if (!admin) return
+    const n = ++asked.current
     api.reports(status ?? undefined).then(
       (d) => {
+        if (n !== asked.current) return
+        setProblem(null)
         setRows(d.items)
         setPeople(d.people)
         setCounts(d.counts)
       },
-      (e) => setProblem(errorText(e, lang)),
+      (e) => n === asked.current && setProblem(errorText(e, lang)),
     )
   }, [admin, status, lang])
   useEffect(load, [load])
@@ -146,7 +161,9 @@ function ReportRow({ report: r, who, onChanged }: { report: UserReport; who?: Au
   const when = (iso: string) => new Date(iso).toLocaleString(localeOf(lang), { dateStyle: 'medium', timeStyle: 'short' })
   const url = subjectUrl(r.subject)
   // The page as the reporter had it open (their own address), else the subject's page.
-  const page = (r.context?.url?.startsWith('/') ? r.context.url : null) ?? url
+  // The reporter sends it, so only a path on this site: //host or /\host would leave it.
+  const sentFrom = r.context?.url
+  const page = (sitePath(sentFrom) ? sentFrom : null) ?? url
   const ctx = Object.entries(r.context ?? {}).filter(([, v]) => v)
 
   async function save() {
