@@ -38,6 +38,7 @@ const S = strings(
     sentTitle: 'Thank you',
     sent: 'We check every report. When we fix it, or decide it is not a mistake, you see it under "Your reports" in your account.',
     close: 'close',
+    discard: 'Close the report? What you wrote and the pictures are lost.',
     signIn: 'Sign in to report a problem. We need to know who sent a report, so we can answer you.',
     logIn: 'log in',
   },
@@ -60,6 +61,7 @@ const S = strings(
     sentTitle: 'Благодарим ви',
     sent: 'Проверяваме всеки доклад. Когато го поправим или решим, че не е грешка, ще го видите в „Вашите доклади“ в профила си.',
     close: 'затворете',
+    discard: 'Да се затвори ли докладът? Написаното и снимките се губят.',
     signIn: 'Влезте, за да съобщите за проблем. Трябва да знаем кой е изпратил доклада, за да ви отговорим.',
     logIn: 'вход',
   },
@@ -119,6 +121,11 @@ function ReportDialog({
   const [problem, setProblem] = useState<string | null>(null)
   const picker = useRef<HTMLInputElement>(null)
   const title = t('title', { x: of })
+  // Escape, the backdrop, × and cancel all come here: unsent work is lost only when the person says so.
+  const close = () => {
+    if (!sent && (text.trim() || files.length) && !window.confirm(t('discard'))) return
+    onClose()
+  }
 
   function add(list: Iterable<File>) {
     const next = [...files]
@@ -153,7 +160,7 @@ function ReportDialog({
   }
 
   return (
-    <Overlay panel="account-panel report-panel" label={title} onClose={onClose}>
+    <Overlay panel="account-panel report-panel" label={title} onClose={close}>
       {sent ? (
         <>
           <h2>{t('sentTitle')}</h2>
@@ -226,7 +233,7 @@ function ReportDialog({
 
           {problem && <p className="account-problem">{problem}</p>}
           <div className="account-row profile-save">
-            <button type="button" className="clear" onClick={onClose}>
+            <button type="button" className="clear" onClick={close}>
               {t('cancel')}
             </button>
             <button className="account-submit" disabled={busy || !text.trim()}>
