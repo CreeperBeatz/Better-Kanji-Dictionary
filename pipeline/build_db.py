@@ -832,7 +832,7 @@ def build_forms(db: sqlite3.Connection) -> None:
     forms.build(db)
 
 
-@stage("fonts", "the font strip's four fonts -> which has each character, and old JIS shapes")
+@stage("fonts", "the font strip's fonts -> which has each character, old JIS shapes, semi-cursive outlines")
 def build_fonts(db: sqlite3.Connection) -> None:
     """See pipeline/fonts.py. Needs the graph stage and fonttools."""
     import fonts

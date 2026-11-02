@@ -8,7 +8,7 @@ const errors = []
 page.on('pageerror', (e) => errors.push(String(e)))
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
-for (const c of ['葛', '心', '亻', '国', '青', '令']) {
+for (const c of ['葛', '心', '亻', '国', '青', '令', '記', '様', '紅']) {
   await page.goto(`${BASE}/kanji/${encodeURIComponent(c)}`, { waitUntil: 'networkidle' })
   await page.locator('.font-strip').scrollIntoViewIfNeeded()
   await wait(2500)

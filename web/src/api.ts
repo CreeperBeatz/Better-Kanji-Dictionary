@@ -100,6 +100,8 @@ export interface FontsResponse {
   faces: string[]
   /** `old` is SVG path data on a 0 0 em em box, y down. */
   old: { face: string; feature: 'jp78' | 'jp83' | 'jp90'; em: number; old: string }[]
+  /** The character in faces too big to load (semi-cursive brush), as SVG path data on 0 0 em em. Absent from an old server. */
+  drawn?: { face: string; em: number; d: string }[]
 }
 
 /** A character linked to another as one of its forms (server/forms.py). */
