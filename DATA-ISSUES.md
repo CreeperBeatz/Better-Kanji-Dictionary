@@ -657,6 +657,18 @@ Source: JMdict.
 **Status: open.** The sense notes say what is right where the note could; the
 glosses on the page are unchanged.
 
+### D-044 · JMdict field tags never reached the notes
+*Found 2026-11-02,* in the D-042 check. build_db keeps a sense's part of
+speech and misc tags but not its `<field>` (go, Buddh, med, baseb, sumo …),
+so the sense-note drafters and checkers never saw it. 壁 sense 4 "wall (of
+stones)" is the go term; its note described a stone wall round a field.
+Scale: 3,045 senses of 2,613 in-scope words carry a field tag. Most glosses
+name their field anyway ("home run"); how many notes are wrong is not known.
+Source: our build (pipeline/build_db.py drops `<field>`).
+**Status: open.** The D-042 check (sense_readings.py) gives the tags for the
+1,704 words it covers. Not done: the other tagged senses, and the tag on the
+page.
+
 ## Fixed
 
 ### D-007 · 主 lost its dot

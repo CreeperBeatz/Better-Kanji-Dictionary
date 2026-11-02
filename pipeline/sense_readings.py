@@ -24,8 +24,11 @@ now. A later batch on the same notes must sort after G-Y42.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
+import re
 import sys
+import xml.etree.ElementTree as ET
 from collections import defaultdict
 from pathlib import Path
 
@@ -51,12 +54,33 @@ def _forms() -> dict[int, dict[str, list[str]]]:
     return out
 
 
+def _fields(scope: dict) -> dict[int, dict[int, list[str]]]:
+    """Word id -> sense index (among senses with a gloss) -> JMdict <field> tags (go, Buddh, med ...).
+    build_db does not keep them, so the drafters never saw them (壁 "wall (of stones)" is a go term)."""
+    raw = gzip.open(ROOT / "pipeline" / "data" / "JMdict_e.gz", "rt", encoding="utf-8").read()
+    raw = re.sub(r"<!DOCTYPE[^\[]*\[.*?\]>", "", raw, flags=re.S)
+    raw = re.sub(r"&([\w-]+);", r"\1", raw)
+    out: dict[int, dict[int, list[str]]] = {}
+    for entry in ET.fromstring(raw).iter("entry"):
+        wid = int(entry.findtext("ent_seq"))
+        if wid not in scope:
+            continue
+        i = -1
+        for s in entry.findall("sense"):
+            if not [g for g in s.findall("gloss") if g.text]:
+                continue
+            i += 1
+            if f := [x.text for x in s.findall("field") if x.text]:
+                out.setdefault(wid, {})[i] = f
+    return out
+
+
 def prepare(size: int) -> None:
+    """Writes every batch with no answer yet; a batch already answered is kept as it is, if its keys still match."""
     register_claims.IN.mkdir(parents=True, exist_ok=True)
     register_claims.OUT.mkdir(parents=True, exist_ok=True)
-    if any(register_claims.IN.glob(f"{NAME}-*.json")):
-        sys.exit(f"{NAME} batches exist already: their outputs would no longer match. Finish them, or pick a new name.")
     words, forms = ws.scope(), _forms()
+    fields = _fields(words)
     notes = json.loads(NOTES.read_text(encoding="utf-8"))
     only = json.loads(ONLY.read_text(encoding="utf-8")) if ONLY.exists() else {}
     groups = []
@@ -65,7 +89,8 @@ def prepare(size: int) -> None:
         if not ns or len(forms[wid]["readings"]) < 2 or len(w["senses"]) < 2:
             continue
         about = {"word": w["word"], "reading": w["reading"], "jlpt": w["jlpt"], **forms[wid],
-                 "senses": [f"{n}. [{pos}{'; ' + misc if misc else ''}] {g}" for n, (pos, misc, g) in enumerate(w["senses"], 1)]}
+                 "senses": [f"{n}. [{pos}{'; ' + misc if misc else ''}]{''.join(f' {{{f}}}' for f in fields.get(wid, {}).get(n - 1, []))} {g}"
+                            for n, (pos, misc, g) in enumerate(w["senses"], 1)]}
         if str(wid) in only:
             about["jmdictOnly"] = {str(int(i) + 1): v for i, v in only[str(wid)].items()}
         groups.append([{"key": f"{wid}|{i}|note", "where": "sense note", "text": n["nuance"],
@@ -79,10 +104,36 @@ def prepare(size: int) -> None:
         cur += g
     if cur:
         batches.append(cur)
+    kept, again = 0, []
     for b, items in enumerate(batches):
         name = f"{NAME}-{b:03d}"
-        ws._dump(register_claims.IN / f"{name}.json", {"batch": name, "task": "sense readings (D-042)", "items": items})
-    print(f"{len(groups)} words, {sum(map(len, batches))} sense notes -> {NAME}-000..{len(batches) - 1:03d}")
+        path = register_claims.IN / f"{name}.json"
+        if (register_claims.OUT / path.name).exists():
+            asked = ws._read(path)["items"]
+            if [it["key"] for it in asked] != [it["key"] for it in items]:
+                sys.exit(f"{name} is answered but would now hold other notes: pick a new NAME for a new run.")
+            kept += 1
+            # The two pilot batches were asked before the field tags were given: their tagged senses go again,
+            # as that batch left them (the F batch sorts after it, so its verdict goes on top).
+            good = register_claims.verdicts(name)[0]
+            for old, new in zip(asked, items):
+                n = new["about"]["sense"]
+                if "{" in new["about"]["senses"][n - 1] and "{" not in old["about"]["senses"][n - 1]:
+                    v = good.get(new["key"]) or {}
+                    again.append({**new, **({"text": v["text"]} if "text" in v else {}),
+                                  **({"ex": v["ex"]} if v.get("ex") else {})})
+                    if "ex" in v and v["ex"] is None:
+                        again[-1].pop("ex", None)
+            continue
+        data = {"batch": name, "task": "sense readings (D-042)", "items": items}
+        if not path.exists() or ws._read(path) != data:  # an agent may be reading it
+            ws._dump(path, data)
+    print(f"{len(groups)} words, {sum(map(len, batches))} sense notes -> {NAME}-000..{len(batches) - 1:03d}"
+          f" ({kept} answered batches kept as they were)")
+    path = register_claims.IN / f"{NAME}-F00.json"
+    if again and not (register_claims.OUT / path.name).exists():
+        ws._dump(path, {"batch": path.stem, "task": "sense readings (D-042), senses with a field tag", "items": again})
+        print(f"{len(again)} tagged senses of answered batches asked again -> {path.stem}")
 
 
 def main() -> None:

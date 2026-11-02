@@ -28,7 +28,10 @@ one the page shows), all `readings` and `spellings` of the entry in JMdict
 order ("(rare)" = an irregular or rare form), all `senses`, the `sense` the
 note is for, and `jmdictOnly` when JMdict does restrict some senses
 (sense number -> the only readings `r` / spellings `k` it is used with;
-trust it). A word's notes are all in the same batch: read them together.
+trust it). A sense may carry JMdict's field in braces ({Buddh}, {go},
+{med}, {baseb} …): the drafters never saw these, so a note may describe
+the sense outside its field (壁 "wall (of stones)" is the go term, not a
+stone wall round a field); fix such a note too. A word's notes are all in the same batch: read them together.
 
 ## What to do
 
