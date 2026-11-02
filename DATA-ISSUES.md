@@ -331,6 +331,61 @@ and others. Each needs its kanji's groups looked at, or a person to place it.
 for now (data/drafts/regroup/manual.json). The last kun readings on no card were
 placed by hand there too: 携わる, 照れる, 却って, 丈 だけ, 居候, 雨脚, 大関 and others.
 What is left are names, the zodiac and rare words (静岡, 申 さる, 謀).
+2026-11-02, blind check against Kodansha (100 random kanji, prod pages;
+pipeline/kodansha_blind.py): all 11 of our major errors are this issue. A kun
+word or a common word with its own meaning is either in no group or under
+the nearest one: 懲りる under "punish" (learn one's lesson), 照れる/照れ屋
+under "shine", 並びに under "line up", 焦燥 under "dry up"; 及び ("and"), 一膳
+(counter), 酔いが醒める (sober up), 喝采/采配/風采 (采 has one group, no words)
+are in none. 9% of the sampled pages (5-16%) have such an error.
+Checked against kotobank, jisho, Wiktionary and kanjipedia by Sonnet agents
+with the web, still blind (kodansha_blind.py verify-*): all 11 claims are true;
+7 major on 6 kanji (懲りる, 照れる, 及び, 一膳, 焦燥, and 透 = D-045), 4 minor (並びに
+comes from 並ぶ; 醒める is mostly written 覚める; 采's words are rarer). Kodansha's
+11: 3 major (巽 たつみ is Fukagawa, not Yoshiwara; 随分 and 案内 under the wrong
+sense), 8 minor.
+Correction (2026-11-02, the gaps pilot): the blind check hid our group notes, and
+three of the "major" ones are explained there on the page: 懲's note names 懲りる
+("to learn a hard lesson"), 燥's explains 焦燥, 醒's covers sobering up. Left as
+real: 照れる under "shine", 及び in no group, 並びに (minor), 一膳 (not a common
+word), 采's 喝采 in no group, and 透 (D-045).
+Pilot (pipeline/meaning_gaps.py, 50 kanji: those 8 unmarked among 42 random; Opus
+screen on prod groups + every common word with JMdict senses, then a Sonnet
+skeptic with the web on every flag): 26 flags, 0 wrong; 20 right as proposed, 6
+right with another fix (the screener proposes new groups too readily: 照れる,
+立ち往生, 往々, 損じ and 喝采 belong in an existing group or the catch-all, 相場 too).
+Only 及び stays major. Random kanji: 16 of 42 flagged, all minor in the end,
+almost all common words in no group (相場, 死者, 若干, 車線, 中堅). Found the known
+real gaps 照, 及, 采; missed 並びに and 一膳 (not common, so not in the input).
+Real new meanings found: 幸 "imperial visit" (御幸), 干 "stems of the cycle" (干支).
+Focus run (2026-11-02, all 692 other kanji with a common word in no group on prod;
+47 Opus screeners, then 34 Sonnet skeptics: 9 hard batches with the web for majors,
+misplacements and new groups, 25 easy batches judged from the senses, the web
+when unsure): 1,072 flags, every one of the 1,539 hidden common words (232 in the
+top 6k, e.g. 積極的, 代表, 手続き, 問い合わせ, 当然) has a fix. Skeptic: 914 right,
+129 right with another fix, 23 unsure, 6 wrong (伝法, 手本, 二枚目, 大通り, 円建て,
+発電: their current place is fine). Of the hidden words: 1,296 placed as proposed,
+214 with the skeptic's other fix, 27 unsure. 29 of 30 major flags confirmed, e.g.
+実際 under 際 "edge", 自作 under 作 "crops", 口々 under "entrance", 結構 under 構
+"structure", 中々 under 中, 都合 under "join". 28 new groups confirmed, among them
+及 "and", 致 "reach" (一致), 消 "wane" (消極的), 故 "on purpose" (故意), 師 "army",
+卒 "sudden" (脳卒中), 暴 "expose" (暴露), 樹 "establish" (樹立), 洋 "East or West".
+Drafts in data/drafts/meaning-gaps/focus.
+2026-11-02, made ready (pipeline/meaning_gaps_final.py): the 135 other-fix verdicts
+made exact by two Opus agents (205 moves), the 32 new groups written in English
+and Bulgarian (none dropped), final.json: 1,613 words in 705 kanji, 32 new groups;
+held: 28 unsure, 11 wrong, and 院政 and 隷書 (hold.json, see below). Dry run and a
+real load into a copy of prod's review store (read 2026-11-02 12:37): every word
+lands on an open, untouched AI draft, nothing held for a person's decision. On
+that copy, common word-kanji pairs in no group over the 742 screened kanji:
+1,571 (5.1%) -> 29 (0.1%); top-6k words in no group 239 -> 5.
+Re-measured what ships (kodansha_blind.py prepare --prod --fixes; 24 of the 100
+sample pages change, graded again blind, the 7 new majors web-verified): better
+entry ours 36 / Kodansha 37 / tie 27 (was 37/40/23); verified majors on our pages
+6 -> 4 kanji (膳 一膳 not common; 透 = D-045; 懲, 燥 explained by their notes),
+Kodansha 2. The fixes caused one verified major: 院政 sent to the catch-all, but
+院 there is the retired emperor (held). Coverage 3.70 -> 3.80.
+**Status: ready, not loaded on prod.** Loading needs a write on the Pi.
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
@@ -659,6 +714,8 @@ these are for checking and sending upstream. Not confirmed against a second sour
   1820980 形質 "allele" (trait), 1161550 一環 "monocyclic".
 - Headwords: 1569480 甦 read よみがえ looks cut short; 1896520 電算 でんそろ reads
   as でんさん to anyone.
+- 2026-11-02 (Kodansha blind check, verified against kotobank): 1882330 照映 "portrait";
+  kotobank gives "light shining or reflecting". Probably mixed up with 照影.
 Source: JMdict.
 **Status: open.** The sense notes say what is right where the note could; the
 glosses on the page are unchanged.
@@ -683,6 +740,17 @@ the cut); then wrong facts inside the field (告訴 goes to police or prosecutor
 not a court; 関取 and 幕 are divisions, not ranks; 急性 is sudden, not severe;
 定石 are corner sequences). Most frequent words had most (36 of 250 in G-Y44-000).
 Bulgarian: round N12. Open: the tag is still not on the page.
+
+### D-045 · KANJIDIC kun readings: one misspelt, one missing
+*Found 2026-11-02,* in the blind check against Kodansha (pipeline/kodansha_blind.py).
+透 lists the kun readings とう.る and とう.す; they are とお.る and とお.す
+(透る, 透す). 速 has no はや.まる, a jōyō reading (速まる). The page's
+readings line shows the full KANJIDIC list, so a learner sees both.
+Source: KANJIDIC2 itself (pipeline/data/kanjidic2.xml.gz), not our build.
+Scale: unknown. These two are from a 100-kanji sample; nothing has checked
+KANJIDIC's kun list against the jōyō table.
+**Status: open.** A fix needs a reading override in the build, and a check of
+every in-scope kanji's kun list against the jōyō table (with 2010 changes).
 
 ## Fixed
 
