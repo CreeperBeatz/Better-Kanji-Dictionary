@@ -2799,9 +2799,8 @@ export function App() {
       </div>
 
       {workbench && (
-        <ReportsScreen onClose={closeWorkbench} onSignIn={signIn} />
+        <ReportsScreen onClose={closeWorkbench} />
       )}
-      {/* After the reports screen, so signing in from its gate opens above it. */}
       {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
       <InstallGuide />
     </div>

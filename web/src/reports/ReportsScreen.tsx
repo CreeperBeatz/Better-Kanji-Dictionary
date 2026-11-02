@@ -27,11 +27,6 @@ const S = strings(
     s_duplicate: 'Duplicate',
     none: 'No reports here.',
     loading: 'loading…',
-    gateTitle: 'Reports',
-    gateSignedOut: 'This screen is for the site’s owner. Sign in to open it.',
-    gateUser: 'This screen is for the site’s owner.',
-    signIn: 'Sign in',
-    back: 'Back to the dictionary',
     general: 'no page',
     context: 'Sent from',
     reply: 'Reply the reporter sees (optional)',
@@ -52,11 +47,6 @@ const S = strings(
     s_duplicate: 'Повторение',
     none: 'Тук няма доклади.',
     loading: 'зарежда се…',
-    gateTitle: 'Доклади',
-    gateSignedOut: 'Този екран е за собственика на сайта. Влезте, за да го отворите.',
-    gateUser: 'Този екран е за собственика на сайта.',
-    signIn: 'Вход',
-    back: 'Обратно към речника',
     general: 'без страница',
     context: 'Изпратен от',
     reply: 'Отговор, който подателят вижда (по желание)',
@@ -71,7 +61,7 @@ const S = strings(
 type Key = Parameters<ReturnType<typeof S>>[0]
 type People = Record<string, Author & { email: string }>
 
-export function ReportsScreen({ onClose, onSignIn }: { onClose: () => void; onSignIn?: () => void }) {
+export function ReportsScreen({ onClose }: { onClose: () => void }) {
   const lang = useLang()
   const t = S(lang)
   const { user, ready } = useAuth()
@@ -101,31 +91,12 @@ export function ReportsScreen({ onClose, onSignIn }: { onClose: () => void; onSi
   }, [admin, status, lang])
   useEffect(load, [load])
 
-  if (!ready || !admin)
-    return (
-      <div className="overlay workbench-screen">
-        <div className="overlay-panel workbench workbench-gate" role="dialog" aria-modal="true" aria-label={t('gateTitle')}>
-          {!ready ? (
-            <p className="hint">{t('loading')}</p>
-          ) : (
-            <>
-              <h2>{t('gateTitle')}</h2>
-              <p>{t(user ? 'gateUser' : 'gateSignedOut')}</p>
-              <p className="workbench-gate-actions">
-                {!user && onSignIn && (
-                  <button className="account-submit" onClick={onSignIn}>
-                    {t('signIn')}
-                  </button>
-                )}
-                <button className="clear" onClick={onClose}>
-                  {t('back')}
-                </button>
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-    )
+  // Anyone else who lands on /reports just gets the dictionary, with no word that the
+  // screen exists. While the account loads, nothing is drawn.
+  useEffect(() => {
+    if (ready && !admin) onClose()
+  }, [ready, admin, onClose])
+  if (!admin) return null
 
   const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null
   const tabs: (ReportStatus | null)[] = [...STATUSES, null]
