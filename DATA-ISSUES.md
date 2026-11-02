@@ -671,11 +671,18 @@ stones)" is the go term; its note described a stone wall round a field.
 Scale: 3,045 senses of 2,613 in-scope words carry a field tag. Most glosses
 name their field anyway ("home run"); how many notes are wrong is not known.
 Source: our build (pipeline/build_db.py drops `<field>`).
-**Status: open.** The D-042 check (sense_readings.py) gave the tags for the
-1,704 words it covers (417 tagged senses); of the 41 tagged senses asked again
-for that (G-Y42-F00), 2 notes had left their field (女性 grammatical gender, 山
-cards, not mahjong) and 3 more were fixed for readings. Not done: the other
-2,629 tagged senses (2,294 words), and the tag on the page.
+**Status: fixed locally** (feat/common-sense-notes, 2026-11-02). Every note on a
+tagged sense was asked once with its tags: the 1,704 D-042 words in G-Y42 (+F00 for
+the 41 tagged senses of the two batches asked before the tags were given), the
+other 2,629 tagged senses (2,294 words) in G-Y44-000..010 (sense_readings.py
+fields, sense_fields_prompt.md, Opus): 161 fixed (6.1%; 146 notes, 45 examples).
+Most: the everyday meaning or a neighbouring sense in place of the term (仕事
+{physics} work = force × distance, 翻訳 {biol} mRNA to protein, 連続 {math}
+continuous, インバーター {comp} the NOT gate, ジャーナル {comp} a change log, 切る {go}
+the cut); then wrong facts inside the field (告訴 goes to police or prosecutors,
+not a court; 関取 and 幕 are divisions, not ranks; 急性 is sudden, not severe;
+定石 are corner sequences). Most frequent words had most (36 of 250 in G-Y44-000).
+Bulgarian: round N12. Open: the tag is still not on the page.
 
 ## Fixed
 
