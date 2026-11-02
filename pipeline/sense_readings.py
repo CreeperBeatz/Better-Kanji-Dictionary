@@ -4,6 +4,7 @@
     # one Opus subagent per batch, each reading pipeline/sense_readings_prompt.md
     python pipeline/register_claims.py check [--batch G-Y42-000]
     python pipeline/sense_notes.py merge                     # applies the fixes (register_claims.fixes)
+    python pipeline/sense_readings.py fields [--size 250]    # D-044: G-Y44-*, pipeline/sense_fields_prompt.md
 
 One JMdict entry holds several readings, and most senses carry no tag saying
 which reading they go with. The page heads the entry with one reading, and
@@ -136,14 +137,66 @@ def prepare(size: int) -> None:
         print(f"{len(again)} tagged senses of answered batches asked again -> {path.stem}")
 
 
+FIELDS = "G-Y44"
+
+
+def fields(size: int) -> None:
+    """D-044: the notes on every field-tagged sense of the words G-Y42 did not cover, asked whether they describe
+    the sense inside its field (pipeline/sense_fields_prompt.md). Answered batches are kept as they are."""
+    words, forms = ws.scope(), _forms()
+    tags = _fields(words)
+    notes = json.loads(NOTES.read_text(encoding="utf-8"))
+    only = json.loads(ONLY.read_text(encoding="utf-8")) if ONLY.exists() else {}
+    asked = {it["key"].split("|")[0] for p in register_claims.IN.glob(f"{NAME}-*.json") for it in ws._read(p)["items"]}
+    groups = []
+    for wid in sorted(tags, key=lambda w: (ws._rank(w), w)):
+        w, ns = words[wid], notes.get(str(wid))
+        if not ns or str(wid) in asked:
+            continue
+        about = {"word": w["word"], "reading": w["reading"], "jlpt": w["jlpt"], **forms[wid],
+                 "senses": [f"{n}. [{pos}{'; ' + misc if misc else ''}]{''.join(f' {{{f}}}' for f in tags[wid].get(n - 1, []))} {g}"
+                            for n, (pos, misc, g) in enumerate(w["senses"], 1)]}
+        if str(wid) in only:
+            about["jmdictOnly"] = {str(int(i) + 1): v for i, v in only[str(wid)].items()}
+        # Every note of the word is shown as context; only the tagged senses are asked.
+        about["notes"] = {str(i + 1): n["nuance"] for i, n in enumerate(ns) if n}
+        groups.append([{"key": f"{wid}|{i}|note", "where": "sense note", "text": ns[i]["nuance"], "field": tags[wid][i],
+                        "about": {**about, "sense": i + 1}, **({"ex": ns[i]["ex"]} if ns[i].get("ex") else {})}
+                       for i in sorted(tags[wid]) if i < len(ns) and ns[i]])
+    batches, cur = [], []
+    for g in groups:
+        if cur and len(cur) + len(g) > size:
+            batches.append(cur)
+            cur = []
+        cur += g
+    if cur:
+        batches.append(cur)
+    kept = 0
+    for b, items in enumerate(batches):
+        name = f"{FIELDS}-{b:03d}"
+        path = register_claims.IN / f"{name}.json"
+        if (register_claims.OUT / path.name).exists():
+            if [it["key"] for it in ws._read(path)["items"]] != [it["key"] for it in items]:
+                sys.exit(f"{name} is answered but would now hold other notes: pick a new name for a new run.")
+            kept += 1
+            continue
+        data = {"batch": name, "task": "field-tagged senses (D-044)", "items": items}
+        if not path.exists() or ws._read(path) != data:
+            ws._dump(path, data)
+    print(f"{len(groups)} words, {sum(map(len, batches))} tagged sense notes -> {FIELDS}-000..{len(batches) - 1:03d}"
+          f" ({kept} answered batches kept as they were)")
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--size", type=int, default=250)
+    p = sub.add_parser("fields")
+    p.add_argument("--size", type=int, default=250)
     a = ap.parse_args()
-    prepare(a.size)
+    (prepare if a.cmd == "prepare" else fields)(a.size)
 
 
 if __name__ == "__main__":
