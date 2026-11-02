@@ -88,7 +88,12 @@ def old_reports() -> None:
     # What users sent through the old review queue shows among the reports (once; safe to repeat).
     from . import reports
 
-    if n := reports.import_old():
+    try:
+        n = reports.import_old()
+    except Exception as e:  # noqa: BLE001 -- a copy of old data must not keep the site down; the next start tries again
+        print(f"[reports] old review queue not brought over: {e!r}", flush=True)
+        return
+    if n:
         print(f"[reports] {n} brought over from the old review queue", flush=True)
 
 

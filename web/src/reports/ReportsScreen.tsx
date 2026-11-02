@@ -10,10 +10,13 @@ import { useAuth } from '../account/auth'
 import { Avatar } from '../account/Avatar'
 import { localeOf, strings, useLang } from '../i18n'
 import { errorText } from '../i18n/errors'
-import { useKey } from '../keys'
+import { typing, useKey } from '../keys'
 import { ReportPicture, StatusChip, subjectUrl } from './parts'
 
 export const STATUSES: ReportStatus[] = ['open', 'fixed', 'not_a_mistake', 'duplicate']
+// Rows asked for at a time; the server gives up to 500 in one answer.
+const PAGE = 200
+const MAX_PAGE = 500
 
 const S = strings(
   {
@@ -35,6 +38,7 @@ const S = strings(
     closed: 'set {date}',
     status: 'Status',
     openPage: 'Open the page it was sent from',
+    more: 'show more ({n})',
   },
   {
     title: 'Доклади',
@@ -55,6 +59,7 @@ const S = strings(
     closed: 'зададено {date}',
     status: 'Състояние',
     openPage: 'Отворете страницата, от която е изпратен',
+    more: 'покажете още ({n})',
   },
 )
 
@@ -83,27 +88,50 @@ export function ReportsScreen({ onClose }: { onClose: () => void }) {
   const admin = user?.role === 'admin'
 
   useKey((e) => {
-    if (e.key !== 'Escape' || e.defaultPrevented) return
+    // Not from a field: Escape in the reply box must not close the screen and lose what was typed.
+    if (e.key !== 'Escape' || e.defaultPrevented || typing(e.target)) return
     e.preventDefault()
     onClose()
   })
 
   // Only the latest load's answer is shown: a slower one for a tab left already is dropped.
   const asked = useRef(0)
-  const load = useCallback(() => {
-    if (!admin) return
-    const n = ++asked.current
-    api.reports(status ?? undefined).then(
-      (d) => {
-        if (n !== asked.current) return
-        setProblem(null)
+  // How many rows are shown, so a reload after a save keeps the pages loaded with "show more".
+  const shown = useRef(0)
+  const langRef = useRef(lang)
+  useEffect(() => {
+    shown.current = rows?.length ?? 0
+    langRef.current = lang
+  })
+  const fetchRows = useCallback(
+    (offset: number, limit: number, done: (d: Awaited<ReturnType<typeof api.reports>>) => void) => {
+      if (!admin) return
+      const n = ++asked.current
+      api.reports(status ?? undefined, offset, limit).then(
+        (d) => {
+          if (n !== asked.current) return
+          setProblem(null)
+          setCounts(d.counts)
+          done(d)
+        },
+        (e) => n === asked.current && setProblem(errorText(e, langRef.current)),
+      )
+    },
+    [admin, status],
+  )
+  const load = useCallback(
+    () =>
+      fetchRows(0, Math.min(MAX_PAGE, Math.max(PAGE, shown.current)), (d) => {
         setRows(d.items)
         setPeople(d.people)
-        setCounts(d.counts)
-      },
-      (e) => n === asked.current && setProblem(errorText(e, lang)),
-    )
-  }, [admin, status, lang])
+      }),
+    [fetchRows],
+  )
+  const more = () =>
+    fetchRows(shown.current, PAGE, (d) => {
+      setRows((rs) => [...(rs ?? []), ...d.items])
+      setPeople((p) => ({ ...p, ...d.people }))
+    })
   useEffect(load, [load])
 
   // Anyone else who lands on /reports just gets the dictionary, with no word that the
@@ -115,13 +143,27 @@ export function ReportsScreen({ onClose }: { onClose: () => void }) {
 
   const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : null
   const tabs: (ReportStatus | null)[] = [...STATUSES, null]
+  // How many this tab holds in all; the list shows them a page at a time.
+  const wanted = status ? (counts?.[status] ?? null) : total
   return (
     <div className="overlay workbench-screen">
       <div className="overlay-panel workbench" role="dialog" aria-modal="true" aria-label={t('title')}>
         <header className="workbench-head">
           <nav className="overlay-tabs" role="tablist">
             {tabs.map((s) => (
-              <button key={s ?? 'all'} role="tab" aria-selected={status === s} data-on={status === s} onClick={() => setStatus(s)}>
+              <button
+                key={s ?? 'all'}
+                role="tab"
+                aria-selected={status === s}
+                data-on={status === s}
+                onClick={() => {
+                  if (s === status) return
+                  // The new tab's rows, not the last tab's, under it while they load.
+                  setRows(null)
+                  setProblem(null)
+                  setStatus(s)
+                }}
+              >
                 {s ? t(`s_${s}` as Key) : t('all')}
                 <span className="reports-count">{s ? (counts?.[s] ?? '') : (total ?? '')}</span>
               </button>
@@ -143,6 +185,11 @@ export function ReportsScreen({ onClose }: { onClose: () => void }) {
               <ReportRow key={r.id} report={r} who={people[r.by]} onChanged={load} />
             ))}
           </ul>
+          {rows && wanted !== null && rows.length < wanted && (
+            <button className="discussion-more" onClick={more}>
+              {t('more', { n: wanted - rows.length })}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -157,6 +204,14 @@ function ReportRow({ report: r, who, onChanged }: { report: UserReport; who?: Au
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  // A reload brought a different status or reply (set in Claude Code, say): show that, so a
+  // save does not quietly put back what the row was first drawn with.
+  const [drawn, setDrawn] = useState({ status: r.status, reply: r.reply })
+  if (drawn.status !== r.status || drawn.reply !== r.reply) {
+    setDrawn({ status: r.status, reply: r.reply })
+    setStatus(r.status)
+    setReply(r.reply ?? '')
+  }
   const changed = status !== r.status || reply.trim() !== (r.reply ?? '')
   const when = (iso: string) => new Date(iso).toLocaleString(localeOf(lang), { dateStyle: 'medium', timeStyle: 'short' })
   const url = subjectUrl(r.subject)

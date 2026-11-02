@@ -991,10 +991,10 @@ export const api = {
   myReports: () => get<{ items: MyReport[] }>('/api/reports/mine'),
 
   /** The admin's list, newest first; `status` narrows it. */
-  reports: (status?: ReportStatus) =>
+  reports: (status?: ReportStatus, offset = 0, limit = 200) =>
     get<{ items: UserReport[]; people: Record<string, Author & { email: string }>; counts: Record<ReportStatus, number> }>(
       '/api/reports',
-      status ? [['status', status]] : [],
+      [...(status ? ([['status', status]] as [string, string][]) : []), ['offset', String(offset)], ['limit', String(limit)]],
     ),
 
   /** How many reports are open: the owner's badge. */

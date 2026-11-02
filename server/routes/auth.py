@@ -45,7 +45,7 @@ def check_role(user: dict, role: str) -> None:
 
 
 def require_role(role: str):
-    """A dependency letting through `role` and anything above it (admin passes `reviewer`)."""
+    """A dependency letting through `role` and anything above it (admin passes `user`)."""
     assert role in auth.ROLES
 
     def dep(authorization: str | None = Header(None)) -> dict:

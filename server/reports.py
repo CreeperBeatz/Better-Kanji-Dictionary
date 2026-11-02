@@ -105,9 +105,10 @@ def _old_subject(type_: str, subject: str) -> str | None:
     if subject.startswith(("kanji:", "word:")):
         return subject if SUBJECT.match(subject) else None
     head, _, tail = subject.partition("|")
-    if type_ == "word_sense" and tail.isdigit():
-        return f"word:{tail}"
-    return f"kanji:{head}" if len(head) == 1 else None
+    # Held to the same shape as a new report's: `_labels` reads word:<digits> as a number.
+    if type_ == "word_sense" and SUBJECT.match(word := f"word:{tail}"):
+        return word
+    return kanji if SUBJECT.match(kanji := f"kanji:{head}") else None
 
 
 def _from_old(i: dict) -> dict:
@@ -400,6 +401,13 @@ def main(argv: list[str] | None = None) -> int:
     rows = json.loads(args.file.read_text(encoding="utf-8")) if args.file else [{"id": args.id, "status": args.status, "reply": args.reply}]
     if not rows or not all(r.get("id") and r.get("status") for r in rows):
         ap.error("give <id> <status> [reply], or --file")
+    # All checked before any is written: a typo in one row must not leave the batch half done on prod.
+    bad = [r["id"] for r in rows if r["status"] not in STATUSES]
+    if bad:
+        ap.error(f"unknown status for {', '.join(bad)}; one of {', '.join(STATUSES)}")
+    known = {i for (i,) in _all(f"SELECT id FROM report WHERE id IN ({','.join('?' * len(rows))})", [r["id"] for r in rows])}
+    if missing := [r["id"] for r in rows if r["id"] not in known]:
+        ap.error(f"no report with id {', '.join(missing)}")
     for r in rows:
         set_status(r["id"], r["status"], r.get("reply"), BOT)
     print(f"{len(rows)} reports updated")

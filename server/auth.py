@@ -7,11 +7,10 @@ in the same session, and an address that already has an account signs into
 it rather than making a second one. A bearer header rather than a
 cookie because the dev frontend and this server sit on different origins.
 
-Every account has a role: `user`, `reviewer` (approved by hand, after asking
-to contribute) or `admin`. Admin is never stored: it is whoever's address is
-BETTERRTK_OWNER_EMAIL, so no request or API call can grant it, and with that
-unset nobody is admin. `reviewer` is stored on the user record; a missing role
-is `user`. Every change of role is logged, with who made it.
+Every account has a role: `user` or `admin`. Admin is never stored: it is
+whoever's address is BETTERRTK_OWNER_EMAIL, so no request or API call can
+grant it, and with that unset nobody is admin. There are no reviewers since
+2026-11-02 (reports first); an old `reviewer` role on a record is ignored.
 
 Only hashes of tokens are stored, so `data/auth/auth.json` leaking does not let
 anyone sign in. The file is kept apart from the association store because it
@@ -75,8 +74,6 @@ def _load() -> dict:
         data = {"version": 1, "users": {}, "links": {}, "sessions": {}}
     else:
         data = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
-    data.setdefault("requests", {})
-    data.setdefault("role_log", [])
     return data
 
 

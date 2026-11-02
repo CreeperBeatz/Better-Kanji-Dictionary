@@ -4,6 +4,7 @@ import json
 
 from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
+from starlette.concurrency import run_in_threadpool
 
 from .. import reports
 from ..errors import AppError
@@ -34,7 +35,8 @@ async def send(
         ctx = json.loads(context) if context else None
     except ValueError:
         ctx = None
-    r = reports.add(me["id"], text, subject, ctx, raw)
+    # Off the event loop: SQLite with fsync and up to 15 MB of pictures written would stall every other request.
+    r = await run_in_threadpool(reports.add, me["id"], text, subject, ctx, raw)
     return {"id": r["id"], "status": r["status"]}
 
 
