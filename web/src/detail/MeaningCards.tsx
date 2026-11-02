@@ -371,7 +371,7 @@ function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c
  * reading (揚: "raise, hoist", not its keyword) -- and, where the 異字同訓
  * card has them, what each is for and an example; where no card has them,
  * a line on when to write which. A heading opens its kanji; the page's own
- * is marked, not a link.
+ * comes first, framed, not a link.
  */
 function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (c: string) => void }) {
   const lang = useLang()
@@ -384,6 +384,8 @@ function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (
         spelled: s,
       }))
     : [me, ...x.kanji].map((k) => ({ spelling: k.char, k }))
+  // The page's own kanji first, whatever order the card has: what you are reading, then what it is mixed up with.
+  items.sort((a, b) => Number(b.k?.char === self.char) - Number(a.k?.char === self.char))
   return (
     <section className="aside-block mixup" title={t('mixupsHint')}>
       <AsideTitle icon="!">{t('mixups')}</AsideTitle>

@@ -1270,6 +1270,17 @@ button.usage-head:focus-visible .usage-spelling {
   color: var(--odo);
 }
 
+/* The page's own kanji or word, always first: framed in the mix-up's yellow, so the others read against it. */
+.usage-spellings > [data-self] {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--odo) 45%, transparent);
+  border-radius: 4px;
+}
+
+.usage-spellings > [data-self] + li {
+  border-top: 0;
+}
+
 .spelling-def {
   margin: 0;
   font-size: calc(12.5px * var(--type));
