@@ -426,25 +426,12 @@ export interface Author {
   avatar: string | null
 }
 
-export type Role = 'user' | 'reviewer' | 'admin'
+export type Role = 'user' | 'admin'
 
 export interface User extends Author {
   email: string
-  /** Admin is the site's owner; reviewers are approved by hand; everyone else is a user. */
+  /** Admin is the site's owner; everyone else is a user (no reviewers since 2026-11-02). */
   role: Role
-  /** Your latest request to become a reviewer, if you made one. */
-  contribution: { id: string; status: 'open' | 'approved' | 'declined'; created: string; decided: string | null } | null
-}
-
-/** An account as only the admin page sees it. */
-export interface PersonCard extends Author {
-  email: string
-}
-
-export interface AdminPeople {
-  requests: { id: string; text: string; created: string; user: PersonCard }[]
-  reviewers: (PersonCard & { since: string | null })[]
-  log: { user: string; userName: string; before: Role; after: Role; by: string; byName: string; at: string; reason: string | null }[]
 }
 
 /** A note as the associations tab shows it: yours, or someone's public one. */
@@ -494,39 +481,7 @@ export interface AssociationView {
   components: { char: string; notes: Association[] }[]
 }
 
-export type TaskType =
-  | 'decomposition'
-  | 'form_link'
-  | 'part_meaning'
-  | 'kanji_senses'
-  | 'word_sense'
-  | 'kanji_extras'
-  | 'usage'
-  | 'bg'
-  | 'report'
-  | 'character'
-  /** How a character kept whole looks (土 as 十 + 一): never parts; decided on its character card. */
-  | 'visual_split'
-/** What a report is about: a word's or a kanji's (server/review.py REPORT_ABOUT). */
-export type ReportAbout = 'english' | 'reading' | 'meanings' | 'readings' | 'levels' | 'parts' | 'forms' | 'similar' | 'strokes' | 'other'
-/** Something wrong that no card or edit can fix, in the reporter's words; never live. */
-export interface Report {
-  about: ReportAbout
-  text: string
-}
-export type Origin = 'proposal' | 'suggestion'
-export type FormKind = 'positional' | 'old' | 'form_of' | 'looks_like' | 'kin' | 'none'
 export type PartKind = 'meaning' | 'shape'
-
-/**
- * A form link's value. Subject X|Y of a one-way kind reads "Y is the old
- * form of X", "X is a form of Y", "X looks like Y"; `reverse` reads it from Y to X.
- */
-export interface FormLink {
-  kind: FormKind
-  note: string | null
-  reverse?: boolean
-}
 
 /**
  * What a part with no meaning in the dictionary is (server/review.py): a
@@ -575,16 +530,6 @@ export interface KanjiExtras {
   mixups: Mixup[]
 }
 
-/** A candidate link from Kodansha (reviewers only): `gloss` is Kodansha's word, `en` our keyword. */
-export interface LinkCandidate {
-  char: string
-  gloss: string
-  en: string | null
-  ticked: boolean
-  reading?: string
-  sense?: string
-}
-
 /** Which kanji to write for a shared kun reading: Bunkacho's report, translated. */
 export interface UsageCard {
   reading: string
@@ -599,194 +544,11 @@ export interface UsageCard {
   notes: { ja: string | null; en: string | null; bg: string | null }[]
 }
 
-/** A usage card's Bulgarian (a bg card, usage:<reading>): line for line as its accepted English. */
-export interface UsageBg {
-  spellings: { def: string | null; examples: (string | null)[] }[]
-  notes: (string | null)[]
-}
-
 /**
  * What each type's value is: parts, a link, meaning groups, one group's id, or
  * for Bulgarian a list -- a word's gloss per sense, or a kanji's meanings --
  * or a usage card's lines.
  */
-/** How a character kept whole looks (土 as 十 + 一): never its parts. */
-export interface VisualSplit {
-  parts: string[]
-}
-export type TaskValue = string[] | FormLink | PartMeaning | MeaningGroup[] | Report | KanjiExtras | UsageCard | UsageBg | VisualSplit | string | null
-
-/** A change waiting in the labeling queue (server/review.py). */
-export interface QueueItem {
-  id: string
-  type: TaskType
-  /** 青 · 龶|王 · 生 · 生|1234567 */
-  subject: string
-  proposed: TaskValue
-  /** What the site shows now. */
-  current: TaskValue
-  source: string
-  origin: Origin
-  reason: string | null
-  evidence: Record<string, unknown> | null
-  priority: number
-  /** `withdrawn`: its source no longer proposes it (a misread corrected); never a decision. */
-  status: 'open' | 'auto-accepted' | 'accepted' | 'edited' | 'kept' | 'rejected' | 'withdrawn'
-  created: string
-  createdBy: Author | null
-  decidedBy: Author | null
-  confidence?: number
-  /** Bulgarian word cards: the word's headword, for the list. */
-  label?: string
-  /** A character's card (type `character`): the items on it, and their types. */
-  items?: string[]
-  kinds?: TaskType[]
-}
-
-export interface Impact {
-  char: string
-  before: string[]
-  after: string[]
-  removed: string[]
-  added: string[]
-  /** What the character, and so everything containing it, stops or starts having as a prerequisite. */
-  lost: string[]
-  gained: string[]
-  newEdge: boolean
-  containers: number
-  containersJoyo: number
-  topContainers: string[]
-  notes: { id: string; char: string; mentions: string[]; text: string }[]
-  notesTotal: number
-}
-
-export interface Decision {
-  id: string
-  action: 'accept' | 'edit' | 'keep' | 'reject' | 'direct' | 'auto' | 'revert' | 'reopen' | 'take_back'
-  type: TaskType
-  subject: string
-  before: TaskValue
-  after: TaskValue
-  by: string
-  byCard?: Author | null
-  at: string
-  item: string | null
-  reason: string | null
-  supersedes: string | null
-  reverted_by: string | null
-  /** Under another decision (a word placed with its kanji's meanings): reverted with that one. */
-  parent?: string | null
-  /** A keep or reject: what the site showed when it was decided. */
-  shown?: TaskValue
-  /** What the admin's revert does with it: put its value back, or take back a keep or reject (its card reopens). */
-  revertible?: 'revert' | 'take_back' | null
-  /** For a kanji's meanings: how many word placements were decided with it. */
-  words?: number
-}
-
-/** A word on the meanings board, in the group it is in now (null: in none). */
-export interface BoardWord {
-  id: number
-  headword: string
-  reading: string
-  common: boolean
-  /** JMdict newspaper frequency band, 1-48: among the nf*500 most frequent words. */
-  nf: number | null
-  /** On the JLPT N{jlpt} list. */
-  jlpt: number | null
-  /** School grade of its hardest kanji (1-6, 8 jōyō, 9-10 name kanji); null when one has none. */
-  grade: number | null
-  gloss: string
-  glossBg: string | null
-  group: string | null
-  /** The drafting model's, when it drafted the placement. */
-  confidence?: number | null
-  /** Whether the two drafting runs agreed. */
-  agree?: boolean | null
-  /** Both runs agree, both sure: the board starts it ticked. */
-  sure?: boolean
-}
-
-export interface ReviewProgress {
-  tasks: { done: number; total: number }
-  stages: Record<TaskType, { done: number; total: number }>
-  /** N5-N2 kanji with nothing open on their parts, forms, meanings or words. */
-  kanji: { verified: number; total: number }
-  meanings: { accepted: number; total: number }
-  /** Drafted word placements, decided with their kanji's meanings: not tasks of their own. */
-  words: { done: number; total: number }
-}
-
-export interface HistoryFilter {
-  all?: boolean
-  by?: string
-  from?: string
-  to?: string
-}
-
-/** One item's answer on a character's card. */
-export interface CardDecision {
-  item: string
-  action: 'accept' | 'edit' | 'keep' | 'reject' | 'skip'
-  value?: TaskValue
-}
-
-/** A character's card: every item waiting about it, and what it is now. */
-export interface CharacterCard {
-  char: string
-  items: ItemDetail[]
-  context: ItemDetail['context'] & {
-    parts: string[]
-    splits: SourceSplit[]
-    book?: BookRef | null
-    /** The parts of each character step 1 could make its root: a form shows them as inherited. */
-    rootParts?: Record<string, string[]>
-    /** The character's visual split, if it has one: how it looks, not what it is made from. */
-    visual?: VisualSplit | null
-  }
-}
-
-export interface ItemDetail extends QueueItem {
-  impact?: Impact
-  history: Decision[]
-  context: {
-    forms?: FormsResponse
-    a?: FormsResponse
-    b?: FormsResponse
-    char?: string
-    kanjidic?: string[]
-    curated?: string | null
-    on?: string[]
-    kun?: string[]
-    senses?: MeaningGroup[] | null
-    word?: Word
-    /** Bulgarian: the machine translation the card started from. */
-    built?: string[] | UsageBg | null
-    /** Bulgarian word cards: for each of its kanji with accepted groups, the group it is in here. */
-    groups?: { char: string; group: string | null; en: string | null; bg: string | null }[]
-    /** kanji_senses: its common words (and any placed), each in its group now. */
-    board?: BoardWord[]
-    /**
-     * The kanji in scope built from the subject at any depth, most frequent
-     * first: for a part's meaning, the part's; for a form link, each side's.
-     */
-    users?: string[] | { a: string[]; b: string[] }
-    /** form_link: each side's own meanings. */
-    meanings?: { a: string[]; b: string[] }
-    /** part_meaning: the old form of those kanji, where they have one. */
-    old?: Record<string, string>
-    /** part_meaning: the form links about the part still waiting in the queue. */
-    formItems?: { id: string; subject: string; proposed: FormLink | null }[]
-    /** kanji_senses and a kanji's bg: its extras -- the open item's draft, else what is accepted -- and whether it was made in Japan. */
-    extras?: { item: string | null; value: KanjiExtras | null; kokuji: boolean }
-    /** usage: the kanji the card is about. */
-    kanji?: { char: string; kanjidic?: string[]; curated?: string | null }[]
-    /** kanji_senses: the kanji a usage card writes for the same kun reading, its reading and item (会: 合, 遭 あう). */
-    usagePairs?: Record<string, { reading: string; item: string }>
-    /** a usage card's Bulgarian: the card's accepted English, to translate line for line. */
-    usage?: UsageCard | null
-  }
-}
 
 /**
  * What one of Dani's print dictionaries says, put on a review card as evidence
@@ -794,133 +556,6 @@ export interface ItemDetail extends QueueItem {
  * or Иванов's Bulgarian-Japanese dictionary (`bg-ja`). `unsure`: what the
  * transcribing agent was not sure it read right -- the page's scan settles it.
  */
-/** A word a dictionary lists, matched to the board's JMdict entry when it is there (`id`). */
-export interface DictWord {
-  ja: string
-  reading: string | null
-  gloss: string | null
-  id?: number | null
-}
-
-/** One sense of a dictionary's entry; `key` is what a board word's tag points at. */
-export interface DictSense {
-  key: string
-  /** Its number in the book: 1a, ❷, 国 ... */
-  n: string
-  text: string
-  words?: DictWord[]
-}
-
-/** Other dictionaries' view of a kanji (server/dictionaries.py): reviewers and the admin only. */
-export interface KanjiDictionaries {
-  char: string
-  kanjipedia: string
-  kodansha?: {
-    no: number
-    /** The PDF pages the entry is on. */
-    pages: number[]
-    core: string[]
-    on: string[]
-    kunReadings: string[]
-    grade: string | null
-    strokes: number | null
-    skip: string | null
-    unicode: string | null
-    senses: DictSense[]
-    kun: { head: string; kana: string | null; text: string | null; senses: DictSense[] }[]
-    independent: { head: string; kana: string | null; text: string | null }[]
-    special: DictWord[]
-    /** Its SYNONYMS box: which sense (`n`, as in `senses`) each synonym is of. */
-    synonyms?: { n: string; char: string; gloss: string }[]
-  }
-  kangorin?: {
-    no: number
-    pages: number[]
-    /** Its old form, printed beside it in 〖〗. */
-    old: string | null
-    classes: string[]
-    joyo: string[]
-    /** Only its Japan-only senses (国): the rest of the transcription is too unsure to show. */
-    senses: (DictSense & { japan: boolean; examples: string[] })[]
-  }
-  tsalta?: BookRef | null
-  wiktionary?: { pos: string; glosses: string[]; readings: string[] }[]
-  /** Board word id -> where each dictionary puts it. */
-  words: Record<string, { src: 'kodansha' | 'kangorin' | 'tsalta'; key: string; label: string }[]>
-}
-
-export interface BookRef {
-  /** Цалта's kanji book, Иванов's dictionary (printed pages); Kodansha, 新漢語林 (PDF pages). */
-  book: 'kanji' | 'bg-ja' | 'kodansha' | 'kangorin'
-  pages: number[]
-  no?: number
-  char?: string
-  unsure?: string[]
-}
-
-/** An entry of the kanji book as transcribed (server/books.py): a numbered kanji, or a grapheme (a part with a name). */
-export interface KanjiBookEntry {
-  type: 'kanji' | 'grapheme'
-  no?: number
-  kanji?: string
-  char?: string | null
-  /** A grapheme's name; a kanji has a keyword. */
-  name?: string | null
-  glyph_desc?: string | null
-  keyword?: string
-  alt_meaning?: string | null
-  parts: BookPart[]
-  /** The book's Kanken level mark: 1-10, ★, ★★. */
-  level?: string | null
-  kun?: string[]
-  on?: string[]
-  old_form?: string | null
-  freq?: number | null
-  strokes?: number | null
-  radical?: { char: string | null; no: number | null } | null
-  words?: { ja: string; romaji: string | null; star: boolean; bg: string; jlpt: string | null }[]
-  note?: string | null
-}
-
-/** A part as the kanji book draws it: a character, or a shape described in words when it has none. */
-export interface BookPart {
-  char: string | null
-  name: string | null
-  glyph_desc?: string | null
-}
-
-/** The kanji book on a decomposition: its parts, and the same split in our graph's nodes when it maps. */
-export interface BookSplit extends BookRef {
-  parts: BookPart[]
-  split: string[] | null
-}
-
-/** The kanji book's old form of a kanji. */
-export interface BookOld extends BookRef {
-  old: string
-}
-
-/** The kanji book on a part: its Bulgarian names (with how often), its own entry, where it is named. */
-export interface BookPartView {
-  names: [string, number][]
-  entry: (BookRef & { name: string | null; note: string | null }) | null
-  seen: (BookRef & { name: string })[]
-}
-
-/** The kanji book's Bulgarian keyword for a kanji, and its second meaning. */
-export interface BookKeyword extends BookRef {
-  keyword: string
-  alt: string | null
-}
-
-/** A word's gloss in either book. `shared`: the book's spelling fits other words too (イースト: yeast, east). */
-export interface BookGloss extends BookRef {
-  bg: string
-  ja: string
-  romaji: string | null
-  notes?: string[]
-  shared?: boolean
-}
 
 /** Every word with a kanji: by accepted meaning group, then the ones not placed yet, a page at a time. */
 export interface WordsWithResponse {
@@ -951,6 +586,42 @@ export interface RecognizeResponse {
   candidates: DrawCandidate[]
   strokes: number
   also: DrawCandidate[]
+}
+
+export type ReportStatus = 'open' | 'fixed' | 'not_a_mistake' | 'duplicate'
+
+/** What the page says about itself when a report is sent; the server adds the data version. */
+export interface ReportContext {
+  url?: string
+  lang?: string
+  screen?: string
+  from?: string
+  view?: string
+}
+
+export interface ReportFile {
+  name: string
+  type: string
+  bytes: number
+}
+
+export interface MyReport {
+  id: string
+  created: string
+  subject: string | null
+  /** The subject as people read it: the kanji, or the word's headword. */
+  label?: string
+  text: string
+  files: ReportFile[]
+  status: ReportStatus
+  reply: string | null
+  closed_at: string | null
+}
+
+export interface UserReport extends MyReport {
+  by: string
+  context: ReportContext & { data?: string; commit?: string }
+  closed_by: string | null
 }
 
 /**
@@ -996,15 +667,12 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
  * Answers that do not change while the app is open, kept: two parts of the
  * page asking at once -- a word's head and its panel, a picked character's
  * page and then its graph -- share one request. A failure is asked again.
- * A reviewer's edit is the one exception: dataChanged() empties them all.
  */
-const keptCaches: Map<unknown, unknown>[] = []
 
 function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): ((k: K) => Promise<T>) & { peek: (k: K) => T | undefined } {
   const answers = new Map<K, Promise<T>>()
   // The answers that have come, to draw at once: a promise is only read a render late.
   const settled = new Map<K, T>()
-  keptCaches.push(answers, settled)
   const ask_ = (k: K) => {
     let p = answers.get(k)
     if (p) answers.delete(k) // to the back of the queue, as used just now
@@ -1025,21 +693,6 @@ function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): ((k: K) => Promise<T>
     return p
   }
   return Object.assign(ask_, { peek: (k: K) => settled.get(k) })
-}
-
-const changeListeners = new Set<() => void>()
-
-/** Something a reviewer changed went live: forget what was kept, and tell whoever shows it. */
-export function dataChanged() {
-  for (const c of keptCaches) c.clear()
-  similarCache.clear()
-  similarSettled.clear()
-  for (const l of changeListeners) l()
-}
-
-export function onDataChanged(listener: () => void): () => void {
-  changeListeners.add(listener)
-  return () => changeListeners.delete(listener)
 }
 
 /** The device's answer if it has one, the server's otherwise. */
@@ -1319,129 +972,43 @@ export const api = {
 
   logout: () => send<{ ok: boolean }>('/api/auth/logout', 'POST'),
 
-  /** Ask to become a reviewer; the owner is emailed. */
-  contribute: (text: string) => send<{ user: User }>('/api/auth/contribute', 'POST', { text }),
-
-  adminPeople: () => get<AdminPeople>('/api/admin/people'),
-
-  decideRequest: (id: string, approve: boolean) =>
-    send<{ request: { id: string; status: string } }>(`/api/admin/requests/${encodeURIComponent(id)}`, 'POST', { approve }),
-
-  revokeReviewer: (userId: string) =>
-    send<{ ok: boolean }>(`/api/admin/reviewers/${encodeURIComponent(userId)}/revoke`, 'POST', {}),
-
   /** A note's picture: one of ours by name, or a GIF straight from KLIPY. */
   imageUrl: (name: string) => (isGifUrl(name) ? name : `${BASE}/api/assoc/image/${encodeURIComponent(name)}`),
 
-  /**
-   * Open items. `types`: how many wait per type (greys out empty stages);
-   * `skipped`: how many you skipped. With `skipped` true, only those.
-   */
-  reviewQueueItems: (type?: TaskType, origin?: Origin, skipped = false, limit = 60) =>
-    get<{ total: number; items: QueueItem[]; types: Record<TaskType, number>; skipped: number; suggestions: number }>('/api/review/queue', [
-      ...(type ? [['type', type] as [string, string]] : []),
-      ...(origin ? [['origin', origin] as [string, string]] : []),
-      ...(skipped ? [['skipped', 'true'] as [string, string]] : []),
-      ['limit', String(limit)],
-    ]),
-
-  reviewItem: (id: string) => get<ItemDetail>(`/api/review/items/${encodeURIComponent(id)}`),
-
-  /** A character's card: its parts, forms and part-meaning items, and the character's own facts. */
-  reviewCharacter: (char: string) => get<CharacterCard>(`/api/review/characters/${encodeURIComponent(char)}`),
-
-  /** Every item on a character's card decided at once; all "skip" leaves the card for later. */
-  /** `visual`: the character's visual split as the card leaves it (null takes it away; undefined leaves it). */
-  decideCharacter: (char: string, decisions: CardDecision[], reason?: string, staleOk?: boolean, visual?: string[] | null) =>
-    send<{ items: QueueItem[] }>(`/api/review/characters/${encodeURIComponent(char)}/decide`, 'POST', {
-      decisions,
-      reason,
-      staleOk,
-      ...(visual !== undefined ? { visual } : {}),
-    }),
-
-  /** An entry of the kanji book, by number (a kanji) or character (a grapheme): reviewers and the admin only. */
-  reviewBookEntry: (no: number | null, char: string | null) =>
-    get<KanjiBookEntry>('/api/review/book-entry', no != null ? [['no', String(no)]] : [['char', char ?? '']]),
-
-  /** Other dictionaries' entries for a kanji and where they put its board's words: reviewers and the admin only. */
-  reviewDictionaries: (char: string) => get<KanjiDictionaries>(`/api/review/dictionaries/${encodeURIComponent(char)}`),
-
-  /** A scanned page a card cites (server/books.py): reviewers and the admin only. */
-  reviewBookPage: async (book: BookRef['book'], page: number) => {
-    const res = await fetch(`${BASE}/api/review/book/${book}/${page}`, { headers: authHeaders() })
-    if (!res.ok) throw await refusal(res, { message: 'that page could not be fetched', code: 'book_page_missing' })
-    return res.blob()
+  /** A report from a signed-in user: what is wrong, in their words, and up to 3 pictures. */
+  sendReport: async (text: string, subject: string | null, context: ReportContext, files: File[]) => {
+    const form = new FormData()
+    form.append('text', text)
+    if (subject) form.append('subject', subject)
+    form.append('context', JSON.stringify(context))
+    for (const f of files) form.append('files', f, f.name)
+    const res = await fetch(BASE + '/api/reports', { method: 'POST', body: form, headers: authHeaders() })
+    if (!res.ok) throw await refusal(res, { message: 'could not send the report', code: 'report_failed' })
+    return (await res.json()) as { id: string; status: ReportStatus }
   },
 
-  /**
-   * `words`, for a kanji's meanings: word id -> group id or null, as left on the
-   * board. `skip`: the words left for later, with where they sat; they come back
-   * as a follow-up item at the end of the queue.
-   */
-  decide: (
-    id: string,
-    action: 'accept' | 'edit' | 'keep' | 'reject' | 'skip',
-    value?: TaskValue,
-    reason?: string,
-    words?: Record<number, string | null>,
-    skip?: Record<number, string | null>,
-    /** A kanji's Bulgarian card: group id -> the group's Bulgarian label. */
-    labels?: Record<string, string>,
-    /** A kanji's meanings or Bulgarian card: its extras as left on the card. */
-    extras?: KanjiExtras,
-    /** A kanji's Bulgarian card: group id -> the Bulgarian of the group's `about`. */
-    aboutBg?: Record<string, string>,
-    /** Accept though the subject changed after the proposal was made (the reviewer was asked). */
-    staleOk?: boolean,
-  ) =>
-    send<{ item: QueueItem }>(`/api/review/items/${encodeURIComponent(id)}/decide`, 'POST', {
-      action,
-      value,
-      reason,
-      words,
-      skip,
-      labels,
-      extras,
-      aboutBg,
-      staleOk,
-    }),
+  /** Your own reports and what became of them. */
+  myReports: () => get<{ items: MyReport[] }>('/api/reports/mine'),
 
-  reviewProgress: () => get<ReviewProgress>('/api/review/progress'),
-  /** Public: the share of kanji reviewers have fully checked. */
-  reviewVerified: () => get<{ kanji: ReviewProgress['kanji'] }>('/api/review/verified'),
-
-  /** What giving `char` these parts would change upstream, before anyone decides. */
-  reviewImpact: (char: string, parts: string[]) => send<Impact>('/api/review/impact', 'POST', { char, parts }),
-
-  /** A reviewer's own change, live at once. `words`, for a kanji's meanings edited on the page's board: word id -> group. */
-  reviewEdit: (type: TaskType, subject: string, value: TaskValue, reason?: string, words?: Record<number, string | null>) =>
-    send<Decision | { unchanged: true }>('/api/review/edit', 'POST', { type, subject, value, reason, words }),
-
-  /** From a user, queued for a reviewer; from a reviewer, made. */
-  suggest: (type: TaskType, subject: string, value: TaskValue, reason: string, words?: Record<number, string | null>, from?: string) =>
-    send<{ applied: boolean; item?: { id: string; status: string } }>('/api/review/suggest', 'POST', { type, subject, value, reason, words, from }),
-
-  /** For a kanji page's Edit / Suggest changes: its groups (or the open draft) and the board's words. */
-  pageKanji: (char: string) =>
-    get<{ char: string; senses: MeaningGroup[] | null; drafted: boolean; board: BoardWord[] }>(`/api/review/page/kanji/${encodeURIComponent(char)}`),
-
-  /** For a word page's Edit / Suggest changes: each of its kanji's groups and the one it is in. */
-  pageWord: (id: number) =>
-    get<{ word: Word; kanji: { char: string; senses: MeaningGroup[] | null; group: string | null }[]; bgBuilt: string[] | null }>(
-      `/api/review/page/word/${id}`,
+  /** The admin's list, newest first; `status` narrows it. */
+  reports: (status?: ReportStatus, offset = 0, limit = 200) =>
+    get<{ items: UserReport[]; people: Record<string, Author & { email: string }>; counts: Record<ReportStatus, number> }>(
+      '/api/reports',
+      [...(status ? ([['status', status]] as [string, string][]) : []), ['offset', String(offset)], ['limit', String(limit)]],
     ),
 
-  reviewHistory: (f: HistoryFilter = {}, limit = 200) =>
-    get<{ items: Decision[]; people: Author[] }>('/api/review/history', [
-      ['all', f.all ? 'true' : 'false'],
-      ...(f.by ? [['by', f.by] as [string, string]] : []),
-      ...(f.from ? [['from', f.from] as [string, string]] : []),
-      ...(f.to ? [['to', f.to] as [string, string]] : []),
-      ['limit', String(limit)],
-    ]),
+  /** How many reports are open: the owner's badge. */
+  openReports: () => get<{ open: number }>('/api/reports/open-count'),
 
-  revert: (decisionId: string) => send<{ decision: Decision }>(`/api/review/decisions/${encodeURIComponent(decisionId)}/revert`, 'POST'),
+  setReportStatus: (id: string, status: ReportStatus, reply: string | null) =>
+    send<{ report: UserReport }>(`/api/reports/${encodeURIComponent(id)}/status`, 'POST', { status, reply }),
+
+  /** A report's picture as a blob: it needs the session, which an <img> can't send. */
+  reportFile: async (id: string, name: string) => {
+    const res = await fetch(`${BASE}/api/reports/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`, { headers: authHeaders() })
+    if (!res.ok) throw await refusal(res, { message: 'that picture could not be fetched', code: 'report_file_missing' })
+    return res.blob()
+  },
 
   /** `also`: other recognisers' picks, returned with the same metadata; they do not change the ranking. */
   recognize: (strokes: [number, number][][], also: string[] = []) =>

@@ -24,14 +24,7 @@ console.log('search box holds:', await page.locator('.search-input').first().inp
 console.log('flat list rows:', await page.locator('.words-with .word').count(), '| note:', (await page.locator('.words-with-head .hint').textContent())?.trim())
 await page.screenshot({ path: `${SHOTS}/words-1-flat.png` })
 
-// The admin accepts the drafted groups, then the drafted word meanings.
-const q = await api('/api/review/queue?type=kanji_senses')
-const senses = q.items.find((i) => i.subject === '生')
-if (senses) await api(`/api/review/items/${senses.id}/decide`, { action: 'accept' })
-const words = await api('/api/review/queue?type=word_sense')
-for (const w of words.items.filter((i) => i.subject.startsWith('生|'))) await api(`/api/review/items/${w.id}/decide`, { action: 'accept' })
-console.log('accepted word meanings:', words.items.length)
-
+// The page shows the drafted groups as they are (no review queue since 2026-11-02).
 await page.reload({ waitUntil: 'networkidle' })
 await wait(1500)
 console.log('groups:', (await page.locator('.meaning-group h3').allTextContents()).map((s) => s.trim()).join(' / '))

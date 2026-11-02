@@ -6,7 +6,7 @@ import { plainReading } from '../local/japanese'
 import { local } from '../local/local'
 import { KanjiMeta } from './HeadMeta'
 import { realMeanings } from './meanings'
-import { KanjiEditButton } from '../review/PageEdit'
+import { ReportButton } from '../reports/ReportButton'
 import { FontStrip } from './FontStrip'
 import { Forms, useForms } from './Forms'
 import { StrokeOrder } from './StrokeOrder'
@@ -417,7 +417,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
         </div>
       )}
 
-      {!isPreview && <KanjiEditButton char={data.focus.char} onSignIn={onSignIn} />}
+      {!isPreview && <ReportButton subject={`kanji:${data.focus.char}`} of={data.focus.char} from="kanji page" onSignIn={onSignIn} />}
     </section>
   )
 }

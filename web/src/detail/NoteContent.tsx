@@ -87,7 +87,7 @@ export function NoteImage({ name, zoomable = false }: { name: string; zoomable?:
 }
 
 /** The image as large as the window allows, over everything, with a way out. */
-function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
+export function ImageZoom({ src, onClose }: { src: string; onClose: () => void }) {
   const t = S(useLang())
 
   useEffect(() => {

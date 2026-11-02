@@ -24,7 +24,7 @@ import { Pitch } from '../search/Pitch'
 import { transitivity } from '../search/transitivity'
 import { Valency } from '../search/Valency'
 import { WordMeta } from './HeadMeta'
-import { WordEditButton } from '../review/PageEdit'
+import { ReportButton } from '../reports/ReportButton'
 import { warmKanji, warmWord } from '../warm'
 
 const S = strings(
@@ -596,7 +596,7 @@ export function WordPanel({ id, word, from, onPick, onWord, onSignIn, notes }: P
         </p>
       )}
 
-      {!failed && <WordEditButton id={w.id} headword={w.headword} onSignIn={onSignIn} />}
+      {!failed && <ReportButton subject={`word:${w.id}`} of={w.headword} from="word card" onSignIn={onSignIn} />}
     </section>
   )
 }

@@ -48,16 +48,6 @@ def send_magic_link(email: str, link: str, lang: str = "en") -> None:
     _send_resend(to=email, subject=subject, text=text)
 
 
-def send_contribution_request(owner: str, who: str, text: str, link: str) -> None:
-    """Tell the site's owner that `who` asked to become a reviewer. Always English: it goes to Dani."""
-    subject = f"{who} wants to contribute to Better Kanji Dictionary"
-    body = f"{who} asked to become a reviewer:\n\n{text}\n\nApprove or decline: {link}\n"
-    if is_dev():
-        print(f"[mail] to {owner}: {subject}\n{body}", flush=True)
-        return
-    _send_resend(to=owner, subject=subject, text=body)
-
-
 def _send_resend(to: str, subject: str, text: str) -> None:
     body = json.dumps({
         "from": os.environ.get("MAIL_FROM", "Better Kanji Dictionary <login@example.com>"),

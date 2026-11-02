@@ -1,38 +1,25 @@
-import { lazy, StrictMode, Suspense } from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './theme.css'
 import { App } from './App'
-import { pinLang } from './i18n'
 import { startOffline } from './local/local'
 // Caught from the first moment: the browser's offer to install the app.
 import './account/install'
 
-// The dictionary tab (review/BookViewer.tsx), reviewers' second screen: a page of its own, not the app.
-const DictionaryTab = lazy(() => import('./review/BookViewer'))
-const dictionaryTab = window.location.pathname === '/review/dictionary'
-// Its dictionaries are English (Kodansha, Wiktionary) or Japanese: the tab is in English, whatever the app's language.
-if (dictionaryTab) pinLang('en')
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {dictionaryTab ? (
-      <Suspense fallback={null}>
-        <DictionaryTab />
-      </Suspense>
-    ) : (
-      <App />
-    )}
+    <App />
   </StrictMode>,
 )
 
 // The app opens offline once installed (the service worker), and lookups run
 // on the device once the dictionary is downloaded (the lookup worker). Neither
-// is needed for the first paint, nor at all in the dictionary tab.
-if (import.meta.env.PROD && 'serviceWorker' in navigator && !dictionaryTab) {
+// is needed for the first paint.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {})
   })
 }
 // After the first frame is on the screen: the worker's start and its first
 // messages would otherwise share the task that draws the page.
-if (!dictionaryTab) requestAnimationFrame(() => setTimeout(startOffline, 0))
+requestAnimationFrame(() => setTimeout(startOffline, 0))

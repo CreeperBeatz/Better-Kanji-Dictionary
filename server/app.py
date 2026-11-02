@@ -24,7 +24,7 @@ from .errors import AppError, app_error_handler
 from . import auth as accounts
 from . import offline as offline_pack
 from . import store
-from .routes import admin, assoc, atlas, auth, comments, decomp, gifs, graph, images, offline, recognize, review, search
+from .routes import assoc, atlas, auth, comments, decomp, gifs, graph, images, offline, recognize, reports, search
 
 app = FastAPI(
     title="Better Kanji Dictionary",
@@ -63,8 +63,7 @@ app.include_router(images.router)
 app.include_router(gifs.router)
 app.include_router(comments.router)
 app.include_router(decomp.router)
-app.include_router(admin.router)
-app.include_router(review.router)
+app.include_router(reports.router)
 app.include_router(recognize.router)
 app.include_router(offline.router)
 
@@ -82,6 +81,20 @@ def reviewed_bulgarian() -> None:
     from . import review as review_store
 
     review_store.load_bg_overlay()
+
+
+@app.on_event("startup")
+def old_reports() -> None:
+    # What users sent through the old review queue shows among the reports (once; safe to repeat).
+    from . import reports
+
+    try:
+        n = reports.import_old()
+    except Exception as e:  # noqa: BLE001 -- a copy of old data must not keep the site down; the next start tries again
+        print(f"[reports] old review queue not brought over: {e!r}", flush=True)
+        return
+    if n:
+        print(f"[reports] {n} brought over from the old review queue", flush=True)
 
 
 @app.on_event("startup")

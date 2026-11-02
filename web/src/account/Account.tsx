@@ -1,11 +1,12 @@
-import { useRef, useState } from 'react'
-import { contribute, logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
+import { useEffect, useRef, useState } from 'react'
+import { logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
+import { api } from '../api'
 import { Credits } from '../About'
 import { strings, useLang, type Lang } from '../i18n'
 import { errorText } from '../i18n/errors'
 import { LangSwitch } from '../i18n/LangSwitch'
 import { OfflineSetting } from '../local/OfflineSetting'
-import { CheckedNote } from '../review/Progress'
+import { MyReports } from '../reports/MyReports'
 import { Avatar, squareAvatar } from './Avatar'
 import { GoogleButton } from './GoogleButton'
 import { InstallApp } from './InstallApp'
@@ -44,17 +45,12 @@ const S = strings(
     profileHint:
       'Your name, username and picture show beside your public notes and replies. Your email is never shown. Notes are private unless you mark one public.',
     logOut: 'Log out',
-    helpTitle: 'Help fix the data',
-    helpHint:
-      'Reviewers check and correct how kanji break into parts, their old forms and which meaning each word uses. Dani approves reviewers by hand.',
-    helpAsk: 'Who are you, and how do you know Japanese?',
-    helpSend: 'ask to review',
-    helpWaiting: 'Your request to review is waiting for an answer.',
-    helpDeclined: 'Your last request to review was declined. You can ask again.',
-    cannotAsk: 'could not send your request',
-    roleReviewer: 'You are a reviewer.',
+    dataTitle: 'Some of this data can be wrong',
+    dataHint:
+      'AI drafts much of it from dictionaries, and automatic checks test it. If you see a mistake, use "Report a problem" at the bottom of the page. We check every report.',
     roleAdmin: 'You run this site.',
-    reviewMode: 'Review Mode',
+    reportsScreen: 'Reports',
+    openReports: '{n} open',
   },
   {
     moving: 'Бележките от този браузър се преместват в профила ви',
@@ -88,17 +84,12 @@ const S = strings(
     profileHint:
       'Името, потребителското име и снимката ви се виждат до публичните ви бележки и отговори. Имейлът ви не се показва никога. Бележките са лични, освен ако не отбележите някоя като публична.',
     logOut: 'Изход',
-    helpTitle: 'Помогнете да поправим данните',
-    helpHint:
-      'Рецензентите проверяват и поправят как се разделят канджитата на части, старите им форми и кое значение използва всяка дума. Дани одобрява рецензентите лично.',
-    helpAsk: 'Кои сте и откъде знаете японски?',
-    helpSend: 'поискайте да рецензирате',
-    helpWaiting: 'Заявката ви да рецензирате чака отговор.',
-    helpDeclined: 'Последната ви заявка беше отказана. Можете да поискате отново.',
-    cannotAsk: 'заявката не можа да бъде изпратена',
-    roleReviewer: 'Вие сте рецензент.',
+    dataTitle: 'Част от тези данни може да е грешна',
+    dataHint:
+      'Изкуственият интелект съставя голяма част от тях по речници, а автоматични проверки ги тестват. Ако видите грешка, използвайте „Съобщете за проблем“ най-долу на страницата. Проверяваме всеки доклад.',
     roleAdmin: 'Вие управлявате този сайт.',
-    reviewMode: 'Режим преглед',
+    reportsScreen: 'Доклади',
+    openReports: '{n} отворени',
   },
 )
 
@@ -132,16 +123,15 @@ function message(err: unknown, fallback: Key, lang: Lang) {
   return err instanceof Error ? errorText(err, lang) : S(lang)(fallback)
 }
 
-export type WorkbenchTab = 'queue' | 'history' | 'progress' | 'people' | 'handbook'
 
 /** Mounted only while open, so each opening starts from a clean form. */
 export function AccountDialog({
   onClose,
-  onWorkbench,
+  onReports,
 }: {
   onClose: () => void
-  /** Opens the review screen at a tab; reviewers and the admin only. */
-  onWorkbench?: (tab: WorkbenchTab) => void
+  /** Opens the reports screen; the admin only. */
+  onReports?: () => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -168,7 +158,7 @@ export function AccountDialog({
   return (
     <Overlay panel="account-panel" label={t('account')} onClose={onClose}>
       {user ? (
-        <Profile onWorkbench={onWorkbench} />
+        <Profile onReports={onReports} />
       ) : sent ? (
         <>
           <h2>{t('checkEmail')}</h2>
@@ -214,7 +204,10 @@ export function AccountDialog({
       </p>
       <InstallApp />
       <OfflineSetting />
-      <CheckedNote />
+      <section className="account-checked">
+        <h3>{t('dataTitle')}</h3>
+        <p className="hint">{t('dataHint')}</p>
+      </section>
       <Credits />
       {/* Last, on its own: leaving the account. */}
       {user && (
@@ -234,7 +227,7 @@ export function AccountDialog({
 
 const USERNAME = /^[a-z0-9_-]{3,24}$/
 
-function Profile({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
+function Profile({ onReports }: { onReports?: () => void }) {
   const lang = useLang()
   const t = S(lang)
   const { user } = useAuth()
@@ -366,82 +359,42 @@ function Profile({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void })
 
       <p className="hint">{t('profileHint')}</p>
       {problem && <p className="account-problem">{problem}</p>}
-      <Contribute onWorkbench={onWorkbench} />
+      <MyReports />
+      <ReportsLink onReports={onReports} />
     </>
   )
 }
 
-/** Asking to become a reviewer, or, for a reviewer, the way into the review screen. */
-function Contribute({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
-  const lang = useLang()
-  const t = S(lang)
+/** For the site's owner: the way into the reports screen. */
+function ReportsLink({ onReports }: { onReports?: () => void }) {
+  const t = S(useLang())
   const { user } = useAuth()
-  const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
-  if (!user) return null
-
-  if (user.role !== 'user') {
-    return (
-      <section className="account-contribute">
-        <h3>{t('helpTitle')}</h3>
-        <p className="hint">{t(user.role === 'admin' ? 'roleAdmin' : 'roleReviewer')}</p>
-        {onWorkbench && (
-          <button className="account-submit account-review" onClick={() => onWorkbench('queue')}>
-            {t('reviewMode')}
-          </button>
-        )}
-      </section>
+  const admin = user?.role === 'admin'
+  // How many wait, asked each time the popup opens.
+  const [open, setOpen] = useState<number | null>(null)
+  useEffect(() => {
+    if (!admin) return
+    let stale = false
+    api.openReports().then(
+      (d) => !stale && setOpen(d.open),
+      () => {},
     )
-  }
-
-  const status = user.contribution?.status
-  if (status === 'open') {
-    return (
-      <section className="account-contribute">
-        <h3>{t('helpTitle')}</h3>
-        <p className="hint">{t('helpWaiting')}</p>
-      </section>
-    )
-  }
-
-  async function ask(e: React.FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    setProblem(null)
-    try {
-      await contribute(text.trim())
-      setText('')
-    } catch (err) {
-      setProblem(message(err, 'cannotAsk', lang))
-    } finally {
-      setBusy(false)
+    return () => {
+      stale = true
     }
-  }
-
+  }, [admin])
+  if (!admin || !onReports) return null
   return (
-    <details className="account-contribute">
-      <summary>{t('helpTitle')}</summary>
-      <p className="hint">{t('helpHint')}</p>
-      {status === 'declined' && <p className="hint">{t('helpDeclined')}</p>}
-      <form className="account-form" onSubmit={ask}>
-        <label htmlFor="account-contribute">{t('helpAsk')}</label>
-        <textarea
-          id="account-contribute"
-          className="assoc-text"
-          rows={3}
-          maxLength={1000}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <div className="account-row profile-save">
-          <span />
-          <button className="account-submit" disabled={busy || text.trim().length < 10}>
-            {t('helpSend')}
-          </button>
-        </div>
-      </form>
-      {problem && <p className="account-problem">{problem}</p>}
-    </details>
+    <section className="account-contribute">
+      <p className="hint">{t('roleAdmin')}</p>
+      <button className="account-submit account-review" onClick={onReports}>
+        {t('reportsScreen')}
+        {!!open && (
+          <span className="reports-badge" title={t('openReports', { n: open })} aria-label={t('openReports', { n: open })}>
+            {open > 99 ? '99+' : open}
+          </span>
+        )}
+      </button>
+    </section>
   )
 }

@@ -1777,61 +1777,6 @@ def _view(item: dict, names: dict, data: dict) -> dict:
     return out
 
 
-def queue(user_id: str, type_: str | None = None, origin: str | None = None, limit: int = 50,
-          skipped: bool = False) -> dict:
-    """Open items, worst first: highest priority, then oldest; your skips left
-    out, or only your skips with `skipped`. `types` counts what waits per type
-    (for the filter, before the type is picked), `skipped` how many you skipped."""
-    if type_ is not None:
-        _known_type(type_, character=True)
-    if origin is not None:
-        _known_origin(origin)
-    data = _read()
-    accepted = data["live"]["kanji_senses"]
-    # Words waiting in a follow-up are decided there, not one by one.
-    held = {
-        f"{i['subject']}|{w}" for i in data["items"].values()
-        if i["status"] == "open" and (fw := follow_up_words(i)) for w in fw
-    }
-    pending = _meanings_pending(data)
-    waiting = [
-        i for i in data["items"].values()
-        if i["status"] == "open"
-        and i["type"] not in RIDERS
-        and i["subject"] not in held
-        # A word's meaning waits until its kanji's meanings are accepted.
-        and (i["type"] != "word_sense" or _char(i["subject"]) in accepted)
-        # Bulgarian waits for the meanings too: the groups are its context.
-        and (i["type"] != "bg" or not _bg_waits(i["subject"], pending, data))
-        and (origin is None or i["origin"] == origin)
-    ]
-    mine = [i for i in waiting if (user_id in i["skipped_by"]) == skipped]
-    anchor = _anchors(data)
-    types = {t: 0 for t in TYPES if t not in CHARACTER_TYPES and t not in RIDERS}
-    types[CHARACTER] = len({anchor(i) for i in mine if i["type"] in CHARACTER_TYPES})
-    for i in mine:
-        if i["type"] not in CHARACTER_TYPES:
-            types[i["type"]] += 1
-    # The meanings stage holds a kanji's groups and its single words both;
-    # the character stage, a character's parts, forms and part meaning.
-    def wanted(i: dict) -> bool:
-        return (type_ is None or i["type"] == type_ or (type_ == "kanji_senses" and i["type"] == "word_sense")
-                or (type_ == CHARACTER and i["type"] in CHARACTER_TYPES))
-
-    rows = [i for i in mine if wanted(i)]
-    rows.sort(key=lambda i: (-(i.get("priority") or 0), i["created"]))
-    rows = _by_character(_by_kanji(rows), anchor)
-    names = _names({i["created_by"] for i in rows[:limit] if i["type"] != CHARACTER})
-    return {
-        "total": len(rows),
-        "items": [i if i["type"] == CHARACTER else _view(i, names, data) for i in rows[:limit]],
-        "types": types,
-        "skipped": len(_by_character([i for i in waiting if user_id in i["skipped_by"] and wanted(i)], anchor)),
-        # People's suggestions waiting, any stage: the queue offers its proposals/suggestions filter only then.
-        "suggestions": sum(1 for i in data["items"].values() if i["status"] == "open" and i["origin"] == "suggestion" and i["type"] not in RIDERS),
-    }
-
-
 def _anchors(data: dict):
     """Which character's card an item is on: its subject, or for a form link X|Y,
     X -- unless only Y has a card of its own (parts or a part meaning waiting)."""
@@ -1845,62 +1790,6 @@ def _anchors(data: dict):
         return b if b in hosts and a not in hosts else a
 
     return anchor
-
-
-def _by_character(rows: list[dict], anchor) -> list[dict]:
-    """A character's parts, forms and part-meaning items as one card, at the
-    place its first item had: the queue lists the card, the card holds the items."""
-    out, cards = [], {}
-    for i in rows:
-        if i["type"] not in CHARACTER_TYPES:
-            out.append(i)
-            continue
-        c = anchor(i)
-        card = cards.get(c)
-        if card is None:
-            card = cards[c] = {
-                "id": f"char:{c}", "type": CHARACTER, "subject": c, "origin": "proposal", "sources": [],
-                "kinds": [], "items": [], "proposed": None, "current": None, "evidence": None, "reason": None,
-                "status": "open", "priority": i.get("priority") or 0, "createdBy": None,
-            }
-            out.append(card)
-        card["items"].append(i["id"])
-        if i["type"] not in card["kinds"]:
-            card["kinds"].append(i["type"])
-        if i["source"] not in card["sources"]:
-            card["sources"].append(i["source"])
-        if i["origin"] == "suggestion":
-            card["origin"] = "suggestion"
-    for card in cards.values():
-        card["source"] = ", ".join(card["sources"])
-    return out
-
-
-def character_card(char: str) -> dict:
-    """Everything waiting about one character, each item as `item` shows it, and the character's own facts."""
-    data = _read()
-    anchor = _anchors(data)
-    ids = [i["id"] for i in sorted(data["items"].values(), key=lambda i: (-(i.get("priority") or 0), i["created"]))
-           if i["status"] == "open" and i["type"] in CHARACTER_TYPES and anchor(i) == char]
-    if not ids:
-        raise AppError(404, "card_empty", "nothing waits about this character")
-    users = users_of(char)
-    built = forms.forms_of(char)
-    # The parts of every character step 1 could make its root, for step 2 to show as inherited.
-    roots = {f["char"] for f in built["formOf"]} | {c for i in ids if data["items"][i]["type"] == "form_link"
-                                                     for c in data["items"][i]["subject"].split("|") if c != char}
-    return {
-        "char": char,
-        "items": [item(i) for i in ids],
-        "context": {"char": char, **_kanji_info(char), "forms": built, "users": users,
-                    "rootParts": {c: _children(c) for c in sorted(roots)},
-                    "visual": live_value("visual_split", char, data),
-                    "old": _old_forms(users[:40]), "parts": _children(char),
-                    # Each source's split, so every answer can say who gives it.
-                    "splits": decomp_sources.splits(char),
-                    # The kanji book's entry, drawn on every card it has one for, split or not.
-                    "book": books.kanji_ref(char)},
-    }
 
 
 _UNSET = object()
@@ -2004,29 +1893,6 @@ def _form_rule(data: dict, char: str, decisions: list[dict]) -> None:
         raise _bad("form_has_parts", "a form of another kanji has no parts of its own: it uses its root's")
 
 
-def _by_kanji(rows: list[dict]) -> list[dict]:
-    """A kanji's meanings card and its single words one after another, at the
-    place the first of them had; the card before its words."""
-    meaning = ("kanji_senses", "word_sense")
-    first: dict[str, int] = {}
-    for n, i in enumerate(rows):
-        if i["type"] in meaning:
-            first.setdefault(_char(i["subject"]), n)
-
-    def key(p: tuple[int, dict]) -> tuple[int, int, int]:
-        n, i = p
-        if i["type"] in meaning:
-            return (first[_char(i["subject"])], i["type"] != "kanji_senses", n)
-        return (n, 0, n)
-
-    return [i for _, i in sorted(enumerate(rows), key=key)]
-
-
-def _meanings_pending(data: dict) -> set[str]:
-    """Kanji that have a meanings task whose groups are not accepted yet."""
-    return subjects("kanji_senses", data) - set(data["live"]["kanji_senses"])
-
-
 _headwords: dict[int, str] | None = None
 
 
@@ -2037,17 +1903,6 @@ def _headword(word_id: int) -> str:
         _headwords = {r["id"]: r["headword"] for r in query(
             "SELECT id, headword FROM word WHERE id IN (SELECT DISTINCT word_id FROM sense_bg)")}
     return _headwords.get(word_id, "")
-
-
-def _bg_waits(subject: str, pending: set[str], data: dict) -> bool:
-    """A Bulgarian card waits while its kanji's groups, or any of its word's kanji's, are still to be made;
-    a usage card's, while its English is."""
-    kind, key = _target(subject)
-    if kind == "usage":
-        return key not in data["live"]["usage"]
-    if kind == "kanji":
-        return key in pending
-    return any(c in pending for c in _headword(int(key)))
 
 
 def subjects(type_: str, data: dict | None = None) -> set[str]:
@@ -2352,38 +2207,6 @@ def board(char: str, data: dict | None = None, only: dict[str, str | None] | Non
     return out
 
 
-def page_kanji(char: str) -> dict:
-    """What the page's Edit / Suggest changes needs for a kanji's meanings: its
-    accepted groups (or, when none are, the open draft, marked as such) and
-    the board's words, each in the group it is in now."""
-    if len(char) != 1:
-        raise _bad("bad_subject", "senses are of one kanji")
-    data = _read()
-    senses = _senses(data, char)
-    drafted = False
-    if not senses:
-        drafts = [i for i in data["items"].values()
-                  if i["type"] == "kanji_senses" and i["subject"] == char and i["status"] == "open" and i["proposed"]]
-        if drafts:
-            senses, drafted = max(drafts, key=lambda i: i["created"])["proposed"], True
-    return {"char": char, "senses": senses, "drafted": drafted, "board": board(char, data)}
-
-
-def page_word(word_id: int) -> dict:
-    """What the page's Edit / Suggest changes needs for a word: for each of its
-    kanji, the kanji's accepted groups and the one this word is in; and the
-    machine Bulgarian under any correction."""
-    data = _read()
-    w = _fetch_word(word_id)
-    if not w:
-        raise AppError(404, "word_not_found", "no such word")
-    kanji = [
-        {"char": c, "senses": _senses(data, c), "group": _placed(data, f"{c}|{word_id}")}
-        for c in dict.fromkeys(_headword(word_id)) if word_id in _word_ids(c)
-    ]
-    return {"word": w, "kanji": kanji, "bgBuilt": _bg_built(f"word:{word_id}")}
-
-
 def history(user_id: str | None, limit: int = 100, type_: str | None = None, by: str | None = None,
             since: str | None = None, until: str | None = None) -> dict:
     """Decisions, newest first: one reviewer's, or everyone's for the admin.
@@ -2484,34 +2307,6 @@ def progress() -> dict:
         "meanings": {"accepted": sum(1 for c in targets if c in senses), "total": len(targets)},
         "words": words,
     }
-
-
-_verified: tuple[dict | None, dict] = (None, {})
-
-
-def verified() -> dict:
-    """For everyone: how much of the dictionary reviewers have checked (`progress`'s share of
-    kanji verified), worked out once per change, since every visitor's account popup asks."""
-    global _verified
-    data = _read()
-    if _verified[0] is not data:
-        _verified = (data, {"kanji": progress()["kanji"]})
-    return _verified[1]
-
-
-def auto_accepted(limit: int = 200) -> dict:
-    data = _read()
-    rows = [d for d in reversed(data["decisions"]) if d["action"] == "auto"][:limit]
-    return {"items": rows}
-
-
-def suggestions_of(user_id: str) -> dict:
-    data = _read()
-    rows = sorted(
-        (i for i in data["items"].values() if i["created_by"] == user_id and i["origin"] == "suggestion"),
-        key=lambda i: i["created"], reverse=True,
-    )
-    return {"items": [{k: i[k] for k in ("id", "type", "subject", "proposed", "status", "created", "decided_at")} for i in rows[:50]]}
 
 
 # ---------------------------------------------------------------- live state for the rest of the server

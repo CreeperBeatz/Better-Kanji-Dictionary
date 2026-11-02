@@ -11,7 +11,6 @@ from __future__ import annotations
 from harness import Checks, Server, use_sandbox
 
 from server import review
-from server.routes import review as review_routes
 from server.routes import search
 
 check = Checks()
@@ -38,7 +37,7 @@ def card_words(page: dict, group: str) -> dict[int, dict]:
 
 
 def main() -> int:
-    srv = Server(search.router, review_routes.router)
+    srv = Server(search.router)
     use_sandbox(srv.tmp)
     review._flush_pack = lambda: None
     call = srv.call
@@ -111,10 +110,6 @@ def main() -> int:
         live = review._read()["live"]["word_sense"].get(f"木|{f[0]}") or {}
         check("a changed group: the word keeps its main group and loses that extra",
               live.get("sense") == "木.tree" and "also" not in live, live)
-
-        print("anyone may see how much is checked")
-        status, res = call("GET", "/api/review/verified")
-        check("anonymous GET verified is 200", status == 200 and set(res.get("kanji", {})) == {"verified", "total"}, (status, res))
 
         print("no draft at all: as before")
         status, res = call("GET", "/api/search/words-with/%E7%94%9F?common=true")
