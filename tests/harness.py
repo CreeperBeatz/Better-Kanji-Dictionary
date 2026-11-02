@@ -1,6 +1,6 @@
 """A real HTTP server around some routers, with throwaway accounts.
 
-Shared by the access tests (tests/roles.py, tests/review_access.py, ...).
+Shared by the access tests (tests/reports_access.py, ...).
 Accounts live in a temporary directory, one per role, so nothing in data/auth
 is read or written; each test fakes or redirects whatever else it touches,
 the association store and the review state with `use_sandbox`, as the
@@ -28,11 +28,11 @@ sys.path.insert(0, str(ROOT))
 import uvicorn  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 
-from server import auth, review, store  # noqa: E402
+from server import auth, reports, review, store  # noqa: E402
 from server.errors import AppError, app_error_handler  # noqa: E402
 
 OWNER = "owner@example.com"
-WHO = ("admin", "reviewer", "user", "other")
+WHO = ("admin", "user", "other")
 
 
 def use_sandbox(tmp: Path, copy_notes: bool = False) -> None:
@@ -43,6 +43,7 @@ def use_sandbox(tmp: Path, copy_notes: bool = False) -> None:
         shutil.copytree(store.ASSOC_DIR, assoc)
     store.use_dir(assoc)
     review.use_dir(tmp / "review")
+    reports.use_dir(tmp / "reports")
 
 
 class Checks:
@@ -71,8 +72,6 @@ class Server:
         self.ids: dict[str, str] = {}
         for who in WHO:
             user = auth._new_user(data, OWNER if who == "admin" else f"{who}@example.com")
-            if who == "reviewer":
-                user["role"] = "reviewer"
             self.ids[who] = user["id"]
             self.sessions[who] = auth._new_session(data, user["id"])
         auth._save(data)

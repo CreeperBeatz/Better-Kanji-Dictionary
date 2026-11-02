@@ -22,6 +22,7 @@ export async function signedIn(browser, base, email, errors, { viewport = { widt
   const page = await ctx.newPage()
   page.on('pageerror', (e) => errors.push(`${label}${e}`))
   page.on('console', (m) => m.type() === 'error' && !/avatar/.test(m.text()) && errors.push(`${label}${m.text()}`))
+  page.on('response', (r) => r.status() >= 400 && !/avatar/.test(r.url()) && errors.push(`${label}${r.status()} ${r.url()}`))
   await logIn(page, base, email)
   await wait(settle)
   return page

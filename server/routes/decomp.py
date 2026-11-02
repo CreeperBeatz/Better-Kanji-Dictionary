@@ -1,21 +1,15 @@
-"""Fixing decompositions from inside the graph, plus a queue of what to fix.
+"""The decomposition overrides, and a ranking of what is most worth a look.
 
-cjk-decomp is mechanically correct and pedagogically useless in a few hundred
-places. FINDINGS.md calls hand-review "where the real effort lives", so the app
-makes it something you do in passing while studying rather than a separate
-spreadsheet session.
-
-An edit is a review decision (server/review.py): logged, revertible by the
-admin, and exported to data/decomp_overrides.json, which pipeline/decomp.py
-loads as its top layer. The graph applies them live, for everyone, so only
-reviewers and the admin may make them; reading them and the queue stays open.
+Overrides are review decisions (server/review.py): logged, revertible, and
+exported to data/decomp_overrides.json, which pipeline/decomp.py loads as its
+top layer. Since 2026-11-02 nobody edits them on the site; fixes come from
+Claude Code through `review.direct`. Reading them stays open.
 """
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Query
 
-from .. import review, store
+from .. import store
 from ..db import query
-from .auth import require_role
 
 router = APIRouter(prefix="/api/decomp", tags=["decomposition"])
 
@@ -24,21 +18,6 @@ router = APIRouter(prefix="/api/decomp", tags=["decomposition"])
 def list_overrides() -> dict:
     ov = store.decomposition_overrides()
     return {"count": len(ov), "overrides": ov}
-
-
-@router.put("/{char}")
-def set_override(char: str, payload: dict = Body(...), me: dict = Depends(require_role("reviewer"))) -> dict:
-    components = payload.get("components")
-    review.direct("decomposition", char, components, me["id"], payload.get("reason"))
-    return {"char": char, "components": review.validate("decomposition", char, components)}
-
-
-@router.delete("/{char}")
-def clear_override(char: str, me: dict = Depends(require_role("reviewer"))) -> dict:
-    had = char in store.decomposition_overrides()
-    if had:
-        review.direct("decomposition", char, None, me["id"], "back to the source data")
-    return {"char": char, "cleared": had}
 
 
 @router.get("/review")

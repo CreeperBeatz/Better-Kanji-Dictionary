@@ -21,7 +21,7 @@ import { bringToTop, peekWordsFocus, takeWordsFocus } from '../detail/meaningFoc
 import { WordLanes } from '../detail/WordLanes'
 import { strings, useLang } from '../i18n'
 import { reducedMotion } from '../media'
-import { CATCH_ALL, groupLabel } from '../review/editors'
+import { CATCH_ALL, groupLabel } from '../detail/groups'
 import { toggled } from '../sets'
 import { warmKanji } from '../warm'
 

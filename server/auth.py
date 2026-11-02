@@ -56,18 +56,10 @@ class UsernameTaken(Exception):
     pass
 
 
-class AlreadyAsked(Exception):
-    """There is an open request to contribute, or the account already reviews."""
-
-
-class NotFound(Exception):
-    pass
-
-
-ROLES = ("user", "reviewer", "admin")
-# How much each role may do; a route asking for `reviewer` lets admin through too.
-RANK = {"user": 0, "reviewer": 1, "admin": 2}
-MAX_REQUEST_TEXT = 1000
+ROLES = ("user", "admin")
+# How much each role may do; a route asking for `user` lets admin through too.
+# Admin is the BETTERRTK_OWNER_EMAIL account alone; there are no reviewers since 2026-11-02.
+RANK = {"user": 0, "admin": 1}
 
 
 def _now() -> datetime:
@@ -299,22 +291,12 @@ def role_of(user: dict | None) -> str:
     owner = owner_email()
     if owner and user.get("email") == owner:
         return "admin"
-    return "reviewer" if user.get("role") == "reviewer" else "user"
+    # An old "reviewer" role on an account means nothing since 2026-11-02 (reports first).
+    return "user"
 
 
 def has_role(user: dict | None, role: str) -> bool:
     return user is not None and RANK[role_of(user)] >= RANK[role]
-
-
-def _log_role(data: dict, user_id: str, before: str, after: str, by: str, reason: str | None) -> None:
-    data["role_log"].append({
-        "user": user_id,
-        "before": before,
-        "after": after,
-        "by": by,
-        "at": _now().isoformat(),
-        "reason": reason,
-    })
 
 
 def _public_card(user: dict) -> dict:
@@ -325,100 +307,6 @@ def _public_card(user: dict) -> dict:
 def _card(user: dict) -> dict:
     """What the admin page shows of an account. Only ever sent to the admin."""
     return {**_public_card(user), "email": user["email"]}
-
-
-def own_request(user_id: str) -> dict | None:
-    """This account's latest request to contribute, for its own Account page."""
-    data = _load()
-    mine = [r for r in data["requests"].values() if r["user"] == user_id]
-    if not mine:
-        return None
-    r = max(mine, key=lambda r: r["created"])
-    return {"id": r["id"], "status": r["status"], "created": r["created"], "decided": r.get("decided_at")}
-
-
-def request_contribution(user_id: str, text: str) -> dict:
-    """Ask to become a reviewer. One open request per account."""
-    with _lock:
-        data = _load()
-        user = data["users"].get(user_id)
-        if not user:
-            raise NotFound()
-        if role_of(user) != "user" or any(r["user"] == user_id and r["status"] == "open" for r in data["requests"].values()):
-            raise AlreadyAsked()
-        req = {
-            "id": f"r-{uuid.uuid4().hex[:12]}",
-            "user": user_id,
-            "text": text[:MAX_REQUEST_TEXT],
-            "status": "open",
-            "created": _now().isoformat(),
-            "decided_by": None,
-            "decided_at": None,
-        }
-        data["requests"][req["id"]] = req
-        _save(data)
-        return dict(req)
-
-
-def open_requests() -> list[dict]:
-    data = _load()
-    rows = []
-    for r in sorted(data["requests"].values(), key=lambda r: r["created"]):
-        user = data["users"].get(r["user"])
-        if r["status"] == "open" and user:
-            rows.append({"id": r["id"], "text": r["text"], "created": r["created"], "user": _card(user)})
-    return rows
-
-
-def decide_request(request_id: str, approve: bool, by: str) -> dict:
-    """Approve (the account becomes a reviewer) or decline an open request."""
-    with _lock:
-        data = _load()
-        req = data["requests"].get(request_id)
-        if not req or req["status"] != "open":
-            raise NotFound()
-        req["status"] = "approved" if approve else "declined"
-        req["decided_by"] = by
-        req["decided_at"] = _now().isoformat()
-        user = data["users"].get(req["user"])
-        if approve and user and role_of(user) == "user":
-            user["role"] = "reviewer"
-            _log_role(data, user["id"], "user", "reviewer", by, f"request {request_id}")
-        _save(data)
-        return dict(req)
-
-
-def reviewers() -> list[dict]:
-    data = _load()
-    return [
-        {**_card(u), "since": next(
-            (e["at"] for e in reversed(data["role_log"]) if e["user"] == u["id"] and e["after"] == "reviewer"),
-            None,
-        )}
-        for u in data["users"].values()
-        if role_of(u) == "reviewer"
-    ]
-
-
-def revoke_reviewer(user_id: str, by: str, reason: str | None = None) -> dict:
-    with _lock:
-        data = _load()
-        user = data["users"].get(user_id)
-        if not user or role_of(user) != "reviewer":
-            raise NotFound()
-        user.pop("role", None)
-        _log_role(data, user_id, "reviewer", "user", by, reason)
-        _save(data)
-        return dict(user)
-
-
-def role_log(limit: int = 100) -> list[dict]:
-    data = _load()
-    names = {u["id"]: u.get("username") or u["name"] for u in data["users"].values()}
-    return [
-        {**e, "userName": names.get(e["user"], e["user"]), "byName": names.get(e["by"], e["by"])}
-        for e in reversed(data["role_log"][-limit:])
-    ]
 
 
 def names_for(user_ids: set[str]) -> dict[str, dict]:

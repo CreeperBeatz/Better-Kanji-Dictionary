@@ -135,6 +135,17 @@ const ERRORS: Record<string, [string, string]> = {
   changed_since: ['this was changed again since; revert the later change first', 'оттогава е променяно пак; първо върнете по-късната промяна'],
   suggest_reason: ['say why, so a reviewer can check it', 'кажете защо, за да може рецензент да провери'],
   too_many_suggestions: ['you have {n} suggestions waiting already', 'вече имате {n} чакащи предложения'],
+  // reports
+  report_empty: ['say what is wrong', 'кажете какво не е наред'],
+  report_too_long: ['a report can have up to {n} characters', 'докладът може да има до {n} знака'],
+  report_files: ['up to {n} pictures', 'до {n} снимки'],
+  report_file_big: ['a picture can be up to {n} MB', 'снимката може да е до {n} MB'],
+  report_file_type: ['pictures only: PNG, JPEG or WebP', 'само снимки: PNG, JPEG или WebP'],
+  too_many_reports: ['you sent {n} reports today; please try again tomorrow', 'днес изпратихте {n} доклада; опитайте пак утре'],
+  report_failed: ['could not send the report', 'докладът не можа да бъде изпратен'],
+  report_not_found: ['no report with that id', 'няма доклад с този номер'],
+  report_file_missing: ['that picture could not be fetched', 'снимката не можа да бъде заредена'],
+  bad_status: ['status is one of {s}', 'състоянието е едно от {s}'],
 }
 
 const FALLBACK: Record<Lang, string> = { en: 'something went wrong', bg: 'нещо се обърка' }

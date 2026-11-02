@@ -24,6 +24,28 @@ kanji or word it is about.
 - No direct edit on the page, also not for the admin. Every change goes
   through Claude Code.
 - The analysis has no UI. It runs in Claude Code.
+- Limit: 100 reports per user per day (Dani: "a passionate user might get past 20").
+
+## Status (2026-11-02)
+
+Parts 1-5 built on this branch; part 6 (deploy) not started.
+- Guard: `tests/site_unchanged.py` -- 509 page answers identical before and
+  after every removal step.
+- Tests: `tests/reports_access.py` (37 checks), and the store tests still
+  pass (review_safety, drafts_live, part_meaning, form_direction).
+- Look at it: `tests/seed_reports.py <dir> --owner <email>` then
+  `tests/sandbox.py --dir <dir> --owner <email>`; browser check
+  `web/scripts/reports-check.mjs`.
+- Changed from the plan: reports live in their own `data/reports/reports.db`
+  (not as review.db items). On first start the old queue's user reports and
+  suggestions are copied over (`imported_from`). The screen's address is
+  `/reports`; old `/review...` addresses land there.
+- "Not everything is checked yet" + the reviewer progress bar became one
+  static note: some data can be wrong, AI drafts it, report what you see.
+- Left on purpose: the labeling functions in `server/review.py` that the
+  pipeline scripts and tests still call (decide, decide_card, add_items,
+  ...); only the unused views were removed. Dead CSS for the old review
+  screen is still in theme.css.
 
 ## The trap: the review store is live data
 
@@ -56,8 +78,8 @@ pack key) must be byte-identical. Add `tests/site_unchanged.py` first.
   the page; may be empty for a general report), page URL, UI language,
   data version (pack key + commit), screen size, and the card it was sent
   from.
-- Stored as today: item type `report`, origin `suggestion`, in review.db.
-  The images go to `data/reports/files/<item id>/`. Only the admin and the
+- Stored in `data/reports/reports.db` (one row per report). The images go
+  to `data/reports/files/<report id>/`. Only the admin and the
   reporter can see them.
 - After sending: "Thank you. We check every report." Simple technical
   English, en + bg.
@@ -101,7 +123,5 @@ pack key) must be byte-identical. Add `tests/site_unchanged.py` first.
 - Needs Dani's go: merge to main, deploy, Pi .env unchanged.
 
 ## Open, not blocking
-- The public "not everything is checked" / draft marks: with no human
-  checking, do they still mean anything? Ask Dani at part 4.
-- Rate limit for reports (e.g. 20 per user per day)? Default yes, easy to
-  lift.
+- The draft marks on kanji pages ("not reviewed yet"): with no human
+  checking, do they still mean anything? Not changed yet.

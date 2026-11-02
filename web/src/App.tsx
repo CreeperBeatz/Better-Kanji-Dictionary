@@ -7,7 +7,7 @@ import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
 import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
-import { Workbench } from './review/Workbench'
+import { ReportsScreen } from './reports/ReportsScreen'
 import { getLang, setLang, strings, useLang, type Lang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
 import { DetailPanel, KanjiHead, type DetailData } from './detail/DetailPanel'
@@ -213,13 +213,13 @@ type NavKind = 'forward' | 'back' | 'tab-forward' | 'tab-back'
 type TurnScope = 'whole' | 'pane'
 
 /**
- * The review screen, when the address names it: /review, /review/history ...
- * The older `?admin=1` (in the owner's email) and `?review=1` become those.
+ * The owner's reports screen, when the address names it: /reports (old /review
+ * addresses too). The older `?admin=1` (in the owner's email) and `?review=1` become it.
  * The entry is marked now, before the rail writes its own (nav.ts).
  */
 function initialWorkbench(): WorkbenchTab | null {
   const url = new URL(window.location.href)
-  const legacy = url.searchParams.has('admin') ? 'people' : url.searchParams.has('review') ? 'queue' : null
+  const legacy = url.searchParams.has('admin') || url.searchParams.has('review') ? 'reports' : null
   const tab = reviewTabInUrl() ?? legacy
   if (tab) replaceReview(tab)
   return tab
@@ -1213,10 +1213,6 @@ export function App() {
       pushReview(tab)
       pushedReview.current = true
     }
-    setWorkbench(tab)
-  }, [])
-  const workbenchTab = useCallback((tab: WorkbenchTab) => {
-    replaceReview(tab)
     setWorkbench(tab)
   }, [])
   const stackTop = stack[stack.length - 1]
@@ -2803,16 +2799,9 @@ export function App() {
       </div>
 
       {workbench && (
-        <Workbench
-          tab={workbench}
-          onTab={workbenchTab}
-          onClose={closeWorkbench}
-          onSignIn={signIn}
-          // A kanji's page in a new tab, so the card being reviewed stays where it is.
-          onKanji={(c) => window.open(`/kanji/${encodeURIComponent(c)}`, '_blank', 'noopener')}
-        />
+        <ReportsScreen onClose={closeWorkbench} onSignIn={signIn} />
       )}
-      {/* After the review screen, so signing in from its gate opens above it. */}
+      {/* After the reports screen, so signing in from its gate opens above it. */}
       {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
       <InstallGuide />
     </div>

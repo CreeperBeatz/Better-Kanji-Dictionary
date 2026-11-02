@@ -1,100 +1,26 @@
 /**
- * The review screen has an address of its own: /review, /review/history, ...
+ * The owner's reports screen has an address of its own: /reports. Old review
+ * addresses (/review, /review/queue/..., /review/history) land there too.
  * It is a history entry on top of whatever page was open, so back closes it
  * and back from a kanji opened out of it lands in it again. The rail's own
- * history entries (nav.ts) carry on underneath: the review entry keeps their
- * state and adds `review`.
- *
- * The queue's address names the stage and the item being looked at:
- * /review/queue/meanings/i-0123abcd, /review/queue/all, plus ?origin=suggestion
- * when filtered, so a reload comes back to the same item.
+ * history entries (nav.ts) carry on underneath: the entry keeps their state
+ * and adds `review`.
  */
 import type { WorkbenchTab } from '../account/Account'
-import type { Origin, TaskType } from '../api'
 
-const TABS: WorkbenchTab[] = ['queue', 'history', 'progress', 'people', 'handbook']
-const PATH = /^\/review(?:\/([a-z-]+))?(?:\/[^/]*)*\/?$/
-const QUEUE_PATH = /^\/review\/queue(?:\/([a-z-]+))?(?:\/([^/?]+))?\/?$/
+const PATH = /^\/(?:reports|review)(?:\/[^?]*)?\/?$/
 
-const SLUGS: Record<TaskType, string> = {
-  character: 'characters',
-  decomposition: 'parts',
-  form_link: 'forms',
-  part_meaning: 'part-meanings',
-  kanji_senses: 'meanings',
-  word_sense: 'word-meanings',
-  kanji_extras: 'extras',
-  usage: 'usage',
-  bg: 'bulgarian',
-  report: 'reports',
-  // Never a stage of its own: decided on the character's card.
-  visual_split: 'visual-splits',
-}
-// Parts, forms and part meanings are one stage now, a card per character: an old address lands there.
-const MERGED: TaskType[] = ['decomposition', 'form_link', 'part_meaning']
-
-export interface QueueRoute {
-  type?: TaskType
-  origin?: Origin
-  /** The item open in the queue. */
-  item?: string
-  /** Showing the items you skipped. */
-  skipped?: boolean
-}
-
-// Where the queue was, so coming back to its tab from History lands there again.
-let lastQueue: QueueRoute = {}
-
-export function queuePath(r: QueueRoute): string {
-  const path = `/review/queue/${r.type ? SLUGS[r.type] : 'all'}${r.item ? `/${encodeURIComponent(r.item)}` : ''}`
-  const q = new URLSearchParams()
-  if (r.origin) q.set('origin', r.origin)
-  if (r.skipped) q.set('skipped', '1')
-  return q.size ? `${path}?${q}` : path
-}
-
-export function queueRouteInUrl(): QueueRoute {
-  const m = window.location.pathname.match(QUEUE_PATH)
-  if (!m) return lastQueue
-  const found = (Object.keys(SLUGS) as TaskType[]).find((k) => SLUGS[k] === m[1])
-  // Single words are reviewed under meanings now; an old address still lands there.
-  const type = found === 'word_sense' ? 'kanji_senses' : found && MERGED.includes(found) ? 'character' : found
-  const params = new URLSearchParams(window.location.search)
-  const origin = params.get('origin')
-  return {
-    type,
-    item: m[2] ? decodeURIComponent(m[2]) : undefined,
-    origin: origin === 'proposal' || origin === 'suggestion' ? origin : undefined,
-    skipped: params.get('skipped') === '1' || undefined,
-  }
-}
-
-/** The queue moved to another stage or item: the address follows, in place. */
-export function replaceQueueRoute(r: QueueRoute) {
-  lastQueue = r
-  if (reviewTabInState(window.history.state) !== 'queue') return
-  window.history.replaceState(window.history.state, '', queuePath(r))
-}
-
-function reviewPath(tab: WorkbenchTab): string {
-  return tab === 'queue' ? queuePath(lastQueue) : `/review/${tab}`
-}
-
-/** The tab the address names, or null when it is not a review address. */
+/** The tab the address names, or null when it is not the reports address. */
 export function reviewTabInUrl(): WorkbenchTab | null {
-  const m = window.location.pathname.match(PATH)
-  if (!m) return null
-  const tab = (m[1] ?? 'queue') as WorkbenchTab
-  return TABS.includes(tab) ? tab : 'queue'
+  return PATH.test(window.location.pathname) ? 'reports' : null
 }
 
-/** The review tab this history entry holds, if it is a review entry. */
+/** The tab this history entry holds, if it is the reports entry. */
 export function reviewTabInState(state: unknown): WorkbenchTab | null {
-  const tab = (state as { review?: WorkbenchTab } | null)?.review
-  return tab && TABS.includes(tab) ? tab : null
+  return (state as { review?: unknown } | null)?.review ? 'reports' : null
 }
 
-// Whether the entry being shown is a review entry, and the one before the last
+// Whether the entry being shown is the reports entry, and the one before the last
 // back or forward. Listening from the module's load means it runs before the
 // app's own listeners, so they can ask `leftReview()`.
 let onReview = !!reviewTabInState(window.history.state)
@@ -104,24 +30,22 @@ window.addEventListener('popstate', (e) => {
   onReview = !!reviewTabInState(e.state)
 })
 
-/** This back or forward came out of the review screen. */
+/** This back or forward came out of the reports screen. */
 export function leftReview(): boolean {
   return wasReview && !onReview
 }
 
 export function pushReview(tab: WorkbenchTab) {
   onReview = true
-  window.history.pushState({ ...(window.history.state ?? {}), review: tab }, '', reviewPath(tab))
+  window.history.pushState({ ...(window.history.state ?? {}), review: tab }, '', '/reports')
 }
 
 export function replaceReview(tab: WorkbenchTab) {
   onReview = true
-  // Already on this tab (the address may name more, like the queue's item): keep the address.
-  const here = reviewTabInUrl() === tab
-  window.history.replaceState({ ...(window.history.state ?? {}), review: tab }, '', here ? window.location.pathname + window.location.search : reviewPath(tab))
+  window.history.replaceState({ ...(window.history.state ?? {}), review: tab }, '', '/reports')
 }
 
-/** Leave the review entry in place for the page under it, when there is no entry to go back to. */
+/** Leave the reports entry in place for the page under it, when there is no entry to go back to. */
 export function dropReview(to: string) {
   const state = { ...(window.history.state ?? {}) }
   delete state.review
