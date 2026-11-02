@@ -714,14 +714,6 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
   color: var(--muted);
 }
 
-/* How the meanings follow from each other, above them. */
-.meanings-link {
-  margin: 2px 0 8px;
-  font-size: calc(13px * var(--type));
-  line-height: 1.5;
-  color: var(--paper-dim);
-}
-
 /* One meaning: what it is, its words by reading, what is close to it. */
 .meaning {
   margin-top: 16px;
@@ -1315,7 +1307,7 @@ button.usage-head:focus-visible .usage-spelling {
 }
 
 /* A kanji's page: each section's title is ruled off, the line across the column. */
-.kanji-page :is(.facts-title, .strokes h3, .readings h3, .meanings > h3, .special-readings > h3, .forms h3, .font-strip h3, .similar-rows h3),
+.kanji-page :is(.facts-title, .strokes h3, .readings h3, .meanings > h3, .special-readings > h3, .forms h3, .similar-rows h3),
 .kanji-page :is(.vocab-head, .facts-title-row) {
   margin-bottom: 8px;
   padding-bottom: 5px;
@@ -2814,14 +2806,7 @@ button.usage-head:focus-visible .usage-spelling {
 
 /* ---------------------------------------------------------------- font strip */
 
-.font-strip h3 {
-  margin: 18px 0 8px;
-  font-size: calc(12.5px * var(--type));
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.font-strip ul {
+.font-strip {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
@@ -2830,12 +2815,13 @@ button.usage-head:focus-visible .usage-spelling {
   padding: 0;
 }
 
-/* The faces with no title of their own, on a kanji's page: the gap a title gave them. */
-.font-strip > ul:first-child {
+/* No title of its own: the gap a title would give it. */
+.font-strip:not(:empty) {
   margin-top: 18px;
 }
 
-.font-strip li {
+.font-strip li,
+.font-strip-form > :is(button, span) {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2870,6 +2856,31 @@ button.usage-head:focus-visible .usage-spelling {
   font-size: calc(11px * var(--type));
   color: var(--muted);
   text-align: center;
+}
+
+/* An old form is a character of its own: the whole cell opens its page. */
+.font-strip li.font-strip-form {
+  padding: 0;
+  border: 0;
+}
+
+.font-strip-form > :is(button, span) {
+  height: 100%;
+  font: inherit;
+  color: inherit;
+  background: none;
+}
+
+.font-strip-form > button {
+  cursor: pointer;
+}
+
+.font-strip-form > button:hover {
+  border-color: var(--rule-bright);
+}
+
+.font-strip-form .font-strip-glyph {
+  font-family: var(--mincho);
 }
 
 /* ---------------------------------------------------------------- overlay */

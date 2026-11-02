@@ -17,8 +17,8 @@
  * way, and is remembered.
  *
  * First its Readings, every one at a glance (a rare one, in no common word,
- * faded). Then its Meanings, opening with how they follow from each other,
- * then the cards. Below them:
+ * faded). Then its Meanings, the cards; the page's gist above says how they
+ * hang together (DetailPanel). Below them:
  * words where the kanji is there for its sound, the special readings, and
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
@@ -112,7 +112,6 @@ export function Meanings({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const link = (lang === 'bg' && page.linkBg) || page.link
   const [allFolded, setAllFolded] = useState(rememberedFold)
   // The cards turned the other way from all of them, on this kanji's page.
   const kept = (): ReadonlySet<string> => turnedOn.get(page.char) ?? new Set()
@@ -165,8 +164,6 @@ export function Meanings({
           </button>
         )}
       </h3>
-      {/* How they follow from each other, above them; the page opens with the kanji's gist (DetailPanel). */}
-      {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
         <Meaning

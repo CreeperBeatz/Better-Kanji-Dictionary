@@ -1,63 +1,59 @@
 /**
- * The character in several fonts side by side: print (mincho, gothic) beside
- * handwriting shapes (a textbook face, a brush face), where 令 心 北 糸 木
- * stop looking alike. Then, where an older JIS standard drew it differently
- * -- 葛 辻 遡 謎 before 2004 -- that shape too, from the font that carries it.
+ * The character as it is printed and as it is written by hand, side by side:
+ * mincho, the face of books, and the textbook face (教科書体) schools teach
+ * handwriting from, where 令 心 北 糸 木 stop looking alike. Gothic and the
+ * like keep mincho's skeleton (the Agency for Cultural Affairs' guide to the
+ * Jōyō table prints them as one shape), so they are not shown. Then its old
+ * form (國 for 国), and where an older JIS standard printed it differently --
+ * 葛 辻 遡 謎 before 2004 -- that shape too, from the font that carries it.
  *
- * The two handwriting fonts are loaded only once the strip is on screen, and
- * a face is shown only when it really has the character: a missing glyph
- * would fall back to some other font and show a lie under its label. The old
- * shapes are outlines from the server (pipeline/fonts.py), since they share a
- * code point with today's and a font keeping them is hundreds of KB.
+ * The textbook font is loaded only once the strip is on screen, and a face is
+ * shown only when it really has the character: a missing glyph would fall
+ * back to some other font and show a lie under its label. The old JIS shapes
+ * are outlines from the server (pipeline/fonts.py), since they share a code
+ * point with today's and a font keeping them is hundreds of KB.
  */
 import { useEffect, useRef, useState } from 'react'
-import { api, type FontsResponse } from '../api'
+import { api, type FontsResponse, type FormItem } from '../api'
 import { strings, useLang } from '../i18n'
+import { meaningsOf } from '../i18n/content'
+import { warmKanji } from '../warm'
 
 const S = strings(
   {
-    title: 'In other fonts',
     mincho: 'mincho',
-    gothic: 'gothic',
     textbook: 'textbook',
-    brush: 'brush',
     minchoTip: 'Shippori Mincho: the serif face of books and newspapers',
-    gothicTip: 'Zen Kaku Gothic New: the sans-serif face of signs and screens',
     textbookTip: 'Klee One: close to the textbook face (教科書体) schools teach handwriting from',
-    brushTip: 'Yuji Syuku: written with a brush',
-    oldTitle: 'Older printed shapes',
-    oldHint: 'The same character as earlier JIS standards printed it. Today’s shape is the mincho above.',
+    oldForm: 'old form',
+    oldFormTip: 'Its form before the post-war reform (旧字体)',
+    notAPage: '{char} has no page of its own',
     old: '{face}, JIS {years}',
-    oldTip: 'How JIS X 0208 ({years}) drew it in {face}',
+    oldTip: 'How JIS X 0208 ({years}) printed it in {face}. Today’s shape is the first {face} in the row.',
   },
   {
-    title: 'В други шрифтове',
     mincho: 'минчо',
-    gothic: 'готик',
     textbook: 'учебник',
-    brush: 'четка',
     minchoTip: 'Shippori Mincho: шрифтът със серифи на книгите и вестниците',
-    gothicTip: 'Zen Kaku Gothic New: шрифтът без серифи на табелите и екраните',
     textbookTip: 'Klee One: близо до учебния шрифт (教科書体), по който училищата учат почерк',
-    brushTip: 'Yuji Syuku: писан с четка',
-    oldTitle: 'По-стари печатни форми',
-    oldHint: 'Същият знак, както са го печатали по-старите стандарти JIS. Днешната форма е минчото горе.',
+    oldForm: 'стара форма',
+    oldFormTip: 'Формата му преди следвоенната реформа (旧字体)',
+    notAPage: '{char} няма собствена страница',
     old: '{face}, JIS {years}',
-    oldTip: 'Как JIS X 0208 ({years}) го рисува в {face}',
+    oldTip: 'Как JIS X 0208 ({years}) го печата в {face}. Днешната форма е първото {face} в реда.',
   },
 )
 
-const FACES = ['mincho', 'gothic', 'textbook', 'brush'] as const
+const FACES = ['mincho', 'textbook'] as const
 type Face = (typeof FACES)[number]
 const FAMILY: Record<Face, string> = {
   mincho: 'Shippori Mincho',
-  gothic: 'Zen Kaku Gothic New',
   textbook: 'Klee One',
-  brush: 'Yuji Syuku',
 }
+const isFace = (f: string): f is Face => (FACES as readonly string[]).includes(f)
 // Google Fonts slices CJK faces by unicode-range, so only the slice holding
-// the character is fetched, as for the two faces the page itself uses.
-const LAZY_CSS = 'https://fonts.googleapis.com/css2?family=Klee+One&family=Yuji+Syuku&display=swap'
+// the character is fetched, as for the faces the page itself uses.
+const LAZY_CSS = 'https://fonts.googleapis.com/css2?family=Klee+One&display=swap'
 const YEARS: Record<string, string> = { jp78: '1978', jp83: '1983', jp90: '1990' }
 
 function loadLazyFonts() {
@@ -105,13 +101,14 @@ function useFontReady(family: string, char: string, wanted: boolean): boolean {
 }
 
 /**
- * The kanji in today's faces, then the shapes old JIS printed. A kanji's page
- * splits them: `fonts` at its top, with no title of its own, `old` lower
- * down with the forms. The review cards show both.
+ * The kanji in mincho and the textbook face, then its old forms (`oldForms`,
+ * from the forms; each opens its own page if it has one), then the shapes
+ * old JIS printed.
  */
-export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old' }) {
-  const t = S(useLang())
-  const ref = useRef<HTMLDivElement>(null)
+export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldForms?: FormItem[]; onKanji: (char: string) => void }) {
+  const lang = useLang()
+  const t = S(lang)
+  const ref = useRef<HTMLUListElement>(null)
   const [seen, setSeen] = useState(() => knownFonts.has(char))
   // Asked for already, as opening the page does (App.tsx warm): there at once.
   const [info, setInfo] = useState<FontsResponse | null>(() => knownFonts.get(char) ?? api.fonts.peek(char) ?? null)
@@ -144,67 +141,79 @@ export function FontStrip({ char, part }: { char: string; part?: 'fonts' | 'old'
         knownFonts.set(char, d)
         if (!stale) setInfo(d)
       },
-      // Offline or an old server: the two faces the page already has are still worth showing.
-      () => !stale && setInfo({ char, faces: ['mincho', 'gothic'], old: [] }),
+      // Offline or an old server: mincho, the page's own face, is still there.
+      () => !stale && setInfo({ char, faces: ['mincho'], old: [] }),
     )
     return () => {
       stale = true
     }
   }, [seen, char])
 
-  // Mincho and gothic are the page's own faces, so they are there from the
-  // start; the others have their place as soon as the kanji is known to be in
-  // them, and their glyph comes into it when their font has loaded -- so
-  // nothing below moves as they come.
-  const has = (f: Face) => f === 'mincho' || f === 'gothic' || (info?.faces.includes(f) ?? false)
+  // Mincho is the page's own face, so it is there from the start; the
+  // textbook face has its place as soon as the kanji is known to be in it,
+  // and its glyph comes into it when its font has loaded -- so nothing moves
+  // as it comes.
+  const has = (f: Face) => f === 'mincho' || (info?.faces.includes(f) ?? false)
   const textbook = useFontReady(FAMILY.textbook, char, seen && has('textbook'))
-  const brush = useFontReady(FAMILY.brush, char, seen && has('brush'))
-  const ready = (f: Face) => (f === 'textbook' ? textbook : f === 'brush' ? brush : true)
+  const ready = (f: Face) => (f === 'textbook' ? textbook : true)
   const shown = FACES.filter(has)
 
-  // One cell per distinct old outline: 1978 and 1983 often agree.
+  // One cell per distinct old outline: 1978 and 1983 often agree. The server
+  // still knows other faces' old shapes; only the two shown here count.
   const old: { face: Face; years: string[]; em: number; d: string }[] = []
   for (const o of info?.old ?? []) {
+    if (!isFace(o.face)) continue
     const same = old.find((x) => x.face === o.face && x.d === o.old)
     if (same) same.years.push(YEARS[o.feature])
-    else old.push({ face: o.face as Face, years: [YEARS[o.feature]], em: o.em, d: o.old })
+    else old.push({ face: o.face, years: [YEARS[o.feature]], em: o.em, d: o.old })
   }
 
+  // Mincho alone says nothing the page does not; the empty list still watches for the screen.
+  if (shown.length + oldForms.length + old.length < 2) return <ul className="font-strip" ref={ref} />
+
   return (
-    <div className="font-strip" ref={ref}>
-      {part !== 'old' && shown.length > 1 && (
-        <>
-          {!part && <h3>{t('title')}</h3>}
-          <ul>
-            {shown.map((f) => (
-              <li key={f} title={t(`${f}Tip`)} data-wait={!ready(f) || undefined}>
-                <span className="font-strip-glyph" style={{ fontFamily: `'${FAMILY[f]}'` }} lang="ja">
-                  {char}
-                </span>
-                <span className="font-strip-label">{t(f)}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {part !== 'fonts' && old.length > 0 && (
-        <>
-          <h3 title={t('oldHint')}>{t('oldTitle')}</h3>
-          <ul>
-            {old.map((o) => {
-              const years = o.years.join('–')
-              return (
-                <li key={`${o.face}${years}`} title={t('oldTip', { years, face: FAMILY[o.face] })}>
-                  <svg className="font-strip-glyph" viewBox={`0 0 ${o.em} ${o.em}`} role="img" aria-label={`${char} JIS ${years}`}>
-                    <path d={o.d} />
-                  </svg>
-                  <span className="font-strip-label">{t('old', { face: t(o.face), years })}</span>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-    </div>
+    <ul className="font-strip" ref={ref}>
+      {shown.map((f) => (
+        <li key={f} title={t(`${f}Tip`)} data-wait={!ready(f) || undefined}>
+          <span className="font-strip-glyph" style={{ fontFamily: `'${FAMILY[f]}'` }} lang="ja">
+            {char}
+          </span>
+          <span className="font-strip-label">{t(f)}</span>
+        </li>
+      ))}
+      {oldForms.map((i) => {
+        const inner = (
+          <>
+            <span className="font-strip-glyph" lang="ja">
+              {i.char}
+            </span>
+            <span className="font-strip-label">{t('oldForm')}</span>
+          </>
+        )
+        const meaning = meaningsOf(i, lang).value[0]
+        return (
+          <li key={`form-${i.char}`} className="font-strip-form">
+            {i.known ? (
+              <button {...warmKanji(i.char)} onClick={() => onKanji(i.char)} title={meaning ? `${t('oldFormTip')} · ${meaning}` : t('oldFormTip')}>
+                {inner}
+              </button>
+            ) : (
+              <span title={`${t('oldFormTip')} · ${t('notAPage', { char: i.char })}`}>{inner}</span>
+            )}
+          </li>
+        )
+      })}
+      {old.map((o) => {
+        const years = o.years.join('–')
+        return (
+          <li key={`${o.face}${years}`} title={t('oldTip', { years, face: t(o.face) })}>
+            <svg className="font-strip-glyph" viewBox={`0 0 ${o.em} ${o.em}`} role="img" aria-label={`${char} JIS ${years}`}>
+              <path d={o.d} />
+            </svg>
+            <span className="font-strip-label">{t('old', { face: t(o.face), years })}</span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
