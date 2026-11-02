@@ -370,9 +370,22 @@ top 6k, e.g. 積極的, 代表, 手続き, 問い合わせ, 当然) has a fix. S
 "structure", 中々 under 中, 都合 under "join". 28 new groups confirmed, among them
 及 "and", 致 "reach" (一致), 消 "wane" (消極的), 故 "on purpose" (故意), 師 "army",
 卒 "sudden" (脳卒中), 暴 "expose" (暴露), 樹 "establish" (樹立), 洋 "East or West".
-Drafts in data/drafts/meaning-gaps/focus. Nothing applied: the other-fix verdicts
-are free text and need structuring, new groups need Bulgarian, and loading on
-prod needs Dani's go.
+Drafts in data/drafts/meaning-gaps/focus.
+2026-11-02, made ready (pipeline/meaning_gaps_final.py): the 135 other-fix verdicts
+made exact by two Opus agents (205 moves), the 32 new groups written in English
+and Bulgarian (none dropped), final.json: 1,613 words in 705 kanji, 32 new groups;
+held: 28 unsure, 11 wrong, and 院政 and 隷書 (hold.json, see below). Dry run and a
+real load into a copy of prod's review store (read 2026-11-02 12:37): every word
+lands on an open, untouched AI draft, nothing held for a person's decision. On
+that copy, common word-kanji pairs in no group over the 742 screened kanji:
+1,571 (5.1%) -> 29 (0.1%); top-6k words in no group 239 -> 5.
+Re-measured what ships (kodansha_blind.py prepare --prod --fixes; 24 of the 100
+sample pages change, graded again blind, the 7 new majors web-verified): better
+entry ours 36 / Kodansha 37 / tie 27 (was 37/40/23); verified majors on our pages
+6 -> 4 kanji (膳 一膳 not common; 透 = D-045; 懲, 燥 explained by their notes),
+Kodansha 2. The fixes caused one verified major: 院政 sent to the catch-all, but
+院 there is the retired emperor (held). Coverage 3.70 -> 3.80.
+**Status: ready, not loaded on prod.** Loading needs a write on the Pi.
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words

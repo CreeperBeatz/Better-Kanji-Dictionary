@@ -195,6 +195,15 @@ def _group_texts() -> dict[str, dict]:
 def final() -> None:
     prod = _prod()
     moves, n = _moves()
+    # Moves the what-ships re-check found wrong (kodansha_blind.py prepare --fixes, then web-verified):
+    # held, so the word stays where it is. hold.json: {char: {headword: why}}.
+    hold_f = D / "hold.json"
+    hold = json.loads(hold_f.read_text(encoding="utf-8")) if hold_f.is_file() else {}
+    for c, hws in hold.items():
+        if c in moves:
+            before = len(moves[c]["words"])
+            moves[c]["words"] = [w for w in moves[c]["words"] if w["hw"] not in hws]
+            n["held by hold.json"] += before - len(moves[c]["words"])
     texts = _group_texts()
     out = {}
     for c, m in sorted(moves.items()):
