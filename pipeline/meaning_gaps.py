@@ -169,36 +169,91 @@ def pilot_prepare(size: int) -> None:
     print(f"{len(chars)} kanji, batch sizes (chars): {sizes}")
 
 
-def _results() -> dict[str, dict]:
+RUNS = {"pilot": (DRAFTS, "mg", "pilot.json"), "focus": (DRAFTS / "focus", "mf", "focus.json")}
+
+
+def _run(run: str) -> tuple[Path, str, dict]:
+    d, prefix, f = RUNS[run]
+    return d, prefix, json.loads((d / f).read_text(encoding="utf-8"))
+
+
+def focus_prepare(target: int) -> None:
+    """Every kanji with a common word in no group on prod (the pilot's 50 aside), packed ~`target` chars a batch."""
+    scan = DRAFTS.parent / "kodansha-blind" / "prod-words-with.json"
+    have = json.loads(scan.read_text(encoding="utf-8"))
+    pilot = set(json.loads((DRAFTS / "pilot.json").read_text(encoding="utf-8"))["chars"])
+    chars = sorted(c for c, v in have.items() if v["restTotal"] and c not in pilot)
+    random.Random(SEED + 1).shuffle(chars)
+    prod = _prod(chars)
+    info = _kanji_info()
+    gl = _glosses(sorted({w["id"] for c in chars for g in prod[c]["groups"] for w in g["words"]}
+                         | {w["id"] for c in chars for w in prod[c]["rest"]}))
+    d = DRAFTS / "focus"
+    (d / "in").mkdir(parents=True, exist_ok=True)
+    (d / "out").mkdir(parents=True, exist_ok=True)
+    batches, cur, size = [], [], 0
+    for c in chars:
+        text = render(c, prod[c], info, gl)
+        if cur and size + len(text) > target:
+            batches.append(cur)
+            cur, size = [], 0
+        cur.append((c, text))
+        size += len(text)
+    if cur:
+        batches.append(cur)
+    for b, chunk in enumerate(batches):
+        body = "\n".join(t for _, t in chunk)
+        (d / "in" / f"mf-{b:03d}.md").write_text(f"# Batch mf-{b:03d}: {len(chunk)} kanji\n\n{body}", encoding="utf-8")
+    (d / "focus.json").write_text(json.dumps({"chars": chars, "batches": [[c for c, _ in ch] for ch in batches]},
+                                             ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(chars)} kanji in {len(batches)} batches; kanji a batch {min(map(len, batches))}-{max(map(len, batches))}")
+
+
+def _results(run: str = "pilot") -> dict[str, dict]:
+    d, prefix, _ = _run(run)
     got = {}
-    for f in sorted(OUT.glob("mg-*.json")):
+    for f in sorted((d / "out").glob(f"{prefix}-*.json")):
         for r in json.loads(f.read_text(encoding="utf-8"))["kanji"]:
             got[r["char"]] = r
     return got
 
 
-def check() -> None:
-    chars = json.loads((DRAFTS / "pilot.json").read_text(encoding="utf-8"))["chars"]
-    got = _results()
-    miss = [c for c in chars if c not in got]
-    print(f"{len(got)}/{len(chars)} screened" + (f"; missing {''.join(miss)}" if miss else ""))
+def check(run: str) -> None:
+    d, prefix, meta = _run(run)
+    got = _results(run)
+    miss = [c for c in meta["chars"] if c not in got]
+    print(f"{len(got)}/{len(meta['chars'])} screened" + (f"; missing {''.join(miss)}" if miss else ""))
+    if run == "focus" and miss:
+        print("batches with gaps:", sorted({f"mf-{b:03d}" for b, ch in enumerate(meta["batches"]) for c in ch if c in miss}))
 
 
-def skeptic_prepare(size: int) -> None:
-    pilot = json.loads((DRAFTS / "pilot.json").read_text(encoding="utf-8"))
-    prod = _prod(pilot["chars"])
+def skeptic_prepare(run: str, size: int) -> None:
+    d, prefix, meta = _run(run)
+    sk = d / "skeptic"
+    prod = _prod(meta["chars"])
     info = _kanji_info()
-    got = _results()
+    got = _results(run)
     items = []
-    for c in pilot["chars"]:
+    for c in meta["chars"]:
         for n, fl in enumerate(got.get(c, {}).get("flags") or []):
             items.append({"id": f"{c}-{n}", "char": c, **fl})
-    gl = _glosses(sorted({w["id"] for c in pilot["chars"] for g in prod[c]["groups"] for w in g["words"]}
-                         | {w["id"] for c in pilot["chars"] for w in prod[c]["rest"]}))
-    (SK / "in").mkdir(parents=True, exist_ok=True)
-    (SK / "out").mkdir(parents=True, exist_ok=True)
-    for b in range(math.ceil(len(items) / size)):
-        chunk = items[b * size:(b + 1) * size]
+    gl = _glosses(sorted({w["id"] for c in meta["chars"] for g in prod[c]["groups"] for w in g["words"]}
+                         | {w["id"] for c in meta["chars"] for w in prod[c]["rest"]}))
+    (sk / "in").mkdir(parents=True, exist_ok=True)
+    (sk / "out").mkdir(parents=True, exist_ok=True)
+    # Whole kanji per batch: a kanji's flags are checked side by side, with its page shown once.
+    by: dict[str, list[dict]] = {}
+    for it in items:
+        by.setdefault(it["char"], []).append(it)
+    batches, cur = [], []
+    for c, its in by.items():
+        if cur and len(cur) + len(its) > size:
+            batches.append(cur)
+            cur = []
+        cur += its
+    if cur:
+        batches.append(cur)
+    for b, chunk in enumerate(batches):
         parts = [f"# Skeptic batch sk-{b:02d}: {len(chunk)} flags\n"]
         shown = set()
         for it in chunk:
@@ -209,38 +264,51 @@ def skeptic_prepare(size: int) -> None:
                 shown.add(it["char"])
             else:
                 parts.append(f"(The kanji {it['char']} is shown above.)\n")
-        (SK / "in" / f"sk-{b:02d}.md").write_text("\n".join(parts), encoding="utf-8")
-    (SK / "items.json").write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"{len(items)} flags, {math.ceil(len(items) / size)} batches")
+        (sk / "in" / f"sk-{b:02d}.md").write_text("\n".join(parts), encoding="utf-8")
+    (sk / "items.json").write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(items)} flags, {len(batches)} batches")
 
 
-def report() -> None:
-    pilot = json.loads((DRAFTS / "pilot.json").read_text(encoding="utf-8"))
-    got = _results()
-    verdicts = {}
-    for f in sorted((SK / "out").glob("sk-*.json")):
+def _verdicts(d: Path) -> dict[str, dict]:
+    out = {}
+    for f in sorted((d / "skeptic" / "out").glob("sk-*.json")):
         for r in json.loads(f.read_text(encoding="utf-8"))["flags"]:
-            verdicts[r["id"]] = r
-    known = set(pilot["known"])
+            out[r["id"]] = r
+    return out
+
+
+def report(run: str) -> None:
+    d, prefix, meta = _run(run)
+    got = _results(run)
+    verdicts = _verdicts(d)
     flagged = {c for c, r in got.items() if r.get("flags")}
     major = {c for c, r in got.items() if any(f.get("severity") == "major" for f in r.get("flags") or [])}
-    rand = [c for c in pilot["chars"] if c not in known]
-    print(f"screened {len(got)}; known gaps flagged {len(flagged & known)}/{len(known)} "
-          f"(as major {len(major & known)}): {''.join(sorted(flagged & known))}; missed {''.join(sorted(known - flagged))}")
-    print(f"random kanji flagged {len(flagged & set(rand))}/{len(rand)}, with a major flag {len(major & set(rand))}")
+    if run == "pilot":
+        known = set(meta["known"])
+        rand = [c for c in meta["chars"] if c not in known]
+        print(f"screened {len(got)}; known gaps flagged {len(flagged & known)}/{len(known)} "
+              f"(as major {len(major & known)}): {''.join(sorted(flagged & known))}; missed {''.join(sorted(known - flagged))}")
+        print(f"random kanji flagged {len(flagged & set(rand))}/{len(rand)}, with a major flag {len(major & set(rand))}")
+    else:
+        known = set()
+        print(f"screened {len(got)}/{len(meta['chars'])}; flagged {len(flagged)}, with a major flag {len(major)}")
     kinds = Counter((f.get("type"), f.get("severity")) for r in got.values() for f in r.get("flags") or [])
     print("flags by type:", dict(kinds))
+    words = sum(len(f.get("words") or []) for r in got.values() for f in r.get("flags") or [])
+    print("words named in flags:", words)
     if verdicts:
-        v = Counter((it_sev, verdicts[i]["verdict"]) for i, it_sev in
-                    ((f"{c}-{n}", fl.get("severity")) for c, r in got.items() for n, fl in enumerate(r.get("flags") or []))
-                    if i in verdicts)
+        pairs = [(f"{c}-{n}", fl) for c, r in got.items() for n, fl in enumerate(r.get("flags") or [])]
+        v = Counter((fl.get("severity"), verdicts[i]["verdict"]) for i, fl in pairs if i in verdicts)
         print("skeptic (flag severity, verdict):", dict(v))
-        for c in pilot["chars"]:
-            for n, fl in enumerate(got.get(c, {}).get("flags") or []):
-                vv = verdicts.get(f"{c}-{n}", {})
-                mark = "*" if c in known else " "
-                print(f"{mark}{c} {fl.get('severity', '?'):5} {fl.get('type', '?'):15} {','.join(fl.get('words') or [])[:40]:40} "
-                      f"-> {vv.get('verdict', '-')}: {(vv.get('why') or '')[:110]}")
+        print("skeptic severity:", dict(Counter(verdicts[i].get("severity") for i, _ in pairs if i in verdicts)))
+        print("unchecked flags:", sum(1 for i, _ in pairs if i not in verdicts))
+        if run == "pilot":
+            for c in meta["chars"]:
+                for n, fl in enumerate(got.get(c, {}).get("flags") or []):
+                    vv = verdicts.get(f"{c}-{n}", {})
+                    mark = "*" if c in known else " "
+                    print(f"{mark}{c} {fl.get('severity', '?'):5} {fl.get('type', '?'):15} {','.join(fl.get('words') or [])[:40]:40} "
+                          f"-> {vv.get('verdict', '-')}: {(vv.get('why') or '')[:110]}")
 
 
 def main() -> None:
@@ -248,13 +316,25 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("pilot-prepare")
     p.add_argument("--size", type=int, default=10)
-    sub.add_parser("check")
+    f = sub.add_parser("focus-prepare")
+    f.add_argument("--target", type=int, default=32000, help="characters of input a batch")
+    for name in ("check", "report"):
+        x = sub.add_parser(name)
+        x.add_argument("--run", choices=RUNS, default="pilot")
     s = sub.add_parser("skeptic-prepare")
+    s.add_argument("--run", choices=RUNS, default="pilot")
     s.add_argument("--size", type=int, default=8)
-    sub.add_parser("report")
     a = ap.parse_args()
-    {"pilot-prepare": lambda: pilot_prepare(a.size), "check": check,
-     "skeptic-prepare": lambda: skeptic_prepare(a.size), "report": report}[a.cmd]()
+    if a.cmd == "pilot-prepare":
+        pilot_prepare(a.size)
+    elif a.cmd == "focus-prepare":
+        focus_prepare(a.target)
+    elif a.cmd == "check":
+        check(a.run)
+    elif a.cmd == "skeptic-prepare":
+        skeptic_prepare(a.run, a.size)
+    else:
+        report(a.run)
 
 
 if __name__ == "__main__":

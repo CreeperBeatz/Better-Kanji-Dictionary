@@ -36,7 +36,20 @@ For each kanji, read every word against its group and ask: does the kanji mean
    and a note of one or two short sentences in plain English, in the style of
    the existing notes. List every word that should move to it.
 3. **unplaced**: a word in no group that an existing group (or the catch-all)
-   does fit. Give the group.
+   does fit. Give the group. Every word in no group needs a flag: a word left
+   there is not shown on the page.
+
+**A new group is the last resort.** Propose one only when it is a meaning of
+the *kanji itself*, the kind a kanji dictionary (漢字辞典, kanjipedia) lists under
+the kanji, usually seen in two or more words. Do not make a group from:
+- one word's idiom or meaning (立ち往生 "stuck" is not a meaning of 往; 往々
+  "often" is not a meaning of 往);
+- a verb's suffix use or a grammar pattern (〜損なう "fail to" is 損なう, not 損);
+- a word whose kanji is there for its sound, or whose spelling is fixed and
+  cannot be learned from the kanji's meaning (ateji, old customs, place names):
+  those go to the **catch-all**. Use the catch-all also when the word's link to
+  every group is only etymology a learner cannot see (相場 is not "mutual").
+When a word fits nowhere and is not a new meaning, the catch-all is the fix.
 
 Do **not** flag:
 - A word whose main sense fits its group, even if a rare later sense does not.
