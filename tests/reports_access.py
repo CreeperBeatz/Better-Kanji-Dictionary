@@ -15,7 +15,7 @@ from pathlib import Path
 import requests as httpx  # the venv has requests; same calls
 from harness import Checks, Server, use_sandbox
 
-from server import reports
+from server import reports, review
 from server.routes import reports as reports_routes
 
 check = Checks()
@@ -26,8 +26,9 @@ JPG = b"\xff\xd8\xff\xe0" + b"\0" * 64
 
 def main() -> int:
     srv = Server(reports_routes.router)
-    # The review store too: the first open imports its old suggestions, and the data version reads it.
+    # The review store too: the data version reads it, and the old-queue import below writes to it.
     use_sandbox(srv.tmp)
+    review.refresh_pack_key()  # as the server does on startup: a report notes the data's key
     base = f"http://127.0.0.1:{srv.port}"
 
     def h(who: str | None) -> dict:
@@ -124,6 +125,24 @@ def main() -> int:
         batch.write_text(json.dumps([{"id": with_pics, "status": "not_a_mistake", "reply": "This is the usual reading."}]), encoding="utf-8")
         reports.main(["close", "--file", str(batch)])
         check("close --file", reports.get(with_pics)["status"] == "not_a_mistake" and reports.get(with_pics)["closed_by"] == reports.BOT)
+
+        print("the old queue's suggestions")
+        with review._change() as data:
+            review._new_item(data, "report", "word:1000220", {"about": "english", "text": "typo"}, "human:x", "suggestion",
+                             "typo", {"from": "kanji:生"}, srv.ids["user"], 1.0)
+            review._new_item(data, "word_sense", "生|1000220", "生.life", "human:x", "suggestion",
+                             "wrong group", None, srv.ids["user"], 1.0)
+            review._new_item(data, "kanji_senses", "生", None, "ai", "proposal", None, None, "system", 0.0)
+            bad = review._new_item(data, "bg", "kanji:生", None, "human:x", "suggestion", None, None, srv.ids["user"], 1.0)
+            review._put(data, {k: v for k, v in bad.items() if k != "created"})
+        n = reports.import_old()
+        check("suggestions come over, a broken one is skipped, proposals are not", n == 2, n)
+        old = {r["imported_from"]: r for r in (reports.get(f"r-{i[2:]}") for i in
+               [i["id"] for i in review._read()["items"].values() if i["origin"] == "suggestion" and "created" in i])}
+        subjects = sorted(r["subject"] for r in old.values())
+        check("a word placement is about the word", subjects == ["word:1000220", "word:1000220"], subjects)
+        check("a report keeps what it was about", any(r["text"] == "[english] typo" and r["context"] == {"from": "kanji:生"} for r in old.values()))
+        check("run again: nothing new", reports.import_old() == 0)
     finally:
         srv.stop()
     return check.done()

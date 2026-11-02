@@ -19,7 +19,9 @@ For Claude Code (no UI):
 from __future__ import annotations
 
 import argparse
+import functools
 import json
+import logging
 import re
 import shutil
 import sqlite3
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS report (
 CREATE INDEX IF NOT EXISTS report_by ON report (by_user, created);
 """
 
+log = logging.getLogger(__name__)
 _lock = threading.RLock()
 _conn: sqlite3.Connection | None = None
 
@@ -80,19 +83,12 @@ def _db() -> sqlite3.Connection:
     with _lock:
         if _conn is None:
             REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-            new = not DB.exists()
             conn = sqlite3.connect(DB, timeout=30, isolation_level=None, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("PRAGMA synchronous=FULL")
             conn.executescript(SCHEMA)
             _conn = conn
-            if new:
-                _import_old(conn)
         return _conn
-
-
-def _row(body: str) -> dict:
-    return json.loads(body)
 
 
 def _put(conn: sqlite3.Connection, r: dict) -> None:
@@ -103,35 +99,65 @@ def _put(conn: sqlite3.Connection, r: dict) -> None:
     )
 
 
-def _import_old(conn: sqlite3.Connection) -> None:
-    """The first time: what users sent through the old review queue (reports and suggested
-    changes) comes over as reports, so nothing anyone sent is lost. The queue's rows stay."""
+def _old_subject(type_: str, subject: str) -> str | None:
+    """An old queue item's subject as a report's: word:123 and kanji:生 stay; a word placement
+    (生|123) is about the word; anything else about its first character."""
+    if subject.startswith(("kanji:", "word:")):
+        return subject if SUBJECT.match(subject) else None
+    head, _, tail = subject.partition("|")
+    if type_ == "word_sense" and tail.isdigit():
+        return f"word:{tail}"
+    return f"kanji:{head}" if len(head) == 1 else None
+
+
+def _from_old(i: dict) -> dict:
+    v = i.get("proposed")
+    if i["type"] == "report" and isinstance(v, dict):
+        text = (v.get("text") or "").strip()
+        if v.get("about"):
+            text = f"[{v['about']}] {text}"
+    else:
+        reason = i.get("reason") or ""
+        text = f"[suggested change: {i['type']}] {reason}\n{json.dumps(v, ensure_ascii=False)}".strip()
+    ev = i.get("evidence") if isinstance(i.get("evidence"), dict) else {}
+    done = i["status"] != "open"
+    return {
+        "id": f"r-{i['id'][2:]}", "created": i["created"], "by": i["created_by"], "subject": _old_subject(i["type"], i["subject"]),
+        "text": text[:MAX_TEXT], "context": {"from": ev["from"]} if isinstance(ev.get("from"), str) else {}, "files": [],
+        "status": ("fixed" if i["status"] in ("accepted", "edited", "auto-accepted") else "not_a_mistake") if done else "open",
+        "reply": None, "closed_at": i.get("decided_at") if done else None, "closed_by": i.get("decided_by") if done else None,
+        "imported_from": i["id"],
+    }
+
+
+def import_old() -> int:
+    """What users sent through the old review queue (reports and suggested changes) as reports,
+    so nothing anyone sent is lost; the queue's rows stay. On every server start: an item already
+    brought over is left as it is (its id is fixed), so this is safe to run again, and one bad
+    item is skipped, not the rest. Returns how many came over."""
     from . import review
 
-    try:
-        items = review._read()["items"].values()
-    except Exception:  # noqa: BLE001 -- no review store (a fresh test): nothing to bring over
-        return
-    for i in items:
+    rows = []
+    for i in list(review._read()["items"].values()):
         if i.get("origin") != "suggestion":
             continue
-        v = i.get("proposed")
-        if i["type"] == "report" and isinstance(v, dict):
-            text = (v.get("text") or "").strip()
-            if v.get("about"):
-                text = f"[{v['about']}] {text}"
-        else:
-            text = f"[suggested change: {i['type']}] {i.get('reason') or ''}\n{json.dumps(v, ensure_ascii=False)}".strip()
-        subject = i["subject"].split("|")[0] if i["type"] != "report" else i["subject"]
-        if not subject.startswith(("kanji:", "word:")):
-            subject = f"kanji:{subject}" if len(subject) == 1 else None
-        status = "open" if i["status"] == "open" else ("fixed" if i["status"] in ("accepted", "edited", "auto-accepted") else "not_a_mistake")
-        _put(conn, {
-            "id": f"r-{i['id'][2:]}", "created": i["created"], "by": i["created_by"], "subject": subject,
-            "text": text[:MAX_TEXT], "context": {"from": i.get("evidence", {}).get("from")} if isinstance(i.get("evidence"), dict) else {},
-            "files": [], "status": status, "reply": None, "closed_at": i.get("decided_at"), "closed_by": i.get("decided_by"),
-            "imported_from": i["id"],
-        })
+        try:
+            rows.append(_from_old(i))
+        except Exception as e:  # noqa: BLE001 -- one malformed old item must not stop the rest
+            log.warning("old queue item %s not brought over: %r", i.get("id"), e)
+    with _lock:
+        conn = _db()
+        before = conn.total_changes
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            conn.executemany(
+                "INSERT OR IGNORE INTO report (id, created, by_user, subject, status, body) VALUES (?, ?, ?, ?, ?, ?)",
+                [(r["id"], r["created"], r["by"], r["subject"], r["status"], json.dumps(r, ensure_ascii=False)) for r in rows])
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        return conn.total_changes - before
 
 
 def _image_type(raw: bytes) -> str | None:
@@ -157,7 +183,10 @@ def _data_version() -> dict:
     try:
         from . import review
 
-        out["data"] = ".".join(review.pack_key())
+        # The key as last stored (the server keeps it current), never worked out here:
+        # that takes seconds and writes to review.db.
+        if key := review._read().get("pack_key"):
+            out["data"] = key
     except Exception:  # noqa: BLE001 -- a report is never refused for this
         pass
     if commit := _commit():
@@ -165,7 +194,9 @@ def _data_version() -> dict:
     return out
 
 
+@functools.cache
 def _commit() -> str | None:
+    """The deployed commit, read once: a deploy restarts the server."""
     try:
         head = (ROOT / ".git" / "HEAD").read_text().strip()
         if head.startswith("ref: "):
@@ -202,7 +233,6 @@ def add(user_id: str, text: str, subject: str | None = None, context: Any = None
         if kind is None:
             raise AppError(400, "report_file_type", "pictures only: PNG, JPEG or WebP")
         kinds.append(kind)
-    # Before the lock: the data version reads the review store and .git, and nothing here needs the lock.
     context = {**_clean_context(context), **_data_version()}
     with _lock:
         conn = _db()
@@ -242,7 +272,7 @@ def get(report_id: str) -> dict:
     row = next(iter(_all("SELECT body FROM report WHERE id = ?", (report_id,))), None)
     if row is None:
         raise AppError(404, "report_not_found", "no report with that id")
-    return _row(row[0])
+    return json.loads(row[0])
 
 
 def _labels(rows: list[dict]) -> None:
@@ -271,7 +301,7 @@ def listing(status: str | None = None, limit: int = 200, offset: int = 0) -> dic
     if status is not None and status not in STATUSES:
         raise AppError(400, "bad_status", "status is one of {s}", s=", ".join(STATUSES))
     where, args = ("WHERE status = ?", [status]) if status else ("", [])
-    rows = [_row(b) for (b,) in _all(f"SELECT body FROM report {where} ORDER BY created DESC, seq DESC LIMIT ? OFFSET ?",
+    rows = [json.loads(b) for (b,) in _all(f"SELECT body FROM report {where} ORDER BY created DESC, seq DESC LIMIT ? OFFSET ?",
                                      [*args, limit, offset])]
     _labels(rows)
     counts = dict.fromkeys(STATUSES, 0) | {s: n for s, n in _all("SELECT status, COUNT(*) FROM report GROUP BY status")}
@@ -292,7 +322,7 @@ def mine(user_id: str, limit: int = 100) -> dict:
     """Your own reports and what became of them. Who closed them is not shown."""
     keep = ("id", "created", "subject", "text", "files", "status", "reply", "closed_at")
     rows = _all("SELECT body FROM report WHERE by_user = ? ORDER BY created DESC, seq DESC LIMIT ?", (user_id, limit))
-    items = [{k: r.get(k) for k in keep} for r in map(_row, (b for (b,) in rows))]
+    items = [{k: r.get(k) for k in keep} for r in (json.loads(b) for (b,) in rows)]
     _labels(items)
     return {"items": items}
 
@@ -336,7 +366,7 @@ def export(dest: Path, everything: bool = False) -> int:
     else:
         conn = sqlite3.connect(f"{DB.resolve().as_uri()}?mode=ro", uri=True, timeout=30)
         try:
-            rows = [_row(b) for (b,) in conn.execute(q)]
+            rows = [json.loads(b) for (b,) in conn.execute(q)]
         finally:
             conn.close()
     users = auth._load()["users"]

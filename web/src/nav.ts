@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Word } from './api'
 import type { StageView } from './StageControls'
-import { leftReview, reviewTabInState } from './review/route'
+import { leftReports, reportsInState } from './reports/route'
 
 export type Level = 1 | 2 | 3 | 4 | 5
 
@@ -177,10 +177,10 @@ function opening(): Entry {
 function write(entry: Entry, how: 'push' | 'replace') {
   const top = entry.stack[entry.stack.length - 1]
   try {
-    // The review screen's entry (review/route.ts) keeps its address and its tab.
-    const review = reviewTabInState(window.history.state)
+    // The reports screen's entry (reports/route.ts) keeps its address and its mark.
     if (how === 'push') window.history.pushState(entry, '', urlOf(top))
-    else if (review) window.history.replaceState({ ...entry, review }, '', window.location.pathname + window.location.search)
+    else if (reportsInState(window.history.state))
+      window.history.replaceState({ ...entry, reports: true }, '', window.location.pathname + window.location.search)
     else window.history.replaceState(entry, '', urlOf(top))
   } catch {
     // Safari refuses too many history calls in a burst; the next one catches up.
@@ -408,8 +408,8 @@ export function useNav(
       const linked = pageInUrl()
       const next: Entry =
         state && isStack(state.stack) ? state : { stack: [linked ?? HOME], depth: 0 }
-      // Into or out of the review screen: the rail under it has not moved.
-      if (reviewTabInState(state) || (leftReview() && sameStack(next.stack, current.current.stack))) {
+      // Into or out of the reports screen: the rail under it has not moved.
+      if (reportsInState(state) || (leftReports() && sameStack(next.stack, current.current.stack))) {
         current.current = { ...next }
         return
       }

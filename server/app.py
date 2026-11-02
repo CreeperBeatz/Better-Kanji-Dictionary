@@ -84,6 +84,15 @@ def reviewed_bulgarian() -> None:
 
 
 @app.on_event("startup")
+def old_reports() -> None:
+    # What users sent through the old review queue shows among the reports (once; safe to repeat).
+    from . import reports
+
+    if n := reports.import_old():
+        print(f"[reports] {n} brought over from the old review queue", flush=True)
+
+
+@app.on_event("startup")
 def build_offline_pack() -> None:
     from . import review as review_store
 

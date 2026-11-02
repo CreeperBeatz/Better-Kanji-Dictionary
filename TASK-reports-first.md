@@ -37,15 +37,17 @@ Parts 1-5 built on this branch; part 6 (deploy) not started.
   `tests/sandbox.py --dir <dir> --owner <email>`; browser check
   `web/scripts/reports-check.mjs`.
 - Changed from the plan: reports live in their own `data/reports/reports.db`
-  (not as review.db items). On first start the old queue's user reports and
-  suggestions are copied over (`imported_from`). The screen's address is
+  (not as review.db items). On every server start the old queue's user
+  reports and suggestions are copied over (`reports.import_old`: fixed ids,
+  INSERT OR IGNORE, so it is safe to repeat; a word placement 生|123 becomes
+  word:123). The screen's address is
   `/reports`; old `/review...` addresses land there.
 - "Not everything is checked yet" + the reviewer progress bar became one
   static note: some data can be wrong, AI drafts it, report what you see.
 - Left on purpose: the labeling functions in `server/review.py` that the
   pipeline scripts and tests still call (decide, decide_card, add_items,
-  ...); only the unused views were removed. Dead CSS for the old review
-  screen is still in theme.css.
+  ...); only the unused views were removed. The old review screen's CSS is
+  gone (theme.css 11,777 -> ~8,200 lines).
 
 ## The trap: the review store is live data
 

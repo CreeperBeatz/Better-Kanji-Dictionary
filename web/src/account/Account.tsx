@@ -123,17 +123,15 @@ function message(err: unknown, fallback: Key, lang: Lang) {
   return err instanceof Error ? errorText(err, lang) : S(lang)(fallback)
 }
 
-/** The owner's reports screen (reports/ReportsScreen.tsx): one tab now. */
-export type WorkbenchTab = 'reports'
 
 /** Mounted only while open, so each opening starts from a clean form. */
 export function AccountDialog({
   onClose,
-  onWorkbench,
+  onReports,
 }: {
   onClose: () => void
   /** Opens the reports screen; the admin only. */
-  onWorkbench?: (tab: WorkbenchTab) => void
+  onReports?: () => void
 }) {
   const lang = useLang()
   const t = S(lang)
@@ -160,7 +158,7 @@ export function AccountDialog({
   return (
     <Overlay panel="account-panel" label={t('account')} onClose={onClose}>
       {user ? (
-        <Profile onWorkbench={onWorkbench} />
+        <Profile onReports={onReports} />
       ) : sent ? (
         <>
           <h2>{t('checkEmail')}</h2>
@@ -229,7 +227,7 @@ export function AccountDialog({
 
 const USERNAME = /^[a-z0-9_-]{3,24}$/
 
-function Profile({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
+function Profile({ onReports }: { onReports?: () => void }) {
   const lang = useLang()
   const t = S(lang)
   const { user } = useAuth()
@@ -362,13 +360,13 @@ function Profile({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void })
       <p className="hint">{t('profileHint')}</p>
       {problem && <p className="account-problem">{problem}</p>}
       <MyReports />
-      <ReportsLink onWorkbench={onWorkbench} />
+      <ReportsLink onReports={onReports} />
     </>
   )
 }
 
 /** For the site's owner: the way into the reports screen. */
-function ReportsLink({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
+function ReportsLink({ onReports }: { onReports?: () => void }) {
   const t = S(useLang())
   const { user } = useAuth()
   const admin = user?.role === 'admin'
@@ -385,11 +383,11 @@ function ReportsLink({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => voi
       stale = true
     }
   }, [admin])
-  if (!admin || !onWorkbench) return null
+  if (!admin || !onReports) return null
   return (
     <section className="account-contribute">
       <p className="hint">{t('roleAdmin')}</p>
-      <button className="account-submit account-review" onClick={() => onWorkbench('reports')}>
+      <button className="account-submit account-review" onClick={onReports}>
         {t('reportsScreen')}
         {!!open && (
           <span className="reports-badge" title={t('openReports', { n: open })} aria-label={t('openReports', { n: open })}>

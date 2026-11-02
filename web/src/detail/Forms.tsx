@@ -8,7 +8,7 @@
  * order, the old shape tells the story (TASK-forms-review.md).
  */
 import { useEffect, useState } from 'react'
-import { api, onDataChanged, type FormItem, type FormsResponse } from '../api'
+import { api, type FormItem, type FormsResponse } from '../api'
 import { strings, useLang } from '../i18n'
 import { meaningsOf } from '../i18n/content'
 import { warmKanji } from '../warm'
@@ -84,8 +84,6 @@ export function FormSource({ source }: { source: string }) {
 /** The forms of `char`, or null until they arrive (offline they never do; the page goes without). */
 export function useForms(char: string, wanted = true): FormsResponse | null {
   const [data, setData] = useState<FormsResponse | null>(() => (wanted ? (api.forms.peek(char) ?? null) : null))
-  const [version, setVersion] = useState(0)
-  useEffect(() => onDataChanged(() => setVersion((v) => v + 1)), [])
   useEffect(() => {
     if (!wanted) return
     let stale = false
@@ -96,7 +94,7 @@ export function useForms(char: string, wanted = true): FormsResponse | null {
     return () => {
       stale = true
     }
-  }, [char, wanted, version])
+  }, [char, wanted])
   return data?.char === char ? data : null
 }
 

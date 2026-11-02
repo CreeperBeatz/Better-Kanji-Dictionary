@@ -667,15 +667,12 @@ async function get<T>(path: string, params?: [string, string][]): Promise<T> {
  * Answers that do not change while the app is open, kept: two parts of the
  * page asking at once -- a word's head and its panel, a picked character's
  * page and then its graph -- share one request. A failure is asked again.
- * A reviewer's edit is the one exception: dataChanged() empties them all.
  */
-const keptCaches: Map<unknown, unknown>[] = []
 
 function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): ((k: K) => Promise<T>) & { peek: (k: K) => T | undefined } {
   const answers = new Map<K, Promise<T>>()
   // The answers that have come, to draw at once: a promise is only read a render late.
   const settled = new Map<K, T>()
-  keptCaches.push(answers, settled)
   const ask_ = (k: K) => {
     let p = answers.get(k)
     if (p) answers.delete(k) // to the back of the queue, as used just now
@@ -696,21 +693,6 @@ function kept<K, T>(ask: (k: K) => Promise<T>, size = 40): ((k: K) => Promise<T>
     return p
   }
   return Object.assign(ask_, { peek: (k: K) => settled.get(k) })
-}
-
-const changeListeners = new Set<() => void>()
-
-/** Something a reviewer changed went live: forget what was kept, and tell whoever shows it. */
-export function dataChanged() {
-  for (const c of keptCaches) c.clear()
-  similarCache.clear()
-  similarSettled.clear()
-  for (const l of changeListeners) l()
-}
-
-export function onDataChanged(listener: () => void): () => void {
-  changeListeners.add(listener)
-  return () => changeListeners.delete(listener)
 }
 
 /** The device's answer if it has one, the server's otherwise. */

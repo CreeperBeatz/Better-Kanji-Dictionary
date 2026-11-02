@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal, flushSync } from 'react-dom'
-import { api, onDataChanged, type GraphResponse, type KanjiNode, type Word } from './api'
+import { api, type GraphResponse, type KanjiNode, type Word } from './api'
 import { KanjiGraph, type ContainerFilter } from './graph/KanjiGraph'
 import { scopeOf } from './map/mapData'
 import { SearchBar } from './search/SearchBar'
 import { LevelPage, SearchPage, commonOnly } from './search/Results'
 import { Associations } from './detail/Associations'
-import { AccountDialog, ProfileButton, type WorkbenchTab } from './account/Account'
+import { AccountDialog, ProfileButton } from './account/Account'
 import { ReportsScreen } from './reports/ReportsScreen'
 import { getLang, setLang, strings, useLang, type Lang, type Translate } from './i18n'
 import { clearAuthError, startAuth, useAuth } from './account/auth'
@@ -22,7 +22,7 @@ import { MapCard } from './map/MapCard'
 import { WordKanji } from './graph/WordKanji'
 import { rememberKanji, rememberSearch, rememberWord } from './history'
 import { pageInUrl, samePage, urlOf, useNav, type Page, type Stack } from './nav'
-import { dropReview, pushReview, replaceReview, reviewTabInState, reviewTabInUrl } from './review/route'
+import { dropReports, pushReports, replaceReports, reportsInState, reportsInUrl } from './reports/route'
 import { MOBILE, matches, reducedMotion, useMediaQuery } from './media'
 import { warmPage } from './warm'
 import { isIOS } from './account/install'
@@ -217,12 +217,11 @@ type TurnScope = 'whole' | 'pane'
  * addresses too). The older `?admin=1` (in the owner's email) and `?review=1` become it.
  * The entry is marked now, before the rail writes its own (nav.ts).
  */
-function initialWorkbench(): WorkbenchTab | null {
+function initialReports(): boolean {
   const url = new URL(window.location.href)
-  const legacy = url.searchParams.has('admin') || url.searchParams.has('review') ? 'reports' : null
-  const tab = reviewTabInUrl() ?? legacy
-  if (tab) replaceReview(tab)
-  return tab
+  const open = reportsInUrl() || url.searchParams.has('admin') || url.searchParams.has('review')
+  if (open) replaceReports()
+  return open
 }
 
 // The page's own name, from index.html. A hot reload runs this again with a
@@ -700,7 +699,7 @@ export function App() {
   const [graphLocked, setGraphLocked] = useState(true)
   const [accountOpen, setAccountOpen] = useState(false)
   // The review screen; the admin's email links straight to its People tab.
-  const [workbench, setWorkbench] = useState<WorkbenchTab | null>(initialWorkbench)
+  const [reportsOpen, setReportsOpen] = useState(initialReports)
   const { error: authError } = useAuth()
   // A sign-in link that did not work says why, where you would try again.
   const accountShown = accountOpen || authError !== null
@@ -824,10 +823,6 @@ export function App() {
     startAuth()
   }, [])
 
-  // A reviewer's edit (a decomposition, a form) went live: load the page again.
-  const [dataVersion, setDataVersion] = useState(0)
-  useEffect(() => onDataChanged(() => setDataVersion((v) => v + 1)), [])
-
   useEffect(() => {
     if (!focus) return
     let stale = false
@@ -848,7 +843,7 @@ export function App() {
     return () => {
       stale = true
     }
-  }, [focus, afterSlide, dataVersion])
+  }, [focus, afterSlide])
 
   // The rail shows the graph's data once it is for this character, and the
   // device's until then -- or instead, when there is no connection.
@@ -881,7 +876,7 @@ export function App() {
     return () => {
       stale = true
     }
-  }, [pageKanji, focus, afterSlide, dataVersion])
+  }, [pageKanji, focus, afterSlide])
 
   // A word opened from a link comes with nothing but its id; the head above
   // its associations wants what it is.
@@ -1203,28 +1198,28 @@ export function App() {
     clearAuthError()
   }, [])
   const signIn = useCallback(() => setAccountOpen(true), [])
-  // The review screen is a history entry of its own (review/route.ts). One
+  // The reports screen is a history entry of its own (reports/route.ts). One
   // pushed this visit is closed with back; one the visit opened on is replaced.
-  const pushedReview = useRef(false)
-  const openWorkbench = useCallback((tab: WorkbenchTab) => {
+  const pushedReports = useRef(false)
+  const openReports = useCallback(() => {
     setAccountOpen(false)
-    if (reviewTabInState(window.history.state)) replaceReview(tab)
+    if (reportsInState(window.history.state)) replaceReports()
     else {
-      pushReview(tab)
-      pushedReview.current = true
+      pushReports()
+      pushedReports.current = true
     }
-    setWorkbench(tab)
+    setReportsOpen(true)
   }, [])
   const stackTop = stack[stack.length - 1]
-  const closeWorkbench = useCallback(() => {
-    if (pushedReview.current && reviewTabInState(window.history.state)) {
-      pushedReview.current = false
+  const closeReports = useCallback(() => {
+    if (pushedReports.current && reportsInState(window.history.state)) {
+      pushedReports.current = false
       window.history.back()
-    } else dropReview(urlOf(stackTop))
-    setWorkbench(null)
+    } else dropReports(urlOf(stackTop))
+    setReportsOpen(false)
   }, [stackTop])
   useEffect(() => {
-    const onPop = (e: PopStateEvent) => setWorkbench(reviewTabInState(e.state))
+    const onPop = (e: PopStateEvent) => setReportsOpen(reportsInState(e.state))
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
@@ -2798,10 +2793,10 @@ export function App() {
         </main>
       </div>
 
-      {workbench && (
-        <ReportsScreen onClose={closeWorkbench} />
+      {reportsOpen && (
+        <ReportsScreen onClose={closeReports} />
       )}
-      {accountShown && <AccountDialog onClose={closeAccount} onWorkbench={openWorkbench} />}
+      {accountShown && <AccountDialog onClose={closeAccount} onReports={openReports} />}
       <InstallGuide />
     </div>
   )

@@ -22,7 +22,6 @@ const S = strings(
   {
     open: 'Report a problem',
     title: 'Report a problem with {x}',
-    titlePlain: 'Report a problem',
     hint: 'Say what is wrong and where you saw it. If you know the right answer, say how you know it.',
     example: 'For example: "The second meaning group mixes two meanings: 生む and 生える."',
     text: 'What is wrong?',
@@ -45,7 +44,6 @@ const S = strings(
   {
     open: 'Съобщете за проблем',
     title: 'Съобщете за проблем с {x}',
-    titlePlain: 'Съобщете за проблем',
     hint: 'Кажете какво не е наред и къде го видяхте. Ако знаете верния отговор, кажете откъде го знаете.',
     example: 'Например: „Втората група значения смесва две значения: 生む и 生える.“',
     text: 'Какво не е наред?',
@@ -105,8 +103,8 @@ function ReportDialog({
   onClose,
   onSignIn,
 }: {
-  subject: string | null
-  of?: string
+  subject: string
+  of: string
   from: string
   onClose: () => void
   onSignIn?: () => void
@@ -120,7 +118,7 @@ function ReportDialog({
   const [sent, setSent] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const picker = useRef<HTMLInputElement>(null)
-  const title = of ? t('title', { x: of }) : t('titlePlain')
+  const title = t('title', { x: of })
 
   function add(list: Iterable<File>) {
     const next = [...files]
@@ -180,7 +178,7 @@ function ReportDialog({
         </>
       ) : (
         <form className="account-form report-form" onSubmit={submit}>
-          <h2 lang={of ? 'ja' : undefined}>{title}</h2>
+          <h2>{title}</h2>
           <p className="hint">{t('hint')}</p>
           <p className="hint report-example">{t('example')}</p>
           <label htmlFor="report-text">{t('text')}</label>
