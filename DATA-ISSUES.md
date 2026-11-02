@@ -638,9 +638,15 @@ words were read only for translating, not checked for this. 1,704 words with
 notes have 2+ readings and 2+ senses (5,052 senses); only 169 of them have a
 JMdict restriction (D-037 covers those).
 Source: JMdict leaves the link out; the drafts took the headword's reading.
-**Status: partly fixed** (feat/common-sense-notes, 2026-11-01). The flagged notes
-now say how the word is read in that sense (register_claims G-X09-*). Open: the
-other notes on those 1,704 words were never asked this question.
+**Status: fixed locally** (feat/common-sense-notes, 2026-11-02). The flagged notes
+now say how the word is read in that sense (register_claims G-X09-*). Then every
+note on those 1,704 words (5,052) was asked once, with all readings, spellings,
+JMdict restrictions and field tags (pipeline/sense_readings.py, G-Y42-000..020 +
+F00, Opus): 113 fixed (2.2%), 106 notes and 24 examples. Most extra readings are
+variants for every sense; the misses were old or specialist senses (実を結ぶ is み,
+妻子 "wife" つまこ, 頭 "boss" かしら, 判 paper sizes ばん, 鶏 as food とり, 型 after a
+noun がた), suffixes, and katakana words with one form per sense (タッグ, ジャージ,
+リコーダー). Bulgarian: round N11.
 
 ### D-043 · Wrong or doubtful JMdict English seen in round 9
 *Found 2026-11-01,* by the same translators. JMdict's English is not edited here;
@@ -665,9 +671,11 @@ stones)" is the go term; its note described a stone wall round a field.
 Scale: 3,045 senses of 2,613 in-scope words carry a field tag. Most glosses
 name their field anyway ("home run"); how many notes are wrong is not known.
 Source: our build (pipeline/build_db.py drops `<field>`).
-**Status: open.** The D-042 check (sense_readings.py) gives the tags for the
-1,704 words it covers. Not done: the other tagged senses, and the tag on the
-page.
+**Status: open.** The D-042 check (sense_readings.py) gave the tags for the
+1,704 words it covers (417 tagged senses); of the 41 tagged senses asked again
+for that (G-Y42-F00), 2 notes had left their field (女性 grammatical gender, 山
+cards, not mahjong) and 3 more were fixed for readings. Not done: the other
+2,629 tagged senses (2,294 words), and the tag on the page.
 
 ## Fixed
 
