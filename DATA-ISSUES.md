@@ -331,6 +331,13 @@ and others. Each needs its kanji's groups looked at, or a person to place it.
 for now (data/drafts/regroup/manual.json). The last kun readings on no card were
 placed by hand there too: 携わる, 照れる, 却って, 丈 だけ, 居候, 雨脚, 大関 and others.
 What is left are names, the zodiac and rare words (静岡, 申 さる, 謀).
+2026-11-02, blind check against Kodansha (100 random kanji, prod pages;
+pipeline/kodansha_blind.py): all 11 of our major errors are this issue. A kun
+word or a common word with its own meaning is either in no group or under
+the nearest one: 懲りる under "punish" (learn one's lesson), 照れる/照れ屋
+under "shine", 並びに under "line up", 焦燥 under "dry up"; 及び ("and"), 一膳
+(counter), 酔いが醒める (sober up), 喝采/采配/風采 (采 has one group, no words)
+are in none. 9% of the sampled pages (5-16%) have such an error.
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
@@ -683,6 +690,17 @@ the cut); then wrong facts inside the field (告訴 goes to police or prosecutor
 not a court; 関取 and 幕 are divisions, not ranks; 急性 is sudden, not severe;
 定石 are corner sequences). Most frequent words had most (36 of 250 in G-Y44-000).
 Bulgarian: round N12. Open: the tag is still not on the page.
+
+### D-045 · KANJIDIC kun readings: one misspelt, one missing
+*Found 2026-11-02,* in the blind check against Kodansha (pipeline/kodansha_blind.py).
+透 lists the kun readings とう.る and とう.す; they are とお.る and とお.す
+(透る, 透す). 速 has no はや.まる, a jōyō reading (速まる). The page's
+readings line shows the full KANJIDIC list, so a learner sees both.
+Source: KANJIDIC2 itself (pipeline/data/kanjidic2.xml.gz), not our build.
+Scale: unknown. These two are from a 100-kanji sample; nothing has checked
+KANJIDIC's kun list against the jōyō table.
+**Status: open.** A fix needs a reading override in the build, and a check of
+every in-scope kanji's kun list against the jōyō table (with 2010 changes).
 
 ## Fixed
 

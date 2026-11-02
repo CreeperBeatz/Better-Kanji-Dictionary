@@ -1,6 +1,6 @@
 """Our kanji pages against Kodansha's Kanji Learner's Dictionary, graded blind (Dani, 2026-11-02).
 
-    python pipeline/kodansha_blind.py prepare [--n 100 --size 10]
+    python pipeline/kodansha_blind.py prepare [--n 100 --size 10] [--prod]
     # one Opus subagent per in/*.md, each reading pipeline/kodansha_blind_prompt.md
     python pipeline/kodansha_blind.py check      # every batch graded, every kanji, both entries
     python pipeline/kodansha_blind.py report     # unblinded: errors per entry, which is better
@@ -97,6 +97,8 @@ def _w(ja: str, reading: str | None) -> str:
 
 def ours(page: dict, info: dict, words: dict[int, tuple[str, str]]) -> dict:
     def name(x: dict) -> str:
+        if "id" in x and "headword" in x:  # the live API's full word
+            return _w(x["headword"], x.get("reading"))
         w = words.get(x["$w"])
         if not w:
             return x.get("headword") or str(x["$w"])
@@ -163,16 +165,42 @@ def render(char: str, tag: str, entry: dict) -> str:
 # ---------------------------------------------------------------- commands
 
 
-def prepare(n: int, size: int) -> None:
+PROD = "https://betterkanjidictionary.org/api/search/kanji-page/"
+
+
+def _prod_pages(chars: list[str]) -> dict[str, dict]:
+    """The pages the live site serves, cached: the local review store can be behind prod."""
+    import urllib.parse
+    import urllib.request
+    f = DRAFTS / "prod-pages.json"
+    have = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    for c in chars:
+        if c not in have:
+            req = urllib.request.Request(PROD + urllib.parse.quote(c), headers={"User-Agent": "curl/8.0"})
+            have[c] = json.load(urllib.request.urlopen(req, timeout=60))
+    DRAFTS.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(have, ensure_ascii=False), encoding="utf-8")
+    return have
+
+
+def prepare(n: int, size: int, prod: bool = False) -> None:
     pack = _pack()
     pages = _gz(pack / "pages.json.gz")
     kpack = _gz(pack / "kanji.json.gz")
     info = {k["char"]: k for lv in kpack["levels"].values() for k in lv["kanji"]}
+    # The levels hold only JLPT kanji: readings come from the kanji table, as the page's do.
+    import sqlite3
+    db = sqlite3.connect(ROOT / "data" / "betterrtk.sqlite")
+    for ch, on, kun in db.execute("SELECT char, on_yomi, kun_yomi FROM kanji"):
+        if ch in pages:
+            info.setdefault(ch, {"jlpt": None}).update(onYomi=json.loads(on or "[]"), kunYomi=json.loads(kun or "[]"))
     kd = dictionaries._kodansha()
     pool = sorted(c for c, p in pages.items()
                   if c in kd and p["meanings"] and dictionaries._kodansha_view(kd[c])["senses"])
     rnd = random.Random(SEED)
     sample = rnd.sample(pool, n)
+    if prod:  # same sample and sides, drawn from the local pool; the entries as prod serves them
+        pages = {**pages, **_prod_pages(sample)}
     words = _words(pack)
     # X is ours for exactly half the kanji, in a shuffled order: a grader leaning to X or Y tilts nothing.
     sides = [i < n // 2 for i in range(n)]
@@ -191,7 +219,8 @@ def prepare(n: int, size: int) -> None:
             x, y = (a, k) if x_is_ours else (k, a)
             parts.append(f"## {c}\n\n{render(c, 'X', x)}\n\n{render(c, 'Y', y)}\n")
         (IN / f"kb-{b:03d}.md").write_text("\n".join(parts), encoding="utf-8")
-    (DRAFTS / "key.json").write_text(json.dumps({"seed": SEED, "pool": len(pool), "pack": pack.name, "kanji": key},
+    (DRAFTS / "key.json").write_text(json.dumps({"seed": SEED, "pool": len(pool), "pack": "prod" if prod else pack.name,
+                                                 "kanji": key},
                                                 ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"pool {len(pool)}, sample {n}, {math.ceil(n / size)} batches in {IN}")
 
@@ -279,11 +308,12 @@ def main() -> None:
     p = sub.add_parser("prepare")
     p.add_argument("--n", type=int, default=100)
     p.add_argument("--size", type=int, default=10)
+    p.add_argument("--prod", action="store_true", help="the entries as the live site serves them")
     sub.add_parser("check")
     sub.add_parser("report")
     a = ap.parse_args()
     if a.cmd == "prepare":
-        prepare(a.n, a.size)
+        prepare(a.n, a.size, a.prod)
     elif a.cmd == "check":
         check()
     else:
