@@ -57,3 +57,10 @@ Write the JSON file named in your task, UTF-8, exactly this shape:
 ```
 
 Every flag in the batch must be in the output, with the URLs you actually read.
+
+**Batches named sk-e…** hold only easy flags: a word in no group, moved to an
+existing group or the catch-all. Judge these from the senses shown and your own
+knowledge; look a word up on the web only when you are unsure. `sources` may then
+be empty. Still be a skeptic: check that the target group's meaning is the one
+the kanji has in the word, and that a catch-all word really has no group that a
+learner could see in it.

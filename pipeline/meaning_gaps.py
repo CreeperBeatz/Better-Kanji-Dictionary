@@ -241,20 +241,32 @@ def skeptic_prepare(run: str, size: int) -> None:
                          | {w["id"] for c in meta["chars"] for w in prod[c]["rest"]}))
     (sk / "in").mkdir(parents=True, exist_ok=True)
     (sk / "out").mkdir(parents=True, exist_ok=True)
-    # Whole kanji per batch: a kanji's flags are checked side by side, with its page shown once.
-    by: dict[str, list[dict]] = {}
-    for it in items:
-        by.setdefault(it["char"], []).append(it)
-    batches, cur = [], []
-    for c, its in by.items():
-        if cur and len(cur) + len(its) > size:
-            batches.append(cur)
-            cur = []
-        cur += its
-    if cur:
-        batches.append(cur)
-    for b, chunk in enumerate(batches):
-        parts = [f"# Skeptic batch sk-{b:02d}: {len(chunk)} flags\n"]
+    # Two tracks (focus run): the hard flags (major, misplaced, a new group) in small batches with the
+    # web; the easy ones (a hidden word to an existing group or the catch-all) in large batches,
+    # the web only when unsure. The pilot's skeptic had used the web on every flag.
+    def hard(it: dict) -> bool:
+        return it.get("severity") == "major" or it.get("type") != "unplaced" or it.get("fix") == "new"
+
+    tracks = [("", items, size)] if run == "pilot" else [
+        ("h", [it for it in items if hard(it)], size), ("e", [it for it in items if not hard(it)], size * 4)]
+    named: list[tuple[str, list[dict]]] = []
+    for tag, its_all, cap in tracks:
+        # Whole kanji per batch: a kanji's flags are checked side by side, with its page shown once.
+        by: dict[str, list[dict]] = {}
+        for it in its_all:
+            by.setdefault(it["char"], []).append(it)
+        cur: list[dict] = []
+        n = 0
+        for c, its in by.items():
+            if cur and len(cur) + len(its) > cap:
+                named.append((f"sk-{tag}{n:02d}", cur))
+                cur, n = [], n + 1
+            cur += its
+        if cur:
+            named.append((f"sk-{tag}{n:02d}", cur))
+    batches = [ch for _, ch in named]
+    for name, chunk in named:
+        parts = [f"# Skeptic batch {name}: {len(chunk)} flags\n"]
         shown = set()
         for it in chunk:
             flag = {k: v for k, v in it.items() if k not in ("id", "char")}
@@ -264,7 +276,7 @@ def skeptic_prepare(run: str, size: int) -> None:
                 shown.add(it["char"])
             else:
                 parts.append(f"(The kanji {it['char']} is shown above.)\n")
-        (sk / "in" / f"sk-{b:02d}.md").write_text("\n".join(parts), encoding="utf-8")
+        (sk / "in" / f"{name}.md").write_text("\n".join(parts), encoding="utf-8")
     (sk / "items.json").write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"{len(items)} flags, {len(batches)} batches")
 
