@@ -4,6 +4,9 @@
     # one Opus subagent per in/*.md, each reading pipeline/kodansha_blind_prompt.md
     python pipeline/kodansha_blind.py check      # every batch graded, every kanji, both entries
     python pipeline/kodansha_blind.py report     # unblinded: errors per entry, which is better
+    python pipeline/kodansha_blind.py verify-prepare   # every major error, for a Sonnet agent with the web
+    # one Sonnet subagent per verify/in/*.md, each reading pipeline/kodansha_blind_verify_prompt.md
+    python pipeline/kodansha_blind.py verify-report
 
 A random sample of the kanji pages the site serves (offline pack pages.json),
 drawn with a fixed seed. Each kanji's two entries -- ours and Kodansha's --
@@ -302,6 +305,55 @@ def report() -> None:
     print(f"\nall errors, unblinded: {DRAFTS / 'errors.json'}")
 
 
+VERIFY = DRAFTS / "verify"
+
+
+def verify_prepare(size: int) -> None:
+    """Each major error, for a Sonnet agent with the web to confirm: blind, the claim on entry X or Y."""
+    key, _ = _load()
+    errs = [x for x in json.loads((DRAFTS / "errors.json").read_text(encoding="utf-8")) if x.get("severity") == "major"]
+    secs = {}
+    for f in sorted(IN.glob("kb-*.md")):
+        for part in re.split(r"\n(?=## )", f.read_text(encoding="utf-8"))[1:]:
+            secs[part[3:].split("\n", 1)[0].strip()] = part.rstrip()
+    rnd = random.Random(SEED + 1)
+    rnd.shuffle(errs)  # ours and Kodansha's mixed in every batch
+    (VERIFY / "in").mkdir(parents=True, exist_ok=True)
+    (VERIFY / "out").mkdir(parents=True, exist_ok=True)
+    items = []
+    for i, x in enumerate(errs):
+        tag = "X" if key[x["char"]]["X"] == x["who"] else "Y"
+        items.append({"id": f"m{i:02d}", "char": x["char"], "entry": tag, "kind": x["kind"], "item": x.get("item"),
+                      "claim": x["what"], "who": x["who"]})
+    for b in range(math.ceil(len(items) / size)):
+        chunk = items[b * size:(b + 1) * size]
+        parts = [f"# Verify batch v-{b:02d}: {len(chunk)} claims\n"]
+        for it in chunk:
+            parts.append(f"## {it['id']} · {it['char']} · about entry {it['entry']}\n\n"
+                         f"Claim ({it['kind']}, on {it['item']}): {it['claim']}\n\n{secs[it['char']]}\n")
+        (VERIFY / "in" / f"v-{b:02d}.md").write_text("\n".join(parts), encoding="utf-8")
+    (VERIFY / "items.json").write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(items)} claims, {math.ceil(len(items) / size)} batches")
+
+
+def verify_report() -> None:
+    items = {it["id"]: it for it in json.loads((VERIFY / "items.json").read_text(encoding="utf-8"))}
+    got = {}
+    for f in sorted((VERIFY / "out").glob("v-*.json")):
+        for r in json.loads(f.read_text(encoding="utf-8"))["claims"]:
+            got[r["id"]] = r
+    tally = {"ours": Counter(), "kodansha": Counter()}
+    for i, it in items.items():
+        r = got.get(i)
+        v = r["verdict"] if r else "missing"
+        tally[it["who"]][v] += 1
+        print(f"{it['who']:8} {it['char']} {it['item']}: {v} -- {(r or {}).get('why', '')[:160]}")
+        for src in (r or {}).get("sources", [])[:2]:
+            print(f"           {src}")
+    for who, t in tally.items():
+        print(who, dict(t))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -311,11 +363,18 @@ def main() -> None:
     p.add_argument("--prod", action="store_true", help="the entries as the live site serves them")
     sub.add_parser("check")
     sub.add_parser("report")
+    v = sub.add_parser("verify-prepare")
+    v.add_argument("--size", type=int, default=4)
+    sub.add_parser("verify-report")
     a = ap.parse_args()
     if a.cmd == "prepare":
         prepare(a.n, a.size, a.prod)
     elif a.cmd == "check":
         check()
+    elif a.cmd == "verify-prepare":
+        verify_prepare(a.size)
+    elif a.cmd == "verify-report":
+        verify_report()
     else:
         report()
 
