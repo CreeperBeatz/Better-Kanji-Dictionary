@@ -385,7 +385,7 @@ entry ours 36 / Kodansha 37 / tie 27 (was 37/40/23); verified majors on our page
 6 -> 4 kanji (膳 一膳 not common; 透 = D-045; 懲, 燥 explained by their notes),
 Kodansha 2. The fixes caused one verified major: 院政 sent to the catch-all, but
 院 there is the retired emperor (held). Coverage 3.70 -> 3.80.
-**Status: ready, not loaded on prod.** Loading needs a write on the Pi.
+**Status: loaded on prod 2026-11-02 12:57 (fe414d4).** Dry run on prod matched local (32 groups, 1,613 words, all open untouched drafts); public API checked (及び, 故意, 師団, 実際, 代表, 手続き placed; 院政 held). Left: 28 unsure + 11 wrong flags stay as they were (都合 among the unsure), 29 common pairs still in no group, 一膳 (not common), the thin non-JLPT kanji.
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
