@@ -338,6 +338,12 @@ the nearest one: 懲りる under "punish" (learn one's lesson), 照れる/照れ
 under "shine", 並びに under "line up", 焦燥 under "dry up"; 及び ("and"), 一膳
 (counter), 酔いが醒める (sober up), 喝采/采配/風采 (采 has one group, no words)
 are in none. 9% of the sampled pages (5-16%) have such an error.
+Checked against kotobank, jisho, Wiktionary and kanjipedia by Sonnet agents
+with the web, still blind (kodansha_blind.py verify-*): all 11 claims are true;
+7 major on 6 kanji (懲りる, 照れる, 及び, 一膳, 焦燥, and 透 = D-045), 4 minor (並びに
+comes from 並ぶ; 醒める is mostly written 覚める; 采's words are rarer). Kodansha's
+11: 3 major (巽 たつみ is Fukagawa, not Yoshiwara; 随分 and 案内 under the wrong
+sense), 8 minor.
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
@@ -666,6 +672,8 @@ these are for checking and sending upstream. Not confirmed against a second sour
   1820980 形質 "allele" (trait), 1161550 一環 "monocyclic".
 - Headwords: 1569480 甦 read よみがえ looks cut short; 1896520 電算 でんそろ reads
   as でんさん to anyone.
+- 2026-11-02 (Kodansha blind check, verified against kotobank): 1882330 照映 "portrait";
+  kotobank gives "light shining or reflecting". Probably mixed up with 照影.
 Source: JMdict.
 **Status: open.** The sense notes say what is right where the note could; the
 glosses on the page are unchanged.
