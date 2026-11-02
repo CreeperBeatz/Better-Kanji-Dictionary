@@ -264,7 +264,7 @@ def grades(batch: str) -> tuple[dict, list[str]]:
         it = by.get(k)
         if not it:
             continue
-        need = [p for p in parts if not (p == "line" and "line" not in it) and not (p == "ex" and "ex" not in it)]
+        need = [p for p in parts if not (p == "line" and "line" not in it) and not (p == "ex" and "ex" not in it and "note" not in it)]  # a sense note's example sits in its note
         if not isinstance(v, dict) or any(v.get(p) not in GRADES for p in need):
             probs.append(f"{batch}: {k}: grade each of {', '.join(need)} as ok, minor or major")
         elif any(v.get(p) != "ok" for p in need) and not (isinstance(v.get("issue"), str) and v["issue"].strip()):
