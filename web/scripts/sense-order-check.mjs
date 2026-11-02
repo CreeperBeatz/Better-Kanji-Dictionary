@@ -21,6 +21,8 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 900 }, t
   const ns = await page.locator('.entry-senses .meaning-n').allInnerTexts()
   expect(`${name} 信 word page numbers`, ns, ns.map((_, i) => String(i + 1)))
   expect(`${name} 信 word page lead`, (await page.locator('.entry-senses .sense-lead').first().innerText()).trim(), 'trust')
+  const head = await page.locator('.word-head .detail-meanings').first().innerText()
+  expect(`${name} 信 head gloss`, head.split(';')[0].trim(), 'trust')
 
   // The search row for 信 leads with the same sense, numbered 1.
   await page.goto(`${BASE}/search?q=${encodeURIComponent('信')}`, { waitUntil: 'networkidle' })
@@ -29,13 +31,13 @@ for (const [name, viewport, mobile] of [['phone', { width: 390, height: 900 }, t
   const first = await row.locator('.sense').first().innerText()
   expect(`${name} 信 search row lead`, first.replace(/\s+/g, ' ').slice(0, 6), '1trust')
 
-  // 生き under 生: the sense that has the meaning is JMdict's first, now its 2nd.
+  // 生い立ち under 生: the sense that has the meaning is JMdict's first, now its 2nd.
   await page.goto(`${BASE}/kanji/${encodeURIComponent('生')}`, { waitUntil: 'networkidle' })
   await page.waitForSelector('.vocab-row', { timeout: 15000 }).catch(() => {})
-  const iki = page.locator('.vocab-row').filter({ has: page.locator('.vocab-word', { hasText: /^生き$/ }) })
+  const iki = page.locator('.vocab-row').filter({ has: page.locator('.vocab-word', { hasText: /^生い立ち$/ }) })
   if (await iki.count()) {
-    expect(`${name} 生き row number`, await iki.first().locator('.vocab-sense-n').innerText(), '2')
-  } else console.log('note', name, '生き not shown as a row (folded card)')
+    expect(`${name} 生い立ち row number`, await iki.first().locator('.vocab-sense-n').innerText(), '2')
+  } else console.log('note', name, '生い立ち not shown as a row (folded card)')
   await page.close()
 }
 console.log('errors', errors.length ? errors : 'none')

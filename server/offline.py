@@ -113,9 +113,8 @@ def source_key(fresh: bool = False) -> tuple[str, str]:
 
     whole, pages = pack_key(fresh)
     wal = DB_PATH.with_name(DB_PATH.name + "-wal")
-    # The sense notes set the order of each word's senses.
-    notes = _stamp(synonyms.NOTES_PATH)
-    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{notes}|{whole}", f"{PAGES_FORMAT}|{pages}"
+    # The sense notes, as the server read them, set the order of each word's senses.
+    return f"{FORMAT}|{_stamp(DB_PATH)}|{_stamp(wal)}|{synonyms.notes_stamp()}|{whole}", f"{PAGES_FORMAT}|{pages}"
 
 
 def _on_disk() -> dict | None:

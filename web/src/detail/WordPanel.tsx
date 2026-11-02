@@ -26,7 +26,7 @@ import { Valency } from '../search/Valency'
 import { WordMeta } from './HeadMeta'
 import { ReportButton } from '../reports/ReportButton'
 import { warmKanji, warmWord } from '../warm'
-import { senseOrder } from '../senses'
+import { firstSense, senseOrder } from '../senses'
 
 const S = strings(
   {
@@ -169,7 +169,8 @@ function Example({ text, hit }: { text: string; hit: [number, number] | null }) 
 export function WordHead({ word: w, onPick }: { word: Word; onPick: (char: string) => void }) {
   const lang = useLang()
   const t = S(lang)
-  const [lead, ...rest] = w.senses.length ? glossOf(w.senses[0], lang).value.split(';').map((g) => g.trim()) : []
+  const first = firstSense(w)
+  const [lead, ...rest] = first ? glossOf(first, lang).value.split(';').map((g) => g.trim()) : []
   // From five characters (電子計算機, アイスクリーム) the word wants the row: its sense goes under it.
   return (
     <div className="word-head" data-long={[...w.headword].length >= 5 || undefined}>
@@ -247,6 +248,10 @@ function SenseNoteView({ note, lang }: { note: SenseNote; lang: Lang }) {
 }
 
 /** A sense in a line: its first glosses. */
+/** The other word's sense a related row names (its index): the one that matches, or for a form
+ *  of the whole word, its first. */
+const otherSense = (r: RelatedWord): number => (r.otherSense ? r.otherSense - 1 : senseOrder(r.word)[0])
+
 function senseLine(w: Word, n: number, lang: Lang): string | null {
   const s = w.senses[n]
   return s ? glossOf(s, lang).value.split(';').slice(0, 2).join(';') : null
@@ -274,7 +279,7 @@ function SenseAside({
   const t = S(lang)
   if (!related.length) return null
   const open = (r: RelatedWord) => {
-    focusMeaningNext(focusKey(r.word.id), String((r.otherSense ?? 1) - 1))
+    focusMeaningNext(focusKey(r.word.id), String(otherSense(r)))
     onWord(r.word)
   }
   const en = (
@@ -289,7 +294,7 @@ function SenseAside({
     related
       .filter((r) => r.kind === kind)
       .map((r) => {
-        const m = senseLine(r.word, (r.otherSense ?? 1) - 1, lang)
+        const m = senseLine(r.word, otherSense(r), lang)
         const l = said(r.line, r.lineBg)
         return (
           <CloseRow
@@ -358,7 +363,7 @@ function SenseAside({
                   <span className="usage-reading" lang="ja">
                     {r.word.reading}
                   </span>
-                  <span className="usage-keyword">{senseLine(r.word, (r.otherSense ?? 1) - 1, lang)}</span>
+                  <span className="usage-keyword">{senseLine(r.word, otherSense(r), lang)}</span>
                 </button>
                 {r.line && (
                   <p className="spelling-def">

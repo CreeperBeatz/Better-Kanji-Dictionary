@@ -38,6 +38,7 @@ from functools import cache
 from pathlib import Path
 
 DATA = Path(__file__).resolve().parent.parent / "data"
+NOTES_PATH = DATA / "word_sense_notes.json"
 
 
 def _load(name: str) -> dict:
@@ -58,8 +59,22 @@ def _kanji() -> dict:
 
 
 @cache
+def _notes_read() -> tuple[dict, str]:
+    try:
+        s = NOTES_PATH.stat()
+        stamp = f"{s.st_mtime_ns}:{s.st_size}"
+    except FileNotFoundError:
+        stamp = "-"
+    return _load(NOTES_PATH.name), stamp
+
+
 def _notes() -> dict:
-    return _load(NOTES_PATH.name)
+    return _notes_read()[0]
+
+
+def notes_stamp() -> str:
+    """The sense notes file as this process read it: the offline pack's words carry their order."""
+    return _notes_read()[1]
 
 
 @cache
@@ -107,7 +122,6 @@ def line_bg(line: str | None) -> str | None:
     return line and _bg().get("lines", {}).get(line)
 
 
-NOTES_PATH = DATA / "word_sense_notes.json"
 _RANK = {"main": 0, "secondary": 1, "rare": 2}
 
 

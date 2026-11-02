@@ -31,7 +31,7 @@ import { WordsWith } from './WordsWith'
 import { Spellings } from '../detail/Spellings'
 import { InstallNote } from '../install/InstallGuide'
 import { warmKanji, warmWord } from '../warm'
-import { leadSense, senseNo, senseOrder } from '../senses'
+import { firstSense, leadSense, senseNo, senseOrder } from '../senses'
 
 export const LEVELS: Level[] = [5, 4, 3, 2, 1]
 
@@ -279,6 +279,11 @@ export function newsRank(nf: number): string {
 function remember(key: string, r: SearchResponse) {
   found.set(key, r)
   if (found.size > 60) found.delete(found.keys().next().value!)
+}
+
+function RecentGloss({ w, lang }: { w: Word; lang: Lang }) {
+  const s = firstSense(w)
+  return s ? <span className="recent-gloss">{glossOf(s, lang).value}</span> : null
 }
 
 /** Memoised: while a new search is on its way the old rows stay as they are. */
@@ -864,7 +869,7 @@ function HomePage({
                 {w.reading}
               </span>
             )}
-            {w.senses[0] && <span className="recent-gloss">{glossOf(w.senses[0], lang).value}</span>}
+            <RecentGloss w={w} lang={lang} />
           </button>
         )
       }

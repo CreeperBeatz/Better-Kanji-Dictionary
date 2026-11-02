@@ -807,10 +807,13 @@ def _in_card(word: dict, wid: int, group: str, meanings: dict, senses: list[dict
     `senseAt`, the sense of the word that has this meaning (JMdict's index), where not the
     first in the word's `order` (焼く's "to roast; to bake" under "bake"); `alsoOf`, the
     word's main meaning, where this is another of its meanings."""
+    from .. import review
+
     out = {**word, "star": True} if wid in best else dict(word)
-    # The placements name a sense only where it is not JMdict's first.
-    n = meanings.get("at", {}).get(wid, {}).get(group, 0)
-    if n != word.get("order", [0])[0]:
+    # The placements name a sense only where it is not JMdict's first; the catch-all is none of them.
+    first = word.get("order", [0])[0]
+    n = first if group == review.CATCH_ALL else meanings.get("at", {}).get(wid, {}).get(group, 0)
+    if n != first:
         out["senseAt"] = n
     main = meanings["placed"].get(wid)
     if main != group and (g := next((x for x in senses if x["id"] == main), None)):

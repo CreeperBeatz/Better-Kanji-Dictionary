@@ -14,6 +14,7 @@ import { glossOf } from '../i18n/content'
 import { hiraganaToKatakana, plainReading as plain } from '../local/japanese'
 import { ValencyMark } from '../search/Valency'
 import { warmWord } from '../warm'
+import { firstSense } from '../senses'
 
 const S = strings(
   {
@@ -138,6 +139,7 @@ function ReadingGroup({
           const formed = it?.formed ?? null
           const rare = full && !it?.common
           const kana = <ReadingKana r={r} on={!kun} />
+          const gloss = kun && formed ? firstSense(formed) : undefined
           return (
             <li key={r} className="reading-row" data-rare={rare || undefined}>
               <span className="reading-kana" lang="ja" title={rare ? t('rare') : undefined}>
@@ -151,7 +153,7 @@ function ReadingGroup({
               </span>
               <span className="reading-about">
                 {/* An on reading's own word (上 read じょう) rarely means what the kanji does: its words say it. */}
-                {kun && formed?.senses[0] && <span className="reading-gloss">{glossOf(formed.senses[0], lang).value.split(';')[0]}</span>}
+                {gloss && <span className="reading-gloss">{glossOf(gloss, lang).value.split(';')[0]}</span>}
                 {kun && formed && <ValencyMark word={formed} />}
                 {it?.examples.map((w) => (
                   <button
