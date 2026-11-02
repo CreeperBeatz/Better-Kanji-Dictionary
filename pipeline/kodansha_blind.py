@@ -186,7 +186,47 @@ def _prod_pages(chars: list[str]) -> dict[str, dict]:
     return have
 
 
-def prepare(n: int, size: int, prod: bool = False) -> None:
+def _apply_fixes(page: dict, fix: dict) -> dict:
+    """A prod page as it will be once the meaning-gaps fixes (pipeline/meaning_gaps_final.py
+    final.json) are loaded: new groups appended, each moved word out of where it was and into
+    its group (by frequency among the words there), catch-all words among the sound-only ones."""
+    page = json.loads(json.dumps(page))
+    for g in fix.get("new_groups") or []:
+        page["meanings"].append({"id": g["id"], "en": g["en"], "about": g.get("about"), "kun": {"words": []},
+                                 "on": [], "also": [], "exceptions": []})
+    by_id = {m["id"]: m for m in page["meanings"]}
+    moving = {w["id"] for w in fix.get("words") or []}
+
+    def drop(ws: list[dict]) -> list[dict]:
+        return [w for w in ws if w.get("id") not in moving]
+
+    for m in page["meanings"]:
+        if m.get("kun"):
+            m["kun"]["words"] = drop(m["kun"]["words"])
+        for o in m.get("on") or []:
+            o["words"] = drop(o["words"])
+    if page.get("soundOnly"):
+        page["soundOnly"]["words"] = drop(page["soundOnly"]["words"])
+    for w in fix.get("words") or []:
+        obj = {"id": w["id"], "headword": w["hw"], "reading": w.get("r"), "nf": w.get("nf")}
+        if w["to"] == "catch-all":
+            page.setdefault("soundOnly", None)
+            page["soundOnly"] = page["soundOnly"] or {"words": []}
+            page["soundOnly"]["words"].append(obj)
+            continue
+        m = by_id.get(w["to"])
+        if m is None:
+            continue
+        if not m.get("on"):
+            m["on"] = [{"reading": "", "words": []}]
+        ws = m["on"][0]["words"]
+        nf = w.get("nf") or 99
+        at = next((k for k, x in enumerate(ws) if not x.get("star") and (x.get("nf") or 99) > nf), len(ws))
+        ws.insert(at, obj)
+    return page
+
+
+def prepare(n: int, size: int, prod: bool = False, fixes: Path | None = None) -> None:
     pack = _pack()
     pages = _gz(pack / "pages.json.gz")
     kpack = _gz(pack / "kanji.json.gz")
@@ -204,6 +244,9 @@ def prepare(n: int, size: int, prod: bool = False) -> None:
     sample = rnd.sample(pool, n)
     if prod:  # same sample and sides, drawn from the local pool; the entries as prod serves them
         pages = {**pages, **_prod_pages(sample)}
+    if fixes:  # what will ship: prod with the meaning-gaps fixes applied
+        fx = json.loads(Path(fixes).read_text(encoding="utf-8"))
+        pages = {**pages, **{c: _apply_fixes(pages[c], fx[c]) for c in sample if c in fx}}
     words = _words(pack)
     # X is ours for exactly half the kanji, in a shuffled order: a grader leaning to X or Y tilts nothing.
     sides = [i < n // 2 for i in range(n)]
@@ -361,6 +404,7 @@ def main() -> None:
     p.add_argument("--n", type=int, default=100)
     p.add_argument("--size", type=int, default=10)
     p.add_argument("--prod", action="store_true", help="the entries as the live site serves them")
+    p.add_argument("--fixes", type=Path, help="apply this meaning-gaps final.json to the prod pages first")
     sub.add_parser("check")
     sub.add_parser("report")
     v = sub.add_parser("verify-prepare")
@@ -368,7 +412,7 @@ def main() -> None:
     sub.add_parser("verify-report")
     a = ap.parse_args()
     if a.cmd == "prepare":
-        prepare(a.n, a.size, a.prod)
+        prepare(a.n, a.size, a.prod, a.fixes)
     elif a.cmd == "check":
         check()
     elif a.cmd == "verify-prepare":
