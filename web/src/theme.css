@@ -11515,6 +11515,11 @@ button.review-part {
   background: var(--sumi-sunk);
 }
 
+button.report-thumb {
+  padding: 0;
+  cursor: zoom-in;
+}
+
 .report-thumb img {
   width: 100%;
   height: 100%;
@@ -11686,34 +11691,21 @@ button.review-part {
   margin-top: 10px;
 }
 
-.report-statuses {
-  display: flex;
-  gap: 2px;
+.report-open {
+  margin: 0 0 8px;
+  font-size: calc(12.5px * var(--type));
 }
 
-.report-statuses button {
-  background: none;
-  border: 1px solid var(--rule-bright);
-  color: var(--paper-dim);
-  font-family: var(--gothic);
-  font-size: calc(12px * var(--type));
-  padding: 3px 9px;
+.report-status-pick {
+  width: auto;
+  min-width: 140px;
   cursor: pointer;
 }
 
-.report-statuses button:first-child {
-  border-radius: 2px 0 0 2px;
-}
 
-.report-statuses button:last-child {
-  border-radius: 0 2px 2px 0;
-}
 
-.report-statuses button[data-on] {
-  background: var(--ai-wash);
-  border-color: var(--ai-deep);
-  color: var(--paper);
-}
+
+
 
 .report-reply {
   flex: 1;
@@ -11753,4 +11745,33 @@ button.review-part {
   .report-subject {
     font-size: calc(24px * var(--type));
   }
+}
+
+/* The owner's Reports button: a circle with how many reports are open. */
+.account-review {
+  position: relative;
+}
+
+.reports-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--shu);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--sumi-lift);
+}
+
+.report-open a {
+  text-decoration: none;
 }

@@ -1017,6 +1017,9 @@ export const api = {
       status ? [['status', status]] : [],
     ),
 
+  /** How many reports are open: the owner's badge. */
+  openReports: () => get<{ open: number }>('/api/reports/open-count'),
+
   setReportStatus: (id: string, status: ReportStatus, reply: string | null) =>
     send<{ report: UserReport }>(`/api/reports/${encodeURIComponent(id)}/status`, 'POST', { status, reply }),
 

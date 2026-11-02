@@ -78,6 +78,8 @@ def main() -> int:
         check("a made-up name gets 404", httpx.get(f"{base}/api/reports/{with_pics}/files/..%2Fx", headers=h("admin")).status_code == 404)
 
         print("listing and closing")
+        check("a user can't see the open count", srv.call("GET", "/api/reports/open-count", "user")[0] == 403)
+        check("the admin sees the open count", srv.call("GET", "/api/reports/open-count", "admin")[1] == {"open": 3})
         check("a user can't list", srv.call("GET", "/api/reports", "user")[0] == 403)
         st, res = srv.call("GET", "/api/reports", "admin")
         check("the admin lists all", st == 200 and len(res["items"]) == 3 and res["counts"]["open"] == 3, (st, res.get("counts")))
@@ -89,6 +91,7 @@ def main() -> int:
         check("an unknown status: 400", st == 400, st)
         st, res = srv.call("POST", f"/api/reports/{first}/status", "admin", {"status": "fixed", "reply": " Fixed in 12 kanji. "})
         check("the admin closes it", st == 200 and res["report"]["status"] == "fixed", res)
+        check("the count follows a close", srv.call("GET", "/api/reports/open-count", "admin")[1] == {"open": 2})
         st, res = srv.call("GET", "/api/reports?status=open", "admin")
         check("filtered by status", st == 200 and len(res["items"]) == 2, len(res.get("items", [])))
         st, mine = srv.call("GET", "/api/reports/mine", "user")

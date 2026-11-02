@@ -276,6 +276,11 @@ def listing(status: str | None = None, limit: int = 200, offset: int = 0) -> dic
     return {"items": rows, "people": people, "counts": counts}
 
 
+def open_count() -> int:
+    """How many reports wait, for the badge on the owner's Reports button."""
+    return _all("SELECT COUNT(*) FROM report WHERE status = 'open'")[0][0]
+
+
 def mine(user_id: str, limit: int = 100) -> dict:
     """Your own reports and what became of them. Who closed them is not shown."""
     keep = ("id", "created", "subject", "text", "files", "status", "reply", "closed_at")

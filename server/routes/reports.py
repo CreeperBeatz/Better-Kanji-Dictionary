@@ -43,6 +43,11 @@ def mine(me: dict = Depends(require_user)) -> dict:
     return reports.mine(me["id"])
 
 
+@router.get("/open-count")
+def open_count(_: dict = Depends(admin)) -> dict:
+    return {"open": reports.open_count()}
+
+
 @router.get("")
 def listing(
     status: str | None = Query(None),

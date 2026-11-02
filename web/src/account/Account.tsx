@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { logout, requestLink, setAvatar, updateProfile, useAuth } from './auth'
+import { api } from '../api'
 import { Credits } from '../About'
 import { strings, useLang, type Lang } from '../i18n'
 import { errorText } from '../i18n/errors'
@@ -49,6 +50,7 @@ const S = strings(
       'AI drafts much of it from dictionaries, and automatic checks test it. If you see a mistake, use "Report a problem" at the bottom of the page. We check every report.',
     roleAdmin: 'You run this site.',
     reportsScreen: 'Reports',
+    openReports: '{n} open',
   },
   {
     moving: 'Бележките от този браузър се преместват в профила ви',
@@ -87,6 +89,7 @@ const S = strings(
       'Изкуственият интелект съставя голяма част от тях по речници, а автоматични проверки ги тестват. Ако видите грешка, използвайте „Съобщете за проблем“ най-долу на страницата. Проверяваме всеки доклад.',
     roleAdmin: 'Вие управлявате този сайт.',
     reportsScreen: 'Доклади',
+    openReports: '{n} отворени',
   },
 )
 
@@ -368,12 +371,31 @@ function Profile({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void })
 function ReportsLink({ onWorkbench }: { onWorkbench?: (tab: WorkbenchTab) => void }) {
   const t = S(useLang())
   const { user } = useAuth()
-  if (user?.role !== 'admin' || !onWorkbench) return null
+  const admin = user?.role === 'admin'
+  // How many wait, asked each time the popup opens.
+  const [open, setOpen] = useState<number | null>(null)
+  useEffect(() => {
+    if (!admin) return
+    let stale = false
+    api.openReports().then(
+      (d) => !stale && setOpen(d.open),
+      () => {},
+    )
+    return () => {
+      stale = true
+    }
+  }, [admin])
+  if (!admin || !onWorkbench) return null
   return (
     <section className="account-contribute">
       <p className="hint">{t('roleAdmin')}</p>
       <button className="account-submit account-review" onClick={() => onWorkbench('reports')}>
         {t('reportsScreen')}
+        {!!open && (
+          <span className="reports-badge" title={t('openReports', { n: open })} aria-label={t('openReports', { n: open })}>
+            {open > 99 ? '99+' : open}
+          </span>
+        )}
       </button>
     </section>
   )

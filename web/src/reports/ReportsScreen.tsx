@@ -38,6 +38,8 @@ const S = strings(
     save: 'save',
     saved: 'saved',
     closed: 'set {date}',
+    status: 'Status',
+    openPage: 'Open the page it was sent from',
   },
   {
     title: 'Доклади',
@@ -61,6 +63,8 @@ const S = strings(
     save: 'запазете',
     saved: 'запазено',
     closed: 'зададено {date}',
+    status: 'Състояние',
+    openPage: 'Отворете страницата, от която е изпратен',
   },
 )
 
@@ -170,6 +174,8 @@ function ReportRow({ report: r, who, onChanged }: { report: UserReport; who?: Au
   const changed = status !== r.status || reply.trim() !== (r.reply ?? '')
   const when = (iso: string) => new Date(iso).toLocaleString(localeOf(lang), { dateStyle: 'medium', timeStyle: 'short' })
   const url = subjectUrl(r.subject)
+  // The page as the reporter had it open (their own address), else the subject's page.
+  const page = (r.context?.url?.startsWith('/') ? r.context.url : null) ?? url
   const ctx = Object.entries(r.context ?? {}).filter(([, v]) => v)
 
   async function save() {
@@ -207,6 +213,13 @@ function ReportRow({ report: r, who, onChanged }: { report: UserReport; who?: Au
           <StatusChip status={r.status} />
         </p>
         <p className="report-text">{r.text}</p>
+        {page && (
+          <p className="report-open">
+            <a className="clear" href={page} target="_blank" rel="noopener">
+              {t('openPage')} →
+            </a>
+          </p>
+        )}
         {r.files.length > 0 && (
           <div className="report-files">
             {r.files.map((f) => (
@@ -228,23 +241,21 @@ function ReportRow({ report: r, who, onChanged }: { report: UserReport; who?: Au
           </details>
         )}
         <div className="report-actions">
-          <div className="report-statuses" role="radiogroup">
+          <select
+            className="assoc-text report-status-pick"
+            aria-label={t('status')}
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value as ReportStatus)
+              setSaved(false)
+            }}
+          >
             {STATUSES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                role="radio"
-                aria-checked={status === s}
-                data-on={status === s || undefined}
-                onClick={() => {
-                  setStatus(s)
-                  setSaved(false)
-                }}
-              >
+              <option key={s} value={s}>
                 {t(`s_${s}` as Key)}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
           <textarea
             className="assoc-text report-reply"
             rows={2}
