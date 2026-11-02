@@ -247,11 +247,11 @@ function SenseNoteView({ note, lang }: { note: SenseNote; lang: Lang }) {
   )
 }
 
-/** A sense in a line: its first glosses. */
 /** The other word's sense a related row names (its index): the one that matches, or for a form
  *  of the whole word, its first. */
 const otherSense = (r: RelatedWord): number => (r.otherSense ? r.otherSense - 1 : senseOrder(r.word)[0])
 
+/** A sense in a line: its first glosses. */
 function senseLine(w: Word, n: number, lang: Lang): string | null {
   const s = w.senses[n]
   return s ? glossOf(s, lang).value.split(';').slice(0, 2).join(';') : null

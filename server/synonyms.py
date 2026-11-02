@@ -37,6 +37,8 @@ import json
 from functools import cache
 from pathlib import Path
 
+from .db import file_stamp
+
 DATA = Path(__file__).resolve().parent.parent / "data"
 NOTES_PATH = DATA / "word_sense_notes.json"
 
@@ -60,11 +62,7 @@ def _kanji() -> dict:
 
 @cache
 def _notes_read() -> tuple[dict, str]:
-    try:
-        s = NOTES_PATH.stat()
-        stamp = f"{s.st_mtime_ns}:{s.st_size}"
-    except FileNotFoundError:
-        stamp = "-"
+    stamp = file_stamp(NOTES_PATH)
     return _load(NOTES_PATH.name), stamp
 
 
@@ -129,7 +127,9 @@ def sense_order(word_id: int, count: int) -> list[int] | None:
     """The word's senses (0-based) in our order: main, then secondary, then rare, JMdict's order
     within each. The site numbers senses by it; the index stays the sense's id everywhere else.
     None where it is JMdict's own order (and for a word with no notes)."""
-    notes = _notes().get(str(word_id)) or []
+    notes = _notes().get(str(word_id))
+    if not notes:
+        return None
     rank = [_RANK.get((notes[i] or {}).get("rank"), 1) if i < len(notes) else 1 for i in range(count)]
     order = sorted(range(count), key=lambda i: (rank[i], i))
     return None if order == list(range(count)) else order

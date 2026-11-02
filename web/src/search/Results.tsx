@@ -281,11 +281,6 @@ function remember(key: string, r: SearchResponse) {
   if (found.size > 60) found.delete(found.keys().next().value!)
 }
 
-function RecentGloss({ w, lang }: { w: Word; lang: Lang }) {
-  const s = firstSense(w)
-  return s ? <span className="recent-gloss">{glossOf(s, lang).value}</span> : null
-}
-
 /** Memoised: while a new search is on its way the old rows stay as they are. */
 const WordRow = memo(WordRowView)
 
@@ -859,6 +854,7 @@ function HomePage({
       }
       case 'word': {
         const w = v.word
+        const first = firstSense(w)
         return (
           <button {...warmWord(w.id)} onClick={() => onWord(w)}>
             <span className="recent-head" lang="ja">
@@ -869,7 +865,7 @@ function HomePage({
                 {w.reading}
               </span>
             )}
-            <RecentGloss w={w} lang={lang} />
+            {first && <span className="recent-gloss">{glossOf(first, lang).value}</span>}
           </button>
         )
       }
