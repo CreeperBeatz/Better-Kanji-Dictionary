@@ -22,6 +22,14 @@ works them out:
   one -- are stored as SVG paths, only where they differ, and a page fetches
   the few hundred bytes for its own character.
 
+  Unicode keeps more old printed shapes as *compatibility ideographs*: 館
+  (U+FA2C) is 館 with the old 食 radical, 神 礼 福 the old 示, 都 諸 the
+  dotted 者. Each is the same character as its base -- Unicode
+  normalization turns one into the other -- so it gets no page, and text is
+  no safe way to show it: normalizing or a phone's own font draws today's
+  shape instead. Where the mincho draws one differently from its base it is
+  stored the same way, as feature `compat`.
+
 - **Drawn shapes** (`font_drawn`). The semi-cursive face, 衡山毛筆フォント行書
   (Aoyagi Kouzan, public domain), is 5.6 MB and has no web subset, so it is
   never loaded: each kanji's outline is stored as an SVG path, a few KB, and
@@ -37,6 +45,7 @@ import io
 import lzma
 import sqlite3
 import tarfile
+import unicodedata
 from pathlib import Path
 
 FONTS = Path(__file__).parent / "data" / "fonts"
@@ -52,6 +61,18 @@ DRAWN = {
 }
 # The older-standard features worth showing, oldest first.
 OLD_FEATURES = ("jp78", "jp83", "jp90")
+# The face whose compatibility ideographs are old printed shapes worth showing.
+COMPAT_FACE = "mincho"
+
+
+def compat_shapes() -> dict[str, list[str]]:
+    """base character -> the compatibility ideographs that are it (館 -> 館)."""
+    out: dict[str, list[str]] = {}
+    for cp in [*range(0xF900, 0xFB00), *range(0x2F800, 0x2FA20)]:
+        d = unicodedata.decomposition(chr(cp))
+        if d and " " not in d and not d.startswith("<"):
+            out.setdefault(chr(int(d, 16)), []).append(chr(cp))
+    return out
 
 
 def missing() -> list[str]:
@@ -130,10 +151,11 @@ def build(db: sqlite3.Connection) -> None:
         CREATE TABLE font_old (
             char    TEXT NOT NULL,
             face    TEXT NOT NULL,   -- mincho | textbook
-            feature TEXT NOT NULL,   -- jp78 | jp83 | jp90
+            feature TEXT NOT NULL,   -- jp78 | jp83 | jp90, or compat: a compatibility ideograph's shape
             em      INTEGER NOT NULL, -- units per em: the paths' viewBox is 0 0 em em
             now     TEXT NOT NULL,   -- today's shape, SVG path data
             old     TEXT NOT NULL,   -- the feature's shape
+            code    TEXT,            -- compat only: the ideograph's code point, FA2C
             PRIMARY KEY (char, face, feature)
         );
         CREATE TABLE font_drawn (
@@ -165,13 +187,30 @@ def build(db: sqlite3.Connection) -> None:
                     continue
                 now, then = _path(glyphs, base, top), _path(glyphs, subs[base], top)
                 if now != then:
-                    old_rows.append((c, key, feature, em, now, then))
+                    old_rows.append((c, key, feature, em, now, then, None))
                     n += 1
             if n:
                 print(f"  {key:9} {feature}  {n:>5} characters drawn differently")
+        if key == COMPAT_FACE:
+            n = 0
+            for c, variants in compat_shapes().items():
+                base = cmap.get(ord(c))
+                if c not in cover or base is None:
+                    continue
+                now = _path(glyphs, base, top)
+                for v in variants:
+                    g = cmap.get(ord(v))
+                    then = _path(glyphs, g, top) if g else ""
+                    # One row per character, the first drawn differently: 88 bases have
+                    # several, mostly Korean duplicates the mincho draws as today's shape.
+                    if then and then != now:
+                        old_rows.append((c, key, "compat", em, now, then, f"{ord(v):04X}"))
+                        n += 1
+                        break
+            print(f"  {key:9} compat {n:>5} characters drawn differently (compatibility ideographs)")
         print(f"  {key:9} has   {sum(1 for c in chars if key in cover[c]):>6,} of {len(chars):,} characters")
     db.executemany("INSERT INTO font_cover VALUES (?,?)", [(c, " ".join(f)) for c, f in cover.items() if f])
-    db.executemany("INSERT INTO font_old VALUES (?,?,?,?,?,?)", old_rows)
+    db.executemany("INSERT INTO font_old VALUES (?,?,?,?,?,?,?)", old_rows)
 
     # Only characters someone may look up -- graded, on a JLPT list, or in the
     # newspaper count -- not the 10,000 rare ones: 2-4 KB each adds up.

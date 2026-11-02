@@ -342,14 +342,22 @@ def fonts_of(char: str) -> dict:
     JIS shapes where a face draws them differently, and its outline in the
     faces too big to load, semi-cursive brush (pipeline/fonts.py)."""
     row = query_one("SELECT faces FROM font_cover WHERE char = ?", (char,))
-    old = query("SELECT face, feature, em, old FROM font_old WHERE char = ? ORDER BY feature, face", (char,))
+    # `code`, a compatibility ideograph's code point, came after the first fonts
+    # tables; an older database has the JIS shapes alone.
+    has_code = any(r["name"] == "code" for r in query("PRAGMA table_info(font_old)"))
+    old = query(
+        "SELECT face, feature, em, old, code FROM font_old WHERE char = ? ORDER BY feature, face"
+        if has_code
+        else "SELECT face, feature, em, old, NULL AS code FROM font_old WHERE char = ? ORDER BY feature, face",
+        (char,),
+    )
     # A database from before the drawn faces has no such table: the strip goes without them.
     has_drawn = query_one("SELECT 1 FROM sqlite_master WHERE name = 'font_drawn'")
     drawn = query("SELECT face, em, path FROM font_drawn WHERE char = ?", (char,)) if has_drawn else []
     return {
         "char": char,
         "faces": row["faces"].split() if row else [],
-        "old": [dict(r) for r in old],
+        "old": [{k: r[k] for k in ("face", "feature", "em", "old")} | ({"code": r["code"]} if r["code"] else {}) for r in old],
         "drawn": [{"face": r["face"], "em": r["em"], "d": r["path"]} for r in drawn],
     }
 

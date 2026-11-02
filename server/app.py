@@ -11,7 +11,9 @@ off untrusted networks until real mail is configured.
 
 import mimetypes
 import threading
+import unicodedata
 from pathlib import Path
+from urllib.parse import parse_qsl, quote, urlencode
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +46,30 @@ app.add_middleware(
 
 # The map payload is a few hundred KB of repetitive JSON at the widest scope.
 app.add_middleware(GZipMiddleware, minimum_size=2048)
+
+
+class NormalizeText:
+    """Every API path and query in Unicode NFC, so text pasted from an old
+    document finds what it means: 館 (U+FA2C, a compatibility ideograph) is
+    館, and か plus a combining ゛ is が. The database holds NFC only."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].startswith("/api/"):
+            path = unicodedata.normalize("NFC", scope["path"])
+            qs = scope.get("query_string", b"").decode("latin-1")
+            pairs = parse_qsl(qs, keep_blank_values=True)
+            fixed = [(k, unicodedata.normalize("NFC", v)) for k, v in pairs]
+            if path != scope["path"] or fixed != pairs:
+                scope = dict(scope, path=path, raw_path=quote(path).encode())
+                if fixed != pairs:
+                    scope["query_string"] = urlencode(fixed).encode()
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(NormalizeText)
 
 
 app.add_exception_handler(AppError, app_error_handler)

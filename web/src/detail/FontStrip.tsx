@@ -32,6 +32,7 @@ const S = strings(
     gyoshoTip: 'Kouzan Gyosho: semi-cursive brush (行書), the hand of shop signs, menus and New Year cards. Strokes join and parts get simpler.',
     oldForm: 'old form',
     oldFormTip: 'Its form before the post-war reform (旧字体)',
+    printedTip: 'Its old printed shape (旧字体). Unicode keeps it as U+{code}, the same character as {char}, so it has no page of its own.',
     notAPage: '{char} has no page of its own',
     old: '{face}, JIS {years}',
     oldTip: 'How JIS X 0208 ({years}) printed it in {face}. Today’s shape is the first {face} in the row.',
@@ -45,6 +46,7 @@ const S = strings(
     gyoshoTip: 'Kouzan Gyosho: полуполегат почерк с четка (行書), както на табелите, менютата и новогодишните картички. Чертите се свързват, а частите се опростяват.',
     oldForm: 'стара форма',
     oldFormTip: 'Формата му преди следвоенната реформа (旧字体)',
+    printedTip: 'Старата му печатна форма (旧字体). Unicode я пази като U+{code}, същия знак като {char}, затова няма собствена страница.',
     notAPage: '{char} няма собствена страница',
     old: '{face}, JIS {years}',
     oldTip: 'Как JIS X 0208 ({years}) го печата в {face}. Днешната форма е първото {face} в реда.',
@@ -167,18 +169,26 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
   // Faces drawn from outlines, never loaded as fonts: only the brush one, and only where it has the character.
   const drawn = (info?.drawn ?? []).filter((x) => x.face === 'gyosho')
 
-  // One cell per distinct old outline: 1978 and 1983 often agree. The server
-  // still knows other faces' old shapes; only the two shown here count.
+  // Old printed shapes Unicode keeps as compatibility ideographs (館 for 館):
+  // the same character, so drawn from the server's outline -- as text,
+  // normalizing or a phone's own font would draw today's shape instead.
+  const printed = (info?.old ?? []).filter((o) => o.feature === 'compat' && isFace(o.face))
+  // An old form that is such an ideograph (侮 for 侮) is that shape: shown once, drawn.
+  const forms = printed.length ? oldForms.filter((i) => i.char.normalize('NFC') === i.char) : oldForms
+
+  // One cell per distinct old JIS outline: 1978 and 1983 often agree, and one
+  // may be the printed shape above. The server still knows other faces' old
+  // shapes; only the two shown here count.
   const old: { face: Face; years: string[]; em: number; d: string }[] = []
   for (const o of info?.old ?? []) {
-    if (!isFace(o.face)) continue
+    if (!isFace(o.face) || o.feature === 'compat' || printed.some((p) => p.face === o.face && p.old === o.old)) continue
     const same = old.find((x) => x.face === o.face && x.d === o.old)
     if (same) same.years.push(YEARS[o.feature])
     else old.push({ face: o.face, years: [YEARS[o.feature]], em: o.em, d: o.old })
   }
 
   // Mincho alone says nothing the page does not; the empty list still watches for the screen.
-  if (shown.length + drawn.length + oldForms.length + old.length < 2) return <ul className="font-strip" ref={ref} />
+  if (shown.length + drawn.length + forms.length + printed.length + old.length < 2) return <ul className="font-strip" ref={ref} />
 
   return (
     <ul className="font-strip" ref={ref}>
@@ -198,7 +208,7 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
           <span className="font-strip-label">{t('gyosho')}</span>
         </li>
       ))}
-      {oldForms.map((i) => {
+      {forms.map((i) => {
         const inner = (
           <>
             <span className="font-strip-glyph" lang="ja">
@@ -217,6 +227,16 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
             ) : (
               <span title={`${t('oldFormTip')} · ${t('notAPage', { char: i.char })}`}>{inner}</span>
             )}
+          </li>
+        )
+      })}
+      {printed.map((o) => {
+        return (
+          <li key={`printed-${o.face}`} title={t('printedTip', { code: o.code ?? '', char })}>
+            <svg className="font-strip-glyph" viewBox={`0 0 ${o.em} ${o.em}`} role="img" aria-label={`${char} ${t('oldForm')}`}>
+              <path d={o.old} />
+            </svg>
+            <span className="font-strip-label">{t('oldForm')}</span>
           </li>
         )
       })}
