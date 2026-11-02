@@ -344,6 +344,20 @@ with the web, still blind (kodansha_blind.py verify-*): all 11 claims are true;
 comes from 並ぶ; 醒める is mostly written 覚める; 采's words are rarer). Kodansha's
 11: 3 major (巽 たつみ is Fukagawa, not Yoshiwara; 随分 and 案内 under the wrong
 sense), 8 minor.
+Correction (2026-11-02, the gaps pilot): the blind check hid our group notes, and
+three of the "major" ones are explained there on the page: 懲's note names 懲りる
+("to learn a hard lesson"), 燥's explains 焦燥, 醒's covers sobering up. Left as
+real: 照れる under "shine", 及び in no group, 並びに (minor), 一膳 (not a common
+word), 采's 喝采 in no group, and 透 (D-045).
+Pilot (pipeline/meaning_gaps.py, 50 kanji: those 8 unmarked among 42 random; Opus
+screen on prod groups + every common word with JMdict senses, then a Sonnet
+skeptic with the web on every flag): 26 flags, 0 wrong; 20 right as proposed, 6
+right with another fix (the screener proposes new groups too readily: 照れる,
+立ち往生, 往々, 損じ and 喝采 belong in an existing group or the catch-all, 相場 too).
+Only 及び stays major. Random kanji: 16 of 42 flagged, all minor in the end,
+almost all common words in no group (相場, 死者, 若干, 車線, 中堅). Found the known
+real gaps 照, 及, 采; missed 並びに and 一膳 (not common, so not in the input).
+Real new meanings found: 幸 "imperial visit" (御幸), 干 "stems of the cycle" (干支).
 
 ### D-028 · Groups that are word-building patterns, not meanings
 *Found 2026-10-17* (Dani: well-known kanji like 人 and 物 have the most words
