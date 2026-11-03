@@ -17,8 +17,8 @@
  * way, and is remembered.
  *
  * First its Readings, every one at a glance (a rare one, in no common word,
- * faded). Then its Meanings, opening with how they follow from each other,
- * then the cards. Below them:
+ * faded). Then its Meanings, the cards; the page's gist above says how they
+ * hang together (DetailPanel). Below them:
  * words where the kanji is there for its sound, the special readings, and
  * mix-ups on readings no meaning has. The words in no meaning group are not
  * here: "all words" has them.
@@ -112,7 +112,6 @@ export function Meanings({
 }) {
   const lang = useLang()
   const t = S(lang)
-  const link = (lang === 'bg' && page.linkBg) || page.link
   const [allFolded, setAllFolded] = useState(rememberedFold)
   // The cards turned the other way from all of them, on this kanji's page.
   const kept = (): ReadonlySet<string> => turnedOn.get(page.char) ?? new Set()
@@ -165,8 +164,6 @@ export function Meanings({
           </button>
         )}
       </h3>
-      {/* How they follow from each other, above them; the page opens with the kanji's gist (DetailPanel). */}
-      {link && <p className="meanings-link">{link}</p>}
 
       {page.meanings.map((m, i) => (
         <Meaning
@@ -374,7 +371,7 @@ function CloseRow({ k, lang, onKanji }: { k: CloseKanji; lang: Lang; onKanji: (c
  * reading (揚: "raise, hoist", not its keyword) -- and, where the 異字同訓
  * card has them, what each is for and an example; where no card has them,
  * a line on when to write which. A heading opens its kanji; the page's own
- * is marked, not a link.
+ * comes first, framed, not a link.
  */
 function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (c: string) => void }) {
   const lang = useLang()
@@ -387,6 +384,8 @@ function MixUpLine({ x, self, onKanji }: { x: MixUp; self: KanjiLite; onKanji: (
         spelled: s,
       }))
     : [me, ...x.kanji].map((k) => ({ spelling: k.char, k }))
+  // The page's own kanji first, whatever order the card has: what you are reading, then what it is mixed up with.
+  items.sort((a, b) => Number(b.k?.char === self.char) - Number(a.k?.char === self.char))
   return (
     <section className="aside-block mixup" title={t('mixupsHint')}>
       <AsideTitle icon="!">{t('mixups')}</AsideTitle>

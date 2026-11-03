@@ -353,7 +353,7 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
 
       {!isPreview && (
         <>
-          <FontStrip char={data.focus.char} part="fonts" />
+          <FontStrip char={data.focus.char} oldForms={forms?.old} onKanji={onKanji} />
           <StrokeOrder char={data.focus.char} strokes={data.strokes} />
         </>
       )}
@@ -405,7 +405,6 @@ export function DetailPanel({ data, hovered, onWord, onKanji, onComponents, onSi
       {!isPreview && (
         <>
           {forms && <Forms data={forms} onKanji={onKanji} />}
-          <FontStrip char={data.focus.char} part="old" />
           {similar && <LooksLike items={similar.look} onKanji={onKanji} />}
         </>
       )}

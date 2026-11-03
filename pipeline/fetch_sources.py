@@ -124,11 +124,16 @@ SOURCES = {
         )
         for key, folder, name, label in (
             ("mincho", "shipporimincho", "ShipporiMincho-Regular.ttf", "Shippori Mincho"),
-            ("gothic", "zenkakugothicnew", "ZenKakuGothicNew-Regular.ttf", "Zen Kaku Gothic New"),
             ("textbook", "kleeone", "KleeOne-Regular.ttf", "Klee One"),
-            ("brush", "yujisyuku", "YujiSyuku-Regular.ttf", "Yuji Syuku"),
         )
     },
+    # Semi-cursive brush (行書): 衡山毛筆フォント行書, public domain. Google Fonts
+    # has no 行書 face; Debian's package is a stable URL for the original.
+    "font-gyosho": (
+        "fonts/fonts-kouzan-mouhitsu.deb",
+        "https://deb.debian.org/debian/pool/main/f/fonts-kouzan-mouhitsu/fonts-kouzan-mouhitsu_20170411-3_all.deb",
+        "Kouzan brush fonts (kaisho, gyosho, sosho), public domain -- font strip",
+    ),
     # --- decomposition check (Part 6 of TASK-forms-review.md). BabelStone's
     # header: anyone may use the IDS data for any purpose without permission
     # or attribution (IDS are facts). Region tags per sequence; J = Japan.

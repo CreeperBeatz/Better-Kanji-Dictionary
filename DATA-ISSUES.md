@@ -786,6 +786,39 @@ IDS and KanjiVG sometimes write 厂 for ⺁, which we treat as a different shape
 **Fixed:** such spellings are left out of the queue's proposals
 (pipeline/review_sources.py).
 
+### D-046 · Old printed shapes kept as compatibility ideographs were missing
+*Found 2026-11-03* by Dani on 館. Unicode keeps some old printed shapes as
+compatibility ideographs: 館 (U+FA2C) is 館 with the old 食 radical (𩙿),
+神 礼 福 have the old 示, and 都 諸 have the dotted 者. Each is the same
+character as its base. Unicode normalization (NFC) turns one into the other.
+Two faults:
+- **Not shown.** The 館 page had no old form. Unihan's old-form list
+  (kJapaneseOldVariant) names 62 of these ideographs (侮 → 侮). It does not
+  name the IBM block (U+FA10–FA2D: 館 神 福 都 晴 益 …).
+- **Not found.** Searching 館 found nothing, and the search read it as
+  English. `/api/kanji/館` was a 404. Any text pasted from an old document
+  that keeps these code points failed the same way.
+
+Source: the Unicode data (compatibility decompositions), and our search,
+which did not normalize.
+**Fixed 2026-11-03** on feat/font-strip:
+- The fonts stage stores Shippori Mincho's outline of every compatibility
+  ideograph that the font draws differently from its base, feature `compat`
+  in font_old. The strip shows it as "old form". It is drawn, not typed,
+  because text gets normalized away.
+  - Checked by eye on 2026-11-03: only ideographs with a Japanese source
+    (Unihan kIRG_JSource) are kept, 86 kanji. The 56 Korean and Taiwanese
+    duplicates were regional designs (更 契 冬), and 練 had shown the Korean
+    F996 instead of its own old form FA57.
+  - Old shapes with no code point at all come from Noto Serif JP variation
+    sequences, feature `ivs`: 51 kanji (道 with two dots, 飾, 情).
+    ideas/old-shapes/README.md has the details.
+- The 62 that were already old forms now show once, drawn.
+- The server NFC-normalizes every API path and query (server/app.py). The
+  client normalizes searches and kanji URLs.
+
+Not deployed yet.
+
 ## Known limits (not mistakes, but worth knowing)
 
 - A corrected Bulgarian gloss shows everywhere at once, but searching by

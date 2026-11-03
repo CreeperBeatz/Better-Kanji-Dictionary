@@ -101,7 +101,8 @@ export function useForms(char: string, wanted = true): FormsResponse | null {
 export function Forms({ data, onKanji }: { data: FormsResponse; onKanji: (char: string) => void }) {
   const lang = useLang()
   const t = S(lang)
-  const rows = ROWS.filter(([k]) => data[k].length > 0)
+  // The old form sits in the font strip at the page's top, beside the kanji's other shapes.
+  const rows = ROWS.filter(([k]) => k !== 'old' && data[k].length > 0)
   // With nothing to show the block is left out; a missing link (龰 is a form
   // of 止) is added from the page's Edit / Suggest changes.
   if (!rows.length) return null

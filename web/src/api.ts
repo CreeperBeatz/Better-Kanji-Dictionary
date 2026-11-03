@@ -99,7 +99,11 @@ export interface FontsResponse {
   char: string
   faces: string[]
   /** `old` is SVG path data on a 0 0 em em box, y down. */
-  old: { face: string; feature: 'jp78' | 'jp83' | 'jp90'; em: number; old: string }[]
+  /** `compat`: an old printed shape Unicode keeps as a compatibility ideograph, `code` its code point (FA2C).
+   *  `ivs`: one that is only a variation sequence, drawn by Noto Serif JP, `code` the selector (E0101). */
+  old: { face: string; feature: 'jp78' | 'jp83' | 'jp90' | 'compat' | 'ivs'; em: number; old: string; code?: string }[]
+  /** The character in faces too big to load (semi-cursive brush), as SVG path data on 0 0 em em. Absent from an old server. */
+  drawn?: { face: string; em: number; d: string }[]
 }
 
 /** A character linked to another as one of its forms (server/forms.py). */
@@ -780,8 +784,10 @@ export const api = {
 
   word: kept((id: number) => get<WordEntry>(`/api/search/word/${id}`)),
 
-  search: (q: string, lang: string, o: SearchOptions) =>
-    localFirst(local.search(q, lang, o), () =>
+  // NFC, as the dictionary is: 館 (U+FA2C) pasted from an old document is 館.
+  search: (raw: string, lang: string, o: SearchOptions) => {
+    const q = raw.normalize('NFC')
+    return localFirst(local.search(q, lang, o), () =>
       get<SearchResponse>('/api/search', [
         ['q', q],
         ['lang', lang],
@@ -790,7 +796,8 @@ export const api = {
         ['order', o.order],
         ['limit', String(o.limit ?? 30)],
       ]),
-    ),
+    )
+  },
 
   /**
    * Semantic search, streamed: `onEvent` hears each result as the model names

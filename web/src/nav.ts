@@ -119,7 +119,8 @@ export function pageInUrl(): Page | null {
   try {
     const k = path.match(KANJI_PATH)
     if (k) {
-      const c = decodeURIComponent(k[1])
+      // NFC: 館 (U+FA2C) from an old document is the page of 館.
+      const c = decodeURIComponent(k[1]).normalize('NFC')
       return [...c].length === 1 ? { kind: 'kanji', char: c, ...(k[2] ? { notes: true } : {}) } : null
     }
   } catch {
@@ -130,7 +131,7 @@ export function pageInUrl(): Page | null {
   try {
     const ws = path.match(WORDS_PATH)
     if (ws) {
-      const c = decodeURIComponent(ws[1])
+      const c = decodeURIComponent(ws[1]).normalize('NFC')
       return [...c].length === 1 ? { kind: 'words', char: c } : null
     }
   } catch {
