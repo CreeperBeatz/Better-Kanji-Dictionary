@@ -33,6 +33,7 @@ const S = strings(
     oldForm: 'old form',
     oldFormTip: 'Its form before the post-war reform (旧字体)',
     printedTip: 'Its old printed shape (旧字体). Unicode keeps it as U+{code}, the same character as {char}, so it has no page of its own.',
+    ivsTip: 'Its old printed shape (旧字体), drawn in Noto Serif JP. Unicode gives it no character of its own, only a variant of {char}.',
     notAPage: '{char} has no page of its own',
     old: '{face}, JIS {years}',
     oldTip: 'How JIS X 0208 ({years}) printed it in {face}. Today’s shape is the first {face} in the row.',
@@ -47,6 +48,7 @@ const S = strings(
     oldForm: 'стара форма',
     oldFormTip: 'Формата му преди следвоенната реформа (旧字体)',
     printedTip: 'Старата му печатна форма (旧字体). Unicode я пази като U+{code}, същия знак като {char}, затова няма собствена страница.',
+    ivsTip: 'Старата му печатна форма (旧字体), в шрифта Noto Serif JP. Unicode не ѝ дава отделен знак, а само вариант на {char}.',
     notAPage: '{char} няма собствена страница',
     old: '{face}, JIS {years}',
     oldTip: 'Как JIS X 0208 ({years}) го печата в {face}. Днешната форма е първото {face} в реда.',
@@ -171,8 +173,11 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
 
   // Old printed shapes Unicode keeps as compatibility ideographs (館 for 館):
   // the same character, so drawn from the server's outline -- as text,
-  // normalizing or a phone's own font would draw today's shape instead.
-  const printed = (info?.old ?? []).filter((o) => o.feature === 'compat' && isFace(o.face))
+  // normalizing or a phone's own font would draw today's shape instead. Some
+  // have no code point at all, only a variation sequence (道 with two dots):
+  // those come from Noto Serif JP, the one font here that has them.
+  const isPrinted = (f: string) => f === 'compat' || f === 'ivs'
+  const printed = (info?.old ?? []).filter((o) => isPrinted(o.feature) && isFace(o.face))
   // An old form that is such an ideograph (侮 for 侮) is that shape: shown once, drawn.
   const forms = printed.length ? oldForms.filter((i) => i.char.normalize('NFC') === i.char) : oldForms
 
@@ -181,7 +186,7 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
   // shapes; only the two shown here count.
   const old: { face: Face; years: string[]; em: number; d: string }[] = []
   for (const o of info?.old ?? []) {
-    if (!isFace(o.face) || o.feature === 'compat' || printed.some((p) => p.face === o.face && p.old === o.old)) continue
+    if (!isFace(o.face) || isPrinted(o.feature) || printed.some((p) => p.face === o.face && p.old === o.old)) continue
     const same = old.find((x) => x.face === o.face && x.d === o.old)
     if (same) same.years.push(YEARS[o.feature])
     else old.push({ face: o.face, years: [YEARS[o.feature]], em: o.em, d: o.old })
@@ -232,7 +237,7 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
       })}
       {printed.map((o) => {
         return (
-          <li key={`printed-${o.face}`} title={t('printedTip', { code: o.code ?? '', char })}>
+          <li key={`printed-${o.face}-${o.feature}`} title={o.feature === 'ivs' ? t('ivsTip', { char }) : t('printedTip', { code: o.code ?? '', char })}>
             <svg className="font-strip-glyph" viewBox={`0 0 ${o.em} ${o.em}`} role="img" aria-label={`${char} ${t('oldForm')}`}>
               <path d={o.old} />
             </svg>

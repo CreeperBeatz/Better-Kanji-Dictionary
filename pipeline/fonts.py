@@ -28,7 +28,18 @@ works them out:
   normalization turns one into the other -- so it gets no page, and text is
   no safe way to show it: normalizing or a phone's own font draws today's
   shape instead. Where the mincho draws one differently from its base it is
-  stored the same way, as feature `compat`.
+  stored the same way, as feature `compat` -- only ideographs with a Japanese
+  source (Unihan kIRG_JSource). The Korean (F900-) and Taiwanese (2F800-)
+  duplicates are regional designs, not old Japanese printing: 更 契 冬 再, and
+  練 would have shown the Korean F996 instead of its own old form 練 (FA57).
+
+  Some old printed shapes have no code point at all, only an ideographic
+  variation sequence, which only a font with Adobe-Japan1 IVS draws -- not
+  Shippori. `IVS_OLD` lists the ones taken from Noto Serif JP (at weight 400)
+  as feature `ivs`: kanji of the well-defined families whose shape nothing else
+  shows, ⻌ with two dots (道 通), 𩙿 (飾 飯), 靑 (情 請). Each was picked by eye
+  (2026-11-03); where the font has several variants, the one differing least
+  outside the family's part.
 
 - **Drawn shapes** (`font_drawn`). The semi-cursive face, 衡山毛筆フォント行書
   (Aoyagi Kouzan, public domain), is 5.6 MB and has no web subset, so it is
@@ -63,21 +74,45 @@ DRAWN = {
 OLD_FEATURES = ("jp78", "jp83", "jp90")
 # The face whose compatibility ideographs are old printed shapes worth showing.
 COMPAT_FACE = "mincho"
+UNIHAN = Path(__file__).parent / "data" / "Unihan.zip"
+
+# Old printed shapes that are only a variation sequence: kanji -> selector, in
+# Noto Serif JP. Stored under the mincho face, the strip's print face.
+IVS_FONT = Path(__file__).parent / "data" / "NotoSerifJP.ttf"
+IVS_OLD: dict[str, int] = {
+    **{c: 0xE0101 for c in
+       "選通進近道運過送述追退造達週速迎遺遣適込逆返途避逮迫遠還遊迷透巡遇遭遍迅迭逐遵"  # ⻌ two dots
+       "導縫"  # ⻌ inside, not the radical
+       "食養飾飢餓飽"  # 𩙿
+       "情請"},  # 靑
+    "連": 0xE0100,
+    "遷": 0xE0102,  # all three variants have the two dots; this one changes least besides
+}
+
+
+def _japanese_sourced() -> set[str]:
+    """Characters Unihan gives a Japanese source (kIRG_JSource)."""
+    import zipfile
+
+    with zipfile.ZipFile(UNIHAN) as z:
+        text = z.read("Unihan_IRGSources.txt").decode("utf-8")
+    return {chr(int(line.split("\t")[0][2:], 16)) for line in text.splitlines() if "\tkIRG_JSource\t" in line}
 
 
 def compat_shapes() -> dict[str, list[str]]:
-    """base character -> the compatibility ideographs that are it (館 -> 館)."""
+    """base character -> the Japanese-sourced compatibility ideographs that are it (館 -> 館)."""
+    japanese = _japanese_sourced()
     out: dict[str, list[str]] = {}
     for cp in [*range(0xF900, 0xFB00), *range(0x2F800, 0x2FA20)]:
         d = unicodedata.decomposition(chr(cp))
-        if d and " " not in d and not d.startswith("<"):
+        if d and " " not in d and not d.startswith("<") and chr(cp) in japanese:
             out.setdefault(chr(int(d, 16)), []).append(chr(cp))
     return out
 
 
 def missing() -> list[str]:
     files = [*FACES.values(), *(deb for deb, _ in DRAWN.values())]
-    return [f for f in files if not (FONTS / f).exists()]
+    return [f for f in files if not (FONTS / f).exists()] + [p.name for p in (IVS_FONT, UNIHAN) if not p.exists()]
 
 
 def _from_deb(deb: Path, name: str) -> bytes:
@@ -138,7 +173,7 @@ def build(db: sqlite3.Connection) -> None:
     from fontTools.ttLib import TTFont
 
     if missing():
-        raise SystemExit(f"missing {missing()}; run pipeline/fetch_sources.py font-mincho font-textbook font-gyosho")
+        raise SystemExit(f"missing {missing()}; run pipeline/fetch_sources.py font-mincho font-textbook font-gyosho noto-serif-jp unihan")
     chars = [r[0] for r in db.execute("SELECT char FROM kanji")]
     db.executescript("""
         DROP TABLE IF EXISTS font_cover;
@@ -151,11 +186,12 @@ def build(db: sqlite3.Connection) -> None:
         CREATE TABLE font_old (
             char    TEXT NOT NULL,
             face    TEXT NOT NULL,   -- mincho | textbook
-            feature TEXT NOT NULL,   -- jp78 | jp83 | jp90, or compat: a compatibility ideograph's shape
+            feature TEXT NOT NULL,   -- jp78 | jp83 | jp90, compat: a compatibility ideograph's shape,
+                                     -- or ivs: a variation sequence's shape (Noto Serif JP)
             em      INTEGER NOT NULL, -- units per em: the paths' viewBox is 0 0 em em
             now     TEXT NOT NULL,   -- today's shape, SVG path data
             old     TEXT NOT NULL,   -- the feature's shape
-            code    TEXT,            -- compat only: the ideograph's code point, FA2C
+            code    TEXT,            -- compat: the ideograph's code point, FA2C; ivs: the selector, E0101
             PRIMARY KEY (char, face, feature)
         );
         CREATE TABLE font_drawn (
@@ -208,6 +244,23 @@ def build(db: sqlite3.Connection) -> None:
                         n += 1
                         break
             print(f"  {key:9} compat {n:>5} characters drawn differently (compatibility ideographs)")
+            # Variation sequences, from the IVS font at the print face's weight.
+            ivs = TTFont(IVS_FONT)
+            sequences = {(cp, sel): g for sel, pairs in next(t for t in ivs["cmap"].tables if t.format == 14).uvsDict.items()
+                         for cp, g in pairs if g}
+            ivs_glyphs, ivs_cmap = ivs.getGlyphSet(location={"wght": 400}), ivs.getBestCmap()
+            ivs_em, ivs_top = ivs["head"].unitsPerEm, ivs["OS/2"].sTypoAscender
+            n = 0
+            for c, sel in IVS_OLD.items():
+                g = sequences.get((ord(c), sel))
+                now = _path(ivs_glyphs, ivs_cmap[ord(c)], ivs_top)
+                then = _path(ivs_glyphs, g, ivs_top) if g else ""
+                if not then or then == now:
+                    print(f"  WARNING: {IVS_FONT.name} draws {c} {sel:X} as today's shape (or not at all); left out")
+                    continue
+                old_rows.append((c, key, "ivs", ivs_em, now, then, f"{sel:X}"))
+                n += 1
+            print(f"  {key:9} ivs    {n:>5} characters from {IVS_FONT.name} variation sequences")
         print(f"  {key:9} has   {sum(1 for c in chars if key in cover[c]):>6,} of {len(chars):,} characters")
     db.executemany("INSERT INTO font_cover VALUES (?,?)", [(c, " ".join(f)) for c, f in cover.items() if f])
     db.executemany("INSERT INTO font_old VALUES (?,?,?,?,?,?,?)", old_rows)

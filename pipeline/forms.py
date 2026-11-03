@@ -93,6 +93,8 @@ KIN: list[tuple[str, str, str | None]] = [
 OLD: dict[str, tuple[str, str | None]] = {
     "青": ("靑", "生 (grow, fresh) over 丹 (red pigment); the 月 of today was 丹"),
     "清": ("淸", None),
+    # The Jōyō table brackets no old form for 飲, but pre-war print had 飮, as for every 𩙿 kanji.
+    "飲": ("飮", "the printed shape before the reform, with the old 食 (𩙿); the Jōyō table lists none"),
 }
 
 

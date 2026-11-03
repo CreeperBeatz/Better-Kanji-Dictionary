@@ -99,8 +99,9 @@ export interface FontsResponse {
   char: string
   faces: string[]
   /** `old` is SVG path data on a 0 0 em em box, y down. */
-  /** `compat`: an old printed shape Unicode keeps as a compatibility ideograph, `code` its code point (FA2C). */
-  old: { face: string; feature: 'jp78' | 'jp83' | 'jp90' | 'compat'; em: number; old: string; code?: string }[]
+  /** `compat`: an old printed shape Unicode keeps as a compatibility ideograph, `code` its code point (FA2C).
+   *  `ivs`: one that is only a variation sequence, drawn by Noto Serif JP, `code` the selector (E0101). */
+  old: { face: string; feature: 'jp78' | 'jp83' | 'jp90' | 'compat' | 'ivs'; em: number; old: string; code?: string }[]
   /** The character in faces too big to load (semi-cursive brush), as SVG path data on 0 0 em em. Absent from an old server. */
   drawn?: { face: string; em: number; d: string }[]
 }

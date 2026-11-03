@@ -803,9 +803,16 @@ Source: the Unicode data (compatibility decompositions), and our search,
 which did not normalize.
 **Fixed 2026-11-03** on feat/font-strip:
 - The fonts stage stores Shippori Mincho's outline of every compatibility
-  ideograph that the font draws differently from its base: 141 kanji,
-  feature `compat` in font_old. The strip shows it as "old form". It is
-  drawn, not typed, because text gets normalized away.
+  ideograph that the font draws differently from its base, feature `compat`
+  in font_old. The strip shows it as "old form". It is drawn, not typed,
+  because text gets normalized away.
+  - Checked by eye on 2026-11-03: only ideographs with a Japanese source
+    (Unihan kIRG_JSource) are kept, 86 kanji. The 56 Korean and Taiwanese
+    duplicates were regional designs (更 契 冬), and 練 had shown the Korean
+    F996 instead of its own old form FA57.
+  - Old shapes with no code point at all come from Noto Serif JP variation
+    sequences, feature `ivs`: 51 kanji (道 with two dots, 飾, 情).
+    ideas/old-shapes/README.md has the details.
 - The 62 that were already old forms now show once, drawn.
 - The server NFC-normalizes every API path and query (server/app.py). The
   client normalizes searches and kanji URLs.
