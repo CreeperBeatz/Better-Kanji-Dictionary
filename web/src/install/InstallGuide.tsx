@@ -27,8 +27,8 @@ const S = strings(
     label: 'Install the app',
     title: 'This app is designed to work from your Home Screen',
     why: 'In the browser, you might see some bugs or glitches.',
-    s1: 'Tap ••• at the bottom right.',
-    s1b: 'No ••• button? Tap Share, then go to step 3.',
+    s1: 'Tap ☰ in the address bar, on the left.',
+    s1b: 'No ☰ button? Tap ••• at the bottom right. No ••• button? Tap Share, then go to step 3.',
     s2: 'Tap Share.',
     s3: 'Tap View More.',
     s4: 'Tap Add to Home Screen.',
@@ -55,8 +55,8 @@ const S = strings(
     label: 'Инсталиране на приложението',
     title: 'Приложението е направено за работа от началния екран',
     why: 'В браузъра може да видите грешки и проблеми.',
-    s1: 'Натиснете ••• долу вдясно.',
-    s1b: 'Няма бутон •••? Натиснете „Споделяне“ и продължете от стъпка 3.',
+    s1: 'Натиснете ☰ вляво в адресната лента.',
+    s1b: 'Няма бутон ☰? Натиснете ••• долу вдясно. Няма бутон •••? Натиснете „Споделяне“ и продължете от стъпка 3.',
     s2: 'Натиснете „Споделяне“.',
     s3: 'Натиснете „Покажи още“.',
     s4: 'Натиснете „Добавяне към начален екран“.',
@@ -108,11 +108,11 @@ function browser(): Browser {
 
 const STEPS: Record<Exclude<Browser, 'brave' | 'inApp'>, Step[]> = {
   safari: [
-    { text: 's1', note: 's1b', img: step1, h: 234 },
-    { text: 's2', img: step2, h: 748 },
-    { text: 's3', img: step3, h: 573 },
-    { text: 's4', img: step4, h: 403 },
-    { text: 's5', img: step5, h: 488 },
+    { text: 's1', note: 's1b', img: step1, h: 209 },
+    { text: 's2', img: step2, h: 554 },
+    { text: 's3', img: step3, h: 603 },
+    { text: 's4', img: step4, h: 426 },
+    { text: 's5', img: step5, h: 476 },
   ],
   // After Share, Chrome's steps are Safari's: the same system screens.
   chrome: [
