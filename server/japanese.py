@@ -13,6 +13,7 @@ tables usually end up with holes.
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 # ---------------------------------------------------------------- script
@@ -70,17 +71,106 @@ _ROMAJI = {
     "pya": "ぴゃ", "pyu": "ぴゅ", "pyo": "ぴょ",
     "mya": "みゃ", "myu": "みゅ", "myo": "みょ",
     "rya": "りゃ", "ryu": "りゅ", "ryo": "りょ",
+    # Sounds loanwords use: fan, shefu, jetto, chekku, wiski, vaiorin, thii
+    "fa": "ふぁ", "fi": "ふぃ", "fe": "ふぇ", "fo": "ふぉ",
+    "she": "しぇ", "je": "じぇ", "che": "ちぇ", "wi": "うぃ", "we": "うぇ",
+    "va": "ゔぁ", "vi": "ゔぃ", "vu": "ゔ", "ve": "ゔぇ", "vo": "ゔぉ",
+    "thi": "てぃ", "dhi": "でぃ",
+}
+
+# The vowel each kana ends in, for writing a long vowel as ー.
+_VOWEL = {
+    c: v
+    for v, cs in (
+        ("a", "あかさたなはまやらわがざだばぱぁゃゎ"),
+        ("i", "いきしちにひみりぎじぢびぴぃ"),
+        ("u", "うくすつぬふむゆるぐずづぶぷぅゅゔ"),
+        ("e", "えけせてねへめれげぜでべぺぇ"),
+        ("o", "おこそとのほもよろをごぞどぼぽぉょ"),
+    )
+    for c in cs
 }
 
 
+def hiragana_to_katakana(s: str) -> str:
+    return "".join(chr(ord(c) + 0x60) if 0x3041 <= ord(c) <= 0x3096 else c for c in s)
+
+
+def katakana_spellings(kana: str) -> list[str]:
+    """How a word read as `kana` (hiragana, from romaji) may be written in
+    katakana, likeliest first: a vowel repeating the one before it as ー
+    (こおひい -> コーヒー), then as typed (ぼうりんぐ -> ボウリング), then with ou
+    and ei as ー as well (めいる -> メール); then each of those with チ and ヂ
+    as ティ and ディ, as loanwords write ti and di (ぱあちい -> パーティー)."""
+
+    def write(diphthongs: bool) -> str:
+        out = []
+        for i, c in enumerate(kana):
+            before = _VOWEL.get(kana[i - 1]) if i else None
+            long = c in "あいうえお" and before is not None and (
+                before == _VOWEL[c] or diphthongs and (c, before) in (("う", "o"), ("い", "e"))
+            )
+            out.append("ー" if long else hiragana_to_katakana(c))
+        return "".join(out)
+
+    def ti(k: str) -> str:
+        return "".join(
+            {"チ": "ティ", "ヂ": "ディ"}.get(c, c) if k[i + 1:i + 2] not in ("ャ", "ュ", "ョ", "ェ") else c
+            for i, c in enumerate(k)
+        )
+
+    first = [write(False), hiragana_to_katakana(kana), write(True)]
+    return list(dict.fromkeys([*first, *map(ti, first)]))
+
+
+# Long vowels written with a macron or circumflex (Hepburn: Tōkyō, benkyō),
+# each with the ways it is spelled in kana, likeliest first: ō is おう in 東京
+# and おお in 大きい.
+LONG_VOWELS = {
+    "ā": ("aa",), "ī": ("ii",), "ū": ("uu",), "ē": ("ei", "ee"), "ō": ("ou", "oo"),
+    "â": ("aa",), "î": ("ii",), "û": ("uu",), "ê": ("ei", "ee"), "ô": ("ou", "oo"),
+}
+MAX_SPELLINGS = 16
+
+
+def romaji_spellings(s: str) -> list[str]:
+    """Romaji with its long-vowel marks spelled out every way they can be
+    read, likeliest first: tōkyō -> toukyou, toukyoo, tookyou, tookyoo. Romaji
+    without them is its own only spelling. Past MAX_SPELLINGS, only the first."""
+    s = unicodedata.normalize("NFC", s.lower())
+    out = [""]
+    for c in s:
+        opts = LONG_VOWELS.get(c, (c,))
+        out = [o + x for o in out for x in opts]
+    return out if len(out) <= MAX_SPELLINGS else out[:1]
+
+
+def has_long_marks(s: str) -> bool:
+    """Whether romaji carries a long-vowel mark (Tōkyō) -- then it is romaji, not English."""
+    return any(c in LONG_VOWELS for c in unicodedata.normalize("NFC", s.lower()))
+
+
 def romaji_to_kana(s: str) -> str:
-    """Best-effort romaji to hiragana. Returns '' if nothing converted cleanly."""
-    s = s.lower().strip()
+    """Best-effort romaji to hiragana. Returns '' if nothing converted cleanly.
+    A long-vowel mark is read its likeliest way (ō as ou)."""
+    s = romaji_spellings(s.strip())[0]
     if not s or not s.isascii():
         return ""
     out: list[str] = []
     i = 0
     while i < len(s):
+        nxt = s[i + 1] if i + 1 < len(s) else ""
+        # Hepburn writes ん as m before b, p and m: shimbun, sampo, sammai.
+        if s[i] == "m" and nxt in ("b", "p", "m"):
+            out.append("ん")
+            i += 1
+            continue
+        # nn before a vowel or y is ん and the next syllable's n: konnichiha
+        # is こんにちは, not こんいちは.
+        if s[i] == "n" and nxt == "n" and i + 2 < len(s) and s[i + 2] in "aeiouy":
+            out.append("ん")
+            i += 1
+            continue
         # Doubled consonant -> small tsu, e.g. "kitte" -> きって
         if (
             i + 1 < len(s)
@@ -99,6 +189,30 @@ def romaji_to_kana(s: str) -> str:
         else:
             return ""  # unconvertible -- treat the whole input as English
     return "".join(out)
+
+
+def romaji_partial(s: str) -> tuple[str, str, list[str]] | None:
+    """Romaji cut off inside a syllable -- tabem, benky, kitt -- as the kana
+    typed so far, the unfinished letters, and every kana they could become:
+    ("たべ", "m", ["ま", "み", "む", "め", "も", ...]). None when the input is not
+    such romaji, or has not even one whole syllable before the cut."""
+    s = romaji_spellings(s.strip())[0]
+    if not s or not s.isascii() or romaji_to_kana(s):
+        return None
+    for cut in (1, 2):
+        head, tail = s[:-cut], s[-cut:]
+        tails = sorted({k for r, k in _ROMAJI.items() if r.startswith(tail) and len(r) > len(tail)})
+        if not head or not tails:
+            continue
+        # A doubled consonant across the cut is small tsu: kitt is きっ and a t-syllable.
+        if head[-1] == tail[0] and tail[0] not in "aeioun":
+            kana = romaji_to_kana(head[:-1])
+            kana = kana + "っ" if kana else ""
+        else:
+            kana = romaji_to_kana(head)
+        if kana:
+            return kana, tail, tails
+    return None
 
 
 # ---------------------------------------------------------------- deinflection

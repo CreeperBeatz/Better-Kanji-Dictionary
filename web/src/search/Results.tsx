@@ -66,6 +66,10 @@ const S = strings(
     readAs: 'read as {r}',
     alternative: 'in Bulgarian: {q}',
     alternativeTitle: 'Search for {q} in Bulgarian',
+    corrected: 'Showing results for',
+    correctedTitle: 'Nothing matched {q} as typed',
+    orSpelling: 'or',
+    spellingTitle: 'Search for {q}',
     nothing: 'Nothing matched {q}.',
     looking: 'looking',
     more: 'more',
@@ -114,6 +118,10 @@ const S = strings(
     readAs: 'прочетено като {r}',
     alternative: 'на български: {q}',
     alternativeTitle: 'Търсете {q} на български',
+    corrected: 'Резултати за',
+    correctedTitle: 'Нищо не отговаря на {q}, както е написано',
+    orSpelling: 'или',
+    spellingTitle: 'Търсете {q}',
     nothing: 'Нищо не отговаря на {q}.',
     looking: 'търсене',
     more: 'още',
@@ -556,7 +564,9 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
   // A question has nothing to match word for word; it is for Search by meaning.
   const question = result?.interpretation?.kind === 'question'
   const nothing = question ? null : <p className="hint">{t('nothing', { q: term })}</p>
-  const alternatives = result?.alternatives ?? []
+  const alternatives = (result?.alternatives ?? []).filter((a) => a.kind !== 'spelling')
+  const corrected = result?.corrected
+  const spellings = (result?.alternatives ?? []).filter((a) => a.kind === 'spelling')
 
   // The last answer stays up while the next one is on its way, so the list
   // does not blink on every key.
@@ -564,6 +574,19 @@ export function SearchPage({ q, onKanji, onWord, onSearch, asked, onAsk, open, o
     <section className="rail-section search-page" aria-label={t('resultsFor', { q: term })} aria-busy={busy}>
       {/* How to order what was found, and whether to show only common words and kanji. */}
       {tools}
+      {corrected && (
+        <p className="hint reading-note" title={t('correctedTitle', { q: result.query })}>
+          {t('corrected')} <b>{corrected}</b>
+          {spellings.map((a, i) => (
+            <span key={a.query}>
+              {i === 0 ? ` · ${t('orSpelling')} ` : ', '}
+              <button className="clear" onClick={() => onSearch(a.query)} title={t('spellingTitle', { q: a.query })}>
+                {a.query}
+              </button>
+            </span>
+          ))}
+        </p>
+      )}
       {(reading || alternatives.length > 0) && (
         <p className="hint reading-note">
           {reading && t('readAs', { r: reading })}

@@ -6,6 +6,8 @@
  * than improving on it. Change one, change both; web/scripts/parity.ts checks.
  */
 
+import { compareCodePoints } from './sections'
+
 // ---------------------------------------------------------------- script
 
 function isKanaChar(c: number): boolean {
@@ -74,6 +76,53 @@ const ROMAJI: Record<string, string> = {
   pya: 'ぴゃ', pyu: 'ぴゅ', pyo: 'ぴょ',
   mya: 'みゃ', myu: 'みゅ', myo: 'みょ',
   rya: 'りゃ', ryu: 'りゅ', ryo: 'りょ',
+  // Sounds loanwords use: fan, shefu, jetto, chekku, wiski, vaiorin, thii
+  fa: 'ふぁ', fi: 'ふぃ', fe: 'ふぇ', fo: 'ふぉ',
+  she: 'しぇ', je: 'じぇ', che: 'ちぇ', wi: 'うぃ', we: 'うぇ',
+  va: 'ゔぁ', vi: 'ゔぃ', vu: 'ゔ', ve: 'ゔぇ', vo: 'ゔぉ',
+  thi: 'てぃ', dhi: 'でぃ',
+}
+
+/** The vowel each kana ends in, for writing a long vowel as ー. */
+const VOWEL = new Map<string, string>(
+  (
+    [
+      ['a', 'あかさたなはまやらわがざだばぱぁゃゎ'],
+      ['i', 'いきしちにひみりぎじぢびぴぃ'],
+      ['u', 'うくすつぬふむゆるぐずづぶぷぅゅゔ'],
+      ['e', 'えけせてねへめれげぜでべぺぇ'],
+      ['o', 'おこそとのほもよろをごぞどぼぽぉょ'],
+    ] as const
+  ).flatMap(([v, cs]) => [...cs].map((c) => [c, v] as [string, string])),
+)
+
+/**
+ * How a word read as `kana` (hiragana, from romaji) may be written in
+ * katakana, likeliest first: a vowel repeating the one before it as ー
+ * (こおひい -> コーヒー), as typed (ぼうりんぐ -> ボウリング), then with ou and
+ * ei as ー too (めいる -> メール); then each of those with チ and ヂ as ティ and
+ * ディ, as loanwords write ti and di (ぱあちい -> パーティー). The server's
+ * `katakana_spellings`.
+ */
+export function katakanaSpellings(kana: string): string[] {
+  const cs = [...kana]
+  const write = (diphthongs: boolean) =>
+    cs
+      .map((c, i) => {
+        const before = i ? VOWEL.get(cs[i - 1]) : undefined
+        const long =
+          'あいうえお'.includes(c) &&
+          before !== undefined &&
+          (before === VOWEL.get(c) || (diphthongs && ((c === 'う' && before === 'o') || (c === 'い' && before === 'e'))))
+        return long ? 'ー' : hiraganaToKatakana(c)
+      })
+      .join('')
+  const ti = (k: string) => {
+    const ks = [...k]
+    return ks.map((c, i) => (['ャ', 'ュ', 'ョ', 'ェ'].includes(ks[i + 1]) ? c : c === 'チ' ? 'ティ' : c === 'ヂ' ? 'ディ' : c)).join('')
+  }
+  const first = [write(false), hiraganaToKatakana(kana), write(true)]
+  return [...new Set([...first, ...first.map(ti)])]
 }
 
 /** A reading as the page keys it: the dashes that mark a prefix or suffix dropped (-あ.げる). */
@@ -91,14 +140,58 @@ export function pySplit(s: string): string[] {
   return s.split(/[\s\x1c-\x1f\x85]+/u).filter(Boolean)
 }
 
-/** Best-effort romaji to hiragana. Returns '' if nothing converted cleanly. */
+/**
+ * Long vowels written with a macron or circumflex (Hepburn: Tōkyō, benkyō),
+ * each with the ways it is spelled in kana, likeliest first: ō is おう in 東京
+ * and おお in 大きい.
+ */
+const LONG_VOWELS: Record<string, string[]> = {
+  ā: ['aa'], ī: ['ii'], ū: ['uu'], ē: ['ei', 'ee'], ō: ['ou', 'oo'],
+  â: ['aa'], î: ['ii'], û: ['uu'], ê: ['ei', 'ee'], ô: ['ou', 'oo'],
+}
+const MAX_SPELLINGS = 16
+
+/**
+ * Romaji with its long-vowel marks spelled out every way they can be read,
+ * likeliest first: tōkyō -> toukyou, toukyoo, tookyou, tookyoo. The server's
+ * `romaji_spellings`; past MAX_SPELLINGS, only the first.
+ */
+export function romajiSpellings(input: string): string[] {
+  let out = ['']
+  for (const c of input.toLowerCase().normalize('NFC')) {
+    const opts = LONG_VOWELS[c] ?? [c]
+    out = out.flatMap((o) => opts.map((x) => o + x))
+  }
+  return out.length <= MAX_SPELLINGS ? out : out.slice(0, 1)
+}
+
+/** Whether romaji carries a long-vowel mark (Tōkyō) -- then it is romaji, not English. */
+export function hasLongMarks(input: string): boolean {
+  return [...input.toLowerCase().normalize('NFC')].some((c) => c in LONG_VOWELS)
+}
+
+/** Best-effort romaji to hiragana. Returns '' if nothing converted cleanly. A long-vowel mark is read its likeliest way (ō as ou). */
 export function romajiToKana(input: string): string {
-  const s = pyStrip(input.toLowerCase())
+  const s = romajiSpellings(pyStrip(input))[0]
   // eslint-disable-next-line no-control-regex
   if (!s || !/^[\x00-\x7f]*$/.test(s)) return ''
   let out = ''
   let i = 0
   while (i < s.length) {
+    const next = s[i + 1] ?? ''
+    // Hepburn writes ん as m before b, p and m: shimbun, sampo, sammai.
+    if (s[i] === 'm' && (next === 'b' || next === 'p' || next === 'm')) {
+      out += 'ん'
+      i += 1
+      continue
+    }
+    // nn before a vowel or y is ん and the next syllable's n: konnichiha
+    // is こんにちは, not こんいちは.
+    if (s[i] === 'n' && next === 'n' && i + 2 < s.length && 'aeiouy'.includes(s[i + 2])) {
+      out += 'ん'
+      i += 1
+      continue
+    }
     // Doubled consonant -> small tsu, e.g. "kitte" -> きって
     if (i + 1 < s.length && s[i] === s[i + 1] && !'aeioun'.includes(s[i])) {
       out += 'っ'
@@ -118,6 +211,35 @@ export function romajiToKana(input: string): string {
     if (!matched) return '' // unconvertible -- treat the whole input as English
   }
   return out
+}
+
+/**
+ * Romaji cut off inside a syllable -- tabem, benky, kitt -- as the kana typed
+ * so far, the unfinished letters, and every kana they could become:
+ * ['たべ', 'm', ['ま', 'み', ...]]. Null when the input is not such romaji, or
+ * has not even one whole syllable before the cut. The server's `romaji_partial`.
+ */
+export function romajiPartial(input: string): [string, string, string[]] | null {
+  const s = romajiSpellings(pyStrip(input))[0]
+  // eslint-disable-next-line no-control-regex
+  if (!s || !/^[\x00-\x7f]*$/.test(s) || romajiToKana(s)) return null
+  for (const cut of [1, 2]) {
+    const head = s.slice(0, -cut)
+    const tail = s.slice(-cut)
+    const tails = [...new Set(Object.entries(ROMAJI).filter(([r]) => r.startsWith(tail) && r.length > tail.length).map(([, k]) => k))]
+      .sort(compareCodePoints)
+    if (!head || !tails.length) continue
+    let kana: string
+    // A doubled consonant across the cut is small tsu: kitt is きっ and a t-syllable.
+    if (head[head.length - 1] === tail[0] && !'aeioun'.includes(tail[0])) {
+      kana = romajiToKana(head.slice(0, -1))
+      kana = kana ? kana + 'っ' : ''
+    } else {
+      kana = romajiToKana(head)
+    }
+    if (kana) return [kana, tail, tails]
+  }
+  return null
 }
 
 // ---------------------------------------------------------------- deinflection
