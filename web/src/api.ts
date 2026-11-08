@@ -102,8 +102,6 @@ export interface FontsResponse {
   /** `compat`: an old printed shape Unicode keeps as a compatibility ideograph, `code` its code point (FA2C).
    *  `ivs`: one that is only a variation sequence, drawn by Noto Serif JP, `code` the selector (E0101). */
   old: { face: string; feature: 'jp78' | 'jp83' | 'jp90' | 'compat' | 'ivs'; em: number; old: string; code?: string }[]
-  /** The character in faces too big to load (semi-cursive brush), as SVG path data on 0 0 em em. Absent from an old server. */
-  drawn?: { face: string; em: number; d: string }[]
 }
 
 /** A character linked to another as one of its forms (server/forms.py). */

@@ -1,12 +1,11 @@
 """What the kanji page's font strip needs to know about its fonts.
 
-    python pipeline/fetch_sources.py font-mincho font-textbook font-gyosho
+    python pipeline/fetch_sources.py font-mincho font-textbook
     python pipeline/build_db.py fonts
 
-The strip shows a character in print (mincho), in the textbook face schools
-teach handwriting from, and in semi-cursive brush (行書), the hand of shop
-signs, menus and New Year cards, where 糸 言 氵 保 様 lose strokes and join
-up. Three things cannot be found out in the browser, so the `fonts` stage
+The strip shows a character in print (mincho) and in the textbook face
+schools teach handwriting from. Two things cannot be found out in the
+browser, so the `fonts` stage
 works them out:
 
 - **Coverage** (`font_cover`). A font without the character would silently
@@ -41,21 +40,12 @@ works them out:
   (2026-11-03); where the font has several variants, the one differing least
   outside the family's part.
 
-- **Drawn shapes** (`font_drawn`). The semi-cursive face, 衡山毛筆フォント行書
-  (Aoyagi Kouzan, public domain), is 5.6 MB and has no web subset, so it is
-  never loaded: each kanji's outline is stored as an SVG path, a few KB, and
-  comes with the page's own character. It is fetched as Debian's package
-  (fonts-kouzan-mouhitsu), read here without unpacking it to disk.
-
 Needs fonttools (`pip install fonttools`); a build-time tool, not a server dependency.
 """
 
 from __future__ import annotations
 
-import io
-import lzma
 import sqlite3
-import tarfile
 import unicodedata
 from pathlib import Path
 
@@ -65,10 +55,6 @@ FONTS = Path(__file__).parent / "data" / "fonts"
 FACES = {
     "mincho": "ShipporiMincho-Regular.ttf",
     "textbook": "KleeOne-Regular.ttf",
-}
-# key -> (Debian package file, the font inside it). Drawn from stored outlines, never loaded.
-DRAWN = {
-    "gyosho": ("fonts-kouzan-mouhitsu.deb", "kouzan-mouhitsu-gyosho.ttf"),
 }
 # The older-standard features worth showing, oldest first.
 OLD_FEATURES = ("jp78", "jp83", "jp90")
@@ -111,29 +97,7 @@ def compat_shapes() -> dict[str, list[str]]:
 
 
 def missing() -> list[str]:
-    files = [*FACES.values(), *(deb for deb, _ in DRAWN.values())]
-    return [f for f in files if not (FONTS / f).exists()] + [p.name for p in (IVS_FONT, UNIHAN) if not p.exists()]
-
-
-def _from_deb(deb: Path, name: str) -> bytes:
-    """The file `name` out of a .deb: an ar archive holding data.tar.xz."""
-    b = deb.read_bytes()
-    if b[:8] != b"!<arch>\n":
-        raise SystemExit(f"{deb} is not a .deb")
-    i = 8
-    while i < len(b):
-        member = b[i:i + 16].decode().strip().rstrip("/")
-        size = int(b[i + 48:i + 58].decode().strip())
-        data = b[i + 60:i + 60 + size]
-        i += 60 + size + size % 2
-        if member.startswith("data.tar"):
-            if member.endswith(".xz"):
-                data = lzma.decompress(data)
-            with tarfile.open(fileobj=io.BytesIO(data)) as t:
-                for m in t.getmembers():
-                    if m.isfile() and Path(m.name).name == name:
-                        return t.extractfile(m).read()
-    raise SystemExit(f"{name} not in {deb}")
+    return [f for f in FACES.values() if not (FONTS / f).exists()] + [p.name for p in (IVS_FONT, UNIHAN) if not p.exists()]
 
 
 def _single_subs(font, feature: str) -> dict[str, str]:
@@ -173,12 +137,12 @@ def build(db: sqlite3.Connection) -> None:
     from fontTools.ttLib import TTFont
 
     if missing():
-        raise SystemExit(f"missing {missing()}; run pipeline/fetch_sources.py font-mincho font-textbook font-gyosho noto-serif-jp unihan")
+        raise SystemExit(f"missing {missing()}; run pipeline/fetch_sources.py font-mincho font-textbook noto-serif-jp unihan")
     chars = [r[0] for r in db.execute("SELECT char FROM kanji")]
     db.executescript("""
         DROP TABLE IF EXISTS font_cover;
         DROP TABLE IF EXISTS font_old;
-        DROP TABLE IF EXISTS font_drawn;
+        DROP TABLE IF EXISTS font_drawn;  -- the semi-cursive brush outlines, removed 2026-11-08
         CREATE TABLE font_cover (
             char  TEXT PRIMARY KEY,
             faces TEXT NOT NULL      -- space-separated keys of the faces that have it
@@ -193,13 +157,6 @@ def build(db: sqlite3.Connection) -> None:
             old     TEXT NOT NULL,   -- the feature's shape
             code    TEXT,            -- compat: the ideograph's code point, FA2C; ivs: the selector, E0101
             PRIMARY KEY (char, face, feature)
-        );
-        CREATE TABLE font_drawn (
-            char  TEXT NOT NULL,
-            face  TEXT NOT NULL,     -- gyosho
-            em    INTEGER NOT NULL,  -- units per em: the path's viewBox is 0 0 em em
-            path  TEXT NOT NULL,     -- SVG path data, y down from the em box's top
-            PRIMARY KEY (char, face)
         );
     """)
     cover: dict[str, list[str]] = {c: [] for c in chars}
@@ -265,17 +222,4 @@ def build(db: sqlite3.Connection) -> None:
     db.executemany("INSERT INTO font_cover VALUES (?,?)", [(c, " ".join(f)) for c, f in cover.items() if f])
     db.executemany("INSERT INTO font_old VALUES (?,?,?,?,?,?,?)", old_rows)
 
-    # Only characters someone may look up -- graded, on a JLPT list, or in the
-    # newspaper count -- not the 10,000 rare ones: 2-4 KB each adds up.
-    wanted = [r[0] for r in db.execute("SELECT char FROM kanji WHERE grade IS NOT NULL OR jlpt IS NOT NULL OR freq IS NOT NULL")]
-    for key, (deb, name) in DRAWN.items():
-        font = TTFont(io.BytesIO(_from_deb(FONTS / deb, name)))
-        cmap = font.getBestCmap()
-        glyphs = font.getGlyphSet()
-        em, top = font["head"].unitsPerEm, font["OS/2"].sTypoAscender
-        rows = [(c, key, em, _path(glyphs, cmap[ord(c)], top)) for c in wanted if ord(c) in cmap]
-        rows = [r for r in rows if r[3]]
-        db.executemany("INSERT INTO font_drawn VALUES (?,?,?,?)", rows)
-        size = sum(len(r[3]) for r in rows)
-        print(f"  {key:9} draws {len(rows):>6,} of {len(wanted):,} characters ({size / 1e6:.1f} MB of paths)")
     print(f"  old shapes    {len(old_rows):>7,} rows over {len({r[0] for r in old_rows}):,} characters")

@@ -1,11 +1,9 @@
 /**
  * The character as it is printed and as it is written by hand, side by side:
  * mincho, the face of books, and the textbook face (教科書体) schools teach
- * handwriting from, where 令 心 北 糸 木 stop looking alike, and semi-cursive
- * brush (行書), the hand of shop signs, menus and New Year cards, where 糸 言
- * 氵 lose strokes and join up. Gothic and the like keep mincho's skeleton
- * (the Agency for Cultural Affairs' guide to the Jōyō table prints them as one
- * shape), so they are not shown. Then its old
+ * handwriting from, where 令 心 北 糸 木 stop looking alike. Gothic and the
+ * like keep mincho's skeleton (the Agency for Cultural Affairs' guide to the
+ * Jōyō table prints them as one shape), so they are not shown. Then its old
  * form (國 for 国), and where an older JIS standard printed it differently --
  * 葛 辻 遡 謎 before 2004 -- that shape too, from the font that carries it.
  *
@@ -13,8 +11,7 @@
  * shown only when it really has the character: a missing glyph would fall
  * back to some other font and show a lie under its label. The old JIS shapes
  * are outlines from the server (pipeline/fonts.py), since they share a code
- * point with today's and a font keeping them is hundreds of KB; the brush
- * face is outlines from the server too, as its font is 5.6 MB.
+ * point with today's and a font keeping them is hundreds of KB.
  */
 import { useEffect, useRef, useState } from 'react'
 import { api, type FontsResponse, type FormItem } from '../api'
@@ -28,8 +25,6 @@ const S = strings(
     textbook: 'textbook',
     minchoTip: 'Shippori Mincho: the serif face of books and newspapers',
     textbookTip: 'Klee One: close to the textbook face (教科書体) schools teach handwriting from',
-    gyosho: 'brush',
-    gyoshoTip: 'Kouzan Gyosho: semi-cursive brush (行書), the hand of shop signs, menus and New Year cards. Strokes join and parts get simpler.',
     oldForm: 'old form',
     oldFormTip: 'Its form before the post-war reform (旧字体)',
     printedTip: 'Its old printed shape (旧字体). Unicode keeps it as U+{code}, the same character as {char}, so it has no page of its own.',
@@ -43,8 +38,6 @@ const S = strings(
     textbook: 'учебник',
     minchoTip: 'Shippori Mincho: шрифтът със серифи на книгите и вестниците',
     textbookTip: 'Klee One: близо до учебния шрифт (教科書体), по който училищата учат почерк',
-    gyosho: 'четка',
-    gyoshoTip: 'Kouzan Gyosho: полуполегат почерк с четка (行書), както на табелите, менютата и новогодишните картички. Чертите се свързват, а частите се опростяват.',
     oldForm: 'стара форма',
     oldFormTip: 'Формата му преди следвоенната реформа (旧字体)',
     printedTip: 'Старата му печатна форма (旧字体). Unicode я пази като U+{code}, същия знак като {char}, затова няма собствена страница.',
@@ -168,8 +161,6 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
   const textbook = useFontReady(FAMILY.textbook, char, seen && has('textbook'))
   const ready = (f: Face) => (f === 'textbook' ? textbook : true)
   const shown = FACES.filter(has)
-  // Faces drawn from outlines, never loaded as fonts: only the brush one, and only where it has the character.
-  const drawn = (info?.drawn ?? []).filter((x) => x.face === 'gyosho')
 
   // Old printed shapes Unicode keeps as compatibility ideographs (館 for 館):
   // the same character, so drawn from the server's outline -- as text,
@@ -193,7 +184,7 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
   }
 
   // Mincho alone says nothing the page does not; the empty list still watches for the screen.
-  if (shown.length + drawn.length + forms.length + printed.length + old.length < 2) return <ul className="font-strip" ref={ref} />
+  if (shown.length + forms.length + printed.length + old.length < 2) return <ul className="font-strip" ref={ref} />
 
   return (
     <ul className="font-strip" ref={ref}>
@@ -203,14 +194,6 @@ export function FontStrip({ char, oldForms = [], onKanji }: { char: string; oldF
             {char}
           </span>
           <span className="font-strip-label">{t(f)}</span>
-        </li>
-      ))}
-      {drawn.map((x) => (
-        <li key={x.face} title={t('gyoshoTip')}>
-          <svg className="font-strip-glyph" viewBox={`0 0 ${x.em} ${x.em}`} role="img" aria-label={`${char} ${t('gyosho')}`}>
-            <path d={x.d} />
-          </svg>
-          <span className="font-strip-label">{t('gyosho')}</span>
         </li>
       ))}
       {forms.map((i) => {
