@@ -71,7 +71,56 @@ _ROMAJI = {
     "pya": "ぴゃ", "pyu": "ぴゅ", "pyo": "ぴょ",
     "mya": "みゃ", "myu": "みゅ", "myo": "みょ",
     "rya": "りゃ", "ryu": "りゅ", "ryo": "りょ",
+    # Sounds loanwords use: fan, shefu, jetto, chekku, wiski, vaiorin, thii
+    "fa": "ふぁ", "fi": "ふぃ", "fe": "ふぇ", "fo": "ふぉ",
+    "she": "しぇ", "je": "じぇ", "che": "ちぇ", "wi": "うぃ", "we": "うぇ",
+    "va": "ゔぁ", "vi": "ゔぃ", "vu": "ゔ", "ve": "ゔぇ", "vo": "ゔぉ",
+    "thi": "てぃ", "dhi": "でぃ",
 }
+
+# The vowel each kana ends in, for writing a long vowel as ー.
+_VOWEL = {
+    c: v
+    for v, cs in (
+        ("a", "あかさたなはまやらわがざだばぱぁゃゎ"),
+        ("i", "いきしちにひみりぎじぢびぴぃ"),
+        ("u", "うくすつぬふむゆるぐずづぶぷぅゅゔ"),
+        ("e", "えけせてねへめれげぜでべぺぇ"),
+        ("o", "おこそとのほもよろをごぞどぼぽぉょ"),
+    )
+    for c in cs
+}
+
+
+def hiragana_to_katakana(s: str) -> str:
+    return "".join(chr(ord(c) + 0x60) if 0x3041 <= ord(c) <= 0x3096 else c for c in s)
+
+
+def katakana_spellings(kana: str) -> list[str]:
+    """How a word read as `kana` (hiragana, from romaji) may be written in
+    katakana, likeliest first: a vowel repeating the one before it as ー
+    (こおひい -> コーヒー), then as typed (ぼうりんぐ -> ボウリング), then with ou
+    and ei as ー as well (めいる -> メール); then each of those with チ and ヂ
+    as ティ and ディ, as loanwords write ti and di (ぱあちい -> パーティー)."""
+
+    def write(diphthongs: bool) -> str:
+        out = []
+        for i, c in enumerate(kana):
+            before = _VOWEL.get(kana[i - 1]) if i else None
+            long = c in "あいうえお" and before is not None and (
+                before == _VOWEL[c] or diphthongs and (c, before) in (("う", "o"), ("い", "e"))
+            )
+            out.append("ー" if long else hiragana_to_katakana(c))
+        return "".join(out)
+
+    def ti(k: str) -> str:
+        return "".join(
+            {"チ": "ティ", "ヂ": "ディ"}.get(c, c) if k[i + 1:i + 2] not in ("ャ", "ュ", "ョ", "ェ") else c
+            for i, c in enumerate(k)
+        )
+
+    first = [write(False), hiragana_to_katakana(kana), write(True)]
+    return list(dict.fromkeys([*first, *map(ti, first)]))
 
 
 # Long vowels written with a macron or circumflex (Hepburn: Tōkyō, benkyō),
@@ -94,6 +143,11 @@ def romaji_spellings(s: str) -> list[str]:
         opts = LONG_VOWELS.get(c, (c,))
         out = [o + x for o in out for x in opts]
     return out if len(out) <= MAX_SPELLINGS else out[:1]
+
+
+def has_long_marks(s: str) -> bool:
+    """Whether romaji carries a long-vowel mark (Tōkyō) -- then it is romaji, not English."""
+    return any(c in LONG_VOWELS for c in unicodedata.normalize("NFC", s.lower()))
 
 
 def romaji_to_kana(s: str) -> str:

@@ -76,6 +76,53 @@ const ROMAJI: Record<string, string> = {
   pya: 'ぴゃ', pyu: 'ぴゅ', pyo: 'ぴょ',
   mya: 'みゃ', myu: 'みゅ', myo: 'みょ',
   rya: 'りゃ', ryu: 'りゅ', ryo: 'りょ',
+  // Sounds loanwords use: fan, shefu, jetto, chekku, wiski, vaiorin, thii
+  fa: 'ふぁ', fi: 'ふぃ', fe: 'ふぇ', fo: 'ふぉ',
+  she: 'しぇ', je: 'じぇ', che: 'ちぇ', wi: 'うぃ', we: 'うぇ',
+  va: 'ゔぁ', vi: 'ゔぃ', vu: 'ゔ', ve: 'ゔぇ', vo: 'ゔぉ',
+  thi: 'てぃ', dhi: 'でぃ',
+}
+
+/** The vowel each kana ends in, for writing a long vowel as ー. */
+const VOWEL = new Map<string, string>(
+  (
+    [
+      ['a', 'あかさたなはまやらわがざだばぱぁゃゎ'],
+      ['i', 'いきしちにひみりぎじぢびぴぃ'],
+      ['u', 'うくすつぬふむゆるぐずづぶぷぅゅゔ'],
+      ['e', 'えけせてねへめれげぜでべぺぇ'],
+      ['o', 'おこそとのほもよろをごぞどぼぽぉょ'],
+    ] as const
+  ).flatMap(([v, cs]) => [...cs].map((c) => [c, v] as [string, string])),
+)
+
+/**
+ * How a word read as `kana` (hiragana, from romaji) may be written in
+ * katakana, likeliest first: a vowel repeating the one before it as ー
+ * (こおひい -> コーヒー), as typed (ぼうりんぐ -> ボウリング), then with ou and
+ * ei as ー too (めいる -> メール); then each of those with チ and ヂ as ティ and
+ * ディ, as loanwords write ti and di (ぱあちい -> パーティー). The server's
+ * `katakana_spellings`.
+ */
+export function katakanaSpellings(kana: string): string[] {
+  const cs = [...kana]
+  const write = (diphthongs: boolean) =>
+    cs
+      .map((c, i) => {
+        const before = i ? VOWEL.get(cs[i - 1]) : undefined
+        const long =
+          'あいうえお'.includes(c) &&
+          before !== undefined &&
+          (before === VOWEL.get(c) || (diphthongs && ((c === 'う' && before === 'o') || (c === 'い' && before === 'e'))))
+        return long ? 'ー' : hiraganaToKatakana(c)
+      })
+      .join('')
+  const ti = (k: string) => {
+    const ks = [...k]
+    return ks.map((c, i) => (['ャ', 'ュ', 'ョ', 'ェ'].includes(ks[i + 1]) ? c : c === 'チ' ? 'ティ' : c === 'ヂ' ? 'ディ' : c)).join('')
+  }
+  const first = [write(false), hiraganaToKatakana(kana), write(true)]
+  return [...new Set([...first, ...first.map(ti)])]
 }
 
 /** A reading as the page keys it: the dashes that mark a prefix or suffix dropped (-あ.げる). */
@@ -116,6 +163,11 @@ export function romajiSpellings(input: string): string[] {
     out = out.flatMap((o) => opts.map((x) => o + x))
   }
   return out.length <= MAX_SPELLINGS ? out : out.slice(0, 1)
+}
+
+/** Whether romaji carries a long-vowel mark (Tōkyō) -- then it is romaji, not English. */
+export function hasLongMarks(input: string): boolean {
+  return [...input.toLowerCase().normalize('NFC')].some((c) => c in LONG_VOWELS)
 }
 
 /** Best-effort romaji to hiragana. Returns '' if nothing converted cleanly. A long-vowel mark is read its likeliest way (ō as ou). */

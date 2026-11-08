@@ -23,7 +23,7 @@ import type {
 import { bestReading, hasCyrillic, isLatinQuery, normalize as bgNormalize, spelling, stem as bgStem, terms as bgTerms, words as bgWords } from './bulgarian'
 import { FtsIndex, phrasesOf, tokenize, type Phrase } from './fts'
 import {
-  deinflect, hasJapanese, isKana, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiPartial, romajiSpellings, romajiToKana,
+  deinflect, hasJapanese, hasLongMarks, isKana, katakanaSpellings, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiPartial, romajiSpellings, romajiToKana,
   type Candidate,
 } from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
@@ -568,6 +568,24 @@ export class Engine {
 
       wordIdx = checked
       const romaji = kanaGuess
+      // Whether English has the query's words themselves; asked at most once.
+      // Romaji with a long-vowel mark (pātī) is never English.
+      let englishHasIt: boolean | undefined
+      const englishHas = () => (englishHasIt ??= !hasLongMarks(q) && this.englishWords(q, limit, false)[0].length > 0)
+      if (!japanese && !wordIdx.length) {
+        // Loanwords are written in katakana: koohii is コーヒー -- unless
+        // English has the word itself (pan is a pan, not パン).
+        for (const k of katakanaSpellings(romaji)) {
+          const found = this.byForm([k], limit)
+          if (found.length) {
+            if (!englishHas()) {
+              wordIdx = found
+              interpretation = { kind: 'romaji', reading: k }
+            }
+            break
+          }
+        }
+      }
       if (latinBg) {
         const reading = this.shlyokavitsa(q)
         const [found, tiers] = reading ? this.bulgarianWords(reading, limit) : [[], new Map()]
@@ -589,19 +607,23 @@ export class Engine {
         interpretation = null
         // Romaji that is no word -- house, read ほうせ -- is English when
         // English has the word itself, before any word starting with ほうせ.
-        englishFirst = bgStems === null && this.englishWords(q, limit, false)[0].length > 0
+        englishFirst = bgStems === null && englishHas()
       }
 
       // Prefix match tops up short result sets, so typing 時 still suggests 時間:
       // the first of every word starting with it in the order asked for, not
       // the first few in character order, which left 日本語 and 日記 out of 日.
       if (bgStems === null && !englishFirst && wordIdx.length < limit) {
-        const lo = this.forms.lowerBound(target)
-        const hi = this.forms.lowerBound(target + '￿')
+        // Romaji may be the start of a loanword too: koohi for コーヒー.
+        const starts = japanese ? [target] : [...new Set([target, ...katakanaSpellings(target)])]
         const present = new Set(wordIdx)
         const found = new Set<number>()
-        for (let f = lo; f < hi; f++) {
-          for (const w of this.wordsOfForm(f)) if (!present.has(w) && (!common || this.common[w])) found.add(w)
+        for (const start of starts) {
+          const lo = this.forms.lowerBound(start)
+          const hi = this.forms.lowerBound(start + '￿')
+          for (let f = lo; f < hi; f++) {
+            for (const w of this.wordsOfForm(f)) if (!present.has(w) && (!common || this.common[w])) found.add(w)
+          }
         }
         wordIdx.push(...this.inOrder(found, sort, order === 'desc', limit * 6))
         if (!japanese && wordIdx.length && interpretation === null) {
@@ -649,9 +671,10 @@ export class Engine {
     if (partial) {
       const [base, cut, tails] = partial
       const found = new Set<number>()
-      for (const t of tails) {
-        const lo = this.forms.lowerBound(base + t)
-        const hi = this.forms.lowerBound(base + t + '\uffff')
+      // Each way the syllable could end, in hiragana and as a loanword (konpyuut for コンピュータ).
+      for (const start of new Set(tails.flatMap((t) => [base + t, ...katakanaSpellings(base + t)]))) {
+        const lo = this.forms.lowerBound(start)
+        const hi = this.forms.lowerBound(start + '\uffff')
         for (let f = lo; f < hi; f++) for (const w of this.wordsOfForm(f)) if (!common || this.common[w]) found.add(w)
       }
       const rows = this.inOrder(found, sort, order === 'desc', limit * 6)

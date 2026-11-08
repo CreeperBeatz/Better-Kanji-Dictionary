@@ -30,7 +30,8 @@ from .. import synonyms
 from ..db import get_db, query, query_one
 from ..errors import AppError
 from ..japanese import (
-    deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_partial, romaji_spellings, romaji_to_kana,
+    deinflect, has_japanese, has_long_marks, is_kana, katakana_spellings, katakana_to_hiragana, pos_matches, romaji_partial,
+    romaji_spellings, romaji_to_kana,
 )
 from .auth import require_user
 
@@ -527,6 +528,19 @@ def _search(q: str, limit: int, lang: str, common: bool, sort: str, order: str) 
 
         word_ids = checked
         romaji = kana_guess
+        # Whether English has the query's words themselves; asked at most once.
+        # Romaji with a long-vowel mark (pātī) is never English.
+        english_has = functools.cache(lambda: not has_long_marks(q) and bool(_english_words(q, limit, prefix=False)[0]))
+        if not japanese and not word_ids:
+            # Loanwords are written in katakana: koohii is コーヒー -- unless
+            # English has the word itself (pan is a pan, not パン).
+            for k in katakana_spellings(romaji):
+                found = _by_form([k], limit)
+                if found:
+                    if not english_has():
+                        word_ids = found
+                        interpretation = {"kind": "romaji", "reading": k}
+                    break
         if latin_bg:
             reading = _shlyokavitsa(q)
             found, tiers = _bulgarian_words(reading, limit) if reading else ([], {})
@@ -543,19 +557,21 @@ def _search(q: str, limit: int, lang: str, common: bool, sort: str, order: str) 
             interpretation = None
             # Romaji that is no word -- house, read ほうせ -- is English when
             # English has the word itself, before any word starting with ほうせ.
-            english_first = bg_terms is None and bool(_english_words(q, limit, prefix=False)[0])
+            english_first = bg_terms is None and english_has()
 
         # Prefix match tops up short result sets, so typing 時 still suggests 時間:
         # the first of every word starting with it in the order asked for, not
         # the first few in character order, which left 日本語 and 日記 out of 日.
         if bg_terms is None and not english_first and len(word_ids) < limit:
-            lo, hi = target, target + "￿"
+            # Romaji may be the start of a loanword too: koohi for コーヒー.
+            starts = [target] if japanese else list(dict.fromkeys([target, *katakana_spellings(target)]))
             have = set(word_ids)
             rows = query(
                 "SELECT w.id FROM word_form f JOIN word w ON w.id = f.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
-                "WHERE f.text >= ? AND f.text < ?" + (" AND w.common = 1" if common else "") + " "
+                "WHERE (" + " OR ".join("(f.text >= ? AND f.text < ?)" for _ in starts) + ")"
+                + (" AND w.common = 1" if common else "") + " "
                 "GROUP BY w.id ORDER BY " + _ORDER_SQL[(sort, order == "desc")] + ", w.id LIMIT ?",
-                (lo, hi, limit * 6 + len(have)),
+                (*[x for t in starts for x in (t, t + "\uffff")], limit * 6 + len(have)),
             )
             word_ids += [r["id"] for r in rows if r["id"] not in have][: limit * 6]
             if not japanese and word_ids and interpretation is None:
@@ -600,12 +616,14 @@ def _search(q: str, limit: int, lang: str, common: bool, sort: str, order: str) 
     partial = romaji_partial(q) if not word_ids and not japanese and bg_terms is None else None
     if partial:
         base, cut, tails = partial
+        # Each way the syllable could end, in hiragana and as a loanword (konpyuut for コンピュータ).
+        starts = list(dict.fromkeys(k for t in tails for k in (base + t, *katakana_spellings(base + t))))
         rows = query(
             "SELECT w.id FROM word_form f JOIN word w ON w.id = f.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
-            "WHERE (" + " OR ".join("(f.text >= ? AND f.text < ?)" for _ in tails) + ")"
+            "WHERE (" + " OR ".join("(f.text >= ? AND f.text < ?)" for _ in starts) + ")"
             + (" AND w.common = 1" if common else "") + " "
             "GROUP BY w.id ORDER BY " + _ORDER_SQL[(sort, order == "desc")] + ", w.id LIMIT ?",
-            (*[x for t in tails for x in (base + t, base + t + "\uffff")], limit * 6),
+            (*[x for t in starts for x in (t, t + "\uffff")], limit * 6),
         )
         if rows:
             word_ids = [r["id"] for r in rows]

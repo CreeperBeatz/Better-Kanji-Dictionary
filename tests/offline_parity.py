@@ -61,6 +61,10 @@ HARD = [
     "gakk", "hon", "shimbun", "sampo", "konnichiha", "kinnen",
     # long vowels with a macron or circumflex, each spelling tried
     "tōkyō", "Tōkyō", "benkyō", "benkyô", "gakkō", "ōkii", "tōri", "sēto", "onēsan", "obāsan", "ojīsan", "kōhī", "tōky", "ōōōōōō",
+    # loanwords in romaji: katakana with ー, ティ/ディ, while typing, and English words that stay English
+    "koohii", "kōhī", "koohi", "terebi", "meeru", "meiru", "suupaa", "raamen", "kamera", "hoteru",
+    "konpyuutaa", "konpyuut", "aisukuriimu", "bouringu", "paatii", "pātī", "dizunii", "shefu", "chekku",
+    "wain", "chiizu", "vaiorin", "fan", "pan", "pen", "wine",
     # misspellings: one word, two words, one wrong of two, nothing close
     "beutiful", "elefant", "recieve", "neccessary", "hapy", "tomorow", "freind", "red caar",
     "beutiful hause", "xqzvy", "Recieve",
