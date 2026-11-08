@@ -93,9 +93,34 @@ export function pySplit(s: string): string[] {
   return s.split(/[\s\x1c-\x1f\x85]+/u).filter(Boolean)
 }
 
-/** Best-effort romaji to hiragana. Returns '' if nothing converted cleanly. */
+/**
+ * Long vowels written with a macron or circumflex (Hepburn: Tōkyō, benkyō),
+ * each with the ways it is spelled in kana, likeliest first: ō is おう in 東京
+ * and おお in 大きい.
+ */
+const LONG_VOWELS: Record<string, string[]> = {
+  ā: ['aa'], ī: ['ii'], ū: ['uu'], ē: ['ei', 'ee'], ō: ['ou', 'oo'],
+  â: ['aa'], î: ['ii'], û: ['uu'], ê: ['ei', 'ee'], ô: ['ou', 'oo'],
+}
+const MAX_SPELLINGS = 16
+
+/**
+ * Romaji with its long-vowel marks spelled out every way they can be read,
+ * likeliest first: tōkyō -> toukyou, toukyoo, tookyou, tookyoo. The server's
+ * `romaji_spellings`; past MAX_SPELLINGS, only the first.
+ */
+export function romajiSpellings(input: string): string[] {
+  let out = ['']
+  for (const c of input.toLowerCase().normalize('NFC')) {
+    const opts = LONG_VOWELS[c] ?? [c]
+    out = out.flatMap((o) => opts.map((x) => o + x))
+  }
+  return out.length <= MAX_SPELLINGS ? out : out.slice(0, 1)
+}
+
+/** Best-effort romaji to hiragana. Returns '' if nothing converted cleanly. A long-vowel mark is read its likeliest way (ō as ou). */
 export function romajiToKana(input: string): string {
-  const s = pyStrip(input.toLowerCase())
+  const s = romajiSpellings(pyStrip(input))[0]
   // eslint-disable-next-line no-control-regex
   if (!s || !/^[\x00-\x7f]*$/.test(s)) return ''
   let out = ''
@@ -143,7 +168,7 @@ export function romajiToKana(input: string): string {
  * has not even one whole syllable before the cut. The server's `romaji_partial`.
  */
 export function romajiPartial(input: string): [string, string, string[]] | null {
-  const s = pyStrip(input.toLowerCase())
+  const s = romajiSpellings(pyStrip(input))[0]
   // eslint-disable-next-line no-control-regex
   if (!s || !/^[\x00-\x7f]*$/.test(s) || romajiToKana(s)) return null
   for (const cut of [1, 2]) {

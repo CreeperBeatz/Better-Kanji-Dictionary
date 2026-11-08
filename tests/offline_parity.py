@@ -59,6 +59,8 @@ HARD = [
     # unfinished words, romaji cut off mid-syllable or that is really English, Hepburn m and nn
     "hous", "elephan", "beautif", "house", "cat", "x-ra", "to ea", "red ca", "tabe", "tabem", "benky", "kitt",
     "gakk", "hon", "shimbun", "sampo", "konnichiha", "kinnen",
+    # long vowels with a macron or circumflex, each spelling tried
+    "tōkyō", "Tōkyō", "benkyō", "benkyô", "gakkō", "ōkii", "tōri", "sēto", "onēsan", "obāsan", "ojīsan", "kōhī", "tōky", "ōōōōōō",
     # misspellings: one word, two words, one wrong of two, nothing close
     "beutiful", "elefant", "recieve", "neccessary", "hapy", "tomorow", "freind", "red caar",
     "beutiful hause", "xqzvy", "Recieve",

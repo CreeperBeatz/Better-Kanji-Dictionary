@@ -23,7 +23,7 @@ import type {
 import { bestReading, hasCyrillic, isLatinQuery, normalize as bgNormalize, spelling, stem as bgStem, terms as bgTerms, words as bgWords } from './bulgarian'
 import { FtsIndex, phrasesOf, tokenize, type Phrase } from './fts'
 import {
-  deinflect, hasJapanese, isKana, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiPartial, romajiToKana,
+  deinflect, hasJapanese, isKana, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiPartial, romajiSpellings, romajiToKana,
   type Candidate,
 } from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
@@ -378,6 +378,18 @@ export class Engine {
     return [news[0], desc ? -news[1] : news[1], ...level, common, this.hwlen[i]]
   }
 
+  /** The kana a romaji query stands for, or ''; with long-vowel marks, the spelling the most frequent word has. The server's `_romaji_reading`. */
+  private romajiReading(q: string): string {
+    const readings = [...new Set(romajiSpellings(pyStrip(q)).map(romajiToKana))].filter(Boolean)
+    if (readings.length > 1) {
+      // The spelling the most frequent word has (tōri is とおり for 通り, not とうり for 党利).
+      const found = readings.map((r) => new Set(this.byForm(deinflect(r).map((c) => c.text), 5)))
+      const [best] = this.inOrder(new Set(found.flatMap((ws) => [...ws])), 'news', false, 1)
+      if (best !== undefined) return readings[found.findIndex((ws) => ws.has(best))]
+    }
+    return readings[0] ?? ''
+  }
+
   /** The first `n` of `words` in the order asked for (`orderKey`), then by id. */
   private inOrder(words: Iterable<number>, sort: SearchSort, desc: boolean, n: number): number[] {
     return [...words]
@@ -506,7 +518,7 @@ export class Engine {
 
     const japanese = hasJapanese(q)
     const cyrillic = !japanese && hasCyrillic(q)
-    let kanaGuess = japanese || cyrillic ? '' : romajiToKana(q)
+    let kanaGuess = japanese || cyrillic ? '' : this.romajiReading(q)
     const latinBg = lang === 'bg' && !japanese && !cyrillic && isLatinQuery(q)
 
     if (cyrillic) {

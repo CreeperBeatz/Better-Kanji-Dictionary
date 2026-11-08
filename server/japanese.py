@@ -13,6 +13,7 @@ tables usually end up with holes.
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 # ---------------------------------------------------------------- script
@@ -73,9 +74,32 @@ _ROMAJI = {
 }
 
 
+# Long vowels written with a macron or circumflex (Hepburn: Tōkyō, benkyō),
+# each with the ways it is spelled in kana, likeliest first: ō is おう in 東京
+# and おお in 大きい.
+LONG_VOWELS = {
+    "ā": ("aa",), "ī": ("ii",), "ū": ("uu",), "ē": ("ei", "ee"), "ō": ("ou", "oo"),
+    "â": ("aa",), "î": ("ii",), "û": ("uu",), "ê": ("ei", "ee"), "ô": ("ou", "oo"),
+}
+MAX_SPELLINGS = 16
+
+
+def romaji_spellings(s: str) -> list[str]:
+    """Romaji with its long-vowel marks spelled out every way they can be
+    read, likeliest first: tōkyō -> toukyou, toukyoo, tookyou, tookyoo. Romaji
+    without them is its own only spelling. Past MAX_SPELLINGS, only the first."""
+    s = unicodedata.normalize("NFC", s.lower())
+    out = [""]
+    for c in s:
+        opts = LONG_VOWELS.get(c, (c,))
+        out = [o + x for o in out for x in opts]
+    return out if len(out) <= MAX_SPELLINGS else out[:1]
+
+
 def romaji_to_kana(s: str) -> str:
-    """Best-effort romaji to hiragana. Returns '' if nothing converted cleanly."""
-    s = s.lower().strip()
+    """Best-effort romaji to hiragana. Returns '' if nothing converted cleanly.
+    A long-vowel mark is read its likeliest way (ō as ou)."""
+    s = romaji_spellings(s.strip())[0]
     if not s or not s.isascii():
         return ""
     out: list[str] = []
@@ -118,7 +142,7 @@ def romaji_partial(s: str) -> tuple[str, str, list[str]] | None:
     typed so far, the unfinished letters, and every kana they could become:
     ("たべ", "m", ["ま", "み", "む", "め", "も", ...]). None when the input is not
     such romaji, or has not even one whole syllable before the cut."""
-    s = s.lower().strip()
+    s = romaji_spellings(s.strip())[0]
     if not s or not s.isascii() or romaji_to_kana(s):
         return None
     for cut in (1, 2):
@@ -134,22 +158,6 @@ def romaji_partial(s: str) -> tuple[str, str, list[str]] | None:
             kana = romaji_to_kana(head)
         if kana:
             return kana, tail, tails
-    return None
-    for cut in (1, 2):
-        head, tail = s[:-cut], s[-cut:]
-        if not head or not tail.isalpha():
-            continue
-        kana = romaji_to_kana(head)
-        if not kana or kana.endswith("っ") and not tail.startswith(head[-1]):
-            continue
-        # A doubled consonant before the cut is already small tsu: kitt is きっ + t.
-        if s[-cut - 1:-cut] == tail[0] and tail[0] not in "aeioun":
-            kana = romaji_to_kana(head[:-1]) + "っ" if romaji_to_kana(head[:-1]) else ""
-            if not kana:
-                continue
-        tails = sorted({k for r, k in _ROMAJI.items() if r.startswith(tail) and r != tail and len(r) > len(tail)})
-        if tails:
-            return kana, tails
     return None
 
 

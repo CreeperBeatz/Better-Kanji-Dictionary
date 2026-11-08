@@ -29,7 +29,9 @@ from .. import spelling
 from .. import synonyms
 from ..db import get_db, query, query_one
 from ..errors import AppError
-from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_partial, romaji_to_kana
+from ..japanese import (
+    deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_partial, romaji_spellings, romaji_to_kana,
+)
 from .auth import require_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -442,6 +444,24 @@ def _corrections(q: str) -> list[str]:
     return [" ".join(g[0] if g else w for w, g in zip(words, guesses))]
 
 
+def _romaji_reading(q: str) -> str:
+    """The kana a romaji query stands for, or ''. With long-vowel marks, the
+    spelling of them that the most frequent word has, by newspaper rank: tōri
+    is とおり for 通り, not とうり for 党利; ōkii is おおきい."""
+    readings = [r for r in dict.fromkeys(romaji_to_kana(s) for s in romaji_spellings(q.strip())) if r]
+    if len(readings) > 1:
+        found = {r: _by_form([c.text for c in deinflect(r)], 5) for r in readings}
+        ids = sorted({w for ws in found.values() for w in ws})
+        if ids:
+            best = query_one(
+                "SELECT w.id FROM word w LEFT JOIN word_jlpt j ON j.word_id = w.id WHERE w.id IN ("
+                + ",".join("?" * len(ids)) + ") ORDER BY " + _ORDER_SQL[("news", False)] + ", w.id LIMIT 1",
+                tuple(ids),
+            )
+            return next(r for r in readings if best["id"] in found[r])
+    return readings[0] if readings else ""
+
+
 def _search(q: str, limit: int, lang: str, common: bool, sort: str, order: str) -> dict:
     q = q.strip()
     if not q:
@@ -461,7 +481,7 @@ def _search(q: str, limit: int, lang: str, common: bool, sort: str, order: str) 
 
     japanese = has_japanese(q)
     cyrillic = not japanese and bg.has_cyrillic(q)
-    kana_guess = "" if japanese or cyrillic else romaji_to_kana(q)
+    kana_guess = "" if japanese or cyrillic else _romaji_reading(q)
     latin_bg = lang == "bg" and not japanese and not cyrillic and bg.is_latin_query(q)
 
     if cyrillic:
