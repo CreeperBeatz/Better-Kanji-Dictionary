@@ -81,6 +81,18 @@ def romaji_to_kana(s: str) -> str:
     out: list[str] = []
     i = 0
     while i < len(s):
+        nxt = s[i + 1] if i + 1 < len(s) else ""
+        # Hepburn writes ん as m before b, p and m: shimbun, sampo, sammai.
+        if s[i] == "m" and nxt in ("b", "p", "m"):
+            out.append("ん")
+            i += 1
+            continue
+        # nn before a vowel or y is ん and the next syllable's n: konnichiha
+        # is こんにちは, not こんいちは.
+        if s[i] == "n" and nxt == "n" and i + 2 < len(s) and s[i + 2] in "aeiouy":
+            out.append("ん")
+            i += 1
+            continue
         # Doubled consonant -> small tsu, e.g. "kitte" -> きって
         if (
             i + 1 < len(s)
@@ -99,6 +111,46 @@ def romaji_to_kana(s: str) -> str:
         else:
             return ""  # unconvertible -- treat the whole input as English
     return "".join(out)
+
+
+def romaji_partial(s: str) -> tuple[str, str, list[str]] | None:
+    """Romaji cut off inside a syllable -- tabem, benky, kitt -- as the kana
+    typed so far, the unfinished letters, and every kana they could become:
+    ("たべ", "m", ["ま", "み", "む", "め", "も", ...]). None when the input is not
+    such romaji, or has not even one whole syllable before the cut."""
+    s = s.lower().strip()
+    if not s or not s.isascii() or romaji_to_kana(s):
+        return None
+    for cut in (1, 2):
+        head, tail = s[:-cut], s[-cut:]
+        tails = sorted({k for r, k in _ROMAJI.items() if r.startswith(tail) and len(r) > len(tail)})
+        if not head or not tails:
+            continue
+        # A doubled consonant across the cut is small tsu: kitt is きっ and a t-syllable.
+        if head[-1] == tail[0] and tail[0] not in "aeioun":
+            kana = romaji_to_kana(head[:-1])
+            kana = kana + "っ" if kana else ""
+        else:
+            kana = romaji_to_kana(head)
+        if kana:
+            return kana, tail, tails
+    return None
+    for cut in (1, 2):
+        head, tail = s[:-cut], s[-cut:]
+        if not head or not tail.isalpha():
+            continue
+        kana = romaji_to_kana(head)
+        if not kana or kana.endswith("っ") and not tail.startswith(head[-1]):
+            continue
+        # A doubled consonant before the cut is already small tsu: kitt is きっ + t.
+        if s[-cut - 1:-cut] == tail[0] and tail[0] not in "aeioun":
+            kana = romaji_to_kana(head[:-1]) + "っ" if romaji_to_kana(head[:-1]) else ""
+            if not kana:
+                continue
+        tails = sorted({k for r, k in _ROMAJI.items() if r.startswith(tail) and r != tail and len(r) > len(tail)})
+        if tails:
+            return kana, tails
+    return None
 
 
 # ---------------------------------------------------------------- deinflection

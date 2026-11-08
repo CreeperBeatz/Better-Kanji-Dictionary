@@ -63,6 +63,7 @@ function note(kind: string, what: string, want: unknown, got: unknown) {
 
 let searchMs = 0
 let exact = 0
+let shapes = 0
 for (const { q, lang, common, sort, order, out } of golden.search) {
   const s = performance.now()
   const got = await engine.search(q, 30, lang, common, sort, order)
@@ -70,17 +71,24 @@ for (const { q, lang, common, sort, order, out } of golden.search) {
   const shape = (r: SearchResponse) => ({
     interpretation: r.interpretation,
     alternatives: r.alternatives,
+    corrected: r.corrected ?? null,
     kanji: r.kanji.map((k) => k.char),
     words: r.words.map((w) => w.id),
     inflection: r.words.map((w) => w.inflection ?? null),
     total: r.total,
   })
   const what = `${JSON.stringify(q)} (${lang}${common ? ', common' : ''}, ${sort} ${order})`
-  if (!same(shape(out), shape(got))) note('search', what, shape(out), shape(got))
+  if (!same(shape(out), shape(got))) {
+    note('search', what, shape(out), shape(got))
+    shapes++
+  }
   else if (!same(out, got)) note('search entry', what, out, got)
   else exact++
 }
-console.log(`search: ${exact}/${golden.search.length} identical, ${(searchMs / golden.search.length).toFixed(1)} ms per query`)
+console.log(
+  `search: ${exact}/${golden.search.length} identical, ${shapes} finding other words or kanji, ` +
+    `${(searchMs / golden.search.length).toFixed(1)} ms per query`,
+)
 
 let bgOk = 0
 for (const b of golden.bulgarian) {
@@ -171,6 +179,8 @@ console.log(
     `${(kpMs / golden.kanjiPage.length).toFixed(1)} ms per page`,
 )
 
+// What was found before how an entry reads: a different result matters more than a different field.
+failures.sort((a, b) => Number(a.startsWith('search entry ')) - Number(b.startsWith('search entry ')))
 for (const f of failures.slice(0, 40)) console.log(f)
 if (failures.length > 40) console.log(`... and ${failures.length - 40} more`)
 process.exit(failures.length ? 1 : 0)

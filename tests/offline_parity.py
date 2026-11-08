@@ -56,6 +56,12 @@ HARD = [
     # Japanese in a question goes to Search by meaning; with one word or none it is still looked up
     "difference between 暑い and 熱い", "why is 大人 read otona", "食べる to eat", "水 water", "to 食べる",
     "атсуи: 暑い или 熱い", "水 вода", "大人 x y",
+    # unfinished words, romaji cut off mid-syllable or that is really English, Hepburn m and nn
+    "hous", "elephan", "beautif", "house", "cat", "x-ra", "to ea", "red ca", "tabe", "tabem", "benky", "kitt",
+    "gakk", "hon", "shimbun", "sampo", "konnichiha", "kinnen",
+    # misspellings: one word, two words, one wrong of two, nothing close
+    "beutiful", "elefant", "recieve", "neccessary", "hapy", "tomorow", "freind", "red caar",
+    "beutiful hause", "xqzvy", "Recieve",
     # letters unicode61 keeps apart from their unaccented look-alikes
     "йод", "иод", "ёж", "ѝ", "край", "ǡ", "ḯ",
 ]
@@ -65,6 +71,8 @@ HARD_BG = [
     # Cyrillic: plain, inflected, stressed, capitalised, mixed with punctuation
     "вода", "водата", "Вода", "пу" + chr(0x301) + "ша", "котки", "котката", "човек", "човекът", "хора", "книга",
     "добро утро", "японски език", "край", "ъгъл", "чадър!", "море", "дъжд", "пролет", "и", "а",
+    # unfinished and misspelled
+    "сло", "краси", "учили", "ябалка", "учелище", "красифо", "слонн", "компютар", "добро утр", "kotk",
     # shlyokavitsa: official, SMS style, and collisions with romaji
     "voda", "4ovek", "chovek", "zhaba", "riba", "more", "kasa", "kotka", "kniga", "dete", "prozorec",
     "prozorets", "dobro utro", "yaponski ezik", "6apka", "shtastie", "wastie", "dyzhd", "d1zhd", "sam",

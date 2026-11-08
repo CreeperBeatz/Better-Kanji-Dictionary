@@ -6,6 +6,8 @@
  * than improving on it. Change one, change both; web/scripts/parity.ts checks.
  */
 
+import { compareCodePoints } from './sections'
+
 // ---------------------------------------------------------------- script
 
 function isKanaChar(c: number): boolean {
@@ -99,6 +101,20 @@ export function romajiToKana(input: string): string {
   let out = ''
   let i = 0
   while (i < s.length) {
+    const next = s[i + 1] ?? ''
+    // Hepburn writes ん as m before b, p and m: shimbun, sampo, sammai.
+    if (s[i] === 'm' && (next === 'b' || next === 'p' || next === 'm')) {
+      out += 'ん'
+      i += 1
+      continue
+    }
+    // nn before a vowel or y is ん and the next syllable's n: konnichiha
+    // is こんにちは, not こんいちは.
+    if (s[i] === 'n' && next === 'n' && i + 2 < s.length && 'aeiouy'.includes(s[i + 2])) {
+      out += 'ん'
+      i += 1
+      continue
+    }
     // Doubled consonant -> small tsu, e.g. "kitte" -> きって
     if (i + 1 < s.length && s[i] === s[i + 1] && !'aeioun'.includes(s[i])) {
       out += 'っ'
@@ -118,6 +134,35 @@ export function romajiToKana(input: string): string {
     if (!matched) return '' // unconvertible -- treat the whole input as English
   }
   return out
+}
+
+/**
+ * Romaji cut off inside a syllable -- tabem, benky, kitt -- as the kana typed
+ * so far, the unfinished letters, and every kana they could become:
+ * ['たべ', 'm', ['ま', 'み', ...]]. Null when the input is not such romaji, or
+ * has not even one whole syllable before the cut. The server's `romaji_partial`.
+ */
+export function romajiPartial(input: string): [string, string, string[]] | null {
+  const s = pyStrip(input.toLowerCase())
+  // eslint-disable-next-line no-control-regex
+  if (!s || !/^[\x00-\x7f]*$/.test(s) || romajiToKana(s)) return null
+  for (const cut of [1, 2]) {
+    const head = s.slice(0, -cut)
+    const tail = s.slice(-cut)
+    const tails = [...new Set(Object.entries(ROMAJI).filter(([r]) => r.startsWith(tail) && r.length > tail.length).map(([, k]) => k))]
+      .sort(compareCodePoints)
+    if (!head || !tails.length) continue
+    let kana: string
+    // A doubled consonant across the cut is small tsu: kitt is きっ and a t-syllable.
+    if (head[head.length - 1] === tail[0] && !'aeioun'.includes(tail[0])) {
+      kana = romajiToKana(head.slice(0, -1))
+      kana = kana ? kana + 'っ' : ''
+    } else {
+      kana = romajiToKana(head)
+    }
+    if (kana) return [kana, tail, tails]
+  }
+  return null
 }
 
 // ---------------------------------------------------------------- deinflection

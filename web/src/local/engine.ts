@@ -20,14 +20,15 @@ import type {
   Word,
   WordEntry,
 } from '../api'
-import { bestReading, hasCyrillic, isLatinQuery, spelling, terms as bgTerms } from './bulgarian'
+import { bestReading, hasCyrillic, isLatinQuery, normalize as bgNormalize, spelling, stem as bgStem, terms as bgTerms, words as bgWords } from './bulgarian'
 import { FtsIndex, phrasesOf, tokenize, type Phrase } from './fts'
 import {
-  deinflect, hasJapanese, isKana, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiToKana,
+  deinflect, hasJapanese, isKana, katakanaToHiragana, plainReading, posMatches, pySplit, pyStrip, romajiPartial, romajiToKana,
   type Candidate,
 } from './japanese'
 import { Recognizer, MAX_RESULTS, STROKE_WINDOW } from './recognize'
 import { compareCodePoints, readSections, SortedStrings, starts } from './sections'
+import { Vocabulary } from './spelling'
 
 /** char, strokes, grade, freq, jlpt, joyo, inKanjidic, meanings, onYomi, kunYomi, fanout, curated, meaningsBg */
 type KanjiRow = [
@@ -131,6 +132,44 @@ function bgTier(exact: boolean, sameSpelling: boolean, place: number): number {
 /** The server's Bulgarian query: every stem a quoted phrase of its own. */
 function bgPhrases(stems: string[]): Phrase[] {
   return phrasesOf(stems)
+}
+
+/** The last word of an English or Bulgarian query also finds longer words once it has this many letters (server PREFIX_MIN). */
+const PREFIX_MIN = 3
+const longEnough = (w: string) => [...w].length >= PREFIX_MIN
+
+/** The last Bulgarian word as typed (normalised, not stemmed), when long enough to stand for longer words: the server's `_bg_prefix`. */
+function bgPrefix(text: string): string | null {
+  const ws = bgWords(bgNormalize(text))
+  return ws.length && longEnough(ws[ws.length - 1]) ? ws[ws.length - 1] : null
+}
+
+/** The server's `_corrections`: what `q` likely meant, best first, when one of its words is not in the index. */
+function corrections(q: string, english: () => Vocabulary, bulgarian: () => Vocabulary): string[] {
+  let words: string[]
+  let fix: (w: string) => string[]
+  if (hasCyrillic(q) && !hasJapanese(q)) {
+    const vocab = bulgarian()
+    words = bgWords(bgNormalize(q))
+    fix = (w) => {
+      const st = bgStem(w)
+      return vocab.suggest(st).map((g) => (w.startsWith(st) ? g + [...w].slice([...st].length).join('') : g))
+    }
+  } else if (/^[A-Za-z]+( [A-Za-z]+)*$/.test(pySplit(q).join(' '))) {
+    const vocab = english()
+    words = pySplit(q.toLowerCase())
+    fix = (w) => vocab.suggest(w)
+  } else {
+    return []
+  }
+  const guesses = words.map(fix)
+  const wrong = guesses.flatMap((g, i) => (g.length ? [i] : []))
+  if (!wrong.length) return []
+  if (wrong.length === 1) {
+    const i = wrong[0]
+    return guesses[i].map((g) => [...words.slice(0, i), g, ...words.slice(i + 1)].join(' '))
+  }
+  return [words.map((w, i) => guesses[i][0] ?? w).join(' ')]
 }
 
 /** Python's dict.fromkeys over a list: first occurrences, in order. */
@@ -380,11 +419,74 @@ export class Engine {
       const tier = bgTier(this.bgGlossN[d] === stems.length, this.bgGlossSpelled[d] === spelled, this.bgGlossPlace[d])
       tiers.set(w, Math.min(tier, tiers.get(w) ?? tier))
     }
-    return [distinct(docs.map((d) => this.bgGlossWord[d])), tiers]
+    const ids = distinct(docs.map((d) => this.bgGlossWord[d]))
+    // Then glosses with a longer word starting with the last one as typed:
+    // сло finds слон. After every other match (18, 19).
+    const last = bgPrefix(text)
+    if (last) {
+      for (const d of this.bgGloss.search(phrasesOf([...stems.slice(0, -1), last], true), limit * 8)) {
+        const w = this.bgGlossWord[d]
+        if (!tiers.has(w)) {
+          ids.push(w)
+          tiers.set(w, 18 + (this.bgGlossPlace[d] >= 4 ? 1 : 0))
+        }
+      }
+    }
+    return [ids, tiers]
   }
+
+  /**
+   * Words whose English glosses hold every word of `text`, best match first,
+   * and how each matched: the server's `_english_words` -- whole words (0-3),
+   * then glosses with only a longer word starting with the last one (4-7).
+   */
+  private englishWords(text: string, limit: number, prefix = true): [number[], Map<number, number>] {
+    const safe = pySplit(text.replaceAll('"', ' '))
+    if (!safe.length) return [[], new Map()]
+    const tokens = tokenize(safe.join(' '))
+    const wanted = tokens.length - (tokens.length > 1 && tokens[0] === 'to' ? 1 : 0)
+    const ids: number[] = []
+    const tiers = new Map<number, number>()
+    const passes: [Phrase[], number][] = [[phrasesOf(safe), 0]]
+    if (prefix && longEnough(safe[safe.length - 1])) passes.push([phrasesOf(safe, true), 4])
+    for (const [phrases, base] of passes) {
+      for (const d of this.gloss.search(phrases, limit * 8)) {
+        const w = this.glossWord[d]
+        const tier = base + (this.glossN[d] === wanted ? 0 : 2) + this.glossPlace[d]
+        const had = tiers.get(w)
+        if (had === undefined) ids.push(w)
+        tiers.set(w, Math.min(tier, had ?? tier))
+      }
+    }
+    return [ids, tiers]
+  }
+
+  private vocab: { en?: Vocabulary; bg?: Vocabulary } = {}
 
   async search(
     input: string, limit = 30, lang = 'en', common = false, sort: SearchSort = 'news', order: SearchOrder = 'asc',
+  ): Promise<SearchResponse> {
+    // As the server: the query as typed, and when that finds nothing at all, its likeliest spelling.
+    const out = await this.searchOnce(input, limit, lang, common, sort, order)
+    if (out.words.length || out.kanji.length) return out
+    const fixes = corrections(
+      out.query,
+      () => (this.vocab.en ??= new Vocabulary(this.gloss.vocabulary(), true)),
+      () => (this.vocab.bg ??= new Vocabulary(this.bgGloss.vocabulary(), false)),
+    )
+    if (!fixes.length) return out
+    const again = await this.searchOnce(fixes[0], limit, lang, common, sort, order)
+    if (!again.words.length && !again.kanji.length) return out
+    return {
+      ...again,
+      query: out.query,
+      corrected: fixes[0],
+      alternatives: [...again.alternatives, ...fixes.slice(1).map((f) => ({ kind: 'spelling', query: f }))],
+    }
+  }
+
+  private async searchOnce(
+    input: string, limit: number, lang: string, common: boolean, sort: SearchSort, order: SearchOrder,
   ): Promise<SearchResponse> {
     const q = pyStrip(input)
     if (!q) return { query: q, interpretation: null, alternatives: [], kanji: [], words: [], total: 0 }
@@ -397,6 +499,7 @@ export class Engine {
     const alternatives: SearchResponse['alternatives'] = []
     const inflections = new Map<number, string[]>()
     let bgStems: string[] | null = null // set when the words were found in Bulgarian
+    let bgText = '' // and the Bulgarian they were found by
     let bgTiers = new Map<number, number>() // and how well each one matched
     let enTiers: Map<number, number> | null = null // set, the same way, for an English search
     let jpTiers = new Map<number, number>() // one kanji: common words with it first, then further in, then the rest
@@ -408,6 +511,7 @@ export class Engine {
 
     if (cyrillic) {
       bgStems = bgTerms(q)
+      bgText = q
       const [found, tiers] = this.bulgarianWords(q, limit)
       wordIdx = found
       bgTiers = tiers
@@ -451,6 +555,7 @@ export class Engine {
       }
 
       wordIdx = checked
+      const romaji = kanaGuess
       if (latinBg) {
         const reading = this.shlyokavitsa(q)
         const [found, tiers] = reading ? this.bulgarianWords(reading, limit) : [[], new Map()]
@@ -461,19 +566,24 @@ export class Engine {
           wordIdx = found
           bgTiers = tiers
           bgStems = bgTerms(reading!)
+          bgText = reading!
           interpretation = { kind: 'bulgarian', reading: reading! }
           kanaGuess = ''
         }
       }
+      let englishFirst = false
       if (!japanese && !wordIdx.length) {
         kanaGuess = '' // romaji reading found nothing, fall through to English
         interpretation = null
+        // Romaji that is no word -- house, read ほうせ -- is English when
+        // English has the word itself, before any word starting with ほうせ.
+        englishFirst = bgStems === null && this.englishWords(q, limit, false)[0].length > 0
       }
 
       // Prefix match tops up short result sets, so typing 時 still suggests 時間:
       // the first of every word starting with it in the order asked for, not
       // the first few in character order, which left 日本語 and 日記 out of 日.
-      if (bgStems === null && wordIdx.length < limit) {
+      if (bgStems === null && !englishFirst && wordIdx.length < limit) {
         const lo = this.forms.lowerBound(target)
         const hi = this.forms.lowerBound(target + '￿')
         const present = new Set(wordIdx)
@@ -482,6 +592,11 @@ export class Engine {
           for (const w of this.wordsOfForm(f)) if (!present.has(w) && (!common || this.common[w])) found.add(w)
         }
         wordIdx.push(...this.inOrder(found, sort, order === 'desc', limit * 6))
+        if (!japanese && wordIdx.length && interpretation === null) {
+          // Romaji still being typed (tabe for 食べる) is still romaji.
+          interpretation = { kind: 'romaji', reading: romaji }
+          kanaGuess = romaji
+        }
       }
 
       // One kanji: after the common words that start with it, the common words
@@ -503,26 +618,34 @@ export class Engine {
         wordIdx = found
         bgTiers = tiers
         bgStems = bgTerms(reading!)
+        bgText = reading!
         interpretation = { kind: 'bulgarian', reading: reading! }
       }
     }
 
     if (!wordIdx.length && !japanese && bgStems === null) {
-      const safe = pyStrip(q.replaceAll('"', ' '))
-      if (safe) {
-        // How each word matched, lower first: a gloss that is the query (0 in
-        // the first sense, 1 a later one), or one that mentions it (2, 3).
-        const words = tokenize(safe)
-        const wanted = words.length - (words.length > 1 && words[0] === 'to' ? 1 : 0)
-        enTiers = new Map()
-        for (const d of this.gloss.search(phrasesOf(pySplit(safe)), limit * 8)) {
-          const w = this.glossWord[d]
-          const tier = (this.glossN[d] === wanted ? 0 : 2) + this.glossPlace[d]
-          const had = enTiers.get(w)
-          if (had === undefined) wordIdx.push(w)
-          enTiers.set(w, Math.min(tier, had ?? tier))
-        }
+      // English gloss search: whole words first, then the last word's longer forms.
+      if (pyStrip(q.replaceAll('"', ' '))) {
+        ;[wordIdx, enTiers] = this.englishWords(q, limit)
         interpretation = { kind: 'english' }
+      }
+    }
+
+    // Romaji cut off inside a syllable -- tabem, benky -- once English has
+    // nothing for it: every word starting with what it could become.
+    const partial = !wordIdx.length && !japanese && bgStems === null ? romajiPartial(q) : null
+    if (partial) {
+      const [base, cut, tails] = partial
+      const found = new Set<number>()
+      for (const t of tails) {
+        const lo = this.forms.lowerBound(base + t)
+        const hi = this.forms.lowerBound(base + t + '\uffff')
+        for (let f = lo; f < hi; f++) for (const w of this.wordsOfForm(f)) if (!common || this.common[w]) found.add(w)
+      }
+      const rows = this.inOrder(found, sort, order === 'desc', limit * 6)
+      if (rows.length) {
+        wordIdx = rows
+        interpretation = { kind: 'romaji', reading: base + cut }
       }
     }
 
@@ -553,15 +676,38 @@ export class Engine {
       query: q,
       interpretation,
       alternatives,
-      kanji: this.searchKanji(q, japanese, kanaGuess, bgStems),
+      kanji: this.searchKanji(q, japanese, kanaGuess, bgStems, bgStems ? bgPrefix(bgText) : null),
       words,
       total: pool.length,
     }
   }
 
-  private searchKanji(q: string, japanese: boolean, kanaGuess: string, bgStems: string[] | null): KanjiHit[] {
+  private searchKanji(q: string, japanese: boolean, kanaGuess: string, bgStems: string[] | null, bgLast: string | null): KanjiHit[] {
     let chars: string[] = []
     let tiers = new Map<string, number>()
+    const longer = new Set<string>() // found only by a longer word starting with the last one
+
+    // Whole words first, then what only the last word's longer forms find: the server's `by_meaning`.
+    const byMeaning = (index: FtsIndex, charOf: Uint32Array, words: string[], last: string | null): string[] => {
+      const found: string[] = []
+      for (const d of index.search(phrasesOf(words), 80)) {
+        const k = charOf[d]
+        if (k !== NO_INDEX) found.push(this.pack.kanji[k][0])
+      }
+      if (last && longEnough(last)) {
+        const have = new Set(found)
+        for (const d of index.search(phrasesOf([...words.slice(0, -1), last], true), 80)) {
+          const k = charOf[d]
+          if (k === NO_INDEX) continue
+          const c = this.pack.kanji[k][0]
+          if (!have.has(c)) {
+            longer.add(c)
+            found.push(c)
+          }
+        }
+      }
+      return found
+    }
     if (japanese) chars = [...new Set([...q])].filter(isCjk)
 
     // Kana, typed or read from romaji, finds the characters read that way:
@@ -573,21 +719,10 @@ export class Engine {
     }
 
     if (bgStems !== null) {
-      if (bgStems.length) {
-        chars = []
-        for (const d of this.bgKfts.search(bgPhrases(bgStems), 80)) {
-          const k = this.bgKftsChar[d]
-          if (k !== NO_INDEX) chars.push(this.pack.kanji[k][0])
-        }
-      }
+      if (bgStems.length) chars = byMeaning(this.bgKfts, this.bgKftsChar, bgStems, bgLast)
     } else if (!chars.length && !japanese && !kanaGuess) {
       const safe = pySplit(q.replaceAll('"', ' '))
-      if (safe.length) {
-        for (const d of this.kfts.search(phrasesOf(safe), 80)) {
-          const k = this.kftsChar[d]
-          if (k !== NO_INDEX) chars.push(this.pack.kanji[k][0])
-        }
-      }
+      if (safe.length) chars = byMeaning(this.kfts, this.kftsChar, safe, safe[safe.length - 1])
     }
     if (!chars.length) return []
 
@@ -598,6 +733,7 @@ export class Engine {
       .sort((a, b) => compareCodePoints(a[0], b[0]))
     rows.sort(
       (a, b) =>
+        (longer.has(a[0]) ? 1 : 0) - (longer.has(b[0]) ? 1 : 0) ||
         (a[5] ? 0 : 1) - (b[5] ? 0 : 1) ||
         (tiers.get(a[0]) ?? 0) - (tiers.get(b[0]) ?? 0) ||
         (a[3] ?? 9999) - (b[3] ?? 9999),

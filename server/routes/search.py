@@ -25,10 +25,11 @@ from .. import bg_overlay
 from .. import bulgarian as bg
 from .. import kanji_parts
 from .. import semantic as sem
+from .. import spelling
 from .. import synonyms
 from ..db import get_db, query, query_one
 from ..errors import AppError
-from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_to_kana
+from ..japanese import deinflect, has_japanese, is_kana, katakana_to_hiragana, pos_matches, romaji_partial, romaji_to_kana
 from .auth import require_user
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -194,6 +195,56 @@ def _by_form(texts: list[str], limit: int) -> list[int]:
     return [r["word_id"] for r in sorted(rows, key=lambda r: order.get(r["text"], 99))]
 
 
+# The last word of an English or Bulgarian query also finds longer words --
+# hous finds house -- once it has this many letters; shorter ones would find
+# everything.
+PREFIX_MIN = 3
+
+
+def _phrases(words: list[str], prefix: bool = False) -> str:
+    """An FTS5 query: every word a quoted phrase, so punctuation is not read as
+    syntax. With `prefix` the last one also matches longer words: the star
+    goes outside the quotes, as "hous"* -- inside them FTS5 drops it."""
+    out = [f'"{w}"' for w in words]
+    if prefix:
+        out[-1] += "*"
+    return " ".join(out)
+
+
+def _english_words(text: str, limit: int, prefix: bool = True) -> tuple[list[int], dict[int, int]]:
+    """Words whose English glosses hold every word of `text`, best match first,
+    and how each matched, lower first: a gloss that is the query (0 in the first
+    sense, 1 a later one), or one that mentions it (2, 3); then the same, 4-7,
+    for glosses that only have a longer word starting with the last one."""
+    words = text.replace('"', " ").split()
+    if not words:
+        return [], {}
+    wanted = _en_length(" ".join(words))
+    ids: list[int] = []
+    tiers: dict[int, int] = {}
+    passes = [(_phrases(words), 0)]
+    if prefix and len(words[-1]) >= PREFIX_MIN:
+        passes.append((_phrases(words, True), 4))
+    for fts_q, base in passes:
+        rows = query(
+            "SELECT word_id, n, place FROM gloss_fts WHERE gloss_fts MATCH ? ORDER BY rank LIMIT ?",
+            (fts_q, limit * 8),
+        )
+        for r in rows:
+            tier = base + (0 if r["n"] == wanted else 2) + r["place"]
+            if r["word_id"] not in tiers:
+                ids.append(r["word_id"])
+            tiers[r["word_id"]] = min(tier, tiers.get(r["word_id"], tier))
+    return ids, tiers
+
+
+def _bg_prefix(text: str) -> str | None:
+    """The last Bulgarian word as typed (normalised, not stemmed), when it is
+    long enough to stand for the longer words it starts: сло for слон."""
+    words = bg.words(bg.normalize(text))
+    return words[-1] if words and len(words[-1]) >= PREFIX_MIN else None
+
+
 # How many Bulgarian glosses and kanji hold each stem -- what picks the likeliest
 # reading of a word typed in shlyokavitsa. Read once; the database is rebuilt
 # offline and the server restarted with it.
@@ -282,14 +333,26 @@ def _bulgarian_words(text: str, limit: int) -> tuple[list[int], dict[int, int]]:
         return [], {}
     rows = query(
         "SELECT word_id, n, place, spelled FROM bg_gloss_fts WHERE bg_gloss_fts MATCH ? ORDER BY rank LIMIT ?",
-        (" ".join(f'"{t}"' for t in terms), limit * 8),
+        (_phrases(terms), limit * 8),
     )
     spelled = bg.spelling(text)
     tiers: dict[int, int] = {}
     for r in rows:
         tier = _bg_tier(r["n"] == len(terms), r["spelled"] == spelled, r["place"])
         tiers[r["word_id"]] = min(tier, tiers.get(r["word_id"], tier))
-    return list(dict.fromkeys(r["word_id"] for r in rows)), tiers
+    ids = list(dict.fromkeys(r["word_id"] for r in rows))
+    # Then glosses with a longer word starting with the last one as typed:
+    # сло finds слон. After every other match (18, 19).
+    last = _bg_prefix(text)
+    if last:
+        for r in query(
+            "SELECT word_id, place FROM bg_gloss_fts WHERE bg_gloss_fts MATCH ? ORDER BY rank LIMIT ?",
+            (_phrases(terms[:-1] + [last], True), limit * 8),
+        ):
+            if r["word_id"] not in tiers:
+                ids.append(r["word_id"])
+                tiers[r["word_id"]] = 18 + (r["place"] >= 4)
+    return ids, tiers
 
 
 def _bg_tier(exact: bool, same_spelling: bool, place: int) -> int:
@@ -297,7 +360,8 @@ def _bg_tier(exact: bool, same_spelling: bool, place: int) -> int:
     exactly as written, by where it stands (the entry's first item, another in
     the first sense, a later sense; bare before qualified); 8-15 the same for an
     item that only shares the query's stems (водя for вода); 16 and 17 an item
-    that merely mentions them, in the first sense or later."""
+    that merely mentions them, in the first sense or later; 18 and 19 one found
+    only by the last word's start (see `_bulgarian_words`)."""
     if not exact:
         return 16 + (place >= 4)
     return place + (0 if same_spelling else 8)
@@ -312,6 +376,73 @@ def search(
     sort: str = Query("news", pattern="^(news|jlpt)$", description="newspaper rank or JLPT level"),
     order: str = Query("asc", pattern="^(asc|desc)$", description="asc: the basic end first"),
 ) -> dict:
+    """The query as typed; and when that finds nothing at all, the likeliest
+    spelling of it, with `corrected` saying so and the next likeliest ones in
+    `alternatives` (kind "spelling")."""
+    out = _search(q, limit, lang, common, sort, order)
+    if out["words"] or out["kanji"]:
+        return out
+    fixes = _corrections(out["query"])
+    if not fixes:
+        return out
+    again = _search(fixes[0], limit, lang, common, sort, order)
+    if not again["words"] and not again["kanji"]:
+        return out
+    return {
+        **again,
+        "query": out["query"],
+        "corrected": fixes[0],
+        "alternatives": again["alternatives"] + [{"kind": "spelling", "query": f} for f in fixes[1:]],
+    }
+
+
+# The words each index knows, for spelling correction: read once, as the
+# database is rebuilt offline and the server restarted with it.
+_vocab: dict[str, spelling.Vocabulary] = {}
+_vocab_lock = threading.Lock()
+
+
+def _vocabulary(table: str) -> spelling.Vocabulary:
+    if table not in _vocab:
+        with _vocab_lock:
+            if table not in _vocab:
+                conn = get_db()
+                conn.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS temp.s_{table} USING fts5vocab(main, {table}, 'row')")
+                docs = dict(conn.execute(f"SELECT term, doc FROM temp.s_{table}").fetchall())
+                _vocab[table] = spelling.Vocabulary(docs, english=table == "gloss_fts")
+    return _vocab[table]
+
+
+def _corrections(q: str) -> list[str]:
+    """What `q` likely meant to say, best first, when one of its words is not
+    in the index: English words against the English glosses, Bulgarian against
+    the Bulgarian ones, as stems -- the rest of the word kept as typed, so
+    ябалка becomes ябълка. One word wrong gets up to three guesses; several
+    wrong get one, each word at its best."""
+    if bg.has_cyrillic(q) and not has_japanese(q):
+        vocab = _vocabulary("bg_gloss_fts")
+        words = bg.words(bg.normalize(q))
+
+        def fix(w: str) -> list[str]:
+            st = bg.stem(w)
+            return [g + w[len(st):] if w.startswith(st) else g for g in vocab.suggest(st)]
+    elif re.fullmatch(r"[A-Za-z]+( [A-Za-z]+)*", " ".join(q.split())):
+        vocab = _vocabulary("gloss_fts")
+        words = q.lower().split()
+        fix = vocab.suggest
+    else:
+        return []
+    guesses = [fix(w) for w in words]
+    wrong = [i for i, g in enumerate(guesses) if g]
+    if not wrong:
+        return []
+    if len(wrong) == 1:
+        i = wrong[0]
+        return [" ".join(words[:i] + [g] + words[i + 1:]) for g in guesses[i]]
+    return [" ".join(g[0] if g else w for w, g in zip(words, guesses))]
+
+
+def _search(q: str, limit: int, lang: str, common: bool, sort: str, order: str) -> dict:
     q = q.strip()
     if not q:
         return {"query": q, "words": [], "interpretation": None}
@@ -323,6 +454,7 @@ def search(
     alternatives: list[dict] = []
     inflections: dict[int, list[str]] = {}
     bg_terms: list[str] | None = None  # set when the words were found in Bulgarian
+    bg_text = ""  # and the Bulgarian they were found by
     bg_tiers: dict[int, int] = {}  # and how well each one matched
     en_tiers: dict[int, int] | None = None  # set, the same way, for an English search
     jp_tiers: dict[int, int] = {}  # one kanji: common words with it first, then further in, then the rest
@@ -333,7 +465,7 @@ def search(
     latin_bg = lang == "bg" and not japanese and not cyrillic and bg.is_latin_query(q)
 
     if cyrillic:
-        bg_terms = bg.terms(q)
+        bg_terms, bg_text = bg.terms(q), q
         word_ids, bg_tiers = _bulgarian_words(q, limit)
         interpretation = {"kind": "bulgarian"}
 
@@ -374,6 +506,7 @@ def search(
                 checked.append(wid)
 
         word_ids = checked
+        romaji = kana_guess
         if latin_bg:
             reading = _shlyokavitsa(q)
             found, tiers = _bulgarian_words(reading, limit) if reading else ([], {})
@@ -381,17 +514,21 @@ def search(
                 # Romaji won, but the Bulgarian reading is one tap away.
                 alternatives.append({"kind": "bulgarian", "query": reading})
             elif found:
-                word_ids, bg_terms, bg_tiers = found, bg.terms(reading), tiers
+                word_ids, bg_terms, bg_tiers, bg_text = found, bg.terms(reading), tiers, reading
                 interpretation = {"kind": "bulgarian", "reading": reading}
                 kana_guess = ""
+        english_first = False
         if not japanese and not word_ids:
             kana_guess = ""  # romaji reading found nothing, fall through to English
             interpretation = None
+            # Romaji that is no word -- house, read ほうせ -- is English when
+            # English has the word itself, before any word starting with ほうせ.
+            english_first = bg_terms is None and bool(_english_words(q, limit, prefix=False)[0])
 
         # Prefix match tops up short result sets, so typing 時 still suggests 時間:
         # the first of every word starting with it in the order asked for, not
         # the first few in character order, which left 日本語 and 日記 out of 日.
-        if bg_terms is None and len(word_ids) < limit:
+        if bg_terms is None and not english_first and len(word_ids) < limit:
             lo, hi = target, target + "￿"
             have = set(word_ids)
             rows = query(
@@ -401,6 +538,10 @@ def search(
                 (lo, hi, limit * 6 + len(have)),
             )
             word_ids += [r["id"] for r in rows if r["id"] not in have][: limit * 6]
+            if not japanese and word_ids and interpretation is None:
+                # Romaji still being typed (tabe for 食べる) is still romaji.
+                interpretation = {"kind": "romaji", "reading": romaji}
+                kana_guess = romaji
 
         # One kanji: after the common words that start with it, the common words
         # that have it further in (技術, 芸術 for 術), then the rare ones that start with it.
@@ -425,30 +566,30 @@ def search(
         reading = _shlyokavitsa(q)
         found, tiers = _bulgarian_words(reading, limit) if reading else ([], {})
         if found:
-            word_ids, bg_terms, bg_tiers = found, bg.terms(reading), tiers
+            word_ids, bg_terms, bg_tiers, bg_text = found, bg.terms(reading), tiers, reading
             interpretation = {"kind": "bulgarian", "reading": reading}
 
     if not word_ids and not japanese and bg_terms is None:
-        # English gloss search. Quote the term so punctuation can't be read as
-        # FTS syntax, and prefix-match the last word so partial typing works.
-        safe = q.replace('"', " ").strip()
-        if safe:
-            fts_q = " ".join(f'"{t}"' for t in safe.split()[:-1] + [safe.split()[-1] + '*'])
-            rows = query(
-                "SELECT word_id, n, place FROM gloss_fts WHERE gloss_fts MATCH ? "
-                "ORDER BY rank LIMIT ?",
-                (fts_q, limit * 8),
-            )
-            # How each word matched, lower first: a gloss that is the query
-            # (0 in the first sense, 1 a later one), or one that mentions it (2, 3).
-            wanted = _en_length(safe)
-            en_tiers = {}
-            for r in rows:
-                tier = (0 if r["n"] == wanted else 2) + r["place"]
-                if r["word_id"] not in en_tiers:
-                    word_ids.append(r["word_id"])
-                en_tiers[r["word_id"]] = min(tier, en_tiers.get(r["word_id"], tier))
+        # English gloss search: whole words first, then the last word's longer forms.
+        if q.replace('"', " ").strip():
+            word_ids, en_tiers = _english_words(q, limit)
             interpretation = {"kind": "english"}
+
+    # Romaji cut off inside a syllable -- tabem, benky -- once English has
+    # nothing for it: every word starting with what it could become.
+    partial = romaji_partial(q) if not word_ids and not japanese and bg_terms is None else None
+    if partial:
+        base, cut, tails = partial
+        rows = query(
+            "SELECT w.id FROM word_form f JOIN word w ON w.id = f.word_id LEFT JOIN word_jlpt j ON j.word_id = w.id "
+            "WHERE (" + " OR ".join("(f.text >= ? AND f.text < ?)" for _ in tails) + ")"
+            + (" AND w.common = 1" if common else "") + " "
+            "GROUP BY w.id ORDER BY " + _ORDER_SQL[(sort, order == "desc")] + ", w.id LIMIT ?",
+            (*[x for t in tails for x in (base + t, base + t + "\uffff")], limit * 6),
+        )
+        if rows:
+            word_ids = [r["id"] for r in rows]
+            interpretation = {"kind": "romaji", "reading": base + cut}
 
     if common:
         # A view over what was found, not a different search: the query is read
@@ -468,7 +609,7 @@ def search(
         "query": q,
         "interpretation": interpretation,
         "alternatives": alternatives,
-        "kanji": _search_kanji(q, japanese, kana_guess, bg_terms),
+        "kanji": _search_kanji(q, japanese, kana_guess, bg_terms, _bg_prefix(bg_text) if bg_terms else None),
         "words": ordered,
         "total": len(words),
     }
@@ -590,10 +731,14 @@ def _word_for(text: str, reading: str | None) -> dict | None:
     return min(_fetch_words(ids).values(), key=rank, default=None)
 
 
-def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] | None = None) -> list[dict]:
-    """Characters matching the query, by meaning or directly by character."""
+def _search_kanji(
+    q: str, japanese: bool, kana_guess: str, bg_terms: list[str] | None = None, bg_last: str | None = None,
+) -> list[dict]:
+    """Characters matching the query, by meaning or directly by character.
+    `bg_last` is the last Bulgarian word as typed, whose longer words count too."""
     chars: list[str] = []
     tiers: dict[str, int] = {}
+    longer: set[str] = set()  # found only by a longer word starting with the last one
 
     if japanese:
         # Any kanji typed directly is a result in its own right.
@@ -605,29 +750,34 @@ def _search_kanji(q: str, japanese: bool, kana_guess: str, bg_terms: list[str] |
         tiers = _kanji_by_reading(reading)
         chars = list(tiers)
 
+    def by_meaning(table: str, words: list[str], last: str | None) -> list[str]:
+        """Whole words first, then what only the last word's longer forms find."""
+        sql = f"SELECT char FROM {table} WHERE {table} MATCH ? ORDER BY rank LIMIT 80"
+        found = [r["char"] for r in query(sql, (_phrases(words),))]
+        if last and len(last) >= PREFIX_MIN:
+            have = set(found)
+            more = [r["char"] for r in query(sql, (_phrases(words[:-1] + [last], True),)) if r["char"] not in have]
+            longer.update(more)
+            found += more
+        return found
+
     if bg_terms is not None:
         if bg_terms:
-            rows = query(
-                "SELECT char FROM bg_kanji_fts WHERE bg_kanji_fts MATCH ? ORDER BY rank LIMIT 80",
-                (" ".join(f'"{t}"' for t in bg_terms),),
-            )
-            chars = [r["char"] for r in rows]
+            chars = by_meaning("bg_kanji_fts", bg_terms, bg_last)
     elif not chars and not japanese and not kana_guess:
         safe = q.replace('"', " ").split()
         if safe:
-            fts_q = " ".join(f'"{t}"' for t in safe[:-1] + [safe[-1] + "*"])
-            rows = query(
-                "SELECT char FROM kanji_fts WHERE kanji_fts MATCH ? ORDER BY rank LIMIT 80",
-                (fts_q,),
-            )
-            chars = [r["char"] for r in rows]
+            chars = by_meaning("kanji_fts", safe, safe[-1])
 
     out = _kanji_hits(chars)
     # FTS rank alone puts obscure characters first, because their meaning lists
     # are short. What you almost always want is the common one: 寺 before 刹.
     # By reading, kun'yomi come before on'yomi -- among the joyo first, so a
-    # rare character's kun'yomi cannot put it ahead of 水 for すい.
-    out.sort(key=lambda k: (0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999))
+    # rare character's kun'yomi cannot put it ahead of 水 for すい. A meaning
+    # that only starts with the last word typed comes after every whole one.
+    out.sort(key=lambda k: (
+        k["char"] in longer, 0 if k["joyo"] else 1, tiers.get(k["char"], 0), k["freq"] if k["freq"] is not None else 9999,
+    ))
     return out[:12]
 
 

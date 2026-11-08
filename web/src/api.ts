@@ -373,8 +373,13 @@ export interface SearchResponse {
    * bulgarian (with `reading` when it was typed in Latin letters).
    */
   interpretation: { kind: string; reading?: string } | null
-  /** Another reading that would also have found words: tapping it searches `query`. */
+  /**
+   * Another reading that would also have found words, tapping it searches
+   * `query`: kind "bulgarian", or "spelling", another guess at what was meant.
+   */
   alternatives: { kind: string; query: string }[]
+  /** Set when the query as typed found nothing and these are the results for this spelling of it instead. */
+  corrected?: string
   kanji: KanjiHit[]
   words: Word[]
   total: number

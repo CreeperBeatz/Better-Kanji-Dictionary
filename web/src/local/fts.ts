@@ -9,10 +9,8 @@
  * words ("x-ray") has to find them adjacent and in order, which is what the
  * token positions in the pack are for.
  *
- * There is no prefix matching, because the server has none either: it sends
- * `"wat*"`, and inside quotes FTS5 reads the star as punctuation, so that is
- * the whole word "wat". Should the server start sending `"wat"*`, this has to
- * learn prefixes too -- SortedStrings.prefixRange is there for it.
+ * A phrase can end in a prefix, as the server's `"wat"*`: its last word then
+ * matches every term starting with it, each occurrence counting as a hit.
  */
 
 import { SortedStrings } from './sections'
@@ -53,11 +51,13 @@ export function tokenize(s: string): string[] {
 
 export interface Phrase {
   tokens: string[]
+  /** The last token also matches longer terms starting with it: `"wat"*`. */
+  prefix?: boolean
 }
 
-/** The server's query builder: each whitespace-separated word a quoted phrase. */
-export function phrasesOf(words: string[]): Phrase[] {
-  return words.map((w) => ({ tokens: tokenize(w) }))
+/** The server's query builder (`_phrases`): each whitespace-separated word a quoted phrase, the last one a prefix if asked. */
+export function phrasesOf(words: string[], prefix = false): Phrase[] {
+  return words.map((w, i) => ({ tokens: tokenize(w), prefix: prefix && i === words.length - 1 }))
 }
 
 export class FtsIndex {
@@ -102,12 +102,23 @@ export class FtsIndex {
     return t < 0 ? 0 : this.pstart[t + 1] - this.pstart[t]
   }
 
-  /** How often each document contains one token. */
-  private token(token: string): Uint32Array | null {
+  /** Every term, with how many documents hold it: fts5vocab's `row` table. */
+  *vocabulary(): Generator<[string, number]> {
+    for (let t = 0; t < this.terms.count; t++) yield [this.terms.at(t), this.pstart[t + 1] - this.pstart[t]]
+  }
+
+  /** The terms a phrase's token stands for, as [lo, hi): itself, or every term starting with it. */
+  private termRange(token: string, prefix: boolean): [number, number] {
+    if (prefix) return this.terms.prefixRange(token)
     const t = this.terms.indexOf(token)
-    if (t < 0) return null
+    return t < 0 ? [0, 0] : [t, t + 1]
+  }
+
+  /** How often each document contains one of the terms in [lo, hi). */
+  private token(lo: number, hi: number): Uint32Array | null {
+    if (lo >= hi) return null
     const freq = new Uint32Array(this.size)
-    for (let p = this.pstart[t]; p < this.pstart[t + 1]; p++) freq[this.doc[p]] += this.tf[p]
+    for (let t = lo; t < hi; t++) for (let p = this.pstart[t]; p < this.pstart[t + 1]; p++) freq[this.doc[p]] += this.tf[p]
     return freq
   }
 
@@ -130,21 +141,32 @@ export class FtsIndex {
 
   /** Per-document frequency of a whole phrase; null when nothing has it. */
   private phrase(p: Phrase): Uint32Array | null {
-    if (p.tokens.length === 1) return this.token(p.tokens[0])
+    const last = p.tokens.length - 1
+    const ranges = p.tokens.map((t, i) => this.termRange(t, !!p.prefix && i === last))
+    if (p.tokens.length === 1) return this.token(...ranges[0])
+    if (ranges.some(([lo, hi]) => lo >= hi)) return null
 
-    const ts = p.tokens.map((t) => this.terms.indexOf(t))
-    if (ts.some((t) => t < 0)) return null
     const freq = new Uint32Array(this.size)
     let any = false
-    // Walk the first word's occurrences and look for the rest right after it.
-    for (let p0 = this.pstart[ts[0]]; p0 < this.pstart[ts[0] + 1]; p0++) {
+    // Walk the first word's occurrences and look for the rest right after it;
+    // the last word may be any term of its range.
+    const first = ranges[0][0]
+    const middle = ranges.slice(1, -1).map(([t]) => t)
+    const [lastLo, lastHi] = ranges[last]
+    for (let p0 = this.pstart[first]; p0 < this.pstart[first + 1]; p0++) {
       const d = this.doc[p0]
-      const rest = ts.slice(1).map((t) => this.posting(t, d))
-      if (rest.some((r) => r < 0)) continue
+      const mid = middle.map((t) => this.posting(t, d))
+      if (mid.some((r) => r < 0)) continue
+      const ends: number[] = []
+      for (let t = lastLo; t < lastHi; t++) {
+        const r = this.posting(t, d)
+        if (r >= 0) ends.push(r)
+      }
+      if (!ends.length) continue
       let n = 0
       for (let i = this.posStart[p0]; i < this.posStart[p0 + 1]; i++) {
         const at = this.pos[i]
-        if (rest.every((r, k) => this.hasPosition(r, at + k + 1))) n++
+        if (mid.every((r, k) => this.hasPosition(r, at + k + 1)) && ends.some((r) => this.hasPosition(r, at + last))) n++
       }
       if (n) {
         freq[d] = n
