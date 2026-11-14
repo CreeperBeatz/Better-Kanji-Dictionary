@@ -37,7 +37,9 @@ dictionaries on the web. Read at least two sources per kanji:
 Do **not** open jisho.org, wiktionary.org, edrdg.org / KANJIDIC, betterkanjidictionary.org,
 kanshudo, tangorin, wanikani, or any page that copies them. Some of the entries come
 from those sites; using them would make one entry the answer key. If a search result
-leads there, skip it.
+leads there, skip it. weblio's kanji pages embed copied KANJIDIC and Wiktionary sections
+(English keywords, Go-on/Kan-on lists): do not use those parts; weblio's 国語辞典 and
+英和 word pages are fine. dictionary.goo.ne.jp may be offline; then use the others.
 
 Your reference, per kanji: the meanings a learner needs (mark each common or rare),
 the on and kun readings (mark jōyō ones), and 2-4 common words that show each common

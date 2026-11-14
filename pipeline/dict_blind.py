@@ -85,7 +85,7 @@ def _word(ja: str, reading: str | None, gloss: str | None = None) -> str:
 # ---------------------------------------------------------------- the five entries
 
 
-def bkd(page: dict) -> dict:
+def bkd(page: dict, on_r: list[str], kun_r: list[str]) -> dict:
     def name(w: dict) -> str:
         order = w.get("order") or list(range(len(w.get("senses") or [])))
         g = (w.get("senses") or [{}])[order[0]].get("gloss") if w.get("senses") else None
@@ -107,12 +107,11 @@ def bkd(page: dict) -> dict:
                       "words": [name(w) for w in page["soundOnly"]["words"][:6]]})
     if page.get("special"):
         other.append({"label": "special readings", "words": [name(w) for w in page["special"][:6]]})
-    # The page's readings are all hiragana keys; the on ones are those its meanings list words under as on.
-    reads = list(page.get("readings") or {})
-    on_set = {o["reading"] for m in page["meanings"] for o in m.get("on") or []}
-    on = [r for r in reads if r in on_set] + sorted(on_set - set(reads))
-    kun = [r for r in reads if r not in on_set]
-    return {"on": [kb._kata(r) for r in on], "kun": [kb._kun(r) for r in kun], "meanings": meanings, "other": other}
+    # The site's reading line (web/src/detail/Readings.tsx): every on and kun reading of the kanji
+    # table. The site greys out the ones with no common word; that mark is left out here, like
+    # every other dictionary's rarity marks (an extra rare reading is not an error to the graders).
+    return {"on": [kb._kata(r) for r in on_r], "kun": [kb._kun(r) for r in kun_r],
+            "meanings": meanings, "other": other}
 
 
 def kodansha(e: dict) -> dict:
@@ -290,7 +289,8 @@ def _prod_pages(chars: list[str]) -> dict[str, dict]:
 # ---------------------------------------------------------------- commands
 
 
-def prepare(n: int, size: int) -> None:
+def _build(n: int):
+    """The sample, its balanced letter shuffle, and a function giving each kanji's five entries."""
     pack = kb._pack()
     pages = kb._gz(pack / "pages.json.gz")
     db = sqlite3.connect(ROOT / "data" / "betterrtk.sqlite")
@@ -317,6 +317,19 @@ def prepare(n: int, size: int) -> None:
     rows = [base[i:] + base[:i] for i in range(len(base))]
     perms = [rows[i % len(rows)] for i in range(n)]
     rnd.shuffle(perms)
+
+    def section(c: str, perm: list[str]) -> str:
+        on, kun = (json.loads(x or "[]") for x in kdic[c][1:])
+        e = {"bkd": bkd(prod[c], on, kun), "kodansha": kodansha(kd[c]), "tsalta": tsalta(ts[c]),
+             "kanjidic": kanjidic(kdic[c]), "wikt": wikt(wiki[c], live.get(c))}
+        body = "\n\n".join(render(L, e[w]) for L, w in zip("ABCDE", perm))
+        return f"## {c}\n\n{body}\n"
+
+    return pool, sample, perms, jlpt, section
+
+
+def prepare(n: int, size: int) -> None:
+    pool, sample, perms, jlpt, section = _build(n)
     IN.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
     key = {}
@@ -324,13 +337,9 @@ def prepare(n: int, size: int) -> None:
         chunk = sample[b * size:(b + 1) * size]
         parts = [f"# Batch db-{b:03d}: {len(chunk)} kanji\n"]
         for i, c in enumerate(chunk):
-            e = {"bkd": bkd(prod[c]), "kodansha": kodansha(kd[c]), "tsalta": tsalta(ts[c]),
-                 "kanjidic": kanjidic(kdic[c]), "wikt": wikt(wiki[c], live.get(c))}
             perm = perms[b * size + i]
-            letters = "ABCDE"
-            key[c] = {"letters": dict(zip(letters, perm)), "jlpt": jlpt.get(c), "batch": f"db-{b:03d}"}
-            body = "\n\n".join(render(L, e[w]) for L, w in zip(letters, perm))
-            parts.append(f"## {c}\n\n{body}\n")
+            key[c] = {"letters": dict(zip("ABCDE", perm)), "jlpt": jlpt.get(c), "batch": f"db-{b:03d}"}
+            parts.append(section(c, perm))
         (IN / f"db-{b:03d}.md").write_text("\n".join(parts), encoding="utf-8")
     (DRAFTS / "key.json").write_text(json.dumps({"seed": SEED, "pool": len(pool), "kanji": key},
                                                 ensure_ascii=False, indent=1), encoding="utf-8")
@@ -338,12 +347,59 @@ def prepare(n: int, size: int) -> None:
     print("levels:", Counter(LEVEL.get(k["jlpt"], "none") for k in key.values()))
 
 
+def _sections(f: Path) -> dict[str, str]:
+    return {part[3:].split("\n", 1)[0].strip(): part.rstrip() for part in re.split(r"\n(?=## )", f.read_text(encoding="utf-8"))[1:]}
+
+
+def _same(a: str, b: str) -> bool:
+    """Two renderings of a kanji, with the order of readings ignored."""
+    def norm(t: str) -> list:
+        out = []
+        for line in t.rstrip().splitlines():
+            if line.startswith("Readings: "):
+                on, kun = line[len("Readings: on "):].split(" | kun ")
+                line = (tuple(sorted(on.split(", "))), tuple(sorted(kun.split(", "))))
+            out.append(line)
+        return out
+    return norm(a) == norm(b)
+
+
+def regrade(size: int) -> None:
+    """Kanji whose entries changed since they were graded (2026-11-14: BKD's readings were not the
+    site's), in new rg-* batches with the same letters. Their new grades replace the old ones."""
+    kf = DRAFTS / "key.json"
+    meta = json.loads(kf.read_text(encoding="utf-8"))
+    key = meta["kanji"]
+    _, sample, _, _, section = _build(len(key))
+    old = {}
+    for f in sorted(IN.glob("*.md")):
+        old.update(_sections(f))
+    changed = []
+    for c in sample:
+        perm = [key[c]["letters"][L] for L in "ABCDE"]
+        if not _same(section(c, perm), old[c]):
+            changed.append((c, perm))
+    done = len(list(IN.glob("rg-*.md")))
+    for b in range(math.ceil(len(changed) / size)):
+        name = f"rg-{done + b:03d}"
+        chunk = changed[b * size:(b + 1) * size]
+        parts = [f"# Batch {name}: {len(chunk)} kanji\n"]
+        for c, perm in chunk:
+            key[c].setdefault("was", []).append(key[c]["batch"])
+            key[c]["batch"] = name
+            parts.append(section(c, perm))
+        (IN / f"{name}.md").write_text("\n".join(parts), encoding="utf-8")
+    kf.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"{len(changed)} kanji changed: {''.join(c for c, _ in changed)}; {math.ceil(len(changed) / size)} rg batches")
+
+
 def _load() -> tuple[dict, dict]:
     key = json.loads((DRAFTS / "key.json").read_text(encoding="utf-8"))["kanji"]
     got = {}
-    for f in sorted(OUT.glob("db-*.json")):
+    for f in sorted(OUT.glob("db-*.json")) + sorted(OUT.glob("rg-*.json")):  # a regrade replaces the first grade
         for r in json.loads(f.read_text(encoding="utf-8"))["kanji"]:
-            got[r["char"]] = r
+            if f.stem == key.get(r["char"], {}).get("batch") or r["char"] not in got:
+                got[r["char"]] = r
     return key, got
 
 
@@ -429,15 +485,19 @@ def report() -> None:
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("prepare")
     p.add_argument("--n", type=int, default=100)
     p.add_argument("--size", type=int, default=5)
+    r = sub.add_parser("regrade")
+    r.add_argument("--size", type=int, default=5)
     sub.add_parser("check")
     sub.add_parser("report")
     a = ap.parse_args()
-    {"prepare": lambda: prepare(a.n, a.size), "check": check, "report": report}[a.cmd]()
+    {"prepare": lambda: prepare(a.n, a.size), "regrade": lambda: regrade(a.size),
+     "check": check, "report": report}[a.cmd]()
 
 
 if __name__ == "__main__":
