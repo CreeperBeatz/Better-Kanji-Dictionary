@@ -664,6 +664,7 @@ body.rail-resizing .shell-grid > :not(.rail-resizer) {
 }
 
 .reading-chip[data-rare],
+.reading-chip[data-rare] .yomi-link,
 .reading-chip[data-rare] .okuri {
   color: var(--muted);
 }

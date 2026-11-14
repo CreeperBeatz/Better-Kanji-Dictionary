@@ -96,6 +96,7 @@ export function Meanings({
   onYomi,
   kunYomi,
   onKanji,
+  onWord,
   onWordsWith,
   row,
 }: {
@@ -105,6 +106,8 @@ export function Meanings({
   onYomi: string[]
   kunYomi: string[]
   onKanji: (c: string) => void
+  /** A word the page names: the one a kun reading forms. */
+  onWord: (w: Word) => void
   /** All the kanji's words, at this meaning. */
   onWordsWith?: (meaning: string) => void
   /** The page's word row, so words look the same everywhere on it. */
@@ -155,7 +158,7 @@ export function Meanings({
 
   return (
     <div className="meanings">
-      <ReadingsLine on={onYomi} kun={kunYomi} info={page.readings} />
+      <ReadingsLine on={onYomi} kun={kunYomi} info={page.readings} onWord={onWord} />
       <h3 className="meanings-title">
         {t('meanings')}
         {page.meanings.length > 1 && (
