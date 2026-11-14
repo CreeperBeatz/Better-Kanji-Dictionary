@@ -716,6 +716,9 @@ these are for checking and sending upstream. Not confirmed against a second sour
   as でんさん to anyone.
 - 2026-11-02 (Kodansha blind check, verified against kotobank): 1882330 照映 "portrait";
   kotobank gives "light shining or reflecting". Probably mixed up with 照影.
+- 2026-11-14 (five-way blind check, verified against 大辞泉 on kotobank): 1633060
+  気遣わしい is glossed with adverbs ("anxiously; with anxious looks"); it is an
+  i-adjective, "worrying, causing concern" (病人の容体が気遣わしい).
 Source: JMdict.
 **Status: open.** The sense notes say what is right where the note could; the
 glosses on the page are unchanged.
@@ -749,8 +752,50 @@ readings line shows the full KANJIDIC list, so a learner sees both.
 Source: KANJIDIC2 itself (pipeline/data/kanjidic2.xml.gz), not our build.
 Scale: unknown. These two are from a 100-kanji sample; nothing has checked
 KANJIDIC's kun list against the jōyō table.
-**Status: open.** A fix needs a reading override in the build, and a check of
-every in-scope kanji's kun list against the jōyō table (with 2010 changes).
+2026-11-14, the five-way blind check (pipeline/dict_blind.py, web-verified): two
+more. 掃 lists the on reading シュ (kanjipedia, 大辞泉 and 字通 give only ソウ), and
+梢 the kun reading くすのき (kanjipedia: こずえ, かじ; くすのき is 楠's).
+**Status: partly fixed** (branch feat/dict-blind, not deployed). The build now
+applies data/reading_fixes.json (pipeline/readings.py `apply_fixes`, called by
+build_db's graph stage): 透 とお.る/とお.す, 速 + はや.まる, 掃 − しゅ, 梢 − くすのき.
+Left: a check of every in-scope kanji's kun list against the jōyō table (with
+2010 changes).
+
+### D-047 · Bare kun stems taken for special readings
+*Found 2026-11-14,* in the five-way blind check: 下見 したみ was shown as a special
+reading under 見. The reading matcher (pipeline/readings.py `match`) needed
+okurigana after a kun stem, so a stem with nothing after it, at the end of the
+word or before another kanji, matched no reading: 花見 み, 見本 み, 昼寝 ね, 長靴
+なが, 遠回り とお, 暗闇 くら. 313 rows of common words (1,894 in all) were special
+readings that are not; 107 of the common ones were 見.
+Source: our build.
+**Status: fixed** in the build (branch feat/dict-blind, not deployed): a bare
+stem now matches as the last resort (any other reading wins, even with a sound
+change: 罰酒 stays ばつ), and between bare stems the reading KANJIDIC lists first
+wins (見本 is み.る). Rebuilt word_reading: exactly those 1,894 rows change, plus
+速まる (D-045).
+
+### D-048 · Words the kanji page cannot show
+*Found 2026-11-14,* in the five-way blind check. The page lists common words whose
+headword holds the kanji. So a word whose spelling with the kanji is not its
+headword never shows: 臆測 (headword 憶測; 臆測 is the jōyō spelling since 2010),
+絶つ (headword 断つ). 臆 then has no "guess" meaning at all. A word JMdict does not
+mark common never shows either: 貫禄 under 禄.
+Source: our page rule (server/routes/search.py kanji_page), with JMdict's headwords.
+Scale: unknown; not measured yet.
+**Status: open.** A fix would let a common word in by any of its written forms.
+
+### D-049 · "For its sound only" on words that keep a meaning
+*Found 2026-11-14,* in the five-way blind check. The catch-all group was headed "For
+its sound only". Many of its words are not sound uses. In some the kanji keeps a
+plain meaning: 山鉾, 山吹 (mountain), 念仏 (call to mind), 生え抜き (pull), 月桂冠
+(moon), 元禄 (fortune), 未 ひつじ (the zodiac Sheep). In others the meaning has
+drifted: 我慢 (from "pride"), 未練, 皮肉, 雲母, 金糸雀, 酔っ払い.
+Source: our meaning drafts and the heading.
+**Status: fixed** on branch feat/dict-blind (not deployed). The heading is now "No
+clear meaning" ("there for its sound, or its old meaning is lost"; bg "Без ясно
+значение"). The plain-meaning words moved to their groups, and 未 got a "Sheep"
+group (pipeline/dict_blind_fix.py `load`). Other kanji's catch-alls were not checked.
 
 ## Fixed
 
