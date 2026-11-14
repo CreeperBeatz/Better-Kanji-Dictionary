@@ -399,7 +399,7 @@ def _load() -> tuple[dict, dict]:
     for f in sorted(OUT.glob("db-*.json")) + sorted(OUT.glob("rg-*.json")):  # a regrade replaces the first grade
         for r in json.loads(f.read_text(encoding="utf-8"))["kanji"]:
             if f.stem == key.get(r["char"], {}).get("batch") or r["char"] not in got:
-                got[r["char"]] = r
+                got[r["char"]] = {**r, "_from": f.stem}
     return key, got
 
 
@@ -418,7 +418,7 @@ def check() -> None:
             print("malformed ranking", c); bad += 1
         if len(r.get("reference", {}).get("sources") or []) < 2:
             print("fewer than 2 sources", c); bad += 1
-    batches = Counter(k["batch"] for c, k in key.items() if c not in got)
+    batches = Counter(k["batch"] for c, k in key.items() if c not in got or got[c]["_from"] != k["batch"])
     print(f"{len(got)}/{len(key)} graded, {bad} problems; batches missing: {', '.join(sorted(batches)) or 'none'}")
 
 
