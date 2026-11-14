@@ -85,7 +85,7 @@ def match(rt: str, after: str, on: list[str], kun: list[str]) -> str | None:
             break
         tail += c
     best: tuple | None = None
-    for r in [*on, *kun]:
+    for i, r in enumerate([*on, *kun]):
         p = plain(r)
         stem, _, okuri = p.partition(".")
         for changed, form in enumerate(sounds(_hira(stem))):
@@ -94,12 +94,20 @@ def match(rt: str, after: str, on: list[str], kun: list[str]) -> str | None:
             unwritten = rt[len(form):]
             if unwritten and not okuri:
                 continue
-            fit = _okuri_fit(okuri, unwritten + tail) if okuri else (0 if not tail else 1)
+            if okuri and not unwritten and not tail:
+                # The stem alone, nothing after it in the word or a kanji next: the
+                # noun a kun verb or adjective makes, 花見 み (み.る), 遠回り とお (とお.い).
+                fit = 2
+            else:
+                fit = _okuri_fit(okuri, unwritten + tail) if okuri else (0 if not tail else 1)
             if fit is None:
                 continue
             # Kana after the kanji are better explained by okurigana than by a
             # noun reading with a particle after it: 生み is う.む, not う.
-            key = (changed > 0, fit, bool(tail) and not okuri, -len(okuri))
+            # The bare stem (fit 2) is the last resort: any other reading wins, even
+            # one with a sound change (罰 in 罰酒 is ばつ said ばっ, not the stem of ばっ.する).
+            # Between bare stems, the reading KANJIDIC lists first: 見本 is み.る, not み.える.
+            key = (fit == 2, changed > 0, fit, bool(tail) and not okuri, i if fit == 2 else -len(okuri))
             if best is None or key < best[0]:
                 best = (key, p)
     return best[1] if best else None
@@ -158,6 +166,47 @@ def word_readings(db: sqlite3.Connection) -> list[tuple]:
                     reading = None
                 out.append((c, wid, reading, rt, ruby, written, kana, main.get(wid) == (written, kana), start))
     return out
+
+
+FIXES = Path(__file__).resolve().parent.parent / "data" / "reading_fixes.json"
+
+
+def fixed(char: str, on: list[str], kun: list[str]) -> tuple[list[str], list[str]]:
+    """KANJIDIC's readings with our fixes (data/reading_fixes.json, D-045): 梢 is not くすのき."""
+    f = _fixes().get(char)
+    if not f:
+        return on, kun
+    on = [r for r in on if r not in f.get("on_drop", [])] + [r for r in f.get("on_add", []) if r not in on]
+    rep = f.get("kun_replace", {})
+    kun = [rep.get(r, r) for r in kun if r not in f.get("kun_drop", [])]
+    kun += [r for r in f.get("kun_add", []) if r not in kun]
+    return on, kun
+
+
+_FIXES: dict | None = None
+
+
+def _fixes() -> dict:
+    global _FIXES
+    if _FIXES is None:
+        _FIXES = {k: v for k, v in json.loads(FIXES.read_text(encoding="utf-8")).items() if not k.startswith("_")}
+    return _FIXES
+
+
+def apply_fixes(db: sqlite3.Connection) -> int:
+    """Put the fixes into an already built kanji table; how many rows changed."""
+    n = 0
+    for c in _fixes():
+        row = db.execute("SELECT on_yomi, kun_yomi FROM kanji WHERE char = ?", (c,)).fetchone()
+        if not row:
+            continue
+        on, kun = json.loads(row[0] or "[]"), json.loads(row[1] or "[]")
+        new = fixed(c, on, kun)
+        if new != (on, kun):
+            db.execute("UPDATE kanji SET on_yomi = ?, kun_yomi = ? WHERE char = ?",
+                       (json.dumps(new[0], ensure_ascii=False), json.dumps(new[1], ensure_ascii=False), c))
+            n += 1
+    return n
 
 
 def radicals() -> list[tuple[str, int, str]]:

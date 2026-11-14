@@ -1,0 +1,7 @@
+{
+ "_about": "KANJIDIC2 reading mistakes, fixed in the build (pipeline/readings.py apply_fixes). Each with where it was found; see DATA-ISSUES.md D-045.",
+ "透": {"kun_replace": {"とう.る": "とお.る", "とう.す": "とお.す"}, "found": "D-045, Kodansha blind check 2026-11-02: 透る 透す are とおる とおす"},
+ "速": {"kun_add": ["はや.まる"], "found": "D-045, Kodansha blind check 2026-11-02: jōyō 速まる is missing"},
+ "掃": {"on_drop": ["しゅ"], "found": "five-way blind check 2026-11-14: kanjipedia, 大辞泉, 字通 give only ソウ"},
+ "梢": {"kun_drop": ["くすのき"], "found": "five-way blind check 2026-11-14: kanjipedia gives こずえ, かじ; くすのき is 楠's"}
+}

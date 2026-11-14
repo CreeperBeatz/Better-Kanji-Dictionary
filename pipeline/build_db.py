@@ -116,6 +116,8 @@ def build_graph(db: sqlite3.Connection) -> None:
         "meanings, on_yomi, kun_yomi) VALUES (?,?,?,?,?,?,?,?,?,?)",
         rows,
     )
+    import readings  # KANJIDIC's reading mistakes, fixed (data/reading_fixes.json, D-045)
+    readings.apply_fixes(db)
 
     edges = [(parent, child) for parent, children in comps.items() for child in children]
     db.executemany("INSERT OR IGNORE INTO edge (parent, child) VALUES (?, ?)", edges)
