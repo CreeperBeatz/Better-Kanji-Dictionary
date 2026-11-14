@@ -51,9 +51,20 @@ export function ReadingKana({ r, on }: { r: string; on: boolean }) {
 
 /**
  * Every reading at a glance, one line each kind: on, then kun, a rare one
- * faded. Above a kanji's meanings, which give the words.
+ * faded. Above a kanji's meanings, which give the words. A kun reading that
+ * forms a word on its own opens it: あ・げる opens 上げる.
  */
-export function ReadingsLine({ on, kun, info }: { on: string[]; kun: string[]; info: Record<string, ReadingInfo> }) {
+export function ReadingsLine({
+  on,
+  kun,
+  info,
+  onWord,
+}: {
+  on: string[]
+  kun: string[]
+  info: Record<string, ReadingInfo>
+  onWord: (w: Word) => void
+}) {
   const t = S(useLang())
   return (
     <>
@@ -71,9 +82,23 @@ export function ReadingsLine({ on, kun, info }: { on: string[]; kun: string[]; i
                 <span className="lane-kind">{t(kind)}</span>
                 {[...new Set(list.map(plain))].map((r) => {
                   const rare = !info[r]?.common
+                  const kana = <ReadingKana r={r} on={kind === 'on'} />
+                  // An on reading's own word (上 read じょう) rarely means what the kanji does.
+                  const formed = kind === 'kun' ? info[r]?.formed : null
                   return (
                     <span key={r} className="reading-chip" lang="ja" data-rare={rare || undefined} title={rare ? t('rare') : undefined}>
-                      <ReadingKana r={r} on={kind === 'on'} />
+                      {formed ? (
+                        <button
+                          className="yomi-link"
+                          {...warmWord(formed.id)}
+                          onClick={() => onWord(formed)}
+                          title={t('open', { word: formed.headword, reading: formed.reading })}
+                        >
+                          {kana}
+                        </button>
+                      ) : (
+                        kana
+                      )}
                     </span>
                   )
                 })}
