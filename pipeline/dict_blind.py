@@ -85,11 +85,18 @@ def _word(ja: str, reading: str | None, gloss: str | None = None) -> str:
 # ---------------------------------------------------------------- the five entries
 
 
+def shown_gloss(w: dict) -> str | None:
+    """The sense the meaning card shows: `senseAt` (the sense placed in this group), else the first in order."""
+    senses = w.get("senses") or []
+    if not senses:
+        return None
+    at = w.get("senseAt", (w.get("order") or [0])[0])
+    return senses[at].get("gloss")
+
+
 def bkd(page: dict, on_r: list[str], kun_r: list[str]) -> dict:
     def name(w: dict) -> str:
-        order = w.get("order") or list(range(len(w.get("senses") or [])))
-        g = (w.get("senses") or [{}])[order[0]].get("gloss") if w.get("senses") else None
-        return _word(w["headword"], w.get("reading"), g)
+        return _word(w["headword"], w.get("reading"), shown_gloss(w))
 
     meanings = []
     for m in page["meanings"]:
